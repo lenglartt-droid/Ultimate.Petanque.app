@@ -959,7 +959,7 @@ export default function HistoryScreen() {
   // Handlers
   const handleMatchPress = useCallback((match: Match) => {
     Haptics.selectionAsync();
-    setViewingMatch(match);
+    router.push(`/match-detail/${match.id}` as any);
   }, []);
 
   const handleChallengePress = useCallback((challenge: Challenge) => {

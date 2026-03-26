@@ -104,6 +104,8 @@ export default function EditMatchScreen() {
   const [editingShotRecord, setEditingShotRecord] = useState<any>(null);
   const [expandedPlayerShots, setExpandedPlayerShots] = useState<Set<string>>(new Set());
   const [showShareModal, setShowShareModal] = useState(false);
+  const [isInlineEditing, setIsInlineEditing] = useState(false);
+  const [editNotes, setEditNotes] = useState('');
   const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
   const matchIsShared = match ? isSharedItem(match.id) : false;
   const matchPermission = match ? getSharedPermission(match.id) : null;
@@ -188,8 +190,90 @@ export default function EditMatchScreen() {
       setSelectedTerrainId(match.terrainId || null);
       setSelectedTournamentId(match.tournamentId || null);
       setPlayerActions(match.playerActions ? JSON.parse(JSON.stringify(match.playerActions)) : []);
+      setEditNotes(match.notes || '');
     }
   }, [match]);
+
+  // Inline editing enter/cancel/save
+  const enterInlineEdit = useCallback(() => {
+    if (isReadOnly) return;
+    setEditNotes(match?.notes || '');
+    setIsInlineEditing(true);
+    Haptics.selectionAsync();
+  }, [match, isReadOnly]);
+
+  const cancelInlineEdit = useCallback(() => {
+    if (match) {
+      setDuration(match.duration);
+      setMenes(match.menes?.map(m => ({ teamAPoints: m.teamAPoints || 0, teamBPoints: m.teamBPoints || 0, duration: m.duration || 0 })) || []);
+      setEditNotes(match.notes || '');
+    }
+    setIsInlineEditing(false);
+  }, [match]);
+
+  const handleInlineSave = useCallback(async () => {
+    if (!match) return;
+    setIsSaving(true);
+    try {
+      let finalTeamAScore = teamAScore;
+      let finalTeamBScore = teamBScore;
+      if (menes.length > 0) {
+        finalTeamAScore = menes.reduce((sum, m) => sum + m.teamAPoints, 0);
+        finalTeamBScore = menes.reduce((sum, m) => sum + m.teamBPoints, 0);
+      }
+      const winner: 'A' | 'B' = finalTeamAScore > finalTeamBScore ? 'A' : 'B';
+      const inlineUpdates: Partial<Match> = {
+        duration,
+        menes: menes.map((m, i) => ({ ...m, number: i + 1 })) as any,
+        notes: editNotes.trim() || undefined,
+        teamA: { ...match.teamA, score: finalTeamAScore },
+        teamB: { ...match.teamB, score: finalTeamBScore },
+        winner,
+      };
+
+      // Conflict check for shared writable
+      if (matchIsShared && matchPermission === 'write' && serverUpdatedAt) {
+        try {
+          const conflict = await checkEditConflict('matches', id!, serverUpdatedAt);
+          if (conflict.hasConflict && conflict.serverRecord) {
+            const diffs = computeMatchDiffs(inlineUpdates, conflict.serverRecord, language);
+            if (diffs.length > 0) {
+              setConflictDiffs(diffs);
+              setPendingSaveData(inlineUpdates);
+              setShowConflictModal(true);
+              setIsSaving(false);
+              return;
+            }
+          }
+        } catch { /* save anyway */ }
+      }
+
+      // Log modification for shared items
+      if (matchIsShared && matchPermission === 'write') {
+        const changes: { field: string; oldValue?: any; newValue?: any }[] = [];
+        if (match.duration !== duration) changes.push({ field: 'duration', oldValue: match.duration, newValue: duration });
+        if (JSON.stringify(match.menes) !== JSON.stringify(inlineUpdates.menes)) changes.push({ field: 'menes', oldValue: `${match.menes?.length || 0} menes`, newValue: `${menes.length} menes` });
+        if ((match.notes || '') !== (editNotes.trim() || '')) changes.push({ field: 'notes', oldValue: match.notes || '', newValue: editNotes.trim() || '' });
+        if (changes.length > 0) {
+          try {
+            const sb = getSupabaseClient();
+            const { data: row } = await sb.from('matches').select('user_id').eq('id', id!).single();
+            if (row?.user_id) await logModification({ itemType: 'match', itemId: id!, ownerId: row.user_id, changes });
+          } catch { /* silent */ }
+        }
+      }
+
+      await updateMatch(id!, inlineUpdates);
+      setTeamAScore(finalTeamAScore);
+      setTeamBScore(finalTeamBScore);
+      setIsInlineEditing(false);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) {
+      console.log('Error inline saving match:', e);
+    } finally {
+      setIsSaving(false);
+    }
+  }, [match, duration, menes, editNotes, teamAScore, teamBScore, matchIsShared, matchPermission, serverUpdatedAt, id, language, updateMatch]);
 
   const selectedTerrain = useMemo(() => selectedTerrainId ? terrains.find(t => t.id === selectedTerrainId) : null, [selectedTerrainId, terrains]);
   const matchBoulesSet = useMemo(() => match?.boulesSetId ? boulesSets.find(bs => bs.id === match.boulesSetId) : null, [match?.boulesSetId, boulesSets]);
@@ -549,7 +633,7 @@ export default function EditMatchScreen() {
     Haptics.selectionAsync();
   };
 
-  const buildSavePayload = () => {
+  const buildSavePayload = (): any => {
     let finalTeamAScore = teamAScore;
     let finalTeamBScore = teamBScore;
     if (menes.length > 0) {
@@ -571,6 +655,7 @@ export default function EditMatchScreen() {
       terrainId: selectedTerrainId || undefined,
       terrainType: selectedTerrain?.type || undefined,
       playerActions: playerActions.length > 0 ? playerActions : undefined,
+      notes: editNotes.trim() || undefined,
     };
   };
 
@@ -816,11 +901,11 @@ export default function EditMatchScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+        <Pressable style={styles.backButton} onPress={() => { if (isInlineEditing) { cancelInlineEdit(); } else { router.back(); } }}>
+          <MaterialIcons name={isInlineEditing ? 'close' : 'arrow-back'} size={24} color={theme.textPrimary} />
         </Pressable>
         <View style={{ alignItems: 'center' }}>
-          <Text style={styles.headerTitle}>{t('match', 'editMatch')}</Text>
+          <Text style={styles.headerTitle}>{isInlineEditing ? (language === 'fr' ? 'Modifier' : 'Edit') : t('match', 'editMatch')}</Text>
           {matchIsShared ? (
             <View style={{ marginTop: 2 }}>
               <SharedBadge permission={matchPermission || 'read'} size="small" />
@@ -828,14 +913,22 @@ export default function EditMatchScreen() {
           ) : null}
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => setShowShareModal(true)}>
-            <MaterialIcons name="share" size={22} color={theme.primary} />
-          </Pressable>
-          {!matchIsShared || matchPermission === 'write' ? (
-            <Pressable style={styles.deleteButton} onPress={handleDelete}>
-              <MaterialIcons name="delete" size={24} color={theme.error} />
+          {isInlineEditing ? (
+            <Pressable style={inlineStyles.headerSaveBtn} onPress={handleInlineSave} disabled={isSaving}>
+              <Text style={inlineStyles.headerSaveBtnText}>{isSaving ? '...' : (language === 'fr' ? 'OK' : 'Save')}</Text>
             </Pressable>
-          ) : <View style={{ width: 40 }} />}
+          ) : (
+            <>
+              <Pressable style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }} onPress={() => setShowShareModal(true)}>
+                <MaterialIcons name="share" size={22} color={theme.primary} />
+              </Pressable>
+              {!matchIsShared || matchPermission === 'write' ? (
+                <Pressable style={styles.deleteButton} onPress={handleDelete}>
+                  <MaterialIcons name="delete" size={24} color={theme.error} />
+                </Pressable>
+              ) : <View style={{ width: 40 }} />}
+            </>
+          )}
         </View>
       </View>
 
@@ -1264,11 +1357,19 @@ export default function EditMatchScreen() {
           {/* Duration */}
           <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'durationMinutes')}</Text>
-            <View style={styles.durationContainer}>
-              <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => Math.max(0, prev - 5)); }} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
-              <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => { if (!isReadOnly) setDuration(parseInt(text) || 0); }} keyboardType="number-pad" editable={!isReadOnly} />
-              <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => prev + 5); }} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
-            </View>
+            {isInlineEditing ? (
+              <View style={styles.durationContainer}>
+                <Pressable style={styles.durationButton} onPress={() => setDuration(prev => Math.max(0, prev - 5))}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => setDuration(parseInt(text) || 0)} keyboardType="number-pad" />
+                <Pressable style={styles.durationButton} onPress={() => setDuration(prev => prev + 5)}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
+              </View>
+            ) : (
+              <View style={styles.durationContainer}>
+                <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => Math.max(0, prev - 5)); }} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
+                <TextInput style={styles.durationInput} value={duration.toString()} onChangeText={(text) => { if (!isReadOnly) setDuration(parseInt(text) || 0); }} keyboardType="number-pad" editable={!isReadOnly} />
+                <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => prev + 5); }} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
+              </View>
+            )}
           </Animated.View>
 
           {/* Player Actions */}
@@ -1289,11 +1390,37 @@ export default function EditMatchScreen() {
             )}
           </Animated.View>
 
+          {/* Notes */}
+          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+            <Text style={styles.sectionTitle}>NOTES</Text>
+            {isInlineEditing ? (
+              <TextInput
+                style={inlineStyles.notesInput}
+                value={editNotes}
+                onChangeText={setEditNotes}
+                placeholder={language === 'fr' ? 'Ajouter des notes...' : 'Add notes...'}
+                placeholderTextColor={theme.textMuted}
+                multiline
+                numberOfLines={4}
+                textAlignVertical="top"
+              />
+            ) : match?.notes ? (
+              <View style={inlineStyles.notesBox}>
+                <MaterialIcons name="notes" size={16} color={theme.textMuted} />
+                <Text style={inlineStyles.notesText}>{match.notes}</Text>
+              </View>
+            ) : (
+              <View style={inlineStyles.emptyNotesBox}>
+                <Text style={inlineStyles.emptyNotesText}>{language === 'fr' ? 'Aucune note' : 'No notes'}</Text>
+              </View>
+            )}
+          </Animated.View>
+
           {/* Menes */}
           <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('match', 'menesCount')} ({menes.length})</Text>
-              {!isReadOnly ? (
+              {!isReadOnly || isInlineEditing ? (
                 <Pressable style={styles.addMeneBtn} onPress={handleAddMene}>
                   <MaterialIcons name="add" size={18} color={theme.primary} />
                   <Text style={styles.addMeneBtnText}>{t('match', 'addLabel')}</Text>
@@ -1333,7 +1460,18 @@ export default function EditMatchScreen() {
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
-          {matchIsShared && matchPermission === 'read' ? (
+          {isInlineEditing ? (
+            <View style={inlineStyles.footerRow}>
+              <Pressable style={inlineStyles.cancelBtn} onPress={cancelInlineEdit}>
+                <MaterialIcons name="close" size={18} color={theme.textSecondary} />
+                <Text style={inlineStyles.cancelBtnText}>{language === 'fr' ? 'Annuler' : 'Cancel'}</Text>
+              </Pressable>
+              <Pressable style={[inlineStyles.saveBtn, isSaving && { opacity: 0.6 }]} onPress={handleInlineSave} disabled={isSaving}>
+                {isSaving ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="check" size={18} color="#FFF" />}
+                <Text style={inlineStyles.saveBtnText}>{isSaving ? '...' : (language === 'fr' ? 'Enregistrer' : 'Save')}</Text>
+              </Pressable>
+            </View>
+          ) : matchIsShared && matchPermission === 'read' ? (
             <View style={styles.readOnlyBanner}>
               <MaterialIcons name="lock" size={18} color={theme.textMuted} />
               <Text style={styles.readOnlyBannerText}>
@@ -1341,14 +1479,20 @@ export default function EditMatchScreen() {
               </Text>
             </View>
           ) : (
-            <Pressable style={[styles.saveButton, isSaving && { opacity: 0.6 }]} onPress={handleSave} disabled={isSaving}>
-              {isSaving ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <MaterialIcons name="check" size={24} color="#FFF" />
-              )}
-              <Text style={styles.saveButtonText}>{isSaving ? (language === 'fr' ? 'Verification...' : 'Checking...') : t('match', 'saveChangesBtn')}</Text>
-            </Pressable>
+            <View style={inlineStyles.footerRow}>
+              <Pressable style={inlineStyles.inlineEditBtn} onPress={enterInlineEdit}>
+                <MaterialIcons name="edit" size={18} color={theme.primary} />
+                <Text style={inlineStyles.inlineEditBtnText}>{language === 'fr' ? 'Edition rapide' : 'Quick edit'}</Text>
+              </Pressable>
+              <Pressable style={[styles.saveButton, { flex: 2 }, isSaving && { opacity: 0.6 }]} onPress={handleSave} disabled={isSaving}>
+                {isSaving ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <MaterialIcons name="check" size={24} color="#FFF" />
+                )}
+                <Text style={styles.saveButtonText}>{isSaving ? (language === 'fr' ? 'Verification...' : 'Checking...') : t('match', 'saveChangesBtn')}</Text>
+              </Pressable>
+            </View>
           )}
         </View>
       </KeyboardAvoidingView>
@@ -1884,6 +2028,23 @@ const matchSponsorStyles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+});
+
+const inlineStyles = StyleSheet.create({
+  headerSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.primary, borderRadius: 12 },
+  headerSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  footerRow: { flexDirection: 'row', gap: 12 },
+  cancelBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 16, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: theme.border },
+  cancelBtnText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
+  saveBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, backgroundColor: theme.primary, borderRadius: theme.borderRadius.md },
+  saveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+  inlineEditBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.md, borderWidth: 1.5, borderColor: theme.primary + '30' },
+  inlineEditBtnText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  notesInput: { fontSize: 14, color: theme.textPrimary, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, minHeight: 100, borderWidth: 1.5, borderColor: theme.primary + '30', lineHeight: 20, ...theme.shadows.card },
+  notesBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, ...theme.shadows.card },
+  notesText: { flex: 1, fontSize: 14, color: theme.textSecondary, lineHeight: 20 },
+  emptyNotesBox: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, alignItems: 'center', ...theme.shadows.card },
+  emptyNotesText: { fontSize: 13, color: theme.textMuted, fontStyle: 'italic' },
 });
 
 const validationStyles = StyleSheet.create({

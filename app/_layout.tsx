@@ -200,6 +200,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="match-detail/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="player/edit/[id]" 
                 options={{ 
                   presentation: 'modal',

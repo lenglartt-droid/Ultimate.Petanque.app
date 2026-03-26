@@ -98,7 +98,7 @@ function CompactHistory({ recentResults, matches, hasData, language, t }: Props)
               <Pressable
                 style={({ pressed }) => [s.row, !isLast && s.rowBorder, pressed && { opacity: 0.75, backgroundColor: theme.backgroundSecondary }]}
                 onPress={() => item.type === 'match'
-                  ? router.push({ pathname: '/history', params: { openMatchId: item.id } })
+                  ? router.push(`/match-detail/${item.id}` as any)
                   : router.push(`/challenge/${item.id}` as any)}
               >
                 <View style={[s.dot, { backgroundColor: resultColor(item.result) }]} />
