@@ -16,13 +16,18 @@ export interface ScheduledNotification {
 }
 
 // Configure notification behavior (no-op on web via stub)
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Wrap in try/catch to prevent module-level crash on web
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (e) {
+  // Silent on web
+}
 
 // Storage for scheduled notification IDs
 const scheduledNotifications: Map<string, string[]> = new Map();
