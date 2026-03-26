@@ -222,12 +222,9 @@ export default function AmbassadorProgramScreen() {
               key={level.id}
               entering={FadeInDown.duration(300).delay(100 + idx * 80)}
             >
-              <Pressable
-                style={[styles.levelCard, isExpanded && { borderColor: level.color + '50' }]}
-                onPress={() => toggleLevel(level.id)}
-              >
+              <View style={[styles.levelCard, isExpanded && { borderColor: level.color + '50' }]}>
                 {/* Level Header */}
-                <View style={styles.levelHeader}>
+                <Pressable style={styles.levelHeader} onPress={() => toggleLevel(level.id)}>
                   <LinearGradient
                     colors={[level.color, level.color + 'CC']}
                     style={styles.levelIconBg}
@@ -254,7 +251,7 @@ export default function AmbassadorProgramScreen() {
                     size={24}
                     color={level.color}
                   />
-                </View>
+                </Pressable>
 
                 {/* Expanded Content */}
                 {isExpanded ? (
@@ -321,7 +318,7 @@ export default function AmbassadorProgramScreen() {
                     </View>
                   </View>
                 ) : null}
-              </Pressable>
+              </View>
             </Animated.View>
           );
         })}
@@ -470,10 +467,9 @@ const styles = StyleSheet.create({
     marginBottom: 14,
     borderWidth: 1.5,
     borderColor: '#E8EDF2',
-    overflow: 'hidden',
     ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }),
   },
-  levelHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16 },
+  levelHeader: { flexDirection: 'row', alignItems: 'center', gap: 14, padding: 16, borderRadius: 18 },
   levelIconBg: { width: 50, height: 50, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   levelNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   levelName: { fontSize: 18, fontWeight: '800' },
