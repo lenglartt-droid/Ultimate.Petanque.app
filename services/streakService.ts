@@ -173,16 +173,18 @@ export async function loadCachedStreak(): Promise<StreakData | null> {
  */
 export function getDailyActivityLast7Days(
   matches: Array<{ date: string }>,
-  challenges: Array<{ date: string }>
+  challenges: Array<{ date: string }>,
+  language: 'fr' | 'en' = 'en'
 ): Array<{ date: string; dayLabel: string; matchCount: number; challengeCount: number; total: number }> {
   const result: Array<{ date: string; dayLabel: string; matchCount: number; challengeCount: number; total: number }> = [];
   
+  const frDayLabels = ['D', 'L', 'M', 'M', 'J', 'V', 'S'];
   const today = new Date();
   for (let i = 6; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(d.getDate() - i);
     const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const dayLabel = d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
+    const dayLabel = language === 'fr' ? frDayLabels[d.getDay()] : d.toLocaleDateString('en-US', { weekday: 'short' }).charAt(0);
     
     const matchCount = matches.filter(m => {
       const md = new Date(m.date);

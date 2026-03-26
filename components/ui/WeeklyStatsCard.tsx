@@ -45,7 +45,7 @@ export default function WeeklyStatsCard() {
       if (bestMatch) bestPerf = `${bestMatch.teamA?.score || 0}-${bestMatch.teamB?.score || 0}`;
     }
 
-    const dailyActivity = getDailyActivityLast7Days(matches, challenges);
+    const dailyActivity = getDailyActivityLast7Days(matches, challenges, language as 'fr' | 'en');
     const maxDaily = Math.max(...dailyActivity.map(d => d.total), 1);
 
     const allDates = [...matches.map(m => m.date), ...challenges.map(c => c.date)];
@@ -126,38 +126,41 @@ export default function WeeklyStatsCard() {
         {/* Mini Sparkline */}
         <View style={s.sparklineSection}>
           <View style={s.sparklineHeader}>
-            <Text style={s.sparklineLabel}>{(et.dailyActivity as any)?.[language] || 'Daily activity'}</Text>
+            <View style={s.sparklineTitleRow}>
+              <MaterialIcons name="bar-chart" size={14} color="#64748B" />
+              <Text style={s.sparklineLabel}>{(et.dailyActivity as any)?.[language] || 'Daily activity'}</Text>
+            </View>
             <View style={s.sparklineLegend}>
               <View style={s.sparklineLegendItem}>
-                <View style={[s.sparklineLegendDot, { backgroundColor: theme.primary + '80' }]} />
+                <View style={[s.sparklineLegendDot, { backgroundColor: '#2563EB' }]} />
                 <Text style={s.sparklineLegendText}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text>
               </View>
               <View style={s.sparklineLegendItem}>
-                <View style={[s.sparklineLegendDot, { backgroundColor: theme.accent + '80' }]} />
+                <View style={[s.sparklineLegendDot, { backgroundColor: '#F59E0B' }]} />
                 <Text style={s.sparklineLegendText}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
               </View>
             </View>
           </View>
-          <Text style={s.sparklineDesc}>{language === 'fr' ? 'Sessions jouees chaque jour (7 derniers jours)' : 'Sessions played each day (last 7 days)'}</Text>
           <View style={s.sparklineRow}>
             {weeklyData.dailyActivity.map((day, idx) => {
-              const height = day.total > 0 ? Math.max(8, (day.total / weeklyData.maxDaily) * 36) : 4;
+              const matchH = day.matchCount > 0 ? Math.max(6, (day.matchCount / weeklyData.maxDaily) * 36) : 0;
+              const challH = day.challengeCount > 0 ? Math.max(6, (day.challengeCount / weeklyData.maxDaily) * 36) : 0;
+              const totalH = matchH + challH;
               const isToday = idx === 6;
               return (
                 <View key={idx} style={s.sparklineCol}>
                   <View style={s.sparklineBarTrack}>
-                    <View style={[
-                      s.sparklineBar,
-                      {
-                        height,
-                        backgroundColor: day.total > 0
-                          ? (isToday ? '#2563EB' : day.matchCount > 0 ? theme.primary + '80' : theme.accent + '80')
-                          : theme.border,
-                      },
-                    ]} />
+                    {day.total > 0 ? (
+                      <View style={{ justifyContent: 'flex-end', height: Math.max(totalH, 8), borderRadius: 5, overflow: 'hidden' }}>
+                        {challH > 0 ? <View style={{ height: challH, backgroundColor: '#F59E0B', borderTopLeftRadius: matchH === 0 ? 5 : 0, borderTopRightRadius: matchH === 0 ? 5 : 0 }} /> : null}
+                        {matchH > 0 ? <View style={{ height: matchH, backgroundColor: isToday ? '#2563EB' : '#60A5FA', borderTopLeftRadius: challH === 0 ? 5 : 0, borderTopRightRadius: challH === 0 ? 5 : 0, borderBottomLeftRadius: 5, borderBottomRightRadius: 5 }} /> : null}
+                      </View>
+                    ) : (
+                      <View style={[s.sparklineBar, { height: 4, backgroundColor: '#E2E8F0' }]} />
+                    )}
                   </View>
-                  <Text style={[s.sparklineDayLabel, isToday && { color: '#2563EB', fontWeight: '700' }]}>{day.dayLabel}</Text>
-                  {day.total > 0 ? <Text style={s.sparklineCount}>{day.total}</Text> : null}
+                  <Text style={[s.sparklineDayLabel, isToday && s.sparklineDayLabelToday]}>{day.dayLabel}</Text>
+                  {day.total > 0 ? <Text style={[s.sparklineCount, isToday && { color: '#2563EB' }]}>{day.total}</Text> : null}
                 </View>
               );
             })}
@@ -264,22 +267,33 @@ const s = StyleSheet.create({
     borderRadius: 8,
   },
   sparklineSection: {
-    gap: 6,
+    gap: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 14,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: '#E8EDF2',
   },
   sparklineHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginBottom: 4,
+  },
+  sparklineTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   sparklineLegend: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
   },
   sparklineLegendItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 5,
   },
   sparklineLegendDot: {
     width: 8,
@@ -287,27 +301,21 @@ const s = StyleSheet.create({
     borderRadius: 4,
   },
   sparklineLegendText: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '600',
     color: '#94A3B8',
   },
-  sparklineDesc: {
-    fontSize: 10,
-    color: '#94A3B8',
-    marginBottom: 2,
-  },
   sparklineLabel: {
-    fontSize: 10,
+    fontSize: 11,
     fontWeight: '700',
-    color: '#94A3B8',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    color: '#64748B',
+    letterSpacing: 0.2,
   },
   sparklineRow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 6,
-    height: 56,
+    height: 60,
   },
   sparklineCol: {
     flex: 1,
@@ -318,21 +326,26 @@ const s = StyleSheet.create({
     flex: 1,
     justifyContent: 'flex-end',
     width: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
   },
   sparklineBar: {
     width: '100%',
-    borderRadius: 4,
+    borderRadius: 5,
     minHeight: 4,
   },
   sparklineDayLabel: {
-    fontSize: 9,
-    fontWeight: '500',
+    fontSize: 10,
+    fontWeight: '600',
     color: '#94A3B8',
   },
+  sparklineDayLabelToday: {
+    color: '#2563EB',
+    fontWeight: '800',
+    fontSize: 11,
+  },
   sparklineCount: {
-    fontSize: 8,
-    fontWeight: '700',
+    fontSize: 9,
+    fontWeight: '800',
     color: '#64748B',
   },
   seeStatsBtn: {

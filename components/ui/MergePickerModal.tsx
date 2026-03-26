@@ -3,7 +3,7 @@ import {
   View,
   Text,
   Modal,
-  ScrollView,
+  FlatList,
   Pressable,
   TextInput,
   StyleSheet,
@@ -345,31 +345,37 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
           </View>
 
           {/* Items list */}
-          <ScrollView style={s.list} contentContainerStyle={s.listContent} showsVerticalScrollIndicator={false}>
-            {availableItems.length > 0 ? (
-              (availableItems as any[]).map((item: any) => (
-                <Pressable
-                  key={item.id}
-                  style={s.itemCard}
-                  onPress={() => handleSelectItem(item.id)}
-                >
-                  <View style={[s.itemIcon, { backgroundColor: iconColor + '15' }]}>
-                    <MaterialIcons name={iconName as any} size={22} color={iconColor} />
-                  </View>
-                  <View style={s.itemInfo}>
-                    <Text style={s.itemName} numberOfLines={1}>{getItemName(item)}</Text>
-                    <Text style={s.itemSubtitle} numberOfLines={1}>{getItemSubtitle(item)}</Text>
-                  </View>
-                  <MaterialIcons name="compare-arrows" size={20} color={theme.primary} />
-                </Pressable>
-              ))
-            ) : (
+          <FlatList
+            data={availableItems as any[]}
+            keyExtractor={(item: any) => item.id}
+            style={s.list}
+            contentContainerStyle={s.listContent}
+            showsVerticalScrollIndicator={false}
+            initialNumToRender={15}
+            maxToRenderPerBatch={10}
+            windowSize={5}
+            renderItem={({ item }: { item: any }) => (
+              <Pressable
+                style={s.itemCard}
+                onPress={() => handleSelectItem(item.id)}
+              >
+                <View style={[s.itemIcon, { backgroundColor: iconColor + '15' }]}>
+                  <MaterialIcons name={iconName as any} size={22} color={iconColor} />
+                </View>
+                <View style={s.itemInfo}>
+                  <Text style={s.itemName} numberOfLines={1}>{getItemName(item)}</Text>
+                  <Text style={s.itemSubtitle} numberOfLines={1}>{getItemSubtitle(item)}</Text>
+                </View>
+                <MaterialIcons name="compare-arrows" size={20} color={theme.primary} />
+              </Pressable>
+            )}
+            ListEmptyComponent={
               <View style={s.empty}>
                 <MaterialIcons name="search-off" size={48} color={theme.textMuted} />
                 <Text style={s.emptyText}>{t('common', 'noResults')}</Text>
               </View>
-            )}
-          </ScrollView>
+            }
+          />
         </SafeAreaView>
       </Modal>
 

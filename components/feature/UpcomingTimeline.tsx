@@ -89,8 +89,8 @@ function UpcomingTimeline({
             </Pressable>
           ) : null}
           <Pressable style={s.joinBtn} onPress={onShowJoinMeetup}>
-            <MaterialIcons name="login" size={14} color="#FFF" />
-            <Text style={s.joinBtnText}>{language === 'fr' ? 'Rejoindre' : 'Join'}</Text>
+            <MaterialIcons name="event" size={14} color="#FFF" />
+            <Text style={s.joinBtnText}>{language === 'fr' ? 'Rejoindre RDV' : 'Join Meetup'}</Text>
           </Pressable>
         </View>
       </View>
@@ -291,8 +291,8 @@ const s = StyleSheet.create({
   actionBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   actionBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: theme.error, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#F8FAFC' },
   actionBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
-  joinBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: '#0369A1', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 11 },
-  joinBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#FFF' },
+  joinBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#0369A1', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1.5, borderColor: '#0284C7', shadowColor: '#0369A1', shadowOffset: { width: 0, height: 2 } as const, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
+  joinBtnText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF', letterSpacing: 0.3 },
   timeline: { gap: 8 },
   card: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 12, gap: 12, borderLeftWidth: 4, borderWidth: 1, borderColor: 'transparent', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 }, android: { elevation: 1 }, default: {} }) },
   dateCol: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
