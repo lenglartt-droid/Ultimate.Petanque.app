@@ -25,6 +25,7 @@ import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { useAlert } from '@/template';
+import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   fetchPublicPlayers, fetchPublicClubs, fetchPublicTerrains, fetchPublicTournaments,
@@ -36,6 +37,9 @@ import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { Image } from 'expo-image';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events';
 type MapMode = 'all' | 'public';
@@ -164,6 +168,81 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
 
   return clusters;
 }
+
+// ============================================
+// PARTNER MARKER COMPONENT (Gold/Silver)
+// ============================================
+const TIER_COLORS: Record<string, { primary: string; bg: string; border: string }> = {
+  gold_sponsor: { primary: '#D4A017', bg: '#FFFBEB', border: '#F59E0B' },
+  sponsor: { primary: '#78909C', bg: '#ECEFF1', border: '#90A4AE' },
+};
+
+interface PartnerMarkerData extends Ambassador {
+  _tier: string;
+}
+
+const PartnerMarkerView = React.memo(({ partner }: { partner: PartnerMarkerData }) => {
+  const tier = TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+  const isGold = partner._tier === 'gold_sponsor';
+  const size = isGold ? 44 : 38;
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <View style={[
+        pMarkerStyles.container,
+        { width: size, height: size, borderRadius: size / 2, borderColor: tier.border, backgroundColor: tier.bg },
+        isGold && pMarkerStyles.containerGold,
+      ]}>
+        {partner.photo ? (
+          <Image
+            source={{ uri: partner.photo }}
+            style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2 }}
+            contentFit="cover"
+            cachePolicy="memory-disk"
+          />
+        ) : (
+          <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color={tier.primary} />
+        )}
+      </View>
+      <View style={[pMarkerStyles.badge, { backgroundColor: tier.primary }]}>
+        <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={7} color="#FFF" />
+      </View>
+    </View>
+  );
+});
+
+const pMarkerStyles = StyleSheet.create({
+  container: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2.5,
+    overflow: 'hidden' as const,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  containerGold: {
+    borderWidth: 3,
+    ...Platform.select({
+      ios: { shadowColor: '#B45309', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6 },
+      android: { elevation: 6 },
+      default: {},
+    }),
+  },
+  badge: {
+    position: 'absolute' as const,
+    bottom: -2,
+    right: -2,
+    width: 16,
+    height: 16,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+});
 
 // ============================================
 // CLUSTER MARKER COMPONENT
@@ -340,6 +419,10 @@ export default function MapScreen() {
   const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
   const [sponsoredEventsLoaded, setSponsoredEventsLoaded] = useState(false);
 
+  // Partner markers state (Gold/Silver ambassadors linked to terrains/clubs)
+  const [partnerMarkers, setPartnerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
+  const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
+
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
     clubs: { label: t('map', 'clubs'), singular: t('map', 'clubSingular'), icon: 'home', color: theme.accent },
@@ -405,6 +488,57 @@ export default function MapScreen() {
       setSponsoredEventsLoaded(true);
     });
   }, [sponsoredEventsLoaded]);
+
+  // Load partner markers (Gold/Silver ambassadors -> terrains & clubs)
+  useEffect(() => {
+    if (partnerMarkersLoaded) return;
+    const loadPartnerMarkers = async () => {
+      try {
+        const { ambassadors } = await fetchAmbassadors();
+        const goldSilver = ambassadors.filter(a => a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor');
+        if (goldSilver.length === 0) { setPartnerMarkersLoaded(true); return; }
+
+        const partnerUserIds = goldSilver.map(a => a.userId);
+        const supabase = getSupabaseClient();
+
+        // Fetch terrains owned by partners
+        const { data: partnerTerrains } = await supabase
+          .from('terrains')
+          .select('id, user_id, name, city, location, type')
+          .in('user_id', partnerUserIds);
+
+        // Fetch clubs owned by partners
+        const { data: partnerClubs } = await supabase
+          .from('clubs')
+          .select('id, user_id, name, city, location')
+          .in('user_id', partnerUserIds);
+
+        const markers: (Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[] = [];
+        const ambByUserId = new Map(goldSilver.map(a => [a.userId, a]));
+
+        (partnerTerrains || []).forEach((t: any) => {
+          if (!t.location?.latitude && !t.location?.longitude) return;
+          const amb = ambByUserId.get(t.user_id);
+          if (!amb) return;
+          markers.push({ ...amb, _tier: amb.badgeType, _itemType: 'terrains', _itemId: t.id, location: t.location });
+        });
+
+        (partnerClubs || []).forEach((c: any) => {
+          if (!c.location?.latitude && !c.location?.longitude) return;
+          const amb = ambByUserId.get(c.user_id);
+          if (!amb) return;
+          markers.push({ ...amb, _tier: amb.badgeType, _itemType: 'clubs', _itemId: c.id, location: c.location });
+        });
+
+        setPartnerMarkers(markers);
+      } catch (e) {
+        console.log('[Map] Error loading partner markers:', e);
+      }
+      setPartnerMarkersLoaded(true);
+    };
+    const timer = setTimeout(loadPartnerMarkers, 1200);
+    return () => clearTimeout(timer);
+  }, [partnerMarkersLoaded]);
 
   // Helper: check if a location has valid coordinates (not 0,0)
   const hasValidLocation = useCallback((item: any) => {
@@ -738,6 +872,22 @@ export default function MapScreen() {
         onPress={() => setSelected(null)}
         onRegionChangeComplete={handleRegionChange}
       >
+        {/* Partner markers (Gold/Silver) — rendered with higher zIndex */}
+        {partnerMarkers.map((pm, idx) => (
+          <MarkerComponent
+            key={`partner-${pm.id}-${pm._itemType}-${pm._itemId}-${idx}`}
+            coordinate={{ latitude: pm.location.latitude, longitude: pm.location.longitude }}
+            onPress={() => {
+              Haptics.selectionAsync();
+              trackAmbassadorEvent(pm.id, 'profile_view', undefined, { sourcePage: 'map' });
+              router.push('/partners' as any);
+            }}
+            tracksViewChanges={false}
+            zIndex={100}
+          >
+            <PartnerMarkerView partner={{ ...pm, _tier: pm._tier }} />
+          </MarkerComponent>
+        ))}
         {clusters.map(cluster => {
           if (cluster.isCluster) {
             // Cluster marker
@@ -945,6 +1095,23 @@ export default function MapScreen() {
                 </View>
                 <Text style={styles.legendLabel}>{t('map', 'legendFallbackClub')}</Text>
               </View>
+              {/* Partner legend entries */}
+              {partnerMarkers.length > 0 ? (
+                <>
+                  <View style={[styles.legendRow, { marginTop: 4 }]}>
+                    <View style={[styles.legendDot, { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}>
+                      <MaterialIcons name="star" size={7} color="#FFF" />
+                    </View>
+                    <Text style={styles.legendLabel}>{language === 'fr' ? 'Partenaire Or' : 'Gold Partner'}</Text>
+                  </View>
+                  <View style={styles.legendRow}>
+                    <View style={[styles.legendDot, { backgroundColor: '#90A4AE', borderColor: '#90A4AE' }]}>
+                      <MaterialIcons name="workspace-premium" size={7} color="#FFF" />
+                    </View>
+                    <Text style={styles.legendLabel}>{language === 'fr' ? 'Partenaire Argent' : 'Silver Partner'}</Text>
+                  </View>
+                </>
+              ) : null}
             </Animated.View>
           ) : null}
         </View>
