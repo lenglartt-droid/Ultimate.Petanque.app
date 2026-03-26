@@ -218,6 +218,9 @@ export async function trackReferral(referralCode: string, referredUserId: string
       source_page: 'referral_code',
     }).catch(() => {});
 
+    // Check for auto-promotion after referral
+    checkAndPromoteAmbassador(amb.id).catch(() => {});
+
     invalidateAmbassadorCache();
     return { success: true, error: null };
   } catch (e: any) {
@@ -239,6 +242,104 @@ export async function updateAmbassadorLevel(ambassadorId: string, level: Ambassa
   } catch (e: any) {
     return { error: e.message };
   }
+}
+
+/** Check if ambassador qualifies for a level promotion and apply it */
+export async function checkAndPromoteAmbassador(ambassadorId: string): Promise<{ promoted: boolean; newLevel: AmbassadorLevel | null; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    // Get current ambassador data
+    const { data: amb, error: ambErr } = await supabase
+      .from('ambassadors')
+      .select('id, ambassador_level, referral_count, user_id')
+      .eq('id', ambassadorId)
+      .maybeSingle();
+
+    if (ambErr || !amb) return { promoted: false, newLevel: null, error: ambErr?.message || 'Ambassador not found' };
+
+    const currentLevel = (amb.ambassador_level || 'decouverte') as AmbassadorLevel;
+    // Already at max level
+    if (currentLevel === 'elite') return { promoted: false, newLevel: null, error: null };
+
+    // Determine next level
+    const nextLevel: AmbassadorLevel = currentLevel === 'decouverte' ? 'confirme' : 'elite';
+    const nextConf = AMBASSADOR_LEVELS[nextLevel];
+
+    // Get referral count from ambassador record
+    const referrals = amb.referral_count || 0;
+
+    // Count sponsored events created by this ambassador
+    const { data: events } = await supabase
+      .from('sponsored_events')
+      .select('id')
+      .eq('ambassador_id', ambassadorId);
+    const eventCount = events?.length || 0;
+
+    // Count total impressions (all-time banner_impression events)
+    const { data: impressions } = await supabase
+      .from('ambassador_analytics')
+      .select('id')
+      .eq('ambassador_id', ambassadorId)
+      .eq('event_type', 'banner_impression');
+    const impressionCount = impressions?.length || 0;
+
+    // Check thresholds
+    const meetsReferrals = referrals >= nextConf.minReferrals;
+    const meetsEvents = eventCount >= nextConf.minEvents;
+    const meetsImpressions = impressionCount >= nextConf.minImpressions;
+
+    if (meetsReferrals && meetsEvents && meetsImpressions) {
+      // Promote!
+      const { error: upErr } = await supabase
+        .from('ambassadors')
+        .update({ ambassador_level: nextLevel, updated_at: new Date().toISOString() })
+        .eq('id', ambassadorId);
+
+      if (upErr) return { promoted: false, newLevel: null, error: upErr.message };
+
+      // Track promotion event in analytics
+      await supabase.from('ambassador_analytics').insert({
+        ambassador_id: ambassadorId,
+        event_type: 'level_promotion',
+        source_page: `promoted_to_${nextLevel}`,
+        viewer_id: amb.user_id,
+      }).catch(() => {});
+
+      invalidateAmbassadorCache();
+      return { promoted: true, newLevel: nextLevel, error: null };
+    }
+
+    return { promoted: false, newLevel: null, error: null };
+  } catch (e: any) {
+    return { promoted: false, newLevel: null, error: e.message };
+  }
+}
+
+/** Get promotion progress for an ambassador */
+export async function getPromotionProgress(ambassadorId: string, currentLevel: AmbassadorLevel): Promise<{
+  referrals: number;
+  events: number;
+  impressions: number;
+  nextLevel: AmbassadorLevel | null;
+}> {
+  if (currentLevel === 'elite') {
+    return { referrals: 0, events: 0, impressions: 0, nextLevel: null };
+  }
+
+  const supabase = getSupabaseClient();
+
+  const [ambRes, eventsRes, impressionsRes] = await Promise.all([
+    supabase.from('ambassadors').select('referral_count').eq('id', ambassadorId).maybeSingle(),
+    supabase.from('sponsored_events').select('id').eq('ambassador_id', ambassadorId),
+    supabase.from('ambassador_analytics').select('id').eq('ambassador_id', ambassadorId).eq('event_type', 'banner_impression'),
+  ]);
+
+  return {
+    referrals: ambRes.data?.referral_count || 0,
+    events: eventsRes.data?.length || 0,
+    impressions: impressionsRes.data?.length || 0,
+    nextLevel: currentLevel === 'decouverte' ? 'confirme' : 'elite',
+  };
 }
 
 /** Ambassador level configuration */

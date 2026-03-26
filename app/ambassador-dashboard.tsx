@@ -17,7 +17,8 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Ambassador, invalidateAmbassadorCache, generateReferralCode, AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
+import { Ambassador, invalidateAmbassadorCache, generateReferralCode, AMBASSADOR_LEVELS, AmbassadorLevel, checkAndPromoteAmbassador } from '@/services/ambassadorService';
+import LevelUpModal from '@/components/ui/LevelUpModal';
 import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
@@ -49,6 +50,10 @@ export default function AmbassadorDashboardScreen() {
   const [editWebsite, setEditWebsite] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
+  // Level-up promotion state
+  const [showLevelUp, setShowLevelUp] = useState(false);
+  const [promotedLevel, setPromotedLevel] = useState<AmbassadorLevel | null>(null);
 
   // Visibility tab state
   const [bannerAnalytics, setBannerAnalytics] = useState<BannerDetailedAnalytics | null>(null);
@@ -113,13 +118,27 @@ export default function AmbassadorDashboardScreen() {
     setNotifications(notifs);
   }, []);
 
+  // Check for auto-promotion
+  const checkPromotion = useCallback(async (ambId: string) => {
+    try {
+      const { promoted, newLevel } = await checkAndPromoteAmbassador(ambId);
+      if (promoted && newLevel) {
+        setPromotedLevel(newLevel);
+        setShowLevelUp(true);
+        await loadAmbassador();
+      }
+    } catch { /* silent */ }
+  }, [loadAmbassador]);
+
   const loadAll = useCallback(async () => {
     const amb = await loadAmbassador();
     if (amb) {
       await Promise.all([loadAnalytics(amb.id), loadEvents(), loadNotifications(), loadBannerAnalytics(amb.id)]);
+      // Check promotion after all data is loaded
+      await checkPromotion(amb.id);
     }
     setLoading(false);
-  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications, loadBannerAnalytics]);
+  }, [loadAmbassador, loadAnalytics, loadEvents, loadNotifications, loadBannerAnalytics, checkPromotion]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
 
@@ -683,6 +702,16 @@ export default function AmbassadorDashboardScreen() {
           </>
         ) : null}
       </ScrollView>
+      {/* Level Up Modal */}
+      <LevelUpModal
+        visible={showLevelUp}
+        newLevel={promotedLevel}
+        language={fr ? 'fr' : 'en'}
+        onClose={() => {
+          setShowLevelUp(false);
+          setPromotedLevel(null);
+        }}
+      />
     </SafeAreaView>
   );
 }

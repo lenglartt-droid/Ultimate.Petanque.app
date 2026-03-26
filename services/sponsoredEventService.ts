@@ -186,12 +186,23 @@ export async function createSponsoredEvent(data: {
           ambassadorName: null, // Resolved server-side if needed
         }).catch(() => {});
       }).catch(() => {});
+
+      // Check for auto-promotion after event creation
+      checkPromotionAfterEvent(data.ambassadorId);
     }
 
     return { event: mapEvent(event), error: null };
   } catch (e: any) {
     return { event: null, error: e.message };
   }
+}
+
+/** Check and trigger auto-promotion after event creation */
+async function checkPromotionAfterEvent(ambassadorId: string): Promise<void> {
+  try {
+    const { checkAndPromoteAmbassador } = await import('./ambassadorService');
+    await checkAndPromoteAmbassador(ambassadorId);
+  } catch { /* silent */ }
 }
 
 /** Get all sponsored events (upcoming/active) */
