@@ -20,6 +20,7 @@ export interface Ambassador {
   referralCode?: string;
   referralCount: number;
   totalReferralXp: number;
+  brandColor?: string;
   // Joined player stats (if available)
   stats?: {
     matchesPlayed: number;
@@ -91,6 +92,7 @@ export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; e
         referralCode: a.referral_code || undefined,
         referralCount: a.referral_count || 0,
         totalReferralXp: a.total_referral_xp || 0,
+        brandColor: a.brand_color || undefined,
         stats: player?.stats ? {
           matchesPlayed: player.stats.matchesPlayed || 0,
           wins: player.stats.wins || 0,

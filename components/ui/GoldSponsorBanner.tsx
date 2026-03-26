@@ -51,19 +51,23 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
     router.push('/partners');
   }, [sponsor, page, userId]);
 
+  // Dynamic brand color
+  const brandColor = sponsor?.brandColor || '#F59E0B';
+  const brandColorDark = sponsor?.brandColor ? sponsor.brandColor + 'CC' : '#B45309';
+
   if (!loaded || !sponsor) return null;
 
   return (
     <Animated.View entering={FadeIn.duration(500)} style={[styles.container, style]}>
       <Pressable style={({ pressed }) => [styles.banner, pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }]} onPress={handlePress}>
         <LinearGradient
-          colors={['#FFFBEB', '#FEF3C7']}
+          colors={[brandColor + '12', brandColor + '20']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
           style={styles.gradient}
         >
           {/* Gold border accent */}
-          <View style={styles.goldAccent} />
+          <View style={[styles.goldAccent, { backgroundColor: brandColor }]} />
 
           <View style={styles.content}>
             {/* Photo */}
@@ -71,11 +75,11 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
               {sponsor.photo ? (
                 <Image source={{ uri: sponsor.photo }} style={styles.photo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
               ) : (
-                <LinearGradient colors={['#B45309', '#F59E0B']} style={styles.photoFallback}>
+                <LinearGradient colors={[brandColorDark, brandColor]} style={styles.photoFallback}>
                   <MaterialIcons name="workspace-premium" size={22} color="#FFF" />
                 </LinearGradient>
               )}
-              <View style={styles.goldBadge}>
+              <View style={[styles.goldBadge, { backgroundColor: brandColor, borderColor: brandColor + '12' }]}>
                 <MaterialIcons name="star" size={10} color="#FFF" />
               </View>
             </View>
@@ -83,7 +87,7 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
             {/* Info */}
             <View style={styles.info}>
               <View style={styles.labelRow}>
-                <LinearGradient colors={['#B45309', '#D97706']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.goldLabel}>
+                <LinearGradient colors={[brandColorDark, brandColor]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.goldLabel}>
                   <MaterialIcons name="workspace-premium" size={9} color="#FFF" />
                   <Text style={styles.goldLabelText}>PARTENAIRE OR</Text>
                 </LinearGradient>
@@ -94,7 +98,7 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
 
             {/* CTA */}
             <View style={styles.ctaWrap}>
-              <LinearGradient colors={['#B45309', '#F59E0B']} style={styles.ctaBtn}>
+              <LinearGradient colors={[brandColorDark, brandColor]} style={styles.ctaBtn}>
                 <MaterialIcons name="open-in-new" size={14} color="#FFF" />
               </LinearGradient>
             </View>
@@ -111,7 +115,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     overflow: 'hidden',
     borderWidth: 1.5,
-    borderColor: '#F59E0B',
+    borderColor: '#F59E0B', // fallback, overridden dynamically
     ...Platform.select({
       ios: { shadowColor: '#B45309', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 10 },
       android: { elevation: 4 },
