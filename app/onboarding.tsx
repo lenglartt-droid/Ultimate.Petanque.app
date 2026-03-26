@@ -366,6 +366,22 @@ export default function OnboardingScreen() {
 
       await AsyncStorage.removeItem(STORAGE_KEY);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+      // Check if user is a sponsor/partner — redirect to sponsor portal
+      try {
+        const { data: sponsorCheck } = await supabase
+          .from('ambassadors')
+          .select('id, badge_type')
+          .eq('user_id', user?.id)
+          .eq('is_active', true)
+          .in('badge_type', ['gold_sponsor', 'sponsor', 'partner'])
+          .maybeSingle();
+        if (sponsorCheck) {
+          router.replace('/sponsor-portal' as any);
+          return;
+        }
+      } catch { /* proceed normally */ }
+
       router.replace('/consent');
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || t('onboarding', 'unableToCreateProfile'));
