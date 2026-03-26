@@ -93,7 +93,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -316,6 +316,7 @@ export default function HomeScreen() {
       s.push({ key: 'ambassadors', data: ['ambassadors'] });
       s.push({ key: 'divider2', data: ['divider2'] });
     }
+    s.push({ key: 'adBanner2', data: ['adBanner2'] });
     s.push({ key: 'history', data: ['history'] });
     return s;
   }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length]);
@@ -502,8 +503,9 @@ export default function HomeScreen() {
           </View>
         );
 
-      // ===== AD BANNER =====
+      // ===== AD BANNERS =====
       case 'adBanner1':
+      case 'adBanner2':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <AdBanner position="inline" />

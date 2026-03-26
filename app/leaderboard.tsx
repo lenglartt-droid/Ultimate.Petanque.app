@@ -1393,7 +1393,7 @@ export default function LeaderboardScreen() {
                 </Animated.View>
               );
             }}
-            ListFooterComponent={filteredClubs.length > 3 ? <AdBanner position="inline" /> : null}
+            ListFooterComponent={null}
           />
         )
       ) : activeTab === 'boules' ? (
@@ -1506,7 +1506,7 @@ export default function LeaderboardScreen() {
                 </Animated.View>
               );
             }}
-            ListFooterComponent={boulesEntries.length > 3 ? <AdBanner position="inline" /> : null}
+            ListFooterComponent={null}
           />
         )
       ) : (

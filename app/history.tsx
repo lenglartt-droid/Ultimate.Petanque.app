@@ -857,7 +857,7 @@ export default function HistoryScreen() {
     const listData: HistoryItem[] = [];
     let currentDateKey = '';
     let contentCount = 0;
-    const AD_INTERVAL = 5;
+    const AD_INTERVAL = 8;
     
     items.forEach(item => {
       const dateKey = getDateKey(new Date(item.date), language);

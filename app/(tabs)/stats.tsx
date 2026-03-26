@@ -2087,9 +2087,6 @@ export default function StatsScreen() {
                   </View>
                 </Animated.View>
 
-                {/* Ad Banner */}
-                <AdBanner position="inline" />
-
                 {tirStats.hasDetailedData && (
                   <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.section, isTablet && styles.sectionTabletWide]}>
                     <SectionHeader title={t('stats', 'shotTypesSection')} subtitle={`${tirStats.totalDetailedTirs} ${t('stats', 'analyzedLabel')}`} icon="category" color={theme.tirColor} />
@@ -2387,9 +2384,6 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
-
-                {/* Ad Banner */}
-                <AdBanner position="inline" />
 
                 {pointStats.successQualitiesTotal > 0 && (
                   <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
@@ -2793,9 +2787,6 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
-
-                {/* Ad Banner */}
-                <AdBanner position="inline" />
 
                 {/* Detailed point errors */}
                 {errorStats.totalPointErrorTyped > 0 && (
