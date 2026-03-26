@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes'];
 
     const results: Record<string, any> = {};
 
@@ -251,7 +251,210 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 4: Clean up old analytics (older than 365 days)
+    // TASK 4: Sponsor Weekly Digest Email
+    // ============================================================
+    if (tasks.includes('sponsor_digest')) {
+      console.log('[weekly-cron] Sending sponsor weekly digests...');
+
+      try {
+        // Get all active sponsors/partners
+        const { data: sponsors } = await supabaseAdmin
+          .from('ambassadors')
+          .select('id, user_id, display_name, badge_type, ambassador_level, photo, brand_color')
+          .eq('is_active', true)
+          .in('badge_type', ['gold_sponsor', 'sponsor', 'partner']);
+
+        if (sponsors && sponsors.length > 0) {
+          const now = new Date();
+          const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          let digestsSent = 0;
+
+          for (const sp of sponsors) {
+            try {
+              // Get this week's analytics for the sponsor
+              const { data: weekEvents } = await supabaseAdmin
+                .from('ambassador_analytics')
+                .select('event_type, source_page')
+                .eq('ambassador_id', sp.id)
+                .gte('created_at', weekAgo.toISOString());
+
+              if (!weekEvents || weekEvents.length === 0) continue;
+
+              // Compute KPIs
+              const impressions = weekEvents.filter(e => e.event_type === 'banner_impression').length;
+              const clicks = weekEvents.filter(e => e.event_type === 'profile_view').length;
+              const socialClicks = weekEvents.filter(e => e.event_type === 'social_click').length;
+              const pushes = weekEvents.filter(e => e.event_type === 'sponsor_push').length;
+              const ctr = impressions > 0 ? ((clicks / impressions) * 100).toFixed(1) : '0';
+
+              // Get previous week for comparison
+              const twoWeeksAgo = new Date(weekAgo.getTime() - 7 * 24 * 60 * 60 * 1000);
+              const { data: prevWeekEvents } = await supabaseAdmin
+                .from('ambassador_analytics')
+                .select('event_type')
+                .eq('ambassador_id', sp.id)
+                .gte('created_at', twoWeeksAgo.toISOString())
+                .lt('created_at', weekAgo.toISOString());
+
+              const prevImpressions = prevWeekEvents?.filter(e => e.event_type === 'banner_impression').length || 0;
+              const prevClicks = prevWeekEvents?.filter(e => e.event_type === 'profile_view').length || 0;
+
+              const impChange = prevImpressions > 0 ? Math.round(((impressions - prevImpressions) / prevImpressions) * 100) : 0;
+              const clkChange = prevClicks > 0 ? Math.round(((clicks - prevClicks) / prevClicks) * 100) : 0;
+
+              const impArrow = impChange > 0 ? '▲' : impChange < 0 ? '▼' : '→';
+              const clkArrow = clkChange > 0 ? '▲' : clkChange < 0 ? '▼' : '→';
+              const impColor = impChange > 0 ? '#10B981' : impChange < 0 ? '#EF4444' : '#94A3B8';
+              const clkColor = clkChange > 0 ? '#10B981' : clkChange < 0 ? '#EF4444' : '#94A3B8';
+
+              const tierColor = sp.brand_color || (sp.badge_type === 'gold_sponsor' ? '#D4A017' : '#78909C');
+              const tierLabel = sp.badge_type === 'gold_sponsor' ? 'GOLD PARTNER' : sp.badge_type === 'sponsor' ? 'SILVER PARTNER' : 'PARTNER';
+
+              // Build push notification with digest summary
+              const { data: tokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('token')
+                .eq('user_id', sp.user_id)
+                .eq('active', true);
+
+              if (tokens && tokens.length > 0) {
+                // Build rich digest content
+                const weekLabel = `${weekAgo.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+                const title = `\u{1F4CA} Recap hebdo | ${sp.display_name}`;
+                const bodyLines = [
+                  `${impressions} impressions ${impArrow}${Math.abs(impChange)}%`,
+                  `${clicks} clics ${clkArrow}${Math.abs(clkChange)}%`,
+                  `CTR: ${ctr}% | Push: ${pushes}`,
+                ].join(' \u2022 ');
+                const body = bodyLines;
+
+                const messages = tokens.map(t => buildPushMessage(
+                  t.token,
+                  title,
+                  body,
+                  { type: 'sponsor_digest', sponsorId: sp.id },
+                  { channelId: 'sponsor-updates' }
+                ));
+
+                await sendPushNotifications(messages);
+                digestsSent++;
+              }
+
+              // Log digest event
+              await supabaseAdmin.from('ambassador_analytics').insert({
+                ambassador_id: sp.id,
+                event_type: 'weekly_digest',
+                source_page: `imp:${impressions}|clk:${clicks}|ctr:${ctr}|push:${pushes}`,
+                viewer_id: sp.user_id,
+              }).catch(() => {});
+
+            } catch (spErr) {
+              console.error(`[weekly-cron] Digest error for ${sp.display_name}:`, spErr);
+            }
+          }
+
+          console.log(`[weekly-cron] Sponsor digests sent: ${digestsSent}/${sponsors.length}`);
+          results.sponsor_digest = { sent: digestsSent, total_sponsors: sponsors.length };
+        } else {
+          results.sponsor_digest = { sent: 0, reason: 'no_active_sponsors' };
+        }
+      } catch (digestErr: any) {
+        console.error('[weekly-cron] Sponsor digest task error:', digestErr.message);
+        results.sponsor_digest = { error: digestErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 5: Process Scheduled Push Notifications
+    // ============================================================
+    if (tasks.includes('process_scheduled_pushes')) {
+      console.log('[weekly-cron] Processing scheduled push notifications...');
+      try {
+        const now = new Date().toISOString();
+
+        // Find all scheduled pushes that are due (event_type = 'scheduled_push')
+        const { data: scheduledPushes } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id, ambassador_id, source_page, social_platform')
+          .eq('event_type', 'scheduled_push')
+          .limit(50);
+
+        let processed = 0;
+        if (scheduledPushes && scheduledPushes.length > 0) {
+          for (const sp of scheduledPushes) {
+            try {
+              // Parse source_page: title|body|scheduledIso|city|radius
+              const parts = (sp.source_page || '').split('|');
+              const title = parts[0] || 'Push';
+              const body = parts[1] || '';
+              const scheduledFor = parts[2] || '';
+              const city = parts[3] || '';
+              const radius = parseInt(parts[4]) || 200;
+
+              // Check if it's time to send
+              if (!scheduledFor || new Date(scheduledFor) > new Date()) continue;
+
+              // Get ambassador info
+              const { data: amb } = await supabaseAdmin
+                .from('ambassadors')
+                .select('id, display_name, user_id')
+                .eq('id', sp.ambassador_id)
+                .maybeSingle();
+
+              if (!amb) continue;
+
+              // Get push tokens to send to
+              const { data: tokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('token')
+                .eq('active', true)
+                .limit(500);
+
+              if (tokens && tokens.length > 0) {
+                // For A/B tests, only send to half the audience per variant
+                const isVariant = sp.social_platform === 'variant_a' || sp.social_platform === 'variant_b';
+                const targetTokens = isVariant
+                  ? tokens.filter((_, idx) => sp.social_platform === 'variant_a' ? idx % 2 === 0 : idx % 2 === 1)
+                  : tokens;
+
+                const messages = targetTokens.map(t => buildPushMessage(
+                  t.token,
+                  title,
+                  body,
+                  { type: 'sponsor_push', ambassadorId: amb.id, ambassadorName: amb.display_name },
+                  { channelId: 'sponsor-updates' }
+                ));
+
+                if (messages.length > 0) {
+                  const tickets = await sendPushNotifications(messages);
+                  const sent = tickets.filter(t => t.status === 'ok').length;
+                  console.log(`[weekly-cron] Scheduled push sent: ${sent}/${messages.length} for ${amb.display_name}`);
+                }
+              }
+
+              // Mark as sent by converting event_type to sponsor_push
+              await supabaseAdmin
+                .from('ambassador_analytics')
+                .update({ event_type: 'sponsor_push' })
+                .eq('id', sp.id);
+
+              processed++;
+            } catch (spErr) {
+              console.error(`[weekly-cron] Error processing scheduled push ${sp.id}:`, spErr);
+            }
+          }
+        }
+
+        console.log(`[weekly-cron] Processed ${processed} scheduled pushes`);
+        results.process_scheduled_pushes = { processed };
+      } catch (schedErr: any) {
+        console.error('[weekly-cron] Scheduled push task error:', schedErr.message);
+        results.process_scheduled_pushes = { error: schedErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 6: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics')) {
       console.log('[weekly-cron] Cleaning up old analytics...');
