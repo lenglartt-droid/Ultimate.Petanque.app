@@ -22,7 +22,7 @@ import {
   markAllEventNotificationsRead, EventReminderSettings,
 } from '@/services/eventNotificationService';
 import { requestNotificationPermissions, areNotificationsEnabled } from '@/services/notificationService';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Switch } from 'react-native';
 

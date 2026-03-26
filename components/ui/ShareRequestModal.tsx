@@ -8,7 +8,7 @@ import {
   View, Text, Pressable, StyleSheet, Modal, ActivityIndicator, Switch,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { detectLinkedPlayers, createShareRequests } from '@/services/matchShareService';
 import { useAuth } from '@/template';

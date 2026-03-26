@@ -17,7 +17,7 @@ import Animated, {
   withDelay,
   Easing,
 } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import { BADGES, getBadgeName, getBadgeDescription } from '@/services/badgeService';
 import theme from '@/constants/theme';
 

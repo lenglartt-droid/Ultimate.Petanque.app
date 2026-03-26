@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { redeemShareCode, ShareItemType } from '@/services/shareService';

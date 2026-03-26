@@ -14,5 +14,8 @@ export function setNotificationHandler(_handler: any): void {}
 export function addNotificationResponseReceivedListener(_cb: any): { remove: () => void } { return { remove: () => {} }; }
 export function addNotificationReceivedListener(_cb: any): { remove: () => void } { return { remove: () => {} }; }
 export async function getAllScheduledNotificationsAsync(): Promise<any[]> { return []; }
+export async function getExpoPushTokenAsync(_opts?: any): Promise<{ data: string }> { return { data: '' }; }
+export async function getBadgeCountAsync(): Promise<number> { return 0; }
+export async function setBadgeCountAsync(_count: number): Promise<void> {}
 
 export default {};

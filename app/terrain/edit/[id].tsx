@@ -19,7 +19,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import * as Location from 'expo-location';
 import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';

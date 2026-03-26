@@ -15,7 +15,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import * as Clipboard from 'expo-clipboard';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
