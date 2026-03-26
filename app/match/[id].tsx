@@ -34,6 +34,10 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { logModification } from '@/services/modificationLogService';
 import { getMatchValidationLevel, getValidationColor, getValidationIcon, getValidationLabel, getMatchValidationWeight, requestWitnessAttestation, fetchMatchWitnessRequests } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
+import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -115,6 +119,15 @@ export default function EditMatchScreen() {
   const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
   const [showWitnessPicker, setShowWitnessPicker] = useState(false);
   const [witnessSearch, setWitnessSearch] = useState('');
+
+  // Gold sponsor badge
+  const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
+  useEffect(() => {
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
+      if (gold) setGoldSponsor(gold);
+    });
+  }, []);
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
@@ -1021,6 +1034,40 @@ export default function EditMatchScreen() {
             </Animated.View>
           )}
 
+          {/* Gold Sponsor Badge */}
+          {goldSponsor ? (
+            <Animated.View entering={FadeInDown.duration(300)} style={{ marginBottom: 16 }}>
+              <Pressable
+                style={({ pressed }) => [matchSponsorStyles.row, pressed && { opacity: 0.9 }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  trackAmbassadorEvent(goldSponsor.id, 'profile_view', undefined, { sourcePage: 'match_detail' });
+                  router.push('/partners' as any);
+                }}
+              >
+                <LinearGradient colors={['#FFFBEB', '#FEF3C7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={matchSponsorStyles.gradient}>
+                  <View style={matchSponsorStyles.accent} />
+                  <View style={matchSponsorStyles.content}>
+                    {goldSponsor.photo ? (
+                      <Image source={{ uri: goldSponsor.photo }} style={matchSponsorStyles.logo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                    ) : (
+                      <LinearGradient colors={['#B45309', '#F59E0B']} style={matchSponsorStyles.logoFallback}>
+                        <MaterialIcons name="workspace-premium" size={12} color="#FFF" />
+                      </LinearGradient>
+                    )}
+                    <View style={{ flex: 1 }}>
+                      <Text style={matchSponsorStyles.label}>{language === 'fr' ? 'Sponsorise par' : 'Sponsored by'}</Text>
+                      <Text style={matchSponsorStyles.name} numberOfLines={1}>{goldSponsor.displayName}</Text>
+                    </View>
+                    <LinearGradient colors={['#B45309', '#D97706']} style={matchSponsorStyles.tier}>
+                      <MaterialIcons name="star" size={8} color="#FFF" />
+                    </LinearGradient>
+                  </View>
+                </LinearGradient>
+              </Pressable>
+            </Animated.View>
+          ) : null}
+
           {/* Date & Time */}
           <Animated.View entering={FadeInDown.duration(400).delay(seriesMatches.length > 1 ? 50 : 0)} style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'dateAndTime')}</Text>
@@ -1773,6 +1820,69 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '500',
     color: theme.textMuted,
+  },
+});
+
+const matchSponsorStyles = StyleSheet.create({
+  row: {
+    borderRadius: 14,
+    overflow: 'hidden' as const,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B',
+  },
+  gradient: {
+    borderRadius: 12,
+    position: 'relative' as const,
+  },
+  accent: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    height: 2.5,
+    backgroundColor: '#F59E0B',
+    borderTopLeftRadius: 12,
+    borderTopRightRadius: 12,
+  },
+  content: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  logo: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    overflow: 'hidden' as const,
+  },
+  logoFallback: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  label: {
+    fontSize: 9,
+    fontWeight: '600' as const,
+    color: '#92400E',
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.5,
+  },
+  name: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#78350F',
+    marginTop: 1,
+  },
+  tier: {
+    width: 24,
+    height: 24,
+    borderRadius: 8,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
 });
 

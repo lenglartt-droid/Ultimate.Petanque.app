@@ -305,6 +305,9 @@ export async function checkAndPromoteAmbassador(ambassadorId: string): Promise<{
         viewer_id: amb.user_id,
       }).catch(() => {});
 
+      // Send push notification for promotion (fire-and-forget)
+      sendPromotionPush(amb.user_id, ambassadorId, nextLevel).catch(() => {});
+
       invalidateAmbassadorCache();
       return { promoted: true, newLevel: nextLevel, error: null };
     }
@@ -340,6 +343,37 @@ export async function getPromotionProgress(ambassadorId: string, currentLevel: A
     impressions: impressionsRes.data?.length || 0,
     nextLevel: currentLevel === 'decouverte' ? 'confirme' : 'elite',
   };
+}
+
+/** Send push notification when an ambassador is promoted */
+async function sendPromotionPush(userId: string, ambassadorId: string, newLevel: AmbassadorLevel): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    // Get ambassador name
+    const { data: amb } = await supabase
+      .from('ambassadors')
+      .select('display_name')
+      .eq('id', ambassadorId)
+      .maybeSingle();
+
+    const levelLabels: Record<AmbassadorLevel, string> = {
+      decouverte: 'Decouverte',
+      confirme: 'Confirme',
+      elite: 'Elite',
+    };
+
+    await supabase.functions.invoke('send-push', {
+      body: {
+        type: 'ambassador_promotion',
+        payload: {
+          targetUserId: userId,
+          ambassadorName: amb?.display_name || 'Ambassadeur',
+          newLevel,
+          newLevelLabel: levelLabels[newLevel],
+        },
+      },
+    });
+  } catch { /* silent */ }
 }
 
 /** Ambassador level configuration */
