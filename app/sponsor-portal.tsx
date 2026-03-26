@@ -22,7 +22,6 @@ import * as ImagePicker from 'expo-image-picker';
 import { decode } from 'base64-arraybuffer';
 import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
-import { invalidateAmbassadorCache } from '@/services/ambassadorService';
 
 function Sparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (!data || data.length < 2) return null;
