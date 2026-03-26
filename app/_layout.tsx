@@ -682,6 +682,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="sponsor-portal" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="witness-invitations" 
                 options={{ 
                   presentation: 'card',
