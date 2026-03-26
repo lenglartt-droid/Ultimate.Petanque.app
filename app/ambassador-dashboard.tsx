@@ -17,7 +17,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Ambassador, invalidateAmbassadorCache } from '@/services/ambassadorService';
+import { Ambassador, invalidateAmbassadorCache, generateReferralCode, AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
@@ -249,6 +249,42 @@ export default function AmbassadorDashboardScreen() {
   const badgeColor = ambassador.badge_type === 'sponsor' ? '#F59E0B' : ambassador.badge_type === 'partner' ? '#3B82F6' : '#7C3AED';
   const totalInteractions = (analytics?.profileViews || 0) + (analytics?.socialClicks || 0) + (analytics?.bannerImpressions || 0) + sponsoredCount;
 
+  // Ambassador level info
+  const ambLevel = (ambassador.ambassador_level || 'decouverte') as AmbassadorLevel;
+  const levelConf = AMBASSADOR_LEVELS[ambLevel];
+  const levelNames: Record<AmbassadorLevel, string> = { decouverte: fr ? 'Decouverte' : 'Discovery', confirme: fr ? 'Confirme' : 'Confirmed', elite: fr ? 'Elite' : 'Elite' };
+  const nextLevel: AmbassadorLevel | null = ambLevel === 'decouverte' ? 'confirme' : ambLevel === 'confirme' ? 'elite' : null;
+  const nextConf = nextLevel ? AMBASSADOR_LEVELS[nextLevel] : null;
+  const referralCount = ambassador.referral_count || 0;
+  const referralCode = ambassador.referral_code || null;
+  const [generatingCode, setGeneratingCode] = React.useState(false);
+  const [copiedCode, setCopiedCode] = React.useState(false);
+
+  const handleGenerateCode = async () => {
+    if (!ambassador?.id) return;
+    setGeneratingCode(true);
+    const { code, error } = await generateReferralCode(ambassador.id, ambassador.display_name);
+    if (error) showAlert(fr ? 'Erreur' : 'Error', error);
+    else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      await loadAmbassador();
+    }
+    setGeneratingCode(false);
+  };
+
+  const handleCopyCode = () => {
+    if (!referralCode) return;
+    try {
+      const { Clipboard } = require('react-native');
+      Clipboard.setString(referralCode);
+    } catch {
+      // Clipboard not available in all environments
+    }
+    setCopiedCode(true);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => setCopiedCode(false), 2000);
+  };
+
   const tabs = [
     { id: 'overview' as const, icon: 'dashboard' as const, label: fr ? 'Apercu' : 'Overview' },
     { id: 'visibility' as const, icon: 'visibility' as const, label: fr ? 'Visibilite' : 'Visibility' },
@@ -290,7 +326,13 @@ export default function AmbassadorDashboardScreen() {
           <View style={s.heroAvatarBadge}><MaterialIcons name="camera-alt" size={12} color="#FFF" /></View>
         </Pressable>
         <Text style={s.heroName}>{ambassador.display_name}</Text>
-        <View style={s.heroBadge}><MaterialIcons name="verified" size={12} color="#FFF" /><Text style={s.heroBadgeText}>{badgeLabel}</Text></View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+          <View style={s.heroBadge}><MaterialIcons name="verified" size={12} color="#FFF" /><Text style={s.heroBadgeText}>{badgeLabel}</Text></View>
+          <View style={[s.heroBadge, { backgroundColor: levelConf.color + '40' }]}>
+            <MaterialIcons name={levelConf.icon as any} size={12} color="#FFF" />
+            <Text style={s.heroBadgeText}>{levelNames[ambLevel]}</Text>
+          </View>
+        </View>
         {ambassador.bio ? <Text style={s.heroBio} numberOfLines={2}>{ambassador.bio}</Text> : null}
       </LinearGradient>
 
@@ -366,15 +408,124 @@ export default function AmbassadorDashboardScreen() {
               </View>
             ) : null}
 
+            {/* Level Progress Card */}
+            <View style={s.sectionCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                <Text style={s.sectionCardTitle}>{fr ? 'Niveau ambassadeur' : 'Ambassador level'}</Text>
+                <Pressable onPress={() => router.push('/ambassador-program' as any)} hitSlop={8}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: badgeColor }}>{fr ? 'Voir les niveaux' : 'View levels'}</Text>
+                </Pressable>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <View style={[s.statIconBg, { backgroundColor: levelConf.color + '15', width: 48, height: 48, borderRadius: 16 }]}>
+                  <MaterialIcons name={levelConf.icon as any} size={24} color={levelConf.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: levelConf.color }}>{levelNames[ambLevel]}</Text>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                    {referralCount} {fr ? 'parrainages' : 'referrals'} • {events.length} {fr ? 'evenements' : 'events'}
+                  </Text>
+                </View>
+              </View>
+              {nextLevel && nextConf ? (
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>
+                    {fr ? 'Prochain niveau :' : 'Next level:'} {levelNames[nextLevel]}
+                  </Text>
+                  {/* Referrals progress */}
+                  <View style={{ marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary }}>{fr ? 'Parrainages' : 'Referrals'}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>{referralCount}/{nextConf.minReferrals}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${Math.min(100, (referralCount / nextConf.minReferrals) * 100)}%`, backgroundColor: levelConf.color, borderRadius: 3 }} />
+                    </View>
+                  </View>
+                  {/* Events progress */}
+                  <View style={{ marginBottom: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary }}>{fr ? 'Evenements' : 'Events'}</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>{events.length}/{nextConf.minEvents}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${Math.min(100, (events.length / nextConf.minEvents) * 100)}%`, backgroundColor: levelConf.color, borderRadius: 3 }} />
+                    </View>
+                  </View>
+                  {/* Impressions progress */}
+                  <View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary }}>Impressions</Text>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary }}>{analytics?.bannerImpressions || 0}/{nextConf.minImpressions}</Text>
+                    </View>
+                    <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                      <View style={{ height: '100%', width: `${Math.min(100, ((analytics?.bannerImpressions || 0) / nextConf.minImpressions) * 100)}%`, backgroundColor: levelConf.color, borderRadius: 3 }} />
+                    </View>
+                  </View>
+                </View>
+              ) : (
+                <View style={{ backgroundColor: '#F59E0B10', borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <MaterialIcons name="military-tech" size={20} color="#F59E0B" />
+                  <Text style={{ flex: 1, fontSize: 13, color: '#92400E', fontWeight: '600' }}>
+                    {fr ? 'Niveau maximum atteint ! Vous etes un ambassadeur Elite.' : 'Maximum level reached! You are an Elite ambassador.'}
+                  </Text>
+                </View>
+              )}
+            </View>
+
+            {/* Referral Code Card */}
+            <View style={s.sectionCard}>
+              <Text style={s.sectionCardTitle}>{fr ? 'Code de parrainage' : 'Referral code'}</Text>
+              {referralCode ? (
+                <>
+                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, borderWidth: 2, borderColor: badgeColor + '30', borderStyle: 'dashed', gap: 12 }} onPress={handleCopyCode}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 22, fontWeight: '900', color: badgeColor, letterSpacing: 2, textAlign: 'center' }}>{referralCode}</Text>
+                    </View>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: badgeColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name={copiedCode ? 'check' : 'content-copy'} size={20} color={badgeColor} />
+                    </View>
+                  </Pressable>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, textAlign: 'center' }}>
+                    {copiedCode ? (fr ? 'Code copie !' : 'Code copied!') : (fr ? 'Appuyez pour copier' : 'Tap to copy')}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, backgroundColor: '#10B98108', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#10B98115' }}>
+                    <MaterialIcons name="people" size={18} color="#10B981" />
+                    <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>
+                      {referralCount} {fr ? 'parrainage(s) valide(s)' : 'validated referral(s)'}
+                    </Text>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#10B981' }}>+{(ambassador.total_referral_xp || 0)} XP</Text>
+                  </View>
+                </>
+              ) : (
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: badgeColor, paddingVertical: 14, borderRadius: 14 }}
+                  onPress={handleGenerateCode}
+                  disabled={generatingCode}
+                >
+                  {generatingCode ? <ActivityIndicator color="#FFF" size="small" /> : (
+                    <>
+                      <MaterialIcons name="vpn-key" size={20} color="#FFF" />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Generer mon code' : 'Generate my code'}</Text>
+                    </>
+                  )}
+                </Pressable>
+              )}
+            </View>
+
             {/* Quick Links */}
             <View style={s.quickLinksRow}>
+              <Pressable style={s.quickLink} onPress={() => router.push('/ambassador-program' as any)}>
+                <MaterialIcons name="stars" size={20} color="#F59E0B" />
+                <Text style={s.quickLinkText}>{fr ? 'Programme' : 'Program'}</Text>
+              </Pressable>
               <Pressable style={s.quickLink} onPress={() => router.push('/ambassadors' as any)}>
                 <MaterialIcons name="group" size={20} color="#7C3AED" />
-                <Text style={s.quickLinkText}>{fr ? 'Nos ambassadeurs' : 'Our ambassadors'}</Text>
+                <Text style={s.quickLinkText}>{fr ? 'Ambassadeurs' : 'Ambassadors'}</Text>
               </Pressable>
               <Pressable style={s.quickLink} onPress={() => router.push('/sponsored-event/new' as any)}>
                 <MaterialIcons name="add-circle" size={20} color="#10B981" />
-                <Text style={s.quickLinkText}>{fr ? 'Nouvel evenement' : 'New event'}</Text>
+                <Text style={s.quickLinkText}>{fr ? 'Evenement' : 'Event'}</Text>
               </Pressable>
             </View>
           </>

@@ -1,5 +1,7 @@
 import { getSupabaseClient } from '@/template';
 
+export type AmbassadorLevel = 'decouverte' | 'confirme' | 'elite';
+
 export interface Ambassador {
   id: string;
   userId: string;
@@ -14,6 +16,10 @@ export interface Ambassador {
   websiteUrl?: string;
   isFeatured: boolean;
   badgeType: string;
+  ambassadorLevel: AmbassadorLevel;
+  referralCode?: string;
+  referralCount: number;
+  totalReferralXp: number;
   // Joined player stats (if available)
   stats?: {
     matchesPlayed: number;
@@ -81,6 +87,10 @@ export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; e
         websiteUrl: a.website_url || undefined,
         isFeatured: a.is_featured,
         badgeType: a.badge_type || 'ambassador',
+        ambassadorLevel: (a.ambassador_level || 'decouverte') as AmbassadorLevel,
+        referralCode: a.referral_code || undefined,
+        referralCount: a.referral_count || 0,
+        totalReferralXp: a.total_referral_xp || 0,
         stats: player?.stats ? {
           matchesPlayed: player.stats.matchesPlayed || 0,
           wins: player.stats.wins || 0,
@@ -149,3 +159,109 @@ export function invalidateAmbassadorCache() {
   cachedAmbassadorUserIds = null;
   lastFetchTime = 0;
 }
+
+/** Generate a unique referral code for an ambassador */
+export async function generateReferralCode(ambassadorId: string, displayName: string): Promise<{ code: string | null; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    // Generate code from display name initials + random
+    const initials = displayName.replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'AMB';
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let suffix = '';
+    for (let i = 0; i < 5; i++) suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+    const code = `${initials}-${suffix}`;
+
+    const { error } = await supabase
+      .from('ambassadors')
+      .update({ referral_code: code, updated_at: new Date().toISOString() })
+      .eq('id', ambassadorId);
+
+    if (error) return { code: null, error: error.message };
+    invalidateAmbassadorCache();
+    return { code, error: null };
+  } catch (e: any) {
+    return { code: null, error: e.message };
+  }
+}
+
+/** Track a referral via code */
+export async function trackReferral(referralCode: string, referredUserId: string): Promise<{ success: boolean; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    // Find ambassador with this code
+    const { data: amb, error: findErr } = await supabase
+      .from('ambassadors')
+      .select('id, referral_count, total_referral_xp')
+      .eq('referral_code', referralCode.toUpperCase().trim())
+      .maybeSingle();
+
+    if (findErr || !amb) return { success: false, error: 'Code invalide' };
+
+    // Increment referral count and XP
+    const xpPerReferral = 50;
+    const { error: upErr } = await supabase
+      .from('ambassadors')
+      .update({
+        referral_count: (amb.referral_count || 0) + 1,
+        total_referral_xp: (amb.total_referral_xp || 0) + xpPerReferral,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', amb.id);
+
+    if (upErr) return { success: false, error: upErr.message };
+
+    // Track analytics event
+    await supabase.from('ambassador_analytics').insert({
+      ambassador_id: amb.id,
+      event_type: 'referral',
+      viewer_id: referredUserId,
+      source_page: 'referral_code',
+    }).catch(() => {});
+
+    invalidateAmbassadorCache();
+    return { success: true, error: null };
+  } catch (e: any) {
+    return { success: false, error: e.message };
+  }
+}
+
+/** Update ambassador level */
+export async function updateAmbassadorLevel(ambassadorId: string, level: AmbassadorLevel): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('ambassadors')
+      .update({ ambassador_level: level, updated_at: new Date().toISOString() })
+      .eq('id', ambassadorId);
+    if (error) return { error: error.message };
+    invalidateAmbassadorCache();
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/** Ambassador level configuration */
+export const AMBASSADOR_LEVELS = {
+  decouverte: {
+    color: '#3B82F6',
+    icon: 'explore' as const,
+    minReferrals: 0,
+    minEvents: 0,
+    minImpressions: 0,
+  },
+  confirme: {
+    color: '#7C3AED',
+    icon: 'trending-up' as const,
+    minReferrals: 5,
+    minEvents: 3,
+    minImpressions: 500,
+  },
+  elite: {
+    color: '#F59E0B',
+    icon: 'military-tech' as const,
+    minReferrals: 20,
+    minEvents: 10,
+    minImpressions: 2000,
+  },
+} as const;
