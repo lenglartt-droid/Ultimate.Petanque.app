@@ -22,6 +22,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
+import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
 import SponsorBanner from '@/components/ui/SponsorBanner';
@@ -92,7 +93,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -306,14 +307,14 @@ export default function HomeScreen() {
     if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
     s.push({ key: 'sponsor', data: ['sponsor'] });
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
+    s.push({ key: 'timeline', data: ['timeline'] });
+    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
+    s.push({ key: 'adBanner1', data: ['adBanner1'] });
     s.push({ key: 'leaderboard', data: ['leaderboard'] });
     s.push({ key: 'divider1', data: ['divider1'] });
-    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
-    s.push({ key: 'timeline', data: ['timeline'] });
-    s.push({ key: 'divider2', data: ['divider2'] });
     if (featuredAmbassadors.length > 0) {
       s.push({ key: 'ambassadors', data: ['ambassadors'] });
-      s.push({ key: 'divider3', data: ['divider3'] });
+      s.push({ key: 'divider2', data: ['divider2'] });
     }
     s.push({ key: 'history', data: ['history'] });
     return s;
@@ -498,6 +499,14 @@ export default function HomeScreen() {
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <WeeklyStatsCard />
+          </View>
+        );
+
+      // ===== AD BANNER =====
+      case 'adBanner1':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <AdBanner position="inline" />
           </View>
         );
 

@@ -848,12 +848,7 @@ export default function MapScreen() {
 
       {/* ========== GRADIENT HERO HEADER ========== */}
       <View style={[styles.heroHeader, { paddingTop: insets.top }]}>
-        <LinearGradient
-          colors={activeGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.heroGradient}
-        >
+        <View style={[styles.heroGradient, { backgroundColor: '#0F172A' }]}>
           {/* Decorative circles for glassmorphism depth */}
           <View style={styles.heroDecoCircle1} />
           <View style={styles.heroDecoCircle2} />
@@ -906,7 +901,7 @@ export default function MapScreen() {
           </View>
 
 
-        </LinearGradient>
+        </View>
       </View>
 
       {/* Legend */}
@@ -1301,7 +1296,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   // ========== GRADIENT HERO HEADER ==========
   heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
-  heroGradient: { paddingTop: 12, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 28, borderBottomRightRadius: 28, overflow: 'hidden' as const, position: 'relative' as const },
+  heroGradient: { paddingTop: 12, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden' as const, position: 'relative' as const },
   heroDecoCircle1: { position: 'absolute' as const, top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.04)' },
   heroDecoCircle2: { position: 'absolute' as const, bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' },
   heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },

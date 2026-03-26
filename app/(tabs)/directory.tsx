@@ -1097,12 +1097,7 @@ export default function DirectoryScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header - Gradient Hero */}
       <View style={styles.header}>
-        <LinearGradient
-          colors={activeGradient}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={styles.headerGradient}
-        >
+        <View style={[styles.headerGradient, { backgroundColor: '#0F172A' }]}>
           {/* Decorative circles for glassmorphism depth */}
           <View style={styles.headerDecoCircle1} />
           <View style={styles.headerDecoCircle2} />
@@ -1172,7 +1167,7 @@ export default function DirectoryScreen() {
               </React.Fragment>
             ))}
           </View>
-        </LinearGradient>
+        </View>
 
         {/* Tabs */}
         <View style={styles.tabsWrapper}>
@@ -1976,8 +1971,8 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 28,
     paddingHorizontal: 20,
-    borderBottomLeftRadius: 32,
-    borderBottomRightRadius: 32,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
     overflow: 'hidden' as const,
     position: 'relative' as const,
   },
@@ -2023,7 +2018,8 @@ const styles = StyleSheet.create({
     fontSize: 17,
     fontWeight: '800' as const,
     color: 'rgba(255,255,255,0.5)',
-  },
+    transition: 'color 0.2s',
+  } as any,
   headerStatsLabel: {
     fontSize: 9,
     fontWeight: '700' as const,

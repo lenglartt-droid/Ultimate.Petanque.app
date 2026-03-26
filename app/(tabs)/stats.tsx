@@ -1426,7 +1426,7 @@ export default function StatsScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header - Glassmorphism Hero */}
       <View style={styles.header}>
-        <LinearGradient colors={['#0F172A', '#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.headerGradient}>
+        <View style={[styles.headerGradient, { backgroundColor: '#0F172A' }]}>
           {/* Decorative circles for glassmorphism depth */}
           <View style={styles.headerDecoCircle1} />
           <View style={styles.headerDecoCircle2} />
@@ -1448,7 +1448,7 @@ export default function StatsScreen() {
           <View style={styles.headerStatsRow}>
             {[{ val: `${performanceStats.winRate}%`, lbl: t('stats', 'victoriesLabel'), color: '#60A5FA' }, { val: `${tirStats.successRate}%`, lbl: t('stats', 'shotShort'), color: '#93C5FD' }, { val: `${pointStats.successRate}%`, lbl: t('stats', 'pointShort'), color: '#86EFAC' }, { val: `${tirStats.carreauRate}%`, lbl: t('stats', 'carreauxLabel'), color: '#FDE68A' }, { val: pointStats.successQualitiesTotal > 0 ? `${Math.round((pointStats.pointDevantBoule / pointStats.successQualitiesTotal) * 100)}%` : '-', lbl: t('leaderboard', 'devantBouleShort'), color: '#C4B5FD' }].map((s, i) => (<React.Fragment key={i}>{i > 0 ? <View style={styles.headerStatDivider} /> : null}<View style={styles.headerStatItem}><Text style={[styles.headerStatValue, { color: s.color }]}>{s.val}</Text><Text style={styles.headerStatLabel}>{s.lbl}</Text></View></React.Fragment>))}
           </View>
-        </LinearGradient>
+        </View>
 
         {/* Time Filter */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
@@ -3727,7 +3727,7 @@ export default function StatsScreen() {
 const styles = StyleSheet.create({
   container:{flex:1,backgroundColor:'#F8FAFC'},
   header:{backgroundColor:theme.surface,borderBottomWidth:0,paddingBottom:12},
-  headerGradient:{paddingTop:16,paddingBottom:28,paddingHorizontal:20,borderBottomLeftRadius:32,borderBottomRightRadius:32,overflow:'hidden' as const,position:'relative' as const},
+  headerGradient:{paddingTop:16,paddingBottom:28,paddingHorizontal:20,borderBottomLeftRadius:24,borderBottomRightRadius:24,overflow:'hidden' as const,position:'relative' as const},
   headerDecoCircle1:{position:'absolute' as const,top:-40,right:-30,width:140,height:140,borderRadius:70,backgroundColor:'rgba(255,255,255,0.04)'},
   headerDecoCircle2:{position:'absolute' as const,bottom:-20,left:-20,width:100,height:100,borderRadius:50,backgroundColor:'rgba(255,255,255,0.03)'},
   headerTop:{flexDirection:'row',justifyContent:'space-between',alignItems:'flex-start',marginBottom:18},
@@ -3735,6 +3735,7 @@ const styles = StyleSheet.create({
   headerSubtitle:{fontSize:13,color:'rgba(255,255,255,0.6)',marginTop:3,fontWeight:'500'},
   headerButtons:{flexDirection:'row',alignItems:'center',gap:8},
 
+  progressionButtonText:{fontSize:11,fontWeight:'700' as const,color:'rgba(255,255,255,0.8)'},
   progressionButton:{width:42,height:42,borderRadius:14,backgroundColor:'rgba(255,255,255,0.12)',alignItems:'center' as const,justifyContent:'center' as const,borderWidth:1,borderColor:'rgba(255,255,255,0.1)'},
   historyButton:{width:42,height:42,borderRadius:14,backgroundColor:'rgba(255,255,255,0.08)',alignItems:'center' as const,justifyContent:'center' as const,borderWidth:1,borderColor:'rgba(255,255,255,0.1)',position:'relative' as const},
   headerStatsRow:{flexDirection:'row',alignItems:'center',backgroundColor:'rgba(255,255,255,0.08)',borderRadius:16,paddingVertical:14,paddingHorizontal:10,borderWidth:1,borderColor:'rgba(255,255,255,0.08)'},
