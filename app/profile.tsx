@@ -1825,6 +1825,13 @@ export default function ProfileScreen() {
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-sponsors' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="handshake" size={20} color="#7C3AED" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion Sponsors & Ambassadeurs' : 'Sponsors & Ambassadors'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
                 <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat' as any); }}>
                   <View style={[styles.menuIcon, { backgroundColor: '#EF4444' + '15' }]}><MaterialIcons name="security" size={20} color="#EF4444" /></View>
                   <View style={styles.menuItemContent}>
