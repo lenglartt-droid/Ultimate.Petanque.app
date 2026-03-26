@@ -605,45 +605,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setPrimaryBoulesSet = async (id: string) =>
     setPrimaryBoulesSetOp(id, { supabase, userId: user?.id, boulesSets, setBoulesSets, syncPrimaryBoulesToPlayer });
 
-  // ===== Replay offline queue on reconnection =====
+  // ===== Ref for delta data (used by reconnection effect below, after loadData is defined) =====
   const loadDeltaDataRef = useRef<() => Promise<void>>(() => Promise.resolve());
-
-  useEffect(() => {
-    if (justReconnected && user?.id) {
-      console.log('Network restored - replaying offline queue then syncing...');
-      setIsOfflineMode(false);
-      (async () => {
-        const queueSizeVal = await getQueueSize();
-        if (queueSizeVal > 0) {
-          console.log(`Replaying ${queueSizeVal} queued operations...`);
-          setIsReplayingQueue(true);
-          setReplayProgress({ current: 0, total: queueSizeVal });
-          const startTime = Date.now();
-          const result = await replayOfflineQueue(supabase, user.id, (current, total) => {
-            setReplayProgress({ current, total });
-            setConflictRemaining(Math.max(0, total - current));
-          }, handleConflict);
-          const duration = Date.now() - startTime;
-          setIsReplayingQueue(false);
-          setReplayProgress({ current: 0, total: 0 });
-          setCurrentConflict(null);
-          await addSyncHistoryEntry({
-            date: new Date().toISOString(),
-            total: result.total,
-            succeeded: result.succeeded,
-            failed: result.failed,
-            conflictsDetected: result.conflictsDetected,
-            conflictsResolved: result.conflictsResolved,
-            errors: result.errors,
-            duration,
-          });
-          await loadData();
-        } else {
-          await loadDeltaDataRef.current();
-        }
-      })();
-    }
-  }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
   // ===== Secondary data loader (shared items, boules sets, preferences) =====
   const loadSecondaryData = useCallback(async () => {
@@ -977,6 +940,46 @@ export function AppProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     loadDeltaDataRef.current = loadDeltaData;
   }, [loadDeltaData]);
+
+  // ===== Replay offline queue on reconnection =====
+  // IMPORTANT: This useEffect must be AFTER loadData/loadDeltaData definitions
+  // to avoid TDZ errors in the dependency array on web bundlers.
+  useEffect(() => {
+    if (justReconnected && user?.id) {
+      console.log('Network restored - replaying offline queue then syncing...');
+      setIsOfflineMode(false);
+      (async () => {
+        const queueSizeVal = await getQueueSize();
+        if (queueSizeVal > 0) {
+          console.log(`Replaying ${queueSizeVal} queued operations...`);
+          setIsReplayingQueue(true);
+          setReplayProgress({ current: 0, total: queueSizeVal });
+          const startTime = Date.now();
+          const result = await replayOfflineQueue(supabase, user.id, (current, total) => {
+            setReplayProgress({ current, total });
+            setConflictRemaining(Math.max(0, total - current));
+          }, handleConflict);
+          const duration = Date.now() - startTime;
+          setIsReplayingQueue(false);
+          setReplayProgress({ current: 0, total: 0 });
+          setCurrentConflict(null);
+          await addSyncHistoryEntry({
+            date: new Date().toISOString(),
+            total: result.total,
+            succeeded: result.succeeded,
+            failed: result.failed,
+            conflictsDetected: result.conflictsDetected,
+            conflictsResolved: result.conflictsResolved,
+            errors: result.errors,
+            duration,
+          });
+          await loadData();
+        } else {
+          await loadDeltaDataRef.current();
+        }
+      })();
+    }
+  }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
   // Persist cache on state changes
   useEffect(() => {
