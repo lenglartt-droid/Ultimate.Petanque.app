@@ -580,6 +580,20 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="partnerships" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="sponsor-analytics" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="witness-invitations" 
                 options={{ 
                   presentation: 'card',
