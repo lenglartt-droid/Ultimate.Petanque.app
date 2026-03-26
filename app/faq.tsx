@@ -43,7 +43,7 @@ function getFaqData(language: string): FAQCategory[] {
         {
           id: 'tr2',
           q: fr ? 'Comment faire un defi de 10 tirs pour travailler mon tir ?' : 'How do I do a 10-shot challenge to work on my shooting?',
-          a: fr ? 'Appuyez sur "Defi" depuis l\'accueil. Choisissez "10 Tirs" (tir classique) ou "10 Tirs Sautee" (tir en sautee/lob). Selectionnez le joueur et son jeu de boules, puis notez chaque tir : reussi, rate, ou carreau. Vous verrez votre taux de reussite en temps reel. Ideal pour mesurer votre progression a l\'entrainement.' : 'Tap "Challenge" from home. Choose "10 Shots" (classic shot) or "10 Lob Shots" (sautee). Select the player and their boules set, then record each shot: hit, miss, or carreau. You will see your success rate in real time. Ideal to measure your training progress.',
+          a: fr ? 'Appuyez sur "Defi" depuis l\'accueil. Choisissez "10 Tirs" (tir classique) ou "10 Tirs Sautee" (tir en sautee/lob). Selectionnez le joueur et ses boules, puis notez chaque tir : reussi, rate, ou carreau. Vous verrez votre taux de reussite en temps reel. Ideal pour mesurer votre progression a l\'entrainement.' : 'Tap "Challenge" from home. Choose "10 Shots" (classic shot) or "10 Lob Shots" (sautee). Select the player and their boules, then record each shot: hit, miss, or carreau. You will see your success rate in real time. Ideal to measure your training progress.',
         },
         {
           id: 'tr3',
@@ -62,8 +62,8 @@ function getFaqData(language: string): FAQCategory[] {
         },
         {
           id: 'tr6',
-          q: fr ? 'Comment associer mon jeu de boules a un match ou un defi ?' : 'How do I link my boules set to a match or challenge?',
-          a: fr ? 'Lors de la creation d\'un match ou defi, une option "Jeu de boules" permet de selectionner un de vos jeux enregistres dans l\'equipement. Cela permet ensuite de comparer vos stats par jeu : quel jeu vous convient le mieux au tir ? Au point ? Les stats par boules se trouvent dans la page Stats > Performance.' : 'When creating a match or challenge, a "Boules set" option lets you select one of your sets registered in equipment. This then lets you compare stats per set: which set suits you best for shooting? For pointing? Per-set stats are found in Stats > Performance.',
+          q: fr ? 'Comment associer mes boules a un match ou un defi ?' : 'How do I link my boules to a match or challenge?',
+          a: fr ? 'Lors de la creation d\'un match ou defi, une option "Boules" permet de selectionner un de vos equipements enregistres. Cela permet ensuite de comparer vos stats par boules : lesquelles vous conviennent le mieux au tir ? Au point ? Les stats par boules se trouvent dans la page Stats > Performance.' : 'When creating a match or challenge, a "Boules" option lets you select one of your registered sets. This then lets you compare stats per boules: which suits you best for shooting? For pointing? Per-boules stats are found in Stats > Performance.',
         },
       ],
     },
@@ -179,7 +179,12 @@ function getFaqData(language: string): FAQCategory[] {
         {
           id: 'so3',
           q: fr ? 'Comment partager un match ou un defi avec mon partenaire ?' : 'How do I share a match or challenge with my partner?',
-          a: fr ? 'Ouvrez le detail d\'un match ou defi dans l\'historique, puis appuyez sur "Partager avec les joueurs". Selectionnez les joueurs participants. Ils recevront une notification et pourront voir (lecture seule) ou modifier (ecriture) les donnees selon le droit que vous accordez. Les modifications sont tracees avec un historique de conflits.' : 'Open a match or challenge detail in history, then tap "Share with players". Select participating players. They will receive a notification and can view (read only) or edit (write) the data based on the permission you grant. Changes are tracked with a conflict history.',
+          a: fr ? 'Ouvrez le detail d\'un match ou defi dans l\'historique, puis appuyez sur "Partager avec les joueurs". Selectionnez les joueurs participants et choisissez le droit d\'acces : lecture seule ou modification. Ils recevront une notification push. Lorsqu\'ils acceptent, la partie apparait automatiquement dans leur historique et leurs statistiques sont mises a jour en temps reel (taux de victoire, tir, point, carreaux). Cela fonctionne pour tous les types de parties : match d\'entrainement, match de tournoi, Best of 3, et defi en 1 contre 1.' : 'Open a match or challenge detail in history, then tap "Share with players". Select participating players and choose access: read only or edit. They will receive a push notification. When they accept, the match automatically appears in their history and their statistics are updated in real time (win rate, shot, point, carreau). This works for all match types: training match, tournament match, Best of 3, and 1v1 challenge.',
+        },
+        {
+          id: 'so3b',
+          q: fr ? 'Que se passe-t-il quand je modifie un match partage ?' : 'What happens when I edit a shared match?',
+          a: fr ? 'Si vous avez le droit de modification, vos changements sont appliques en temps reel et visibles par tous les joueurs partageant cette partie. L\'app detecte automatiquement les conflits : si deux joueurs modifient en meme temps, une fenetre de resolution de conflit apparait pour choisir quelle version garder (la votre ou celle du serveur). Toutes les modifications sont tracees dans un historique visible par le proprietaire (champs modifies, par qui, quand), et peuvent etre annulees dans les 24 heures.' : 'If you have edit permission, your changes are applied in real time and visible to all players sharing this match. The app automatically detects conflicts: if two players edit at the same time, a conflict resolution window appears to choose which version to keep (yours or the server). All modifications are tracked in a history visible to the owner (fields changed, by whom, when), and can be reverted within 24 hours.',
         },
         {
           id: 'so4',
@@ -197,13 +202,13 @@ function getFaqData(language: string): FAQCategory[] {
       questions: [
         {
           id: 'eq1',
-          q: fr ? 'Pourquoi enregistrer mes jeux de boules dans l\'app ?' : 'Why should I register my boules sets in the app?',
-          a: fr ? 'En associant un jeu de boules a chaque match et defi, l\'app calcule automatiquement vos stats par jeu : taux de victoire, tir, point, carreau. Vous pouvez comparer visuellement vos jeux (graphique comparatif dans Stats > Performance) pour savoir lequel vous convient le mieux selon votre role et le terrain.' : 'By linking a boules set to each match and challenge, the app automatically calculates per-set stats: win rate, shot, point, carreau. You can visually compare sets (comparison chart in Stats > Performance) to know which suits you best for your role and court type.',
+          q: fr ? 'Pourquoi enregistrer mes boules dans l\'app ?' : 'Why should I register my boules in the app?',
+          a: fr ? 'En associant vos boules a chaque match et defi, l\'app calcule automatiquement vos stats par equipement : taux de victoire, tir, point, carreau. Vous pouvez comparer visuellement vos boules (graphique comparatif dans Stats > Performance) pour savoir lesquelles vous conviennent le mieux selon votre role et le terrain.' : 'By linking your boules to each match and challenge, the app automatically calculates per-equipment stats: win rate, shot, point, carreau. You can visually compare your boules (comparison chart in Stats > Performance) to know which suits you best for your role and court type.',
         },
         {
           id: 'eq2',
-          q: fr ? 'Comment ajouter ou modifier un jeu de boules ?' : 'How do I add or edit a boules set?',
-          a: fr ? 'Depuis le profil, appuyez sur "Equipement". Ajoutez un jeu avec le nom, la marque, le diametre, le poids, la durete et le numero de serie. Vous pouvez aussi ajouter une photo et le prix d\'achat. Definissez un jeu comme "principal" pour qu\'il soit pre-selectionne lors de la creation de matchs.' : 'From your profile, tap "Equipment". Add a set with name, brand, diameter, weight, hardness and serial number. You can also add a photo and purchase price. Set one as "primary" for it to be pre-selected when creating matches.',
+          q: fr ? 'Comment ajouter ou modifier mes boules ?' : 'How do I add or edit my boules?',
+          a: fr ? 'Depuis le profil, appuyez sur "Equipement". Ajoutez vos boules avec le nom, la marque, le diametre, le poids, la durete et le numero de serie. Vous pouvez aussi ajouter une photo et le prix d\'achat. Definissez un equipement comme "principal" pour qu\'il soit pre-selectionne lors de la creation de matchs.' : 'From your profile, tap "Equipment". Add your boules with name, brand, diameter, weight, hardness and serial number. You can also add a photo and purchase price. Set one as "primary" for it to be pre-selected when creating matches.',
         },
         {
           id: 'eq3',
@@ -328,7 +333,7 @@ function getQuickActions(language: string) {
     { id: 'match', title: fr ? 'Enregistrer un match' : 'Record a match', icon: 'sports', color: '#2563EB', route: '/match/new',
       steps: fr ? ['Choisissez Entrainement ou Tournoi|Selectionnez le format (Tete-a-tete, Doublette, Triplette)|Ajoutez joueurs et adversaires|Notez le score mene par mene|Optionnel : actions detaillees par joueur'] : ['Choose Training or Tournament|Select format (Singles, Doubles, Triples)|Add players and opponents|Record score end by end|Optional: detailed actions per player'] },
     { id: 'challenge', title: fr ? 'Lancer un defi' : 'Start a challenge', icon: 'track-changes', color: '#D97706', route: '/challenge/new',
-      steps: fr ? ['Choisissez 10 Tirs, Sautee ou Precision|Selectionnez le joueur et son jeu de boules|Notez chaque tir (reussi, rate, carreau)|Mode 1v1 : defier un adversaire|Resultats et comparaison instantanes'] : ['Choose 10 Shots, Lob or Precision|Select player and boules set|Record each shot (hit, miss, carreau)|1v1 mode: challenge an opponent|Instant results and comparison'] },
+      steps: fr ? ['Choisissez 10 Tirs, Sautee ou Precision|Selectionnez le joueur et ses boules|Notez chaque tir (reussi, rate, carreau)|Mode 1v1 : defier un adversaire|Resultats et comparaison instantanes'] : ['Choose 10 Shots, Lob or Precision|Select player and their boules|Record each shot (hit, miss, carreau)|1v1 mode: challenge an opponent|Instant results and comparison'] },
     { id: 'meetup', title: fr ? 'Organiser un RDV' : 'Organize a meetup', icon: 'event', color: '#0369A1', route: '/meetup/new',
       steps: fr ? ['Choisissez le terrain et la date|Definissez le nombre max de participants|Partagez le code ou le QR|Invitez directement depuis l\'annuaire|Suivez les confirmations en temps reel'] : ['Choose court and date|Set max participants|Share code or QR|Invite directly from directory|Track confirmations in real time'] },
     { id: 'tournament', title: fr ? 'Suivre un tournoi' : 'Track a tournament', icon: 'emoji-events', color: '#B45309', route: '/tournament/new',
@@ -340,13 +345,14 @@ function getQuickActions(language: string) {
 function getTips(language: string) {
   const fr = language === 'fr';
   return [
-    { icon: 'lightbulb', text: fr ? 'Associez toujours votre jeu de boules aux matchs pour comparer vos stats par equipement.' : 'Always link your boules set to matches to compare stats per equipment.', color: '#D97706' },
+    { icon: 'lightbulb', text: fr ? 'Associez toujours vos boules aux matchs pour comparer vos stats par equipement.' : 'Always link your boules to matches to compare stats per equipment.', color: '#D97706' },
     { icon: 'timer', text: fr ? 'Faites un defi de 10 tirs avant chaque entrainement pour mesurer votre "temperature" du jour.' : 'Do a 10-shot challenge before each training to measure your daily "temperature".', color: '#2563EB' },
     { icon: 'trending-up', text: fr ? 'Consultez la page Erreurs apres un tournoi : elle revele vos points faibles sous pression.' : 'Check the Errors page after a tournament: it reveals your weak points under pressure.', color: '#EF4444' },
     { icon: 'event', text: fr ? 'Creez un RDV hebdomadaire pour vos entrainements reguliers : les joueurs s\'inscrivent seuls.' : 'Create a weekly meetup for regular training: players sign up on their own.', color: '#0369A1' },
     { icon: 'public', text: fr ? 'Activez votre profil public pour apparaitre sur la carte et dans les classements.' : 'Enable your public profile to appear on the map and in rankings.', color: '#10B981' },
     { icon: 'bar-chart', text: fr ? 'Filtrez vos stats par adversaire pour preparer un match contre un joueur specifique.' : 'Filter your stats by opponent to prepare a match against a specific player.', color: '#7C3AED' },
     { icon: 'sports-baseball', text: fr ? 'En tournoi, notez le terrain : vos stats par type de surface vous aideront a adapter votre jeu.' : 'In tournaments, note the court: your stats per surface type will help adapt your game.', color: '#B45309' },
+    { icon: 'group', text: fr ? 'Partagez vos matchs avec vos partenaires : leurs stats se mettent a jour automatiquement a l\'acceptation.' : 'Share your matches with your partners: their stats update automatically upon acceptance.', color: '#2563EB' },
     { icon: 'savings', text: fr ? 'Renseignez les frais d\'inscription et gains de tournois pour suivre votre bilan financier annuel.' : 'Enter tournament fees and winnings to track your annual financial balance.', color: '#10B981' },
   ];
 }
