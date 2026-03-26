@@ -20,6 +20,7 @@ import { router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Linking } from 'react-native';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -422,6 +423,7 @@ export default function MapScreen() {
   // Partner markers state (Gold/Silver ambassadors linked to terrains/clubs)
   const [partnerMarkers, setPartnerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
   const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
+  const [selectedPartner, setSelectedPartner] = useState<(typeof partnerMarkers)[0] | null>(null);
 
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
@@ -869,7 +871,7 @@ export default function MapScreen() {
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
         showsUserLocation showsMyLocationButton={false}
-        onPress={() => setSelected(null)}
+        onPress={() => { setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
       >
         {/* Partner markers (Gold/Silver) — rendered with higher zIndex */}
@@ -880,7 +882,8 @@ export default function MapScreen() {
             onPress={() => {
               Haptics.selectionAsync();
               trackAmbassadorEvent(pm.id, 'profile_view', undefined, { sourcePage: 'map' });
-              router.push('/partners' as any);
+              setSelected(null);
+              setSelectedPartner(pm);
             }}
             tracksViewChanges={false}
             zIndex={100}
@@ -1268,6 +1271,88 @@ export default function MapScreen() {
           </Pressable>
         </Animated.View>
       ) : null}
+
+      {/* Partner Detail Popup */}
+      {selectedPartner ? (() => {
+        const tierCfg = TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
+        const isGold = selectedPartner._tier === 'gold_sponsor';
+        const tierLabel = isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner');
+        return (
+          <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 190 }]}>
+            <Pressable style={styles.partnerPopupClose} onPress={() => setSelectedPartner(null)} hitSlop={8}>
+              <MaterialIcons name="close" size={16} color={theme.textMuted} />
+            </Pressable>
+            {/* Header */}
+            <View style={styles.partnerPopupHeader}>
+              {selectedPartner.photo ? (
+                <Image source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: tierCfg.border }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+              ) : (
+                <View style={[styles.partnerPopupAvatarFallback, { backgroundColor: tierCfg.bg, borderColor: tierCfg.border }]}>
+                  <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={24} color={tierCfg.primary} />
+                </View>
+              )}
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={styles.partnerPopupName} numberOfLines={1}>{selectedPartner.displayName}</Text>
+                <View style={[styles.partnerPopupBadge, { backgroundColor: tierCfg.primary }]}>
+                  <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={9} color="#FFF" />
+                  <Text style={styles.partnerPopupBadgeText}>{tierLabel.toUpperCase()}</Text>
+                </View>
+              </View>
+            </View>
+            {/* Bio */}
+            {selectedPartner.bio ? (
+              <Text style={styles.partnerPopupBio} numberOfLines={3}>{selectedPartner.bio}</Text>
+            ) : null}
+            {/* Social links */}
+            {(selectedPartner.youtubeUrl || selectedPartner.instagramHandle || selectedPartner.twitterHandle || selectedPartner.tiktokUrl) ? (
+              <View style={styles.partnerPopupSocials}>
+                {selectedPartner.youtubeUrl ? (
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#FF000010', borderColor: '#FF000020' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'youtube', { sourcePage: 'map' }); Linking.openURL(selectedPartner.youtubeUrl!); }}>
+                    <MaterialIcons name="play-arrow" size={14} color="#FF0000" />
+                    <Text style={[styles.partnerPopupSocialText, { color: '#FF0000' }]}>YouTube</Text>
+                  </Pressable>
+                ) : null}
+                {selectedPartner.instagramHandle ? (
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#E4405F10', borderColor: '#E4405F20' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'instagram', { sourcePage: 'map' }); Linking.openURL(`https://instagram.com/${selectedPartner.instagramHandle}`); }}>
+                    <MaterialIcons name="camera-alt" size={14} color="#E4405F" />
+                    <Text style={[styles.partnerPopupSocialText, { color: '#E4405F' }]}>Instagram</Text>
+                  </Pressable>
+                ) : null}
+                {selectedPartner.twitterHandle ? (
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#1DA1F210', borderColor: '#1DA1F220' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'twitter', { sourcePage: 'map' }); Linking.openURL(`https://x.com/${selectedPartner.twitterHandle}`); }}>
+                    <MaterialIcons name="alternate-email" size={14} color="#1DA1F2" />
+                    <Text style={[styles.partnerPopupSocialText, { color: '#1DA1F2' }]}>X</Text>
+                  </Pressable>
+                ) : null}
+                {selectedPartner.tiktokUrl ? (
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#01010108', borderColor: '#01010112' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'tiktok', { sourcePage: 'map' }); Linking.openURL(selectedPartner.tiktokUrl!); }}>
+                    <MaterialIcons name="music-note" size={14} color="#010101" />
+                    <Text style={[styles.partnerPopupSocialText, { color: '#333' }]}>TikTok</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            ) : null}
+            {/* Actions */}
+            <View style={styles.partnerPopupActions}>
+              {selectedPartner.websiteUrl ? (
+                <Pressable
+                  style={({ pressed }) => [styles.partnerPopupVisitBtn, { borderColor: tierCfg.primary }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                  onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'website', { sourcePage: 'map' }); Linking.openURL(selectedPartner.websiteUrl!); }}
+                >
+                  <MaterialIcons name="open-in-new" size={16} color={tierCfg.primary} />
+                  <Text style={[styles.partnerPopupVisitText, { color: tierCfg.primary }]}>{language === 'fr' ? 'Visiter le site' : 'Visit website'}</Text>
+                </Pressable>
+              ) : null}
+              <Pressable
+                style={({ pressed }) => [styles.partnerPopupProfileBtn, pressed && { opacity: 0.85 }]}
+                onPress={() => { setSelectedPartner(null); router.push('/partners' as any); }}
+              >
+                <MaterialIcons name="arrow-forward" size={16} color={theme.primary} />
+              </Pressable>
+            </View>
+          </Animated.View>
+        );
+      })() : null}
 
       {/* No-Geo Items Modal */}
       <Modal visible={showNoGeoModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowNoGeoModal(false); setBatchGeoMode(false); }}>
@@ -1713,4 +1798,63 @@ const styles = StyleSheet.create({
   batchToggleBtnActive: { backgroundColor: theme.primary },
   batchToggleText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   batchToggleTextActive: { color: '#FFF' },
+  // Partner popup
+  partnerPopup: {
+    position: 'absolute' as const, left: 16, right: 16,
+    backgroundColor: theme.surface, borderRadius: 20,
+    padding: 16, ...theme.shadows.cardElevated,
+    borderWidth: 1, borderColor: '#E8EDF2',
+  },
+  partnerPopupClose: {
+    position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14,
+    backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10,
+  },
+  partnerPopupHeader: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 10,
+  },
+  partnerPopupAvatar: {
+    width: 52, height: 52, borderRadius: 16, borderWidth: 2.5, overflow: 'hidden' as const,
+  },
+  partnerPopupAvatarFallback: {
+    width: 52, height: 52, borderRadius: 16, borderWidth: 2.5,
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  partnerPopupName: {
+    fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary, marginBottom: 4,
+  },
+  partnerPopupBadge: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4,
+    alignSelf: 'flex-start' as const, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8,
+  },
+  partnerPopupBadgeText: {
+    fontSize: 8, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.5,
+  },
+  partnerPopupBio: {
+    fontSize: 13, color: theme.textSecondary, lineHeight: 19, marginBottom: 10,
+  },
+  partnerPopupSocials: {
+    flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginBottom: 12,
+  },
+  partnerPopupSocialChip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1,
+  },
+  partnerPopupSocialText: {
+    fontSize: 11, fontWeight: '600' as const,
+  },
+  partnerPopupActions: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8,
+  },
+  partnerPopupVisitBtn: {
+    flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8,
+    paddingVertical: 11, borderRadius: 12, borderWidth: 1.5, backgroundColor: '#FFF',
+  },
+  partnerPopupVisitText: {
+    fontSize: 13, fontWeight: '700' as const,
+  },
+  partnerPopupProfileBtn: {
+    width: 40, height: 40, borderRadius: 12,
+    backgroundColor: theme.primary + '12', alignItems: 'center' as const, justifyContent: 'center' as const,
+    borderWidth: 1, borderColor: theme.primary + '20',
+  },
 });
