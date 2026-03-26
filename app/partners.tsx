@@ -327,7 +327,7 @@ export default function PartnersScreen() {
               <View style={styles.heroPillsRow}>
                 <View style={styles.heroPill}>
                   <MaterialIcons name="handshake" size={14} color="rgba(255,255,255,0.9)" />
-                  <Text style={styles.heroPillText}>{PARTNER_SLOTS.length} {language === 'fr' ? 'emplacements' : 'slots'}</Text>
+                  <Text style={styles.heroPillText}>{SLOT_LIMITS.gold + SLOT_LIMITS.silver + SLOT_LIMITS.bronze} {language === 'fr' ? 'emplacements' : 'slots'}</Text>
                 </View>
               </View>
 
