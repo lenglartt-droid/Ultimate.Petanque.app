@@ -3,7 +3,7 @@ import { View, Text, Pressable, StyleSheet, Dimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import * as Haptics from 'expo-haptics';
+import * as Haptics from '@/services/haptics';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';

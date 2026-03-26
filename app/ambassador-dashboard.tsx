@@ -314,8 +314,8 @@ export default function AmbassadorDashboardScreen() {
   const handleCopyCode = () => {
     if (!referralCode) return;
     try {
-      const { Clipboard } = require('react-native');
-      Clipboard.setString(referralCode);
+      const ExpoClipboard = require('expo-clipboard');
+      ExpoClipboard.setStringAsync(referralCode);
     } catch {
       // Clipboard not available in all environments
     }
@@ -724,13 +724,28 @@ export default function AmbassadorDashboardScreen() {
                     Object.entries(ba.impressionsByPage).forEach(([page, count]) => {
                       csv += `${page},${count},${ba.clicksByPage[page] || 0}\n`;
                     });
-                    const path = `${FileSystem.cacheDirectory}analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
-                    await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-                    const canShare = await Sharing.isAvailableAsync();
-                    if (canShare) {
-                      await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter analytics' : 'Export analytics' });
+                    if (Platform.OS === 'web') {
+                      // Web: trigger download via blob
+                      try {
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } catch {
+                        showAlert(fr ? 'Erreur' : 'Error', fr ? 'Export non disponible sur web' : 'Export not available on web');
+                      }
                     } else {
-                      showAlert(fr ? 'Fichier cree' : 'File created', path);
+                      const path = `${FileSystem.cacheDirectory}analytics_${ambassador.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+                      await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+                      const canShare = await Sharing.isAvailableAsync();
+                      if (canShare) {
+                        await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter analytics' : 'Export analytics' });
+                      } else {
+                        showAlert(fr ? 'Fichier cree' : 'File created', path);
+                      }
                     }
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   } catch (e: any) {

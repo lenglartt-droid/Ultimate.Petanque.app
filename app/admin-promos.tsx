@@ -509,11 +509,23 @@ export default function AdminPromosScreen() {
 
     try {
       if (Platform.OS === 'web') {
-        // Web: copy to clipboard
-        const { Clipboard } = await import('react-native');
-        // @ts-ignore
-        if (Clipboard?.setString) { Clipboard.setString(csvContent); }
-        showAlert(fr ? 'Copie !' : 'Copied!', fr ? 'CSV copie dans le presse-papiers.' : 'CSV copied to clipboard.');
+        // Web: trigger download via blob
+        try {
+          const blob = new Blob([csvContent], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `promo_codes_${Date.now()}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch {
+          // Fallback: copy to clipboard
+          try {
+            const ExpoClipboard = require('expo-clipboard');
+            await ExpoClipboard.setStringAsync(csvContent);
+            showAlert(fr ? 'Copie !' : 'Copied!', fr ? 'CSV copie dans le presse-papiers.' : 'CSV copied to clipboard.');
+          } catch { /* silent */ }
+        }
         return;
       }
 
