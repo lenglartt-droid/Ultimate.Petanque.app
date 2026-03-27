@@ -23,6 +23,10 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { Match, Challenge, SeriesInfo } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
+import { MatchCard } from '@/components/feature/history/MatchCard';
+import { ChallengeCard, CHALLENGE_CONFIG } from '@/components/feature/history/ChallengeCard';
+import { filterByPeriod, getDateKey, PERIOD_DAYS, PERIOD_KEYS, PERIOD_IDS } from '@/hooks/useFilteredStats';
+import type { PeriodOption } from '@/hooks/useFilteredStats';
 import ShareModal from '@/components/ui/ShareModal';
 import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import SharedBadge from '@/components/ui/SharedBadge';
@@ -39,38 +43,8 @@ import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
 
 
-// Constants
-const CHALLENGE_CONFIG = {
-  '10_tirs': { nameKey: 'tenShots', icon: 'gps-fixed' as const, color: '#F97316' },
-  '10_tirs_sautee': { nameKey: 'tenShotsLob', icon: 'sports' as const, color: '#3B82F6' },
-  'precision': { nameKey: 'precision', icon: 'stars' as const, color: '#F59E0B' },
-} as const;
-
 type ContentFilter = 'all' | 'training' | 'tournament' | 'meetups' | 'shared';
 type TrainingSubFilter = 'all' | 'matches' | 'challenges' | 'series';
-type PeriodOption = 'all' | 'week' | '2weeks' | 'month' | '3months' | '6months' | 'year';
-
-const PERIOD_KEYS: Record<PeriodOption, string> = {
-  all: 'allTime',
-  week: 'sevenDays',
-  '2weeks': 'twoWeeks',
-  month: 'oneMonth',
-  '3months': 'threeMonths',
-  '6months': 'sixMonths',
-  year: 'oneYear',
-};
-
-const PERIOD_DAYS: Record<PeriodOption, number> = {
-  all: 0,
-  week: 7,
-  '2weeks': 14,
-  month: 30,
-  '3months': 90,
-  '6months': 180,
-  year: 365,
-};
-
-const PERIOD_IDS: PeriodOption[] = ['all', 'week', '2weeks', 'month', '3months', '6months', 'year'];
 
 type ContentFilterDef = { id: ContentFilter; labelKey: string; icon: keyof typeof MaterialIcons.glyphMap };
 const CONTENT_FILTERS: ContentFilterDef[] = [
@@ -111,122 +85,9 @@ type HistoryItem =
   | { type: 'header'; title: string; date: string }
   | { type: 'ad'; date: string; adIndex: number };
 
-// Utility functions
-const getDateKey = (date: Date, lang: 'fr' | 'en'): string => {
-  const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(yesterday.getDate() - 1);
-  
-  if (date.toDateString() === today.toDateString()) return lang === 'fr' ? "Aujourd'hui" : 'Today';
-  if (date.toDateString() === yesterday.toDateString()) return lang === 'fr' ? 'Hier' : 'Yesterday';
-  if (date.getFullYear() === today.getFullYear()) {
-    return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' });
-  }
-  return date.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' });
-};
+// Utility functions (getDateKey, filterByPeriod, PERIOD_DAYS, PERIOD_KEYS, PERIOD_IDS imported from @/hooks/useFilteredStats)
 
-const filterByPeriod = <T extends { date: string }>(items: T[], days: number): T[] => {
-  if (days === 0) return items;
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - days);
-  return items.filter(item => new Date(item.date) >= cutoff);
-};
-
-// Components
-const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission }: { match: Match; onPress: () => void; compact?: boolean; t: (s: string, k: string) => string; language: 'fr' | 'en'; isShared?: boolean; sharedPermission?: 'read' | 'write' | null }) => {
-  const isWin = match.winner === 'A';
-  const isTournament = match.mode === 'Tournoi';
-
-  if (compact) {
-    return (
-      <Pressable style={styles.compactMatchCard} onPress={onPress}>
-        <View style={[styles.compactIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
-        <View style={styles.compactMatchContent}>
-          <Text style={styles.compactMatchLabel}>
-            {match.seriesInfo?.isFinale ? t('history', 'finale') : `${t('history', 'matchN')} ${match.seriesInfo?.matchNumber}`}
-          </Text>
-          <View style={styles.compactScoreRow}>
-            <Text style={[styles.compactScore, isWin && styles.compactScoreWin]}>{match.teamA.score}</Text>
-            <Text style={styles.compactScoreSep}>-</Text>
-            <Text style={[styles.compactScore, !isWin && styles.compactScoreLoss]}>{match.teamB.score}</Text>
-          </View>
-        </View>
-        <MaterialIcons 
-          name={isWin ? 'check-circle' : 'cancel'} 
-          size={16} 
-          color={isWin ? theme.success : theme.error} 
-        />
-      </Pressable>
-    );
-  }
-
-  return (
-    <Pressable style={styles.card} onPress={onPress}>
-      <View style={[styles.cardIndicator, { backgroundColor: isWin ? theme.success : theme.error }]} />
-      <View style={styles.cardContent}>
-        <View style={styles.cardHeader}>
-          <View style={[styles.badge, { backgroundColor: isTournament ? theme.carreauColor + '15' : theme.primary + '15' }]}>
-            <MaterialIcons 
-              name={isTournament ? 'emoji-events' : 'fitness-center'} 
-              size={12} 
-              color={isTournament ? theme.carreauColor : theme.primary} 
-            />
-            <Text style={[styles.badgeText, { color: isTournament ? theme.carreauColor : theme.primary }]}>
-              {isTournament ? t('modes', 'tournament') : t('modes', 'training')}
-            </Text>
-          </View>
-          <Text style={styles.timeText}>
-            {new Date(match.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-
-        {isTournament && match.tournamentName && (
-          <Text style={styles.tournamentName} numberOfLines={1}>{match.tournamentName}</Text>
-        )}
-
-        <View style={styles.scoreRow}>
-          <View style={styles.teamCol}>
-            <Text style={styles.teamLabel}>{t('history', 'me')}</Text>
-            <Text style={styles.teamNames} numberOfLines={1}>
-              {match.teamA.playerNames.slice(0, 2).join(' • ')}
-            </Text>
-          </View>
-          
-          <View style={styles.scoreBox}>
-            <Text style={[styles.scoreNum, isWin && styles.scoreWin]}>{match.teamA.score}</Text>
-            <Text style={styles.scoreSep}>-</Text>
-            <Text style={[styles.scoreNum, !isWin && styles.scoreLoss]}>{match.teamB.score}</Text>
-          </View>
-          
-          <View style={[styles.teamCol, styles.teamRight]}>
-            <Text style={styles.teamLabel}>{t('history', 'opp')}</Text>
-            <Text style={styles.teamNames} numberOfLines={1}>
-              {match.teamB.playerNames.slice(0, 2).join(' • ')}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <View style={[styles.resultBadge, { backgroundColor: isWin ? theme.success + '15' : theme.error + '15' }]}>
-            <MaterialIcons name={isWin ? 'check-circle' : 'cancel'} size={12} color={isWin ? theme.success : theme.error} />
-            <Text style={[styles.resultText, { color: isWin ? theme.success : theme.error }]}>
-              {isWin ? t('history', 'victory') : t('history', 'defeat')}
-            </Text>
-          </View>
-          {isShared ? (
-            <View style={styles.sharedInlineBadge}>
-              <MaterialIcons name={sharedPermission === 'write' ? 'edit' : 'visibility'} size={10} color={sharedPermission === 'write' ? theme.accent : theme.primary} />
-              <Text style={[styles.sharedInlineBadgeText, { color: sharedPermission === 'write' ? theme.accent : theme.primary }]}>
-                {language === 'fr' ? 'Partagé' : 'Shared'}
-              </Text>
-            </View>
-          ) : null}
-          <Text style={styles.formatText}>{t('formats', match.format)}</Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-});
+// MatchCard and ChallengeCard imported from @/components/feature/history/
 
 // Series Card Component
 const SeriesCard = React.memo(({ series, onMatchPress, t, language }: { series: SeriesGroup; onMatchPress: (match: Match) => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
@@ -337,109 +198,7 @@ const SeriesCard = React.memo(({ series, onMatchPress, t, language }: { series: 
   );
 });
 
-// Challenge Card Component - Improved design
-const ChallengeCard = React.memo(({ challenge, onPress, t, language, isShared, sharedPermission }: { challenge: Challenge; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en'; isShared?: boolean; sharedPermission?: 'read' | 'write' | null }) => {
-  const config = CHALLENGE_CONFIG[challenge.type];
-  const challengeName = t('challenge', config.nameKey);
-  const score = challenge.type === 'precision' ? challenge.totalPoints || 0 : challenge.successRate || 0;
-  const percentage = Math.min(100, score);
-  const is1v1 = challenge.mode === '1v1';
-
-  return (
-    <Pressable style={styles.challengeCard} onPress={onPress}>
-      <View style={[styles.challengeIndicator, { backgroundColor: config.color }]} />
-      <View style={styles.challengeContent}>
-        <View style={styles.challengeHeader}>
-          <View style={[styles.challengeIconBox, { backgroundColor: config.color + '15' }]}>
-            <MaterialIcons name={config.icon} size={20} color={config.color} />
-          </View>
-          <View style={styles.challengeInfo}>
-            <Text style={styles.challengeName}>{challengeName}</Text>
-            {challenge.playerName && (
-              <Text style={styles.challengePlayer} numberOfLines={1}>
-                {is1v1 ? `${challenge.playerName} vs ${challenge.opponentName}` : challenge.playerName}
-              </Text>
-            )}
-          </View>
-          <View style={styles.challengeScoreBox}>
-            <Text style={[styles.challengeScoreValue, { color: config.color }]}>
-              {score}{challenge.type === 'precision' ? '' : '%'}
-            </Text>
-            <Text style={styles.challengeScoreLabel}>
-              {challenge.type === 'precision' ? 'pts' : t('history', 'success')}
-            </Text>
-          </View>
-        </View>
-
-        {/* Progress bar */}
-        <View style={styles.challengeProgress}>
-          <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${percentage}%`, backgroundColor: config.color }]} />
-          </View>
-          {challenge.successCount !== undefined && (
-            <Text style={styles.progressLabel}>{challenge.successCount}/{challenge.totalShots}</Text>
-          )}
-        </View>
-
-        {/* Footer with badges */}
-        {/* Sponsored badge */}
-        {challenge.sponsorId ? (
-          <View style={styles.challengeSponsorRow}>
-            {challenge.sponsorPhoto ? (
-              <Image source={{ uri: challenge.sponsorPhoto }} style={styles.challengeSponsorPhoto} contentFit="cover" transition={200} />
-            ) : null}
-            <Text style={styles.challengeSponsorName} numberOfLines={1}>{challenge.sponsorName}</Text>
-            <View style={styles.challengeSponsorBadge}>
-              <MaterialIcons name="verified" size={9} color="#FFF" />
-              <Text style={styles.challengeSponsorBadgeText}>{t('challenge', 'sponsoredBadge')}</Text>
-            </View>
-          </View>
-        ) : null}
-
-        <View style={styles.challengeFooter}>
-          {isShared ? (
-            <View style={styles.sharedInlineBadge}>
-              <MaterialIcons name={sharedPermission === 'write' ? 'edit' : 'visibility'} size={10} color={sharedPermission === 'write' ? theme.accent : theme.primary} />
-              <Text style={[styles.sharedInlineBadgeText, { color: sharedPermission === 'write' ? theme.accent : theme.primary }]}>
-                {language === 'fr' ? 'Partagé' : 'Shared'}
-              </Text>
-            </View>
-          ) : null}
-          {is1v1 && challenge.winner && (
-            <View style={[
-              styles.challengeWinnerBadge,
-              { backgroundColor: challenge.winner === 'player' ? theme.success : challenge.winner === 'opponent' ? theme.error : theme.warning }
-            ]}>
-              <MaterialIcons 
-                name={challenge.winner === 'draw' ? 'handshake' : challenge.winner === 'player' ? 'emoji-events' : 'sentiment-dissatisfied'} 
-                size={12} 
-                color="#FFF" 
-              />
-              <Text style={styles.challengeWinnerText}>
-                {challenge.winner === 'draw' ? t('history', 'draw') : challenge.winner === 'player' ? t('history', 'victory') : t('history', 'defeat')}
-              </Text>
-            </View>
-          )}
-          {is1v1 && (
-            <View style={[styles.modeBadge, { backgroundColor: theme.accent + '15' }]}>
-              <MaterialIcons name="people" size={10} color={theme.accent} />
-              <Text style={[styles.modeBadgeText, { color: theme.accent }]}>1v1</Text>
-            </View>
-          )}
-          {challenge.carreauCount && challenge.carreauCount > 0 ? (
-            <View style={[styles.modeBadge, { backgroundColor: theme.carreauColor + '15' }]}>
-              <MaterialIcons name="stars" size={10} color={theme.carreauColor} />
-              <Text style={[styles.modeBadgeText, { color: theme.carreauColor }]}>{challenge.carreauCount} {challenge.carreauCount > 1 ? t('history', 'carreauxPlural') : t('history', 'carreauSingular')}</Text>
-            </View>
-          ) : null}
-          <Text style={styles.challengeTime}>
-            {new Date(challenge.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-      </View>
-    </Pressable>
-  );
-});
+// ChallengeCard imported from @/components/feature/history/ChallengeCard
 
 const SectionHeader = React.memo(({ title }: { title: string }) => (
   <View style={styles.sectionHeader}>

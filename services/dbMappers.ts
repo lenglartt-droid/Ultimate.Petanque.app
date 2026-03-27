@@ -13,7 +13,7 @@ import {
   Challenge,
   Terrain,
   BoulesSet,
-} from '@/services/mockData';
+} from '@/types/petanque';
 
 // ============================================
 // Row → Domain mappers
