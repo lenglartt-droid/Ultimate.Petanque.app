@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.1.0  
-**Date:** March 26, 2026  
+**Version:** 1.2.0  
+**Date:** March 27, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
 ---
@@ -67,7 +67,7 @@ The user registers via email OTP + password, their player profile is created aut
 | 12 | **Cross-player Sharing** | Auto-detection of linked players, share requests (read/write), acceptance with automatic stats update for recipient, 30s polling, push notifications | Very High |
 | 13 | **Collaborative Editing** | Conflict detection via timestamps, field-by-field visual diff, resolution (keep mine / keep server / cancel), traceable modification history | High |
 | 14 | **Modification History** | Field-by-field logs with colored diff (red→green), per-field and bulk undo, automatic log cleanup | High |
-| 15 | **Ambassador Program** | Ambassador profiles with bio/social media, rotating banner on home, analytics (impressions, clicks, CTR, 7d/30d sparklines) | High |
+| 15 | **Ambassador Program (3 Levels)** | 3 progressive levels (Discovery, Confirmed, Elite) with automatic promotion. Discovery: badge, referral code, 2 challenges/month. Confirmed (5+ referrals, 500+ impressions): rotating home banner, full analytics dashboard, unlimited challenges. Elite (20+ referrals, 2000+ impressions): permanent banner, unlimited push, onboarding section, advanced analytics with export. Referral XP system (+50 XP/referral, +25 XP/challenge, +10 XP/100 impressions) | Very High |
 | 16 | **Sponsored Challenges** | Event creation by ambassadors, participant registration, witness attestation, leaderboard | High |
 | 17 | **Server Push Notifications** | Edge Function `send-push` via Expo Push API with 5 trigger types (ambassador events with 200km proximity, meetup invitations, ranking changes, share requests, reminders), `push_tokens` table, auto-registration, per-type preferences | High |
 | 17b | **Local Notifications** | Local push (tournament reminders, share requests, attestations), dedicated Android channels, tap navigation | Medium |
@@ -89,8 +89,15 @@ The user registers via email OTP + password, their player profile is created aut
 | 33 | **Sentry Monitoring** | `sentryService.ts` integrated at app launch, exception/message capture, navigation breadcrumbs, anonymized user context | Medium |
 | 34 | **Rate Limiting Edge Functions** | Anti-abuse protection on `validate-promo-code` (5 req/min) and `record-purchase` (3 req/min) with 429 responses, duplicate transaction detection | Medium |
 | 35 | **Weekly Summary (WeeklyStatsCard)** | Weekly summary on home: win rate vs previous week, best performance, dual-color daily sparkline (matches blue/challenges yellow), active streak, link to filtered stats page | Medium |
-| 36 | **Contextual FAQ** | 10 categories adapted to real situations (training, tournament, travel, stats, social, equipment, events, ranking, directory, settings), 40+ questions, numbered quick actions, player tips, integrated search | Medium |
+| 36 | **Audience-Based FAQ** | 3 audience tabs: Player (8 categories, 28 questions), Ambassador (4 categories, 13 questions), Partner (5 categories, 15 questions). 56+ questions covering programs, analytics, push, QR codes, landing pages, sponsored events. Numbered quick actions, direct portal links, integrated search | High |
 | 37 | **Harmonized Design System** | Solid #0F172A headers uniform across all pages, glassmorphic cards (#E8EDF2 borders), compact stat chips, pill filters, dynamic tab colors in directory | Medium |
+| 38 | **Partner Program (3 Tiers)** | 3 business tiers (Bronze, Silver, Gold) with custom pricing. Bronze: partner card, badge, map marker. Silver: + rotating banner, 1 push/month, analytics dashboard, templates, CSV/PDF export. Gold: + permanent banner, unlimited push with A/B testing, heatmap, ROI calculator, monthly goals, CRM, brand kit, weekly digest, onboarding section | Very High |
+| 39 | **Partner Portal (6 Tabs)** | ROI (real-time KPIs, sparklines, competitor benchmark, monthly goals with progress rings, ROI calculator with annual projections, budget tracker CPM/CPC), Placement (per-page breakdown with CTR), Branding (logo upload, brand color, banner and map marker preview, brand kit PDF export), Push (composer with 7 template categories, A/B testing 50/50, scheduling with quick slots, performance heatmap, realistic iOS/Android preview, audience segmentation), Events (sponsored challenges), CRM (referrals with history, CSV export). Integrated notification center, onboarding checklist with +200 XP | Very High |
+| 40 | **Partner Landing Pages** | Public page per partner (partner/[id]) with brand color gradient hero, enlarged avatar with tier badge, animated counters (impressions, clicks, CTR, reach), recent activity timeline, social links, events list, referral code with copy, brand-colored QR code, website button | High |
+| 41 | **Ambassador/Partner Program Pages** | Dedicated pages with collapsible levels, interactive progression (animated circles, connectors), contextual badges ("POPULAR", "RECOMMENDED"), criteria/benefits summaries, comparison table (partner), testimonials, collapsible FAQ, auto-scroll on expand, detailed XP system | High |
+| 42 | **Sponsor Weekly Digest** | Automatic Monday recap for Gold partners: impressions, clicks, CTR, pushes sent, week-over-week comparison. Branded email preview in portal, digest history, PDF export | Medium |
+| 43 | **Advanced Push A/B Testing** | A/B test with 50/50 split, title+message variants, results with open rate per variant, full test history, A/B Insights dashboard with statistical significance analysis (confidence, sample size, recommendations), win/loss/tie visualization | High |
+| 44 | **Advanced Sponsor Analytics** | Performance heatmap by day/time slot with optimal score, competitor benchmark by tier (impressions, CTR, reach, push), push calendar with legend (sent/scheduled/A/B), monthly push stats with bar chart, geographic target distribution | High |
 
 ### 2.2 Partially Implemented Features
 
@@ -114,7 +121,7 @@ The user registers via email OTP + password, their player profile is created aut
 | **Database** | PostgreSQL (via OnSpace Cloud) — 24 tables, 90+ RLS policies |
 | **Auth** | Supabase Auth (email OTP + password) |
 | **Storage** | Supabase Storage (5 buckets: avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
-| **Edge Functions** | Deno (6 functions: delete-account, detect-suspicious, record-purchase, send-push, validate-promo-code, validate-receipt) |
+| **Edge Functions** | Deno (8 functions: delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, validate-receipt, weekly-cron) |
 | **State Management** | React Context API (AppContext + LanguageContext) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
@@ -181,9 +188,16 @@ app/
 ├── tournament/[id|new|edit/[id]].tsx
 ├── sponsored-event/[id|new|list].tsx
 ├── meetup/[id|new|invitations].tsx
-├── ambassadors.tsx       ← Ambassador list
+├── ambassadors.tsx       ← Ambassador list (community only)
+├── partners.tsx          ← Partner list (sponsors/business)
 ├── ambassador-dashboard.tsx ← Ambassador dashboard (analytics, events)
-├── faq.tsx               ← Contextual FAQ (10 categories, 40+ questions)
+├── ambassador-program.tsx ← Ambassador program (3 levels, criteria, benefits)
+├── partner-program.tsx   ← Partner program (3 tiers, comparison, testimonials)
+├── sponsor-portal.tsx    ← Partner portal (6 tabs: ROI, Placement, Branding, Push, Events, CRM)
+├── sponsor-digest.tsx    ← Weekly digest history
+├── sponsor-analytics.tsx ← Detailed sponsor analytics
+├── partner/[id].tsx      ← Public partner landing page
+├── faq.tsx               ← Audience-based FAQ (3 tabs, 56+ questions)
 ├── profile.tsx           ← My profile (accordions, XP, badges)
 ├── login.tsx             ← Authentication (OTP + password)
 ├── onboarding.tsx        ← Welcome screens (3 steps)
@@ -194,7 +208,7 @@ app/
 ├── palmares.tsx          ← Hall of fame (tournament results)
 ├── equipment.tsx         ← Boules management
 ├── scanner.tsx           ← QR code scanner
-└── ... (15+ other pages)
+└── ... (30+ other pages)
 ```
 
 ### 3.4 Service Architecture (50+ services)
@@ -224,8 +238,9 @@ services/
 ├── pushTokenService.ts         ← Push token registration
 ├── offlineQueueService.ts      ← Offline queue, replay, conflicts
 ├── cacheService.ts             ← AsyncStorage cache
-├── ambassadorService.ts        ← Ambassador CRUD
-├── ambassadorAnalyticsService.ts ← Ambassador analytics
+├── ambassadorService.ts        ← Ambassador CRUD (3 levels, auto-promotion)
+├── ambassadorAnalyticsService.ts ← Ambassador and sponsor analytics
+├── pushQuotaService.ts         ← Push quota management by partner tier
 ├── sponsoredEventService.ts    ← Sponsored events
 ├── meetupService.ts            ← Meetups
 ├── publicItemsService.ts       ← Public items (map)
@@ -241,6 +256,7 @@ services/
 - Patterns: `authenticated_*_own_*` (own CRUD), `admin_*` (admin), `public_select_*` (public read), `participant_*_shared_*` (shared items), `shared_select_*` (items shared via code)
 - **9 DB triggers**: auto profile creation, metadata sync, soft deletes on 7 tables
 - **5 DB functions**: handle_new_user, sync_user_metadata, is_meetup_creator, log_soft_delete, get_premium_user_ids
+- **8 Edge Functions**: delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, validate-receipt, weekly-cron
 - **30+ performance indexes**
 
 ---
@@ -256,12 +272,18 @@ services/
 - Interactive map with clustering, public items, and zone-based leaderboard
 - Cross-player sharing with permissions, notifications, and automatic stats update
 - Collaborative editing with conflict resolution and traceable history
-- Ambassador program with analytics
+- Ambassador program with 3 levels (Discovery/Confirmed/Elite) with automatic promotion and XP system
+- Partner program with 3 tiers (Bronze/Silver/Gold) with full 6-tab portal
+- Partner portal: ROI with benchmark/goals/calculator, Branding with brand kit, Push with A/B testing/templates/heatmap/scheduling, CRM with export
+- Partner landing pages with branded hero, animated counters, QR code
+- Ambassador and partner program pages with collapsible levels and comparison
+- Audience-based FAQ (Player/Ambassador/Partner, 56+ questions)
 - Sponsored challenges with witness attestation
+- Automatic weekly digest for Gold partners
 - Meetup system with QR codes
 - Offline mode with queue, replay, and delta sync
 - Complete FR/EN i18n (700+ keys)
-- Contextual FAQ (10 categories, 40+ questions adapted to real situations)
+- Audience-based FAQ (3 tabs, 8+4+5 categories, 56+ questions)
 - Harmonized design system (#0F172A headers, glassmorphic cards, 12 optimized AdBanners)
 - Unit and integration tests
 - AdMob ads (test IDs)
@@ -519,4 +541,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 26, 2026 — Ultimate Petanque v1.1.0*
+*Document updated on March 27, 2026 — Ultimate Petanque v1.2.0*
