@@ -12,7 +12,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as ImagePicker from 'expo-image-picker';
 // expo-file-system loaded dynamically to avoid web bundler issues
-import { decode } from 'base64-arraybuffer';
+import { decode } from '@/services/base64';
 import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';

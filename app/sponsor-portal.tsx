@@ -19,7 +19,7 @@ import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchDetailedBannerAnaly
 import { getMySponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import Svg, { Polyline, Circle as SvgCircle, Rect as SvgRect } from 'react-native-svg';
 import * as ImagePicker from 'expo-image-picker';
-import { decode } from 'base64-arraybuffer';
+import { decode } from '@/services/base64';
 import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 import { invalidateAmbassadorCache as refreshAmbCache } from '@/services/ambassadorService';
