@@ -85,11 +85,15 @@ export default function AmbassadorDashboardScreen() {
   const loadAmbassador = useCallback(async () => {
     if (!user?.id) return;
     const supabase = getSupabaseClient();
-    const { data, error } = await supabase
+    // Fetch all records for user, prefer ambassador type over sponsor types
+    const { data: allRecords } = await supabase
       .from('ambassadors')
       .select('*')
       .eq('user_id', user.id)
-      .maybeSingle();
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+    const records = allRecords || [];
+    const data = records.find(r => r.badge_type === 'ambassador') || records[0] || null;
     if (data) {
       setAmbassador(data);
       setEditBio(data.bio || '');
