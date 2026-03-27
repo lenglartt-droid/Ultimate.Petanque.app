@@ -28,13 +28,8 @@
         "foregroundImage": "./assets/images/app-logo.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true,
+      "edgeToEdgeEnabled": false,
       "package": "com.ultimatepetanque.app",
-      "config": {
-        "googleMaps": {
-          "apiKey": ""
-        }
-      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -104,9 +99,6 @@
         }
       ],
       [
-        "expo-tracking-transparency"
-      ],
-      [
         "expo-camera",
         {
           "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
@@ -116,7 +108,7 @@
         "expo-build-properties",
         {
           "android": {
-            "compileSdkVersion": 35,
+            "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "minSdkVersion": 24
           },
