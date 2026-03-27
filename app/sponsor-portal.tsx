@@ -90,7 +90,7 @@ export default function SponsorPortalScreen() {
   const [bannerData, setBannerData] = useState<BannerDetailedAnalytics | null>(null);
   const [events, setEvents] = useState<SponsoredEvent[]>([]);
   const [period, setPeriod] = useState<7 | 30>(30);
-  const [activeSection, setActiveSection] = useState<'roi' | 'placement' | 'events' | 'branding' | 'push'>('roi');
+  const [activeSection, setActiveSection] = useState<'roi' | 'placement' | 'events' | 'branding' | 'push' | 'crm'>('roi');
 
   // Branding state
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -150,6 +150,17 @@ export default function SponsorPortalScreen() {
   // Notification center state
   const [showNotifCenter, setShowNotifCenter] = useState(false);
   const [sponsorNotifs, setSponsorNotifs] = useState<{ id: string; type: string; icon: string; color: string; title: string; message: string; date: string; unread: boolean }[]>([]);
+
+  // Segmentation state
+  const [segLevels, setSegLevels] = useState<string[]>([]);
+  const [segRoles, setSegRoles] = useState<string[]>([]);
+  const [segActivity, setSegActivity] = useState<'all' | '7d' | '30d'>('all');
+
+  // CRM state
+  const [crmReferrals, setCrmReferrals] = useState<{ date: string; viewerId: string; source: string }[]>([]);
+
+  // Revenue tracker state
+  const [revBudget, setRevBudget] = useState('');
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -470,6 +481,30 @@ export default function SponsorPortalScreen() {
     }
     setSponsorNotifs(notifs);
   }, [sponsor, pushQuota, lastDigest, scheduledPushes, abResults, fr]);
+
+  // Load CRM referral data
+  useEffect(() => {
+    if (!sponsor?.id) return;
+    const loadCrm = async () => {
+      try {
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('created_at, viewer_id, source_page')
+          .eq('ambassador_id', sponsor.id)
+          .eq('event_type', 'referral')
+          .order('created_at', { ascending: false })
+          .limit(50);
+        if (data) {
+          setCrmReferrals(data.map((d: any) => ({
+            date: d.created_at,
+            viewerId: d.viewer_id || '',
+            source: d.source_page || '',
+          })));
+        }
+      } catch { /* silent */ }
+    };
+    loadCrm();
+  }, [sponsor?.id]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -962,6 +997,7 @@ export default function SponsorPortalScreen() {
     { id: 'branding' as const, icon: 'palette', label: 'Branding' },
     { id: 'push' as const, icon: 'notifications', label: 'Push' },
     { id: 'events' as const, icon: 'event', label: fr ? 'Events' : 'Events' },
+    { id: 'crm' as const, icon: 'people', label: 'CRM' },
   ];
 
   const BRAND_COLORS = [
@@ -1243,6 +1279,44 @@ export default function SponsorPortalScreen() {
                 })}
               </Animated.View>
             ) : null}
+
+            {/* Revenue Tracker */}
+            <Animated.View entering={FadeInDown.duration(300).delay(198)} style={st.ctrCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="account-balance-wallet" size={18} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Suivi budget' : 'Budget Tracker'}</Text>
+                  <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{fr ? 'ROI et cout par action' : 'ROI and cost per action'}</Text>
+                </View>
+              </View>
+              <View style={st.pushField}>
+                <Text style={st.pushFieldLabel}>{fr ? 'Budget mensuel (\u20AC)' : 'Monthly budget (\u20AC)'}</Text>
+                <TextInput style={st.pushInput} value={revBudget} onChangeText={setRevBudget} keyboardType="numeric" placeholder="500" placeholderTextColor="#94A3B8" />
+              </View>
+              {revBudget && parseFloat(revBudget) > 0 ? (() => {
+                const budget = parseFloat(revBudget);
+                const cpmVal = totalImp > 0 ? Math.round((budget / totalImp) * 10000) / 10 : 0;
+                const cpcVal = totalClk > 0 ? Math.round((budget / totalClk) * 100) / 100 : 0;
+                return (
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: tierColor }}>\u20AC{cpmVal}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>CPM</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#10B981' }}>\u20AC{cpcVal}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>CPC</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#3B82F6' }}>\u20AC{Math.round(budget * 3)}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>{fr ? '3 mois' : '3 months'}</Text>
+                    </View>
+                  </View>
+                );
+              })() : null}
+            </Animated.View>
 
             {/* Export Buttons */}
             <Animated.View entering={FadeInDown.duration(300).delay(200)} style={{ gap: 10 }}>
@@ -1636,6 +1710,51 @@ export default function SponsorPortalScreen() {
                       placeholderTextColor="#94A3B8"
                     />
                     <Text style={st.pushUnitLabel}>km</Text>
+                  </View>
+                </View>
+
+                {/* Audience Segmentation */}
+                <View style={st.segCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <MaterialIcons name="tune" size={16} color={tierColor} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Ciblage audience' : 'Audience targeting'}</Text>
+                    <View style={{ flex: 1 }} />
+                    <View style={{ backgroundColor: tierColor + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: tierColor }}>~{(() => { let b = 500; if (segLevels.length > 0 && segLevels.length < 4) b = Math.round(b * segLevels.length / 4); if (segRoles.length > 0 && segRoles.length < 3) b = Math.round(b * segRoles.length / 3); if (segActivity === '7d') b = Math.round(b * 0.4); else if (segActivity === '30d') b = Math.round(b * 0.7); return Math.max(10, b); })()} {fr ? 'joueurs' : 'players'}</Text>
+                    </View>
+                  </View>
+                  <Text style={st.segLabel}>{fr ? 'Niveau' : 'Level'}</Text>
+                  <View style={st.segChipsRow}>
+                    {['Debutant', 'Intermediaire', 'Confirme', 'Expert'].map(lv => {
+                      const sel = segLevels.includes(lv);
+                      return (
+                        <Pressable key={lv} style={[st.segChip, sel && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); setSegLevels(prev => sel ? prev.filter(l => l !== lv) : [...prev, lv]); }}>
+                          <Text style={[st.segChipText, sel && { color: tierColor, fontWeight: '700' }]}>{lv}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={st.segLabel}>{fr ? 'Role' : 'Role'}</Text>
+                  <View style={st.segChipsRow}>
+                    {['Tireur', 'Pointeur', 'Milieu'].map(rl => {
+                      const sel = segRoles.includes(rl);
+                      return (
+                        <Pressable key={rl} style={[st.segChip, sel && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); setSegRoles(prev => sel ? prev.filter(r => r !== rl) : [...prev, rl]); }}>
+                          <Text style={[st.segChipText, sel && { color: tierColor, fontWeight: '700' }]}>{rl}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={st.segLabel}>{fr ? 'Activite' : 'Activity'}</Text>
+                  <View style={st.segChipsRow}>
+                    {[{ key: 'all' as const, label: fr ? 'Tous' : 'All' }, { key: '30d' as const, label: '30j' }, { key: '7d' as const, label: '7j' }].map(ac => {
+                      const sel = segActivity === ac.key;
+                      return (
+                        <Pressable key={ac.key} style={[st.segChip, sel && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); setSegActivity(ac.key); }}>
+                          <Text style={[st.segChipText, sel && { color: tierColor, fontWeight: '700' }]}>{ac.label}</Text>
+                        </Pressable>
+                      );
+                    })}
                   </View>
                 </View>
 
@@ -2285,6 +2404,91 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
+        {/* ====== CRM SECTION ====== */}
+        {activeSection === 'crm' ? (
+          <>
+            <Animated.View entering={FadeInDown.duration(300)} style={st.ctrCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tierColor + '12', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="people" size={20} color={tierColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Parrainages' : 'Referrals'}</Text>
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 1 }}>{sponsor.referral_count || 0} {fr ? 'parrainage(s) total' : 'total referral(s)'}</Text>
+                </View>
+                <View style={{ backgroundColor: tierColor + '15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '900', color: tierColor }}>{sponsor.total_referral_xp || 0}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '600', color: tierColor, textAlign: 'center' }}>XP</Text>
+                </View>
+              </View>
+              {sponsor.referral_code ? (
+                <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 16, alignItems: 'center' as const, borderWidth: 1.5, borderColor: tierColor + '30', borderStyle: 'dashed' as any, marginBottom: 14 }}>
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 4 }}>{fr ? 'VOTRE CODE' : 'YOUR CODE'}</Text>
+                  <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor, letterSpacing: 2 }}>{sponsor.referral_code}</Text>
+                </View>
+              ) : null}
+              {crmReferrals.length > 0 ? (
+                <View>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 10 }}>{fr ? 'Historique parrainages' : 'Referral history'}</Text>
+                  {crmReferrals.map((ref, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: i < crmReferrals.length - 1 ? 1 : 0, borderBottomColor: '#F1F5F9' }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name="person-add" size={14} color="#10B981" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155' }}>{fr ? 'Nouveau parrainage' : 'New referral'}</Text>
+                        <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                          {new Date(ref.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: '#10B98115', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>+50 XP</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                  <MaterialIcons name="people-outline" size={36} color={theme.textMuted} />
+                  <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Aucun parrainage enregistre' : 'No referrals recorded'}</Text>
+                </View>
+              )}
+            </Animated.View>
+
+            {/* CRM KPI */}
+            <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.kpiGrid}>
+              <View style={st.kpiCard}>
+                <View style={[st.kpiIcon, { backgroundColor: '#10B98112' }]}>
+                  <MaterialIcons name="card-giftcard" size={20} color="#10B981" />
+                </View>
+                <Text style={st.kpiValue}>{sponsor.referral_count || 0}</Text>
+                <Text style={st.kpiLabel}>{fr ? 'Parrainages' : 'Referrals'}</Text>
+              </View>
+              <View style={st.kpiCard}>
+                <View style={[st.kpiIcon, { backgroundColor: tierColor + '12' }]}>
+                  <MaterialIcons name="star" size={20} color={tierColor} />
+                </View>
+                <Text style={st.kpiValue}>{sponsor.total_referral_xp || 0}</Text>
+                <Text style={st.kpiLabel}>XP</Text>
+              </View>
+              <View style={st.kpiCard}>
+                <View style={[st.kpiIcon, { backgroundColor: '#3B82F612' }]}>
+                  <MaterialIcons name="event" size={20} color="#3B82F6" />
+                </View>
+                <Text style={st.kpiValue}>{events.length}</Text>
+                <Text style={st.kpiLabel}>{fr ? 'Evenements' : 'Events'}</Text>
+              </View>
+              <View style={st.kpiCard}>
+                <View style={[st.kpiIcon, { backgroundColor: '#7C3AED12' }]}>
+                  <MaterialIcons name="trending-up" size={20} color="#7C3AED" />
+                </View>
+                <Text style={st.kpiValue}>{ctr}%</Text>
+                <Text style={st.kpiLabel}>CTR</Text>
+              </View>
+            </Animated.View>
+          </>
+        ) : null}
+
         {/* Quick Actions */}
         <Animated.View entering={FadeIn.duration(300).delay(200)} style={st.actionsCard}>
           <Text style={st.actionsTitle}>{fr ? 'Actions rapides' : 'Quick actions'}</Text>
@@ -2569,4 +2773,10 @@ const st = StyleSheet.create({
   mapPreviewPartnerBadge: { position: 'absolute' as const, bottom: -2, right: -2, width: 14, height: 14, borderRadius: 7, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#FFF' },
   mapPreviewLabel: { position: 'absolute' as const, top: '62%', left: '30%', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8 },
   mapPreviewLabelText: { fontSize: 9, fontWeight: '700' as const, color: '#FFF', maxWidth: 120 },
+  // Segmentation
+  segCard: { backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#E2E8F0' },
+  segLabel: { fontSize: 10, fontWeight: '700' as const, color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6, marginTop: 8 },
+  segChipsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  segChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  segChipText: { fontSize: 12, fontWeight: '500' as const, color: '#64748B' },
 });

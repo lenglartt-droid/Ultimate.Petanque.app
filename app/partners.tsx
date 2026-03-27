@@ -21,7 +21,7 @@ import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { fetchDetailedBannerAnalytics, BannerDetailedAnalytics, fetchAmbassadorAnalytics, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { fetchSponsorsOnly, Ambassador, isUserSponsor } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
@@ -96,17 +96,26 @@ export default function PartnersScreen() {
   const [roiLoading, setRoiLoading] = useState(false);
   const [showRoi, setShowRoi] = useState(false);
 
+  const [isSponsor, setIsSponsor] = useState(false);
+
+  // Comparison state
+  const [compareMode, setCompareMode] = useState(false);
+  const [compareSelection, setCompareSelection] = useState<string[]>([]);
+
+  // Check sponsor status for current user
+  useEffect(() => {
+    if (!user?.id) return;
+    isUserSponsor(user.id).then(setIsSponsor);
+  }, [user?.id]);
+
   // Load real partners and their analytics
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
     try {
-      const [{ ambassadors }, { stats }] = await Promise.all([
-        fetchAmbassadors(),
+      const [{ ambassadors: sponsorPartners }, { stats }] = await Promise.all([
+        fetchSponsorsOnly(),
         fetchAmbassadorAnalytics('30d'),
       ]);
-      const sponsorPartners = ambassadors.filter(a =>
-        a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner'
-      );
       const withAnalytics = sponsorPartners.map(p => ({
         ...p,
         analytics: stats.get(p.id) || { profileViews: 0, socialClicks: 0, bannerImpressions: 0, socialBreakdown: {} },
@@ -195,61 +204,102 @@ export default function PartnersScreen() {
 
         {/* Grid: real partners + empty slots */}
         <View style={[styles.partnerSlotsGrid, isGold && styles.partnerSlotsGridGold]}>
-          {filledPartners.map((partner, idx) => (
+          {filledPartners.map((partner, idx) => {
+            const brandCol = partner.brandColor || cfg.color;
+            const totalClicks = (partner.analytics?.profileViews || 0) + (partner.analytics?.socialClicks || 0);
+            const impCount = partner.analytics?.bannerImpressions || 0;
+            const partnerCtr = impCount > 0 ? Math.round((totalClicks / impCount) * 1000) / 10 : 0;
+            return (
             <Animated.View
               key={partner.id}
               entering={FadeIn.duration(300).delay(sectionDelay + 100 + idx * 60)}
-              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: cfg.color + '30', borderStyle: 'solid' as any }]}
+              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: brandCol + '25', borderStyle: 'solid' as any, borderTopWidth: 3.5, borderTopColor: brandCol, overflow: 'hidden' as const }]}
             >
               <Pressable
                 style={({ pressed }) => [{ alignItems: 'center' as const, width: '100%' }, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
                 onPress={() => {
                   Haptics.selectionAsync();
+                  if (compareMode) {
+                    setCompareSelection(prev => prev.includes(partner.id) ? prev.filter(x => x !== partner.id) : prev.length < 2 ? [...prev, partner.id] : prev);
+                    return;
+                  }
                   trackAmbassadorEvent(partner.id, 'profile_view', undefined, { sourcePage: 'partners' });
-                  if (partner.websiteUrl) Linking.openURL(partner.websiteUrl);
+                  router.push(`/partner/${partner.id}` as any);
                 }}
               >
-                {/* Logo/Photo */}
-                {partner.photo ? (
-                  <Image source={{ uri: partner.photo }} style={[styles.partnerLogo, isGold && styles.partnerLogoGold]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-                ) : (
-                  <LinearGradient colors={cfg.gradient} style={[styles.partnerLogoFallback, isGold && styles.partnerLogoGold]}>
-                    <MaterialIcons name={cfg.icon} size={isGold ? 28 : 22} color="#FFF" />
-                  </LinearGradient>
-                )}
-                <Text style={[styles.partnerSlotTitle, { color: theme.textPrimary, fontWeight: '700' }]} numberOfLines={1}>
+                {/* Logo with brand color ring */}
+                <View style={{ position: 'relative' as const, marginBottom: 8 }}>
+                  {partner.photo ? (
+                    <View style={[{ borderWidth: 2.5, borderColor: brandCol + '40', borderRadius: isGold ? 20 : 18 }]}>
+                      <Image source={{ uri: partner.photo }} style={[styles.partnerLogo, isGold && styles.partnerLogoGold, { marginBottom: 0 }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                    </View>
+                  ) : (
+                    <LinearGradient colors={[brandCol, brandCol + 'CC']} style={[styles.partnerLogoFallback, isGold && styles.partnerLogoGold, { marginBottom: 0 }]}>
+                      <MaterialIcons name={cfg.icon} size={isGold ? 28 : 22} color="#FFF" />
+                    </LinearGradient>
+                  )}
+                  {/* Tier icon overlay */}
+                  <View style={{ position: 'absolute', bottom: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: cfg.color, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#FFF' }}>
+                    <MaterialIcons name={cfg.icon} size={10} color="#FFF" />
+                  </View>
+                </View>
+                <Text style={[styles.partnerSlotTitle, { color: theme.textPrimary, fontWeight: '700', fontSize: 14 }]} numberOfLines={1}>
                   {partner.displayName}
                 </Text>
-                {/* Tier badge */}
-                <View style={[styles.partnerTierBadge, { backgroundColor: cfg.color }]}>
+                {/* Tier badge with brand color */}
+                <View style={[styles.partnerTierBadge, { backgroundColor: brandCol }]}>
                   <MaterialIcons name={cfg.icon} size={8} color="#FFF" />
                   <Text style={styles.partnerTierBadgeText}>{cfg.label[language].toUpperCase()}</Text>
                 </View>
-                {/* Impressions counter */}
+                {/* Enhanced Stats */}
                 {partner.analytics ? (
-                  <View style={styles.partnerStatsRow}>
-                    <View style={styles.partnerStatChip}>
-                      <MaterialIcons name="visibility" size={10} color="#3B82F6" />
-                      <Text style={styles.partnerStatText}>{partner.analytics.bannerImpressions}</Text>
+                  <View style={{ width: '100%', marginTop: 4, marginBottom: 4 }}>
+                    <View style={[styles.partnerStatsRow, { justifyContent: 'center' }]}>
+                      <View style={[styles.partnerStatChip, { backgroundColor: '#3B82F608', borderWidth: 1, borderColor: '#3B82F615' }]}>
+                        <MaterialIcons name="visibility" size={10} color="#3B82F6" />
+                        <Text style={styles.partnerStatText}>{impCount}</Text>
+                      </View>
+                      <View style={[styles.partnerStatChip, { backgroundColor: '#10B98108', borderWidth: 1, borderColor: '#10B98115' }]}>
+                        <MaterialIcons name="touch-app" size={10} color="#10B981" />
+                        <Text style={styles.partnerStatText}>{totalClicks}</Text>
+                      </View>
                     </View>
-                    <View style={styles.partnerStatChip}>
-                      <MaterialIcons name="touch-app" size={10} color="#10B981" />
-                      <Text style={styles.partnerStatText}>{partner.analytics.profileViews + partner.analytics.socialClicks}</Text>
-                    </View>
+                    {/* CTR indicator */}
+                    {partnerCtr > 0 ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
+                        <View style={{ flex: 1, height: 4, backgroundColor: '#F1F5F9', borderRadius: 2, overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${Math.min(partnerCtr * 2, 100)}%`, backgroundColor: brandCol, borderRadius: 2 }} />
+                        </View>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: brandCol }}>{partnerCtr}%</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+                {/* Recent activity dot */}
+                {impCount > 5 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: '#22C55E' }}>{language === 'fr' ? 'Actif' : 'Active'}</Text>
                   </View>
                 ) : null}
                 {/* Website link */}
                 {partner.websiteUrl ? (
-                  <View style={[styles.partnerSlotBtn, { borderColor: cfg.color + '40' }]}>
-                    <MaterialIcons name="open-in-new" size={12} color={cfg.color} />
-                    <Text style={[styles.partnerSlotBtnText, { color: cfg.color }]}>
+                  <View style={[styles.partnerSlotBtn, { borderColor: brandCol + '40' }]}>
+                    <MaterialIcons name="open-in-new" size={12} color={brandCol} />
+                    <Text style={[styles.partnerSlotBtnText, { color: brandCol }]}>
                       {language === 'fr' ? 'Visiter' : 'Visit'}
                     </Text>
                   </View>
                 ) : null}
+                {compareMode ? (
+                  <View style={[styles.compareCheckbox, compareSelection.includes(partner.id) && styles.compareCheckboxActive]}>
+                    {compareSelection.includes(partner.id) ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                  </View>
+                ) : null}
               </Pressable>
             </Animated.View>
-          ))}
+            );
+          })}
           {/* Empty slots */}
           {Array.from({ length: emptyCount }).map((_, idx) => (
             <Animated.View
@@ -294,7 +344,13 @@ export default function PartnersScreen() {
           <MaterialIcons name="handshake" size={18} color={theme.primary} />
           <Text style={styles.headerTitle}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
         </View>
-        <View style={{ width: 40 }} />
+        <Pressable
+          style={[styles.backBtn, compareMode && { backgroundColor: '#7C3AED15' }]}
+          onPress={() => { Haptics.selectionAsync(); setCompareMode(!compareMode); if (compareMode) setCompareSelection([]); }}
+          hitSlop={8}
+        >
+          <MaterialIcons name="compare-arrows" size={20} color={compareMode ? '#7C3AED' : theme.textMuted} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -405,9 +461,9 @@ export default function PartnersScreen() {
                       <MiniSparkline data={dailyClk} width={chartW} height={36} color="#10B981" />
                     </View>
                   </View>
-                  <Pressable style={roiStyles.portalLink} onPress={() => router.push('/ambassador-dashboard' as any)}>
+                  <Pressable style={roiStyles.portalLink} onPress={() => router.push('/sponsor-portal' as any)}>
                     <MaterialIcons name="dashboard" size={16} color="#7C3AED" />
-                    <Text style={roiStyles.portalLinkText}>{language === 'fr' ? 'Voir le portail complet' : 'View full portal'}</Text>
+                    <Text style={roiStyles.portalLinkText}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
                     <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
                   </Pressable>
                 </>
@@ -417,6 +473,30 @@ export default function PartnersScreen() {
                 <Text style={{ fontSize: 13, color: theme.textMuted }}>{language === 'fr' ? 'Aucune donnee' : 'No data'}</Text>
               </View>
             )}
+          </Animated.View>
+        ) : null}
+
+        {/* Sponsor Portal CTA for sponsors */}
+        {isSponsor ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(90)} style={{ marginHorizontal: 16, marginTop: 16 }}>
+            <Pressable
+              style={({ pressed }) => [{
+                flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14,
+                backgroundColor: '#FFF', borderRadius: 18, padding: 16,
+                borderWidth: 1.5, borderColor: '#D4A01730',
+                ...Platform.select({ ios: { shadowColor: '#D4A017', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 }, android: { elevation: 2 }, default: {} }),
+              }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+              onPress={() => router.push('/sponsor-portal' as any)}
+            >
+              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#D4A01715', alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                <MaterialIcons name="dashboard" size={22} color="#D4A017" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 15, fontWeight: '700' as const, color: '#0F172A' }}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
+                <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{language === 'fr' ? 'KPIs, push, branding, exports' : 'KPIs, push, branding, exports'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#D4A017" />
+            </Pressable>
           </Animated.View>
         ) : null}
 
@@ -506,6 +586,75 @@ export default function PartnersScreen() {
           </LinearGradient>
         </Animated.View>
       </ScrollView>
+
+      {/* Comparison Bar */}
+      {compareMode ? (
+        <Animated.View entering={FadeInDown.duration(200)} style={styles.compareBar}>
+          {compareSelection.length < 2 ? (
+            <View style={styles.compareBarContent}>
+              <MaterialIcons name="compare-arrows" size={18} color="#7C3AED" />
+              <Text style={styles.compareBarText}>
+                {compareSelection.length === 0
+                  ? (language === 'fr' ? 'Selectionnez 2 partenaires' : 'Select 2 partners')
+                  : (language === 'fr' ? '1 selectionne, choisissez le 2eme' : '1 selected, choose 2nd')}
+              </Text>
+              <Pressable style={styles.compareBarClose} onPress={() => { setCompareMode(false); setCompareSelection([]); }}>
+                <MaterialIcons name="close" size={16} color="#94A3B8" />
+              </Pressable>
+            </View>
+          ) : (() => {
+            const p1 = partners.find(p => p.id === compareSelection[0]);
+            const p2 = partners.find(p => p.id === compareSelection[1]);
+            if (!p1 || !p2) return null;
+            const p1Imp = p1.analytics?.bannerImpressions || 0;
+            const p1Clk = (p1.analytics?.profileViews || 0) + (p1.analytics?.socialClicks || 0);
+            const p1Ctr = p1Imp > 0 ? Math.round((p1Clk / p1Imp) * 1000) / 10 : 0;
+            const p2Imp = p2.analytics?.bannerImpressions || 0;
+            const p2Clk = (p2.analytics?.profileViews || 0) + (p2.analytics?.socialClicks || 0);
+            const p2Ctr = p2Imp > 0 ? Math.round((p2Clk / p2Imp) * 1000) / 10 : 0;
+            return (
+              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
+                <View style={styles.compareHeader}>
+                  <Text style={styles.compareHeaderText}>{language === 'fr' ? 'Comparaison' : 'Comparison'}</Text>
+                  <Pressable onPress={() => { setCompareMode(false); setCompareSelection([]); }} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color="#94A3B8" />
+                  </Pressable>
+                </View>
+                <View style={styles.compareRow}>
+                  <View style={styles.compareCell}><Text style={styles.compareName} numberOfLines={1}>{p1.displayName}</Text></View>
+                  <View style={styles.compareLabelCell}><Text style={styles.compareLabelText}> </Text></View>
+                  <View style={styles.compareCell}><Text style={styles.compareName} numberOfLines={1}>{p2.displayName}</Text></View>
+                </View>
+                {[
+                  { label: 'Impressions', v1: p1Imp, v2: p2Imp, color: '#3B82F6' },
+                  { label: language === 'fr' ? 'Clics' : 'Clicks', v1: p1Clk, v2: p2Clk, color: '#10B981' },
+                  { label: 'CTR', v1: p1Ctr, v2: p2Ctr, color: '#F59E0B', suffix: '%' },
+                  { label: language === 'fr' ? 'Reseaux' : 'Social', v1: p1.analytics?.socialClicks || 0, v2: p2.analytics?.socialClicks || 0, color: '#7C3AED' },
+                ].map((m, i) => {
+                  const maxV = Math.max(m.v1, m.v2, 1);
+                  return (
+                    <View key={i} style={styles.compareRow}>
+                      <View style={styles.compareCell}>
+                        <Text style={[styles.compareValue, m.v1 >= m.v2 && { color: m.color, fontWeight: '900' as const }]}>{m.v1}{m.suffix || ''}</Text>
+                        <View style={styles.compareBarTrack}><View style={[styles.compareBarFill, { width: `${(m.v1 / maxV) * 100}%`, backgroundColor: m.v1 >= m.v2 ? m.color : '#CBD5E1' }]} /></View>
+                      </View>
+                      <View style={styles.compareLabelCell}><Text style={styles.compareLabelText}>{m.label}</Text></View>
+                      <View style={styles.compareCell}>
+                        <Text style={[styles.compareValue, m.v2 >= m.v1 && { color: m.color, fontWeight: '900' as const }]}>{m.v2}{m.suffix || ''}</Text>
+                        <View style={styles.compareBarTrack}><View style={[styles.compareBarFill, { width: `${(m.v2 / maxV) * 100}%`, backgroundColor: m.v2 >= m.v1 ? m.color : '#CBD5E1' }]} /></View>
+                      </View>
+                    </View>
+                  );
+                })}
+                <Pressable style={styles.compareResetBtn} onPress={() => setCompareSelection([])}>
+                  <MaterialIcons name="refresh" size={14} color="#7C3AED" />
+                  <Text style={styles.compareResetText}>{language === 'fr' ? 'Reinitialiser' : 'Reset'}</Text>
+                </Pressable>
+              </ScrollView>
+            );
+          })()}
+        </Animated.View>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -813,4 +962,23 @@ const styles = StyleSheet.create({
     }),
   },
   ctaButtonText: { fontSize: 16, fontWeight: '700', color: '#2563EB' },
+  // Comparison
+  compareCheckbox: { position: 'absolute' as const, top: 8, right: 8, width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#CBD5E1', backgroundColor: '#FFF', alignItems: 'center' as const, justifyContent: 'center' as const },
+  compareCheckboxActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
+  compareBar: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 16, borderTopWidth: 1, borderTopColor: '#E2E8F0', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 8 }, android: { elevation: 8 }, default: {} }) },
+  compareBarContent: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  compareBarText: { flex: 1, fontSize: 13, fontWeight: '600' as const, color: '#7C3AED' },
+  compareBarClose: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },
+  compareHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  compareHeaderText: { fontSize: 15, fontWeight: '700' as const, color: '#0F172A' },
+  compareRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 10 },
+  compareCell: { flex: 1, alignItems: 'center' as const, gap: 4 },
+  compareLabelCell: { width: 70, alignItems: 'center' as const },
+  compareName: { fontSize: 13, fontWeight: '700' as const, color: '#0F172A', textAlign: 'center' as const },
+  compareLabelText: { fontSize: 10, fontWeight: '600' as const, color: '#94A3B8', textAlign: 'center' as const },
+  compareValue: { fontSize: 18, fontWeight: '700' as const, color: '#64748B' },
+  compareBarTrack: { width: '80%' as any, height: 5, backgroundColor: '#F1F5F9', borderRadius: 2.5, overflow: 'hidden' as const },
+  compareBarFill: { height: '100%' as any, borderRadius: 2.5 },
+  compareResetBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, marginTop: 6, backgroundColor: '#7C3AED0A', borderRadius: 10 },
+  compareResetText: { fontSize: 12, fontWeight: '600' as const, color: '#7C3AED' },
 });
