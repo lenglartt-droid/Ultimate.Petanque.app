@@ -203,9 +203,8 @@ export default function AmbassadorProgramScreen() {
           const isPopular = level.id === 'confirme';
 
           return (
-            <Animated.View
+            <View
               key={level.id}
-              entering={FadeInDown.duration(300).delay(100 + idx * 80)}
               onLayout={(e) => { cardPositions.current.set(level.id, e.nativeEvent.layout.y + 200); }}
             >
               <View style={[
@@ -315,7 +314,7 @@ export default function AmbassadorProgramScreen() {
                   </Animated.View>
                 ) : null}
               </View>
-            </Animated.View>
+            </View>
           );
         })}
 
