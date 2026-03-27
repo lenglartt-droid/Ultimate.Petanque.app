@@ -344,13 +344,24 @@ export default function PartnersScreen() {
           <MaterialIcons name="handshake" size={18} color={theme.primary} />
           <Text style={styles.headerTitle}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
         </View>
-        <Pressable
-          style={[styles.backBtn, compareMode && { backgroundColor: '#7C3AED15' }]}
-          onPress={() => { Haptics.selectionAsync(); setCompareMode(!compareMode); if (compareMode) setCompareSelection([]); }}
-          hitSlop={8}
-        >
-          <MaterialIcons name="compare-arrows" size={20} color={compareMode ? '#7C3AED' : theme.textMuted} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          {isSponsor ? (
+            <Pressable
+              style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#D4A01715', alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => router.push('/sponsor-portal' as any)}
+              hitSlop={4}
+            >
+              <MaterialIcons name="dashboard" size={20} color="#D4A017" />
+            </Pressable>
+          ) : null}
+          <Pressable
+            style={[styles.backBtn, compareMode && { backgroundColor: '#7C3AED15' }]}
+            onPress={() => { Haptics.selectionAsync(); setCompareMode(!compareMode); if (compareMode) setCompareSelection([]); }}
+            hitSlop={8}
+          >
+            <MaterialIcons name="compare-arrows" size={20} color={compareMode ? '#7C3AED' : theme.textMuted} />
+          </Pressable>
+        </View>
       </View>
 
       <ScrollView
@@ -476,29 +487,7 @@ export default function PartnersScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Sponsor Portal CTA for sponsors */}
-        {isSponsor ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(90)} style={{ marginHorizontal: 16, marginTop: 16 }}>
-            <Pressable
-              style={({ pressed }) => [{
-                flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14,
-                backgroundColor: '#FFF', borderRadius: 18, padding: 16,
-                borderWidth: 1.5, borderColor: '#D4A01730',
-                ...Platform.select({ ios: { shadowColor: '#D4A017', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 6 }, android: { elevation: 2 }, default: {} }),
-              }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-              onPress={() => router.push('/sponsor-portal' as any)}
-            >
-              <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#D4A01715', alignItems: 'center' as const, justifyContent: 'center' as const }}>
-                <MaterialIcons name="dashboard" size={22} color="#D4A017" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 15, fontWeight: '700' as const, color: '#0F172A' }}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
-                <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 2 }}>{language === 'fr' ? 'KPIs, push, branding, exports' : 'KPIs, push, branding, exports'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color="#D4A017" />
-            </Pressable>
-          </Animated.View>
-        ) : null}
+
 
         {/* ====== PARTNERS SECTION ====== */}
         <View style={styles.partnersSection}>
