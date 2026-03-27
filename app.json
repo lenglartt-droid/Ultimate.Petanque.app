@@ -2,7 +2,7 @@
   "expo": {
     "name": "Ultimate Petanque",
     "slug": "ppss-petanque-scorer",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-logo.png",
     "scheme": "ultimatepetanque",
@@ -32,7 +32,7 @@
       "package": "com.ultimatepetanque.app",
       "config": {
         "googleMaps": {
-          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY — Google Cloud Console > APIs & Services > Credentials > Create API Key (restrict to Maps SDK for Android)"
+          "apiKey": ""
         }
       },
       "permissions": [
@@ -113,10 +113,16 @@
         }
       ],
       [
-        "react-native-google-mobile-ads",
+        "expo-build-properties",
         {
-          "androidAppId": "ca-app-pub-3940256099942544~3347511713",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+          "android": {
+            "compileSdkVersion": 35,
+            "targetSdkVersion": 34,
+            "minSdkVersion": 24
+          },
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
         }
       ]
     ],
