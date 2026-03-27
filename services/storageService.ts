@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/template';
-import { decode } from 'base64-arraybuffer';
+import { decode } from '@/services/base64';
 
 const supabase = getSupabaseClient();
 

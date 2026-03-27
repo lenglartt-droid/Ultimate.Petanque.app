@@ -31,16 +31,11 @@
       "edgeToEdgeEnabled": false,
       "package": "com.ultimatepetanque.app",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
         "CAMERA",
         "READ_MEDIA_IMAGES",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
         "POST_NOTIFICATIONS",
-        "VIBRATE",
-        "ACCESS_NETWORK_STATE",
-        "INTERNET"
+        "VIBRATE"
       ],
       "intentFilters": [
         {
@@ -110,7 +105,13 @@
           "android": {
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
-            "minSdkVersion": 24
+            "minSdkVersion": 24,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "packagingOptions": {
+              "pickFirst": ["**/libc++_shared.so", "**/libfbjni.so"],
+              "exclude": ["META-INF/NOTICE", "META-INF/LICENSE", "META-INF/*.kotlin_module"]
+            }
           },
           "ios": {
             "deploymentTarget": "15.1"
