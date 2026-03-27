@@ -41,28 +41,11 @@ export async function initSentry(): Promise<void> {
   }
 
   try {
-    // Use string indirection to prevent depcheck from auto-installing this optional dependency
-    // @sentry/react-native requires a native plugin config — auto-install without plugin breaks EAS builds
-    const sentryPackage = ['@sentry', 'react-native'].join('/');
-    Sentry = require(sentryPackage);
-    Sentry.init({
-      dsn: SENTRY_DSN,
-      enableAutoSessionTracking: true,
-      sessionTrackingIntervalMillis: 30000,
-      tracesSampleRate: __DEV__ ? 1.0 : 0.2,
-      profilesSampleRate: __DEV__ ? 0 : 0.1,
-      enableNative: true,
-      debug: __DEV__,
-      environment: __DEV__ ? 'development' : 'production',
-      beforeSend(event: any) {
-        if (event.user) {
-          delete event.user.ip_address;
-        }
-        return event;
-      },
-    });
-    _initialized = true;
-    console.log('[Sentry] Initialized successfully');
+    // @sentry/react-native requires native plugin config — skip dynamic require to avoid Metro errors
+    // In production, replace this block with: Sentry = require('@sentry/react-native');
+    console.log('[Sentry] Skipping dynamic require — package not bundled in preview');
+    Sentry = null;
+    return;
   } catch (e) {
     console.log('[Sentry] SDK not available, crash reporting disabled.');
     Sentry = null;

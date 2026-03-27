@@ -47,16 +47,14 @@ function loadAdsModule() {
     adsModuleAvailable = false;
     return;
   }
-  try {
-    // Use string indirection to prevent depcheck from auto-installing if not present
-    const adsPackage = ['react-native', 'google-mobile-ads'].join('-');
-    const mod = require(adsPackage);
-    BannerAdComponent = mod.BannerAd;
-    BannerAdSizeEnum = mod.BannerAdSize;
-    adsModuleAvailable = true;
-  } catch {
-    adsModuleAvailable = false;
-  }
+  // react-native-google-mobile-ads requires native plugin config.
+  // Skip dynamic require to avoid Metro bundler errors.
+  // In production with the package installed & linked, replace with:
+  //   const mod = require('react-native-google-mobile-ads');
+  //   BannerAdComponent = mod.BannerAd;
+  //   BannerAdSizeEnum = mod.BannerAdSize;
+  //   adsModuleAvailable = true;
+  adsModuleAvailable = false;
 }
 
 // ============================================
