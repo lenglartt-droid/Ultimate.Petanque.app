@@ -338,6 +338,112 @@ Deno.serve(async (req: Request) => {
 
                 await sendPushNotifications(messages);
                 digestsSent++;
+
+                // ---- Build HTML Digest Email Template ----
+                const profileUrl = `https://ultimatepetanque.app/partners?id=${sp.id}`;
+                const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=${encodeURIComponent(profileUrl)}&color=${(tierColor).replace('#', '')}`;
+                const impChangeAbs = Math.abs(impChange);
+                const clkChangeAbs = Math.abs(clkChange);
+                const digestHtml = `
+<!DOCTYPE html>
+<html lang="fr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>
+  body{margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F8FAFC;color:#0F172A;}
+  .wrapper{max-width:600px;margin:0 auto;background:#FFF;border-radius:16px;overflow:hidden;}
+  .hero{background:linear-gradient(135deg,${tierColor},${tierColor}CC);padding:32px 24px;text-align:center;}
+  .hero-logo{width:64px;height:64px;border-radius:18px;border:3px solid rgba(255,255,255,0.3);object-fit:cover;display:inline-block;}
+  .hero-fallback{width:64px;height:64px;border-radius:18px;background:rgba(255,255,255,0.2);display:inline-flex;align-items:center;justify-content:center;color:#FFF;font-size:28px;font-weight:900;}
+  .hero h1{color:#FFF;font-size:22px;font-weight:800;margin:12px 0 4px;}
+  .hero p{color:rgba(255,255,255,0.8);font-size:13px;margin:0;}
+  .badge{display:inline-block;background:rgba(255,255,255,0.2);color:#FFF;font-size:9px;font-weight:800;padding:3px 10px;border-radius:8px;letter-spacing:0.5px;margin-top:8px;}
+  .kpi-row{display:flex;gap:8px;padding:24px 20px 8px;}
+  .kpi{flex:1;background:#F8FAFC;border-radius:14px;padding:16px 8px;text-align:center;border:1px solid #E2E8F0;}
+  .kpi-val{font-size:26px;font-weight:900;color:#0F172A;line-height:1.2;}
+  .kpi-label{font-size:9px;font-weight:600;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px;}
+  .kpi-change{font-size:10px;font-weight:800;margin-top:4px;}
+  .section{padding:16px 20px;}
+  .section-title{font-size:14px;font-weight:700;color:#0F172A;margin:0 0 12px;padding-bottom:8px;border-bottom:1px solid #E2E8F0;}
+  .trend-row{display:flex;align-items:center;gap:12px;margin-bottom:8px;}
+  .trend-label{font-size:12px;color:#64748B;flex:1;}
+  .trend-val{font-size:14px;font-weight:800;}
+  .bar-track{flex:2;height:8px;background:#F1F5F9;border-radius:4px;overflow:hidden;}
+  .bar-fill{height:100%;border-radius:4px;}
+  .cta-section{padding:20px;text-align:center;background:#F8FAFC;}
+  .cta-btn{display:inline-block;background:${tierColor};color:#FFF;font-size:14px;font-weight:700;padding:14px 32px;border-radius:14px;text-decoration:none;}
+  .footer{padding:16px 20px;text-align:center;border-top:1px solid #E2E8F0;}
+  .footer p{font-size:11px;color:#94A3B8;margin:4px 0;}
+  .qr-block{display:inline-block;padding:12px;background:#F8FAFC;border-radius:12px;border:1px solid #E2E8F0;margin-top:8px;}
+</style>
+</head>
+<body>
+<div class="wrapper">
+  <div class="hero">
+    ${sp.photo ? `<img src="${sp.photo}" class="hero-logo" alt="${sp.display_name}" />` : `<div class="hero-fallback">${(sp.display_name||'S').charAt(0)}</div>`}
+    <h1>Recap Hebdomadaire</h1>
+    <p>${weekLabel}</p>
+    <div class="badge">${tierLabel}</div>
+  </div>
+  <div class="kpi-row">
+    <div class="kpi">
+      <div class="kpi-val">${impressions}</div>
+      <div class="kpi-label">Impressions</div>
+      <div class="kpi-change" style="color:${impColor}">${impArrow} ${impChangeAbs}%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val">${clicks}</div>
+      <div class="kpi-label">Clics</div>
+      <div class="kpi-change" style="color:${clkColor}">${clkArrow} ${clkChangeAbs}%</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" style="color:${tierColor}">${ctr}%</div>
+      <div class="kpi-label">CTR</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-val" style="color:#7C3AED">${pushes}</div>
+      <div class="kpi-label">Push</div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">Performance vs semaine precedente</div>
+    <div class="trend-row">
+      <span class="trend-label">Impressions</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Math.max(5,impressions/(prevImpressions||1)*50))}%;background:#3B82F6"></div></div>
+      <span class="trend-val" style="color:#3B82F6">${impressions}</span>
+    </div>
+    <div class="trend-row">
+      <span class="trend-label">Clics</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Math.max(5,clicks/(prevClicks||1)*50))}%;background:#10B981"></div></div>
+      <span class="trend-val" style="color:#10B981">${clicks}</span>
+    </div>
+    <div class="trend-row">
+      <span class="trend-label">Social</span>
+      <div class="bar-track"><div class="bar-fill" style="width:${Math.min(100,Math.max(5,socialClicks*10))}%;background:#7C3AED"></div></div>
+      <span class="trend-val" style="color:#7C3AED">${socialClicks}</span>
+    </div>
+  </div>
+  <div class="cta-section">
+    <a href="${profileUrl}" class="cta-btn">Voir le portail sponsor &rarr;</a>
+    <div class="qr-block">
+      <img src="${qrUrl}" width="80" height="80" alt="QR" style="display:block;margin:0 auto 4px" />
+      <p style="font-size:9px;color:#94A3B8;margin:0">Scannez pour ouvrir</p>
+    </div>
+  </div>
+  <div class="footer">
+    <p><strong>Ultimate Petanque</strong> &middot; Digest automatique</p>
+    <p>Genere le ${now.toLocaleDateString('fr-FR',{day:'numeric',month:'long',year:'numeric'})}</p>
+  </div>
+</div>
+</body>
+</html>`;
+
+                // Store the HTML template for later retrieval
+                await supabaseAdmin.from('ambassador_analytics').insert({
+                  ambassador_id: sp.id,
+                  event_type: 'digest_email_html',
+                  source_page: digestHtml.substring(0, 10000),
+                  viewer_id: sp.user_id,
+                }).catch(() => {});
               }
 
               // Log digest event

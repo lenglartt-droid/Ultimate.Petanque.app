@@ -162,6 +162,20 @@ export default function SponsorPortalScreen() {
   // Revenue tracker state
   const [revBudget, setRevBudget] = useState('');
 
+  // Template analytics state
+  const [templateUsage, setTemplateUsage] = useState<Map<string, number>>(new Map());
+
+  // Onboarding guide state
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingStep, setOnboardingStep] = useState(0);
+
+  // CRM export state
+  const [exportingCrm, setExportingCrm] = useState(false);
+
+  // Onboarding checklist state
+  const [checklistData, setChecklistData] = useState<{ hasLogo: boolean; hasBrandColor: boolean; hasPush: boolean; hasEvent: boolean; hasReferralCode: boolean }>({ hasLogo: false, hasBrandColor: false, hasPush: false, hasEvent: false, hasReferralCode: false });
+  const [checklistXpClaimed, setChecklistXpClaimed] = useState(false);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -481,6 +495,149 @@ export default function SponsorPortalScreen() {
     }
     setSponsorNotifs(notifs);
   }, [sponsor, pushQuota, lastDigest, scheduledPushes, abResults, fr]);
+
+  // Load template usage analytics
+  useEffect(() => {
+    if (!sponsor?.id) return;
+    const loadTemplateUsage = async () => {
+      try {
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('source_page')
+          .eq('ambassador_id', sponsor.id)
+          .eq('event_type', 'template_used');
+        if (data) {
+          const usage = new Map<string, number>();
+          data.forEach((d: any) => {
+            const key = d.source_page || '';
+            usage.set(key, (usage.get(key) || 0) + 1);
+          });
+          setTemplateUsage(usage);
+        }
+      } catch { /* silent */ }
+    };
+    loadTemplateUsage();
+  }, [sponsor?.id]);
+
+  // Check if sponsor portal onboarding needed
+  useEffect(() => {
+    if (!sponsor?.id) return;
+    const checkOnboarding = async () => {
+      try {
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('ambassador_id', sponsor.id)
+          .eq('event_type', 'portal_onboarding_done')
+          .limit(1);
+        if (!data || data.length === 0) setShowOnboarding(true);
+      } catch { /* silent */ }
+    };
+    checkOnboarding();
+  }, [sponsor?.id]);
+
+  // Compute onboarding checklist
+  useEffect(() => {
+    if (!sponsor) return;
+    const hasLogo = !!sponsor.photo;
+    const hasBrandColor = !!sponsor.brand_color;
+    const hasReferralCode = !!sponsor.referral_code;
+    const hasPush = pushAnalytics.totalSent > 0;
+    const hasEvent = events.length > 0;
+    setChecklistData({ hasLogo, hasBrandColor, hasPush, hasEvent, hasReferralCode });
+    // Check if XP already claimed
+    if (sponsor.id) {
+      supabase.from('ambassador_analytics').select('id').eq('ambassador_id', sponsor.id).eq('event_type', 'checklist_xp_claimed').limit(1).then(({ data }) => {
+        if (data && data.length > 0) setChecklistXpClaimed(true);
+      });
+    }
+  }, [sponsor, pushAnalytics.totalSent, events.length]);
+
+  const checklistItems = [
+    { key: 'hasLogo', icon: 'photo-camera' as const, label: fr ? 'Uploader votre logo' : 'Upload your logo', done: checklistData.hasLogo, action: () => setActiveSection('branding') },
+    { key: 'hasBrandColor', icon: 'palette' as const, label: fr ? 'Definir votre couleur' : 'Set your brand color', done: checklistData.hasBrandColor, action: () => setActiveSection('branding') },
+    { key: 'hasPush', icon: 'send' as const, label: fr ? 'Envoyer 1er push' : 'Send first push', done: checklistData.hasPush, action: () => setActiveSection('push') },
+    { key: 'hasEvent', icon: 'event' as const, label: fr ? 'Creer un evenement' : 'Create an event', done: checklistData.hasEvent, action: () => router.push('/sponsored-event/new' as any) },
+    { key: 'hasReferralCode', icon: 'vpn-key' as const, label: fr ? 'Generer un code parrainage' : 'Generate referral code', done: checklistData.hasReferralCode, action: () => setActiveSection('crm') },
+  ];
+  const checklistDoneCount = checklistItems.filter(c => c.done).length;
+  const checklistTotal = checklistItems.length;
+  const checklistComplete = checklistDoneCount === checklistTotal;
+
+  const handleClaimChecklistXp = async () => {
+    if (!sponsor?.id || checklistXpClaimed || !checklistComplete) return;
+    try {
+      await supabase.from('ambassador_analytics').insert({ ambassador_id: sponsor.id, event_type: 'checklist_xp_claimed', source_page: 'onboarding_complete' });
+      // Award XP
+      const currentXp = sponsor.total_referral_xp || 0;
+      await supabase.from('ambassadors').update({ total_referral_xp: currentXp + 200, updated_at: new Date().toISOString() }).eq('id', sponsor.id);
+      setChecklistXpClaimed(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? '+200 XP gagnes !' : '+200 XP earned!');
+      loadSponsor();
+    } catch { /* silent */ }
+  };
+
+  const handleDismissOnboarding = async () => {
+    setShowOnboarding(false);
+    setOnboardingStep(0);
+    if (sponsor?.id) {
+      await supabase.from('ambassador_analytics').insert({
+        ambassador_id: sponsor.id,
+        event_type: 'portal_onboarding_done',
+        source_page: 'completed',
+      }).catch(() => {});
+    }
+  };
+
+  const handleTrackTemplate = async (templateTitle: string) => {
+    if (!sponsor?.id) return;
+    setTemplateUsage(prev => {
+      const next = new Map(prev);
+      next.set(templateTitle, (next.get(templateTitle) || 0) + 1);
+      return next;
+    });
+    await supabase.from('ambassador_analytics').insert({
+      ambassador_id: sponsor.id,
+      event_type: 'template_used',
+      source_page: templateTitle,
+    }).catch(() => {});
+  };
+
+  const handleExportCrmCsv = async () => {
+    if (!sponsor) return;
+    setExportingCrm(true);
+    try {
+      let csv = `${fr ? 'Date,Source,XP' : 'Date,Source,XP'}\n`;
+      crmReferrals.forEach(ref => {
+        const date = new Date(ref.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US');
+        csv += `${date},${ref.source || 'referral_code'},50\n`;
+      });
+      csv += `\n${fr ? 'Total parrainages' : 'Total referrals'},${sponsor.referral_count || 0}\n`;
+      csv += `${fr ? 'XP total' : 'Total XP'},${sponsor.total_referral_xp || 0}\n`;
+      csv += `${fr ? 'Code parrainage' : 'Referral code'},${sponsor.referral_code || 'N/A'}\n`;
+      if (Platform.OS === 'web') {
+        try {
+          const blob = new Blob([csv], { type: 'text/csv' });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `crm_referrals_${sponsor.display_name.replace(/\s/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        } catch { showAlert(fr ? 'Erreur' : 'Error'); }
+      } else {
+        const FS = require('expo-file-system');
+        const SharingModule = require('expo-sharing');
+        const filePath = `${FS.cacheDirectory}crm_${new Date().toISOString().split('T')[0]}.csv`;
+        await FS.writeAsStringAsync(filePath, csv, { encoding: FS.EncodingType.UTF8 });
+        const canShare = await SharingModule.isAvailableAsync();
+        if (canShare) await SharingModule.shareAsync(filePath, { mimeType: 'text/csv' });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e: any) { showAlert(fr ? 'Erreur' : 'Error', e.message); }
+    setExportingCrm(false);
+  };
 
   // Load CRM referral data
   useEffect(() => {
@@ -1011,6 +1168,47 @@ export default function SponsorPortalScreen() {
 
   return (
     <SafeAreaView edges={['top']} style={st.container}>
+      {/* Onboarding Guide Overlay */}
+      {showOnboarding ? (() => {
+        const steps = [
+          { icon: 'palette', color: '#7C3AED', bg: '#7C3AED12', title: fr ? 'Bienvenue sur le Portail Sponsor' : 'Welcome to the Sponsor Portal', desc: fr ? 'Gerez votre branding, push notifications, analytiques et parrainages depuis un seul endroit.' : 'Manage your branding, push notifications, analytics and referrals from one place.' },
+          { icon: 'palette', color: '#EC4899', bg: '#EC489912', title: fr ? '1. Personnalisez votre marque' : '1. Customize your brand', desc: fr ? 'Uploadez votre logo, choisissez votre couleur de marque et previsualisez vos bannieres et marqueurs carte.' : 'Upload your logo, choose your brand color and preview your banners and map markers.' },
+          { icon: 'notifications', color: '#3B82F6', bg: '#3B82F612', title: fr ? '2. Envoyez des notifications' : '2. Send notifications', desc: fr ? 'Composez des push cibles avec A/B testing, programmation et templates pre-redigees.' : 'Compose targeted push with A/B testing, scheduling and pre-written templates.' },
+          { icon: 'insights', color: '#10B981', bg: '#10B98112', title: fr ? '3. Suivez vos performances' : '3. Track your performance', desc: fr ? 'Impressions, clics, CTR, benchmark concurrents et export PDF/CSV de vos analytics.' : 'Impressions, clicks, CTR, competitor benchmark and PDF/CSV export of your analytics.' },
+          { icon: 'people', color: tierColor, bg: tierColor + '12', title: fr ? '4. Gerez vos parrainages' : '4. Manage referrals', desc: fr ? 'Suivez les parrainages via votre code, exportez vos donnees CRM et gagnez des XP.' : 'Track referrals via your code, export CRM data and earn XP.' },
+        ];
+        const step = steps[onboardingStep];
+        const isLast = onboardingStep === steps.length - 1;
+        return (
+          <View style={st.onboardingOverlay}>
+            <Animated.View entering={FadeIn.duration(300)} style={st.onboardingCard}>
+              <View style={[st.onboardingIcon, { backgroundColor: step.bg }]}>
+                <MaterialIcons name={step.icon as any} size={32} color={step.color} />
+              </View>
+              <Text style={st.onboardingTitle}>{step.title}</Text>
+              <Text style={st.onboardingDesc}>{step.desc}</Text>
+              <View style={st.onboardingDots}>
+                {steps.map((_, i) => (
+                  <View key={i} style={[st.onboardingDot, onboardingStep === i && st.onboardingDotActive]} />
+                ))}
+              </View>
+              <Pressable
+                style={[st.onboardingBtn, { backgroundColor: isLast ? tierColor : '#3B82F6' }]}
+                onPress={() => { Haptics.selectionAsync(); if (isLast) handleDismissOnboarding(); else setOnboardingStep(s => s + 1); }}
+              >
+                <Text style={st.onboardingBtnText}>{isLast ? (fr ? 'Commencer' : 'Get started') : (fr ? 'Suivant' : 'Next')}</Text>
+                <MaterialIcons name={isLast ? 'rocket-launch' : 'arrow-forward'} size={18} color="#FFF" />
+              </Pressable>
+              {!isLast ? (
+                <Pressable style={st.onboardingSkip} onPress={handleDismissOnboarding}>
+                  <Text style={st.onboardingSkipText}>{fr ? 'Passer' : 'Skip'}</Text>
+                </Pressable>
+              ) : null}
+            </Animated.View>
+          </View>
+        );
+      })() : null}
+
       {/* Header */}
       <View style={st.headerRow}>
         <Pressable style={st.backBtn} onPress={() => router.back()}>
@@ -1938,6 +2136,28 @@ export default function SponsorPortalScreen() {
                 </Pressable>
                 {showTemplates ? (
                   <Animated.View entering={FadeInDown.duration(200)}>
+                    {/* Template Usage Analytics */}
+                    {templateUsage.size > 0 ? (
+                      <View style={{ backgroundColor: '#EC489908', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#EC489915' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <MaterialIcons name="analytics" size={14} color="#EC4899" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#EC4899' }}>{fr ? 'UTILISATION DES TEMPLATES' : 'TEMPLATE USAGE'}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {Array.from(templateUsage.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([title, count], i) => (
+                            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#EC489920' }}>
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#334155', maxWidth: 120 }} numberOfLines={1}>{title}</Text>
+                              <View style={{ backgroundColor: '#EC4899', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '900', color: '#FFF' }}>{count}</Text>
+                              </View>
+                            </View>
+                          ))}
+                        </View>
+                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 6, fontStyle: 'italic' }}>
+                          {fr ? `${Array.from(templateUsage.values()).reduce((s, v) => s + v, 0)} utilisation(s) totale(s)` : `${Array.from(templateUsage.values()).reduce((s, v) => s + v, 0)} total use(s)`}
+                        </Text>
+                      </View>
+                    ) : null}
                     {[
                       { cat: fr ? 'Promo' : 'Promo', catColor: '#EF4444', catIcon: 'local-offer' as const, templates: [
                         { title: fr ? 'Promo flash -20%' : 'Flash sale -20%', body: fr ? 'Profitez de -20% sur toute la gamme ce weekend ! Code : FLASH20' : 'Get -20% on the full range this weekend! Code: FLASH20' },
@@ -1972,14 +2192,20 @@ export default function SponsorPortalScreen() {
                               setPushTitle(tpl.title);
                               setPushBody(tpl.body);
                               setShowTemplates(false);
+                              handleTrackTemplate(tpl.title);
                             }}
                           >
                             <View style={{ flex: 1 }}>
                               <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155' }} numberOfLines={1}>{tpl.title}</Text>
                               <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }} numberOfLines={2}>{tpl.body}</Text>
                             </View>
-                            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: cat.catColor + '12', alignItems: 'center', justifyContent: 'center' }}>
-                              <MaterialIcons name="content-copy" size={14} color={cat.catColor} />
+                            <View style={{ alignItems: 'center', gap: 2 }}>
+                              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: cat.catColor + '12', alignItems: 'center', justifyContent: 'center' }}>
+                                <MaterialIcons name="content-copy" size={14} color={cat.catColor} />
+                              </View>
+                              {templateUsage.get(tpl.title) ? (
+                                <Text style={{ fontSize: 8, fontWeight: '800', color: cat.catColor }}>{templateUsage.get(tpl.title)}x</Text>
+                              ) : null}
                             </View>
                           </Pressable>
                         ))}
@@ -2453,6 +2679,25 @@ export default function SponsorPortalScreen() {
                   <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Aucun parrainage enregistre' : 'No referrals recorded'}</Text>
                 </View>
               )}
+              {/* CRM Export Button */}
+              {crmReferrals.length > 0 ? (
+                <Pressable
+                  style={({ pressed }) => [st.exportBtn, { marginTop: 14, borderColor: '#10B98140' }, exportingCrm && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                  onPress={handleExportCrmCsv}
+                  disabled={exportingCrm}
+                >
+                  {exportingCrm ? <ActivityIndicator size="small" color="#10B981" /> : (
+                    <>
+                      <MaterialIcons name="download" size={20} color="#10B981" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[st.exportBtnText, { color: '#10B981' }]}>{fr ? 'Exporter parrainages CSV' : 'Export referrals CSV'}</Text>
+                        <Text style={st.exportBtnSub}>{fr ? `${crmReferrals.length} parrainage(s), XP, dates` : `${crmReferrals.length} referral(s), XP, dates`}</Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={18} color="#10B981" />
+                    </>
+                  )}
+                </Pressable>
+              ) : null}
             </Animated.View>
 
             {/* CRM KPI */}
@@ -2487,6 +2732,57 @@ export default function SponsorPortalScreen() {
               </View>
             </Animated.View>
           </>
+        ) : null}
+
+        {/* Onboarding Checklist */}
+        {!checklistComplete || !checklistXpClaimed ? (
+          <Animated.View entering={FadeIn.duration(300).delay(150)} style={st.checklistCard}>
+            <View style={st.checklistHeader}>
+              <View style={[st.checklistIconBg, { backgroundColor: tierColor + '12' }]}>
+                <MaterialIcons name="checklist" size={20} color={tierColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistTitle}>{fr ? 'Demarrage rapide' : 'Quick Start'}</Text>
+                <Text style={st.checklistSub}>{checklistDoneCount}/{checklistTotal} {fr ? 'etapes' : 'steps'}</Text>
+              </View>
+              {checklistComplete && !checklistXpClaimed ? (
+                <Pressable style={[st.checklistClaimBtn, { backgroundColor: tierColor }]} onPress={handleClaimChecklistXp}>
+                  <MaterialIcons name="star" size={14} color="#FFF" />
+                  <Text style={st.checklistClaimText}>+200 XP</Text>
+                </Pressable>
+              ) : (
+                <View style={[st.checklistProgressBadge, { borderColor: tierColor + '30' }]}>
+                  <Text style={[st.checklistProgressText, { color: tierColor }]}>{Math.round((checklistDoneCount / checklistTotal) * 100)}%</Text>
+                </View>
+              )}
+            </View>
+            {/* Progress bar */}
+            <View style={st.checklistBarTrack}>
+              <Animated.View entering={FadeIn.duration(600)} style={[st.checklistBarFill, { width: `${(checklistDoneCount / checklistTotal) * 100}%`, backgroundColor: tierColor }]} />
+            </View>
+            {/* Items */}
+            {checklistItems.map((item, i) => (
+              <Pressable
+                key={item.key}
+                style={({ pressed }) => [st.checklistItem, pressed && !item.done && { backgroundColor: tierColor + '06' }]}
+                onPress={() => { if (!item.done) { Haptics.selectionAsync(); item.action(); } }}
+                disabled={item.done}
+              >
+                <View style={[st.checklistCheck, item.done ? { backgroundColor: '#10B981' } : { borderColor: '#CBD5E1' }]}>
+                  {item.done ? <MaterialIcons name="check" size={12} color="#FFF" /> : <Text style={{ fontSize: 10, fontWeight: '700', color: '#CBD5E1' }}>{i + 1}</Text>}
+                </View>
+                <MaterialIcons name={item.icon} size={16} color={item.done ? '#94A3B8' : tierColor} />
+                <Text style={[st.checklistItemText, item.done && { color: '#94A3B8', textDecorationLine: 'line-through' }]}>{item.label}</Text>
+                {!item.done ? <MaterialIcons name="chevron-right" size={16} color={tierColor + '60'} /> : null}
+              </Pressable>
+            ))}
+            {checklistComplete && checklistXpClaimed ? (
+              <View style={st.checklistDoneBanner}>
+                <MaterialIcons name="check-circle" size={16} color="#10B981" />
+                <Text style={st.checklistDoneText}>{fr ? 'Onboarding termine ! +200 XP' : 'Onboarding complete! +200 XP'}</Text>
+              </View>
+            ) : null}
+          </Animated.View>
         ) : null}
 
         {/* Quick Actions */}
@@ -2779,4 +3075,34 @@ const st = StyleSheet.create({
   segChipsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
   segChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
   segChipText: { fontSize: 12, fontWeight: '500' as const, color: '#64748B' },
+  // Onboarding overlay
+  onboardingOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 100, alignItems: 'center' as const, justifyContent: 'center' as const, padding: 24 },
+  onboardingCard: { backgroundColor: '#FFF', borderRadius: 24, padding: 28, maxWidth: 400, width: '100%', alignItems: 'center' as const },
+  onboardingIcon: { width: 64, height: 64, borderRadius: 20, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 16 },
+  onboardingTitle: { fontSize: 20, fontWeight: '800' as const, color: '#0F172A', textAlign: 'center' as const, marginBottom: 8 },
+  onboardingDesc: { fontSize: 14, color: '#64748B', textAlign: 'center' as const, lineHeight: 21, marginBottom: 20 },
+  onboardingDots: { flexDirection: 'row' as const, gap: 8, marginBottom: 20 },
+  onboardingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E2E8F0' },
+  onboardingDotActive: { backgroundColor: '#D4A017', width: 24 },
+  onboardingBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, paddingHorizontal: 28, borderRadius: 14, width: '100%' as any },
+  onboardingBtnText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+  onboardingSkip: { paddingVertical: 10, marginTop: 8 },
+  onboardingSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#94A3B8' },
+  // Onboarding Checklist
+  checklistCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  checklistHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 14 },
+  checklistIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  checklistTitle: { fontSize: 15, fontWeight: '700' as const, color: '#0F172A' },
+  checklistSub: { fontSize: 12, color: '#94A3B8', marginTop: 1 },
+  checklistClaimBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12 },
+  checklistClaimText: { fontSize: 13, fontWeight: '800' as const, color: '#FFF' },
+  checklistProgressBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1.5 },
+  checklistProgressText: { fontSize: 13, fontWeight: '800' as const },
+  checklistBarTrack: { height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' as const, marginBottom: 14 },
+  checklistBarFill: { height: '100%' as any, borderRadius: 3 },
+  checklistItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 11, paddingHorizontal: 4, borderRadius: 10 },
+  checklistCheck: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: 'center' as const, justifyContent: 'center' as const },
+  checklistItemText: { flex: 1, fontSize: 13, fontWeight: '600' as const, color: '#334155' },
+  checklistDoneBanner: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 10, marginTop: 8, backgroundColor: '#10B98108', borderRadius: 10, borderWidth: 1, borderColor: '#10B98115' },
+  checklistDoneText: { fontSize: 12, fontWeight: '700' as const, color: '#10B981' },
 });
