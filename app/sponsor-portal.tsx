@@ -176,6 +176,17 @@ export default function SponsorPortalScreen() {
   const [checklistData, setChecklistData] = useState<{ hasLogo: boolean; hasBrandColor: boolean; hasPush: boolean; hasEvent: boolean; hasReferralCode: boolean }>({ hasLogo: false, hasBrandColor: false, hasPush: false, hasEvent: false, hasReferralCode: false });
   const [checklistXpClaimed, setChecklistXpClaimed] = useState(false);
 
+  // Digest email preview state
+  const [digestHtmlData, setDigestHtmlData] = useState<{ html: string; date: string } | null>(null);
+  const [digestPreviewOpen, setDigestPreviewOpen] = useState(false);
+
+  // Goal setting state
+  const [goalImpressions, setGoalImpressions] = useState('');
+  const [goalClicks, setGoalClicks] = useState('');
+  const [goalCtr, setGoalCtr] = useState('');
+  const [savingGoals, setSavingGoals] = useState(false);
+  const [goalsLoaded, setGoalsLoaded] = useState(false);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -553,6 +564,52 @@ export default function SponsorPortalScreen() {
     }
   }, [sponsor, pushAnalytics.totalSent, events.length]);
 
+  // Load digest email HTML for preview
+  useEffect(() => {
+    if (!sponsor?.id) return;
+    const loadDigestHtml = async () => {
+      try {
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('created_at, source_page')
+          .eq('ambassador_id', sponsor.id)
+          .eq('event_type', 'digest_email_html')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          setDigestHtmlData({ html: data[0].source_page || '', date: data[0].created_at });
+        }
+      } catch { /* silent */ }
+    };
+    loadDigestHtml();
+  }, [sponsor?.id]);
+
+  // Load saved goals
+  useEffect(() => {
+    if (!sponsor?.id || goalsLoaded) return;
+    const loadGoals = async () => {
+      try {
+        const { data } = await supabase
+          .from('ambassador_analytics')
+          .select('source_page')
+          .eq('ambassador_id', sponsor.id)
+          .eq('event_type', 'sponsor_goals')
+          .order('created_at', { ascending: false })
+          .limit(1);
+        if (data && data.length > 0) {
+          try {
+            const goals = JSON.parse(data[0].source_page || '{}');
+            if (goals.impressions) setGoalImpressions(goals.impressions.toString());
+            if (goals.clicks) setGoalClicks(goals.clicks.toString());
+            if (goals.ctr) setGoalCtr(goals.ctr.toString());
+          } catch { /* parse error */ }
+        }
+        setGoalsLoaded(true);
+      } catch { setGoalsLoaded(true); }
+    };
+    loadGoals();
+  }, [sponsor?.id, goalsLoaded]);
+
   const checklistItems = [
     { key: 'hasLogo', icon: 'photo-camera' as const, label: fr ? 'Uploader votre logo' : 'Upload your logo', done: checklistData.hasLogo, action: () => setActiveSection('branding') },
     { key: 'hasBrandColor', icon: 'palette' as const, label: fr ? 'Definir votre couleur' : 'Set your brand color', done: checklistData.hasBrandColor, action: () => setActiveSection('branding') },
@@ -637,6 +694,28 @@ export default function SponsorPortalScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e: any) { showAlert(fr ? 'Erreur' : 'Error', e.message); }
     setExportingCrm(false);
+  };
+
+  const handleSaveGoals = async () => {
+    if (!sponsor?.id) return;
+    setSavingGoals(true);
+    try {
+      const goalsPayload = JSON.stringify({
+        impressions: parseInt(goalImpressions) || 0,
+        clicks: parseInt(goalClicks) || 0,
+        ctr: parseFloat(goalCtr) || 0,
+      });
+      await supabase.from('ambassador_analytics').insert({
+        ambassador_id: sponsor.id,
+        event_type: 'sponsor_goals',
+        source_page: goalsPayload,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? 'Objectifs enregistres' : 'Goals saved');
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+    }
+    setSavingGoals(false);
   };
 
   // Load CRM referral data
@@ -1422,6 +1501,80 @@ export default function SponsorPortalScreen() {
               </Animated.View>
             ) : null}
 
+            {/* Digest Email Preview */}
+            {digestHtmlData ? (
+              <Animated.View entering={FadeInDown.duration(300).delay(192)} style={st.ctrCard}>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: digestPreviewOpen ? 14 : 0 }}
+                  onPress={() => { Haptics.selectionAsync(); setDigestPreviewOpen(!digestPreviewOpen); }}
+                >
+                  <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#4338CA12', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="mark-email-read" size={20} color="#4338CA" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Apercu email digest' : 'Digest Email Preview'}</Text>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                      {new Date(digestHtmlData.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <MaterialIcons name={digestPreviewOpen ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+                </Pressable>
+                {digestPreviewOpen ? (
+                  <Animated.View entering={FadeInDown.duration(200)}>
+                    {/* Rendered email preview */}
+                    <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      {/* Email header */}
+                      <LinearGradient colors={[tierColor, tierColor + 'CC']} style={{ paddingVertical: 20, paddingHorizontal: 16, alignItems: 'center' }}>
+                        {sponsor.photo ? (
+                          <Image source={{ uri: sponsor.photo }} style={{ width: 48, height: 48, borderRadius: 14, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' }} contentFit="cover" cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFF' }}>{(sponsor.display_name || 'S').charAt(0)}</Text>
+                          </View>
+                        )}
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#FFF', marginTop: 8 }}>{fr ? 'Recap Hebdomadaire' : 'Weekly Recap'}</Text>
+                        <View style={{ backgroundColor: 'rgba(255,255,255,0.2)', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 8, marginTop: 6 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF', letterSpacing: 0.5 }}>{tierLabel.toUpperCase()}</Text>
+                        </View>
+                      </LinearGradient>
+                      {/* Email KPIs */}
+                      <View style={{ flexDirection: 'row', gap: 6, padding: 14 }}>
+                        {[
+                          { v: lastDigest?.impressions || 0, l: 'IMP', c: '#3B82F6' },
+                          { v: lastDigest?.clicks || 0, l: fr ? 'CLICS' : 'CLICKS', c: '#10B981' },
+                          { v: (lastDigest?.ctr || '0') + '%', l: 'CTR', c: tierColor },
+                          { v: lastDigest?.pushes || 0, l: 'PUSH', c: '#7C3AED' },
+                        ].map((k, i) => (
+                          <View key={i} style={{ flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: k.c }}>{k.v}</Text>
+                            <Text style={{ fontSize: 8, fontWeight: '700', color: '#94A3B8', marginTop: 2 }}>{k.l}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {/* Email CTA */}
+                      <View style={{ alignItems: 'center', paddingVertical: 14, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                        <View style={{ backgroundColor: tierColor, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>{fr ? 'Voir le portail sponsor' : 'View sponsor portal'} →</Text>
+                        </View>
+                      </View>
+                      {/* Email footer */}
+                      <View style={{ alignItems: 'center', paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                        <Text style={{ fontSize: 9, color: '#94A3B8' }}>Ultimate Petanque · Digest automatique</Text>
+                      </View>
+                    </View>
+                    {/* View full digest link */}
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 10, backgroundColor: '#4338CA0A', borderRadius: 10, borderWidth: 1, borderColor: '#4338CA15' }}
+                      onPress={() => router.push('/sponsor-digest' as any)}
+                    >
+                      <MaterialIcons name="history" size={14} color="#4338CA" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#4338CA' }}>{fr ? 'Voir tous les digests' : 'View all digests'}</Text>
+                    </Pressable>
+                  </Animated.View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
             {/* Competitor Benchmark */}
             {benchmarkData && benchmarkData.tierCount > 1 ? (
               <Animated.View entering={FadeInDown.duration(300).delay(195)} style={st.benchmarkCard}>
@@ -1514,6 +1667,85 @@ export default function SponsorPortalScreen() {
                   </View>
                 );
               })() : null}
+            </Animated.View>
+
+            {/* Monthly Goals */}
+            <Animated.View entering={FadeInDown.duration(300).delay(199)} style={st.ctrCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="flag" size={18} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Objectifs mensuels' : 'Monthly Goals'}</Text>
+                  <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{fr ? 'Definissez vos cibles et suivez la progression' : 'Set your targets and track progress'}</Text>
+                </View>
+              </View>
+              {/* Goal inputs */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
+                  <Text style={st.pushFieldLabel}>Impressions</Text>
+                  <TextInput style={st.pushInput} value={goalImpressions} onChangeText={setGoalImpressions} keyboardType="numeric" placeholder="1000" placeholderTextColor="#94A3B8" />
+                </View>
+                <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
+                  <Text style={st.pushFieldLabel}>{fr ? 'Clics' : 'Clicks'}</Text>
+                  <TextInput style={st.pushInput} value={goalClicks} onChangeText={setGoalClicks} keyboardType="numeric" placeholder="100" placeholderTextColor="#94A3B8" />
+                </View>
+                <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
+                  <Text style={st.pushFieldLabel}>CTR %</Text>
+                  <TextInput style={st.pushInput} value={goalCtr} onChangeText={setGoalCtr} keyboardType="numeric" placeholder="5" placeholderTextColor="#94A3B8" />
+                </View>
+              </View>
+              {/* Progress rings */}
+              {(parseInt(goalImpressions) > 0 || parseInt(goalClicks) > 0 || parseFloat(goalCtr) > 0) ? (() => {
+                const goals = [
+                  { label: 'Impressions', current: totalImp, target: parseInt(goalImpressions) || 0, color: '#3B82F6', icon: 'visibility' as const },
+                  { label: fr ? 'Clics' : 'Clicks', current: totalClk, target: parseInt(goalClicks) || 0, color: '#10B981', icon: 'touch-app' as const },
+                  { label: 'CTR', current: ctr, target: parseFloat(goalCtr) || 0, color: '#F59E0B', icon: 'trending-up' as const, suffix: '%' },
+                ].filter(g => g.target > 0);
+                return (
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                    {goals.map((g, i) => {
+                      const progress = g.target > 0 ? Math.min((typeof g.current === 'number' ? g.current : 0) / g.target, 1) : 0;
+                      const pct = Math.round(progress * 100);
+                      const ringSize = 64;
+                      const strokeW = 6;
+                      const radius = (ringSize - strokeW) / 2;
+                      const circumference = 2 * Math.PI * radius;
+                      const dashOffset = circumference * (1 - progress);
+                      const completed = pct >= 100;
+                      return (
+                        <View key={i} style={{ flex: 1, alignItems: 'center', backgroundColor: completed ? g.color + '08' : '#F8FAFC', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 4, borderWidth: 1, borderColor: completed ? g.color + '25' : '#E2E8F0' }}>
+                          <View style={{ width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}>
+                            <Svg width={ringSize} height={ringSize} style={{ position: 'absolute' }}>
+                              <SvgCircle cx={ringSize / 2} cy={ringSize / 2} r={radius} stroke="#F1F5F9" strokeWidth={strokeW} fill="none" />
+                              <SvgCircle cx={ringSize / 2} cy={ringSize / 2} r={radius} stroke={g.color} strokeWidth={strokeW} fill="none" strokeDasharray={`${circumference}`} strokeDashoffset={dashOffset} strokeLinecap="round" transform={`rotate(-90 ${ringSize / 2} ${ringSize / 2})`} />
+                            </Svg>
+                            {completed ? (
+                              <MaterialIcons name="check-circle" size={20} color={g.color} />
+                            ) : (
+                              <Text style={{ fontSize: 13, fontWeight: '900', color: g.color }}>{pct}%</Text>
+                            )}
+                          </View>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: g.color }}>{g.current}{g.suffix || ''}/{g.target}{g.suffix || ''}</Text>
+                          <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{g.label}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })() : null}
+              <Pressable
+                style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C3AED', paddingVertical: 12, borderRadius: 12 }, savingGoals && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                onPress={handleSaveGoals}
+                disabled={savingGoals}
+              >
+                {savingGoals ? <ActivityIndicator size="small" color="#FFF" /> : (
+                  <>
+                    <MaterialIcons name="save" size={16} color="#FFF" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Enregistrer les objectifs' : 'Save goals'}</Text>
+                  </>
+                )}
+              </Pressable>
             </Animated.View>
 
             {/* Export Buttons */}
