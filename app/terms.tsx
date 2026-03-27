@@ -161,6 +161,24 @@ export default function TermsScreen() {
       content: t('pushNotifs', 'termsAbuseContent'),
     },
     {
+      icon: 'star',
+      color: '#F59E0B',
+      title: t('termsExtended', 'ambassadorRulesTitle'),
+      content: t('termsExtended', 'ambassadorRulesContent'),
+    },
+    {
+      icon: 'verified-user',
+      color: '#10B981',
+      title: t('termsExtended', 'trustScoreRulesTitle'),
+      content: t('termsExtended', 'trustScoreRulesContent'),
+    },
+    {
+      icon: 'event-available',
+      color: theme.carreauColor,
+      title: t('termsExtended', 'sponsoredEventsRulesTitle'),
+      content: t('termsExtended', 'sponsoredEventsRulesContent'),
+    },
+    {
       icon: 'email',
       color: theme.primary,
       title: t('terms', 'contactTitle'),
