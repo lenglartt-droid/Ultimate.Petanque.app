@@ -335,6 +335,16 @@ export default function PartnerProgramScreen() {
         {/* Comparison Table */}
         <Animated.View entering={FadeInDown.duration(300).delay(350)} style={styles.comparisonCard}>
           <Text style={styles.comparisonTitle}>{fr ? 'Comparaison rapide' : 'Quick comparison'}</Text>
+          {/* Header labels */}
+          <View style={styles.compHeaderRow}>
+            <View style={{ flex: 2 }} />
+            {TIERS.map(t => (
+              <View key={t.id} style={styles.compHeaderCell}>
+                <View style={[styles.compHeaderDot, { backgroundColor: t.color }]} />
+                <Text style={[styles.compHeaderLabel, { color: t.color }]}>{fr ? t.nameFr : t.nameEn}</Text>
+              </View>
+            ))}
+          </View>
           {[
             { feature: fr ? 'Fiche partenaire' : 'Partner card', bronze: true, silver: true, gold: true },
             { feature: fr ? 'Marqueur carte' : 'Map marker', bronze: true, silver: true, gold: true },
@@ -362,16 +372,6 @@ export default function PartnerProgramScreen() {
               ))}
             </View>
           ))}
-          {/* Header labels */}
-          <View style={styles.compHeaderRow}>
-            <View style={{ flex: 2 }} />
-            {TIERS.map(t => (
-              <View key={t.id} style={styles.compHeaderCell}>
-                <View style={[styles.compHeaderDot, { backgroundColor: t.color }]} />
-                <Text style={[styles.compHeaderLabel, { color: t.color }]}>{fr ? t.nameFr : t.nameEn}</Text>
-              </View>
-            ))}
-          </View>
         </Animated.View>
 
         {/* Global CTA */}

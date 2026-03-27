@@ -602,6 +602,15 @@ export default function PartnersScreen() {
                   : 'Become a partner or sponsor and gain visibility within the petanque community.'}
               </Text>
 
+              <Pressable
+                style={({ pressed }) => [{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: 'rgba(255,255,255,0.12)', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', marginBottom: 16, width: '100%' as any }, pressed && { opacity: 0.85 }]}
+                onPress={() => { Haptics.selectionAsync(); router.push('/partner-program' as any); }}
+              >
+                <MaterialIcons name="info-outline" size={16} color="rgba(255,255,255,0.9)" />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.9)' }}>{language === 'fr' ? 'Voir le programme partenaire' : 'View partner program'}</Text>
+                <MaterialIcons name="chevron-right" size={16} color="rgba(255,255,255,0.6)" />
+              </Pressable>
+
               <View style={styles.ctaBenefits}>
                 {[
                   { icon: 'visibility', text: language === 'fr' ? 'Visibilite in-app' : 'In-app visibility' },

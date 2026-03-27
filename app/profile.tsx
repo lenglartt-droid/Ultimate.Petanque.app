@@ -1745,6 +1745,12 @@ export default function ProfileScreen() {
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassador-program' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="stars" size={16} color="#7C3AED" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Programme Ambassadeur' : 'Ambassador Program'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
               {/* 3. Portail Ambassadeur (si ambassadeur) */}
               {isAmbassador ? (
                 <>
@@ -1761,6 +1767,12 @@ export default function ProfileScreen() {
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#FFD700' + '15' }]}><MaterialIcons name="handshake" size={16} color="#FFD700" /></View>
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partner-program' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#D4A017' + '15' }]}><MaterialIcons name="campaign" size={16} color="#D4A017" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Programme Partenaire' : 'Partner Program'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               {/* 5. Portail Partenaires (si sponsor) */}

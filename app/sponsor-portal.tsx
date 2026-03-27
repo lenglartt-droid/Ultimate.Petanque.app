@@ -2470,6 +2470,93 @@ export default function SponsorPortalScreen() {
                   </View>
                 ) : null}
 
+                {/* Phone Notification Mockup */}
+                {pushTitle.trim() ? (
+                  <View style={{ marginBottom: 16 }}>
+                    <Text style={st.pushPreviewLabel}>{fr ? 'APERCU SUR TELEPHONE' : 'PHONE PREVIEW'}</Text>
+                    <View style={{ backgroundColor: '#1C1C1E', borderRadius: 28, padding: 6, overflow: 'hidden' as const }}>
+                      {/* Status bar */}
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 6, paddingBottom: 10 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFF' }}>9:41</Text>
+                        <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                          <MaterialIcons name="signal-cellular-4-bar" size={12} color="#FFF" />
+                          <MaterialIcons name="wifi" size={12} color="#FFF" />
+                          <MaterialIcons name="battery-full" size={12} color="#FFF" />
+                        </View>
+                      </View>
+                      {/* Notification banner */}
+                      <View style={{ backgroundColor: '#F2F2F7', borderRadius: 18, padding: 12, marginHorizontal: 4, marginBottom: 8, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                        {sponsor.photo ? (
+                          <Image source={{ uri: sponsor.photo }} style={{ width: 38, height: 38, borderRadius: 10 }} contentFit="cover" cachePolicy="memory-disk" />
+                        ) : (
+                          <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: tierColor, alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 17, fontWeight: '900', color: '#FFF' }}>{(sponsor.display_name || 'S').charAt(0)}</Text>
+                          </View>
+                        )}
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#000' }}>Ultimate Petanque</Text>
+                            <Text style={{ fontSize: 11, color: '#8E8E93' }}>{fr ? 'maintenant' : 'now'}</Text>
+                          </View>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: '#000', marginTop: 2 }} numberOfLines={1}>{pushTitle}</Text>
+                          <Text style={{ fontSize: 13, color: '#3C3C43', marginTop: 1, lineHeight: 17 }} numberOfLines={2}>{pushBody}</Text>
+                        </View>
+                      </View>
+                      {/* Lock screen hint */}
+                      <View style={{ alignItems: 'center', paddingBottom: 12, paddingTop: 4 }}>
+                        <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' }}>
+                          <MaterialIcons name="lock" size={16} color="rgba(255,255,255,0.4)" />
+                        </View>
+                      </View>
+                      {/* Home indicator */}
+                      <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+                        <View style={{ width: 100, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                      </View>
+                    </View>
+                    {/* Variant B phone mockup */}
+                    {abTestEnabled && pushTitleB.trim() ? (
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={st.pushPreviewLabel}>{fr ? 'VARIANTE B SUR TELEPHONE' : 'VARIANT B PHONE PREVIEW'}</Text>
+                        <View style={{ backgroundColor: '#1C1C1E', borderRadius: 28, padding: 6, overflow: 'hidden' as const }}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 6, paddingBottom: 10 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#FFF' }}>9:41</Text>
+                            <View style={{ flexDirection: 'row', gap: 4, alignItems: 'center' }}>
+                              <MaterialIcons name="signal-cellular-4-bar" size={12} color="#FFF" />
+                              <MaterialIcons name="wifi" size={12} color="#FFF" />
+                              <MaterialIcons name="battery-full" size={12} color="#FFF" />
+                            </View>
+                          </View>
+                          <View style={{ backgroundColor: '#F2F2F7', borderRadius: 18, padding: 12, marginHorizontal: 4, marginBottom: 8, flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
+                            {sponsor.photo ? (
+                              <Image source={{ uri: sponsor.photo }} style={{ width: 38, height: 38, borderRadius: 10 }} contentFit="cover" cachePolicy="memory-disk" />
+                            ) : (
+                              <View style={{ width: 38, height: 38, borderRadius: 10, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 17, fontWeight: '900', color: '#FFF' }}>{(sponsor.display_name || 'S').charAt(0)}</Text>
+                              </View>
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 13, fontWeight: '700', color: '#000' }}>Ultimate Petanque</Text>
+                                <Text style={{ fontSize: 11, color: '#8E8E93' }}>{fr ? 'maintenant' : 'now'}</Text>
+                              </View>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#000', marginTop: 2 }} numberOfLines={1}>{pushTitleB}</Text>
+                              <Text style={{ fontSize: 13, color: '#3C3C43', marginTop: 1, lineHeight: 17 }} numberOfLines={2}>{pushBodyB}</Text>
+                            </View>
+                          </View>
+                          <View style={{ alignItems: 'center', paddingBottom: 12, paddingTop: 4 }}>
+                            <View style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', alignItems: 'center', justifyContent: 'center' }}>
+                              <MaterialIcons name="lock" size={16} color="rgba(255,255,255,0.4)" />
+                            </View>
+                          </View>
+                          <View style={{ alignItems: 'center', paddingBottom: 4 }}>
+                            <View style={{ width: 100, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.3)' }} />
+                          </View>
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
                 {/* Schedule Toggle */}
                 <Pressable
                   style={[st.abToggle, scheduleEnabled && { backgroundColor: '#3B82F612', borderColor: '#3B82F630' }]}
