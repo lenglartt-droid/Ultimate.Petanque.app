@@ -187,6 +187,11 @@ export default function SponsorPortalScreen() {
   const [savingGoals, setSavingGoals] = useState(false);
   const [goalsLoaded, setGoalsLoaded] = useState(false);
 
+  // Goal achievement state
+  const [goalAchievements, setGoalAchievements] = useState<{ impressions: boolean; clicks: boolean; ctr: boolean }>({ impressions: false, clicks: false, ctr: false });
+  const [celebratingGoal, setCelebratingGoal] = useState<string | null>(null);
+  const [goalXpAwarded, setGoalXpAwarded] = useState(false);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -610,6 +615,27 @@ export default function SponsorPortalScreen() {
     loadGoals();
   }, [sponsor?.id, goalsLoaded]);
 
+  // Check goal achievements
+  useEffect(() => {
+    if (!sponsor?.id || !goalsLoaded) return;
+    const gImp = parseInt(goalImpressions) || 0;
+    const gClk = parseInt(goalClicks) || 0;
+    const gCtr = parseFloat(goalCtr) || 0;
+    const newAchievements = {
+      impressions: gImp > 0 && totalImp >= gImp,
+      clicks: gClk > 0 && totalClk >= gClk,
+      ctr: gCtr > 0 && ctr >= gCtr,
+    };
+    setGoalAchievements(newAchievements);
+    // Check if any NEW goal was just achieved
+    const anyAchieved = Object.values(newAchievements).some(v => v);
+    if (anyAchieved && !goalXpAwarded) {
+      supabase.from('ambassador_analytics').select('id').eq('ambassador_id', sponsor.id).eq('event_type', 'goal_achieved_xp').limit(1).then(({ data }) => {
+        if (data && data.length > 0) setGoalXpAwarded(true);
+      });
+    }
+  }, [sponsor?.id, goalsLoaded, goalImpressions, goalClicks, goalCtr, totalImp, totalClk, ctr]);
+
   const checklistItems = [
     { key: 'hasLogo', icon: 'photo-camera' as const, label: fr ? 'Uploader votre logo' : 'Upload your logo', done: checklistData.hasLogo, action: () => setActiveSection('branding') },
     { key: 'hasBrandColor', icon: 'palette' as const, label: fr ? 'Definir votre couleur' : 'Set your brand color', done: checklistData.hasBrandColor, action: () => setActiveSection('branding') },
@@ -716,6 +742,23 @@ export default function SponsorPortalScreen() {
       showAlert(fr ? 'Erreur' : 'Error', e.message);
     }
     setSavingGoals(false);
+  };
+
+  const handleClaimGoalXp = async () => {
+    if (!sponsor?.id || goalXpAwarded) return;
+    const allAchieved = Object.values(goalAchievements).every(v => v);
+    const xpAmount = allAchieved ? 300 : 150;
+    try {
+      await supabase.from('ambassador_analytics').insert({ ambassador_id: sponsor.id, event_type: 'goal_achieved_xp', source_page: `xp:${xpAmount}|imp:${goalAchievements.impressions}|clk:${goalAchievements.clicks}|ctr:${goalAchievements.ctr}` });
+      const currentXp = sponsor.total_referral_xp || 0;
+      await supabase.from('ambassadors').update({ total_referral_xp: currentXp + xpAmount, updated_at: new Date().toISOString() }).eq('id', sponsor.id);
+      setGoalXpAwarded(true);
+      setCelebratingGoal('all');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? `+${xpAmount} XP gagnes ! Objectifs atteints !` : `+${xpAmount} XP earned! Goals achieved!`);
+      loadSponsor();
+      setTimeout(() => setCelebratingGoal(null), 3000);
+    } catch { /* silent */ }
   };
 
   // Load CRM referral data
@@ -1734,6 +1777,40 @@ export default function SponsorPortalScreen() {
                   </View>
                 );
               })() : null}
+              {/* Goal Achievement Banner */}
+              {Object.values(goalAchievements).some(v => v) ? (
+                <Animated.View entering={FadeInDown.duration(300)} style={{ backgroundColor: celebratingGoal ? '#10B98112' : '#10B98108', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#10B98125' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#10B98118', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name={celebratingGoal ? 'celebration' : 'emoji-events'} size={20} color="#10B981" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#10B981' }}>
+                        {Object.values(goalAchievements).every(v => v)
+                          ? (fr ? 'Tous les objectifs atteints !' : 'All goals achieved!')
+                          : (fr ? 'Objectif(s) atteint(s) !' : 'Goal(s) achieved!')}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>
+                        {[goalAchievements.impressions && 'Impressions', goalAchievements.clicks && (fr ? 'Clics' : 'Clicks'), goalAchievements.ctr && 'CTR'].filter(Boolean).join(', ')}
+                      </Text>
+                    </View>
+                    {!goalXpAwarded ? (
+                      <Pressable
+                        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+                        onPress={handleClaimGoalXp}
+                      >
+                        <MaterialIcons name="star" size={14} color="#FFF" />
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: '#FFF' }}>+{Object.values(goalAchievements).every(v => v) ? 300 : 150} XP</Text>
+                      </Pressable>
+                    ) : (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#10B98115', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}>
+                        <MaterialIcons name="check-circle" size={12} color="#10B981" />
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>{fr ? 'Reclame' : 'Claimed'}</Text>
+                      </View>
+                    )}
+                  </View>
+                </Animated.View>
+              ) : null}
               <Pressable
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C3AED', paddingVertical: 12, borderRadius: 12 }, savingGoals && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={handleSaveGoals}
@@ -1746,6 +1823,123 @@ export default function SponsorPortalScreen() {
                   </>
                 )}
               </Pressable>
+            </Animated.View>
+
+            {/* ROI Calculator */}
+            <Animated.View entering={FadeInDown.duration(300).delay(199)} style={st.ctrCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#3B82F612', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="calculate" size={18} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Calculateur ROI' : 'ROI Calculator'}</Text>
+                  <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{fr ? 'Estimez la valeur de votre visibilite' : 'Estimate the value of your visibility'}</Text>
+                </View>
+              </View>
+              {(() => {
+                const budgetVal = parseFloat(revBudget) || 0;
+                const estValuePerImp = 0.008; // EUR per impression
+                const estValuePerClick = 0.35; // EUR per click
+                const estTotalValue = (totalImp * estValuePerImp) + (totalClk * estValuePerClick);
+                const cpmVal = totalImp > 0 && budgetVal > 0 ? Math.round((budgetVal / totalImp) * 10000) / 10 : 0;
+                const cpcVal = totalClk > 0 && budgetVal > 0 ? Math.round((budgetVal / totalClk) * 100) / 100 : 0;
+                const annualImp = totalImp * (365 / Math.max(period, 1));
+                const annualClk = totalClk * (365 / Math.max(period, 1));
+                const annualReach = (bannerData?.uniqueViewers || 0) * (365 / Math.max(period, 1));
+                const roiPct = budgetVal > 0 ? Math.round((estTotalValue / budgetVal) * 100) : 0;
+                const roiColor = roiPct >= 150 ? '#10B981' : roiPct >= 100 ? '#F59E0B' : roiPct >= 50 ? '#F97316' : '#EF4444';
+                return (
+                  <>
+                    {/* Annual projections */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                      <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#3B82F6' }}>{Math.round(annualImp).toLocaleString()}</Text>
+                        <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Imp./an est.' : 'Est. imp/yr'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#10B981' }}>{Math.round(annualClk).toLocaleString()}</Text>
+                        <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Clics/an est.' : 'Est. clicks/yr'}</Text>
+                      </View>
+                      <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                        <Text style={{ fontSize: 16, fontWeight: '900', color: '#7C3AED' }}>{Math.round(annualReach).toLocaleString()}</Text>
+                        <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Portee/an' : 'Reach/yr'}</Text>
+                      </View>
+                    </View>
+                    {/* Estimated value */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>{fr ? 'Valeur estimee de la visibilite' : 'Estimated visibility value'}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
+                        <Text style={{ fontSize: 28, fontWeight: '900', color: '#0F172A' }}>\u20AC{Math.round(estTotalValue * 10) / 10}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8' }}>/ {period}{fr ? 'j' : 'd'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Valeur impressions' : 'Impression value'}</Text>
+                          <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+                            <View style={{ height: '100%', width: `${estTotalValue > 0 ? Math.round(((totalImp * estValuePerImp) / estTotalValue) * 100) : 50}%`, backgroundColor: '#3B82F6', borderRadius: 3 }} />
+                          </View>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6', marginTop: 2 }}>\u20AC{Math.round(totalImp * estValuePerImp * 10) / 10}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Valeur clics' : 'Click value'}</Text>
+                          <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
+                            <View style={{ height: '100%', width: `${estTotalValue > 0 ? Math.round(((totalClk * estValuePerClick) / estTotalValue) * 100) : 50}%`, backgroundColor: '#10B981', borderRadius: 3 }} />
+                          </View>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', marginTop: 2 }}>\u20AC{Math.round(totalClk * estValuePerClick * 10) / 10}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    {/* ROI Score */}
+                    {budgetVal > 0 ? (
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                        <View style={{ flex: 1, backgroundColor: roiColor + '08', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1.5, borderColor: roiColor + '20' }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>ROI</Text>
+                          <Text style={{ fontSize: 28, fontWeight: '900', color: roiColor }}>{roiPct}%</Text>
+                          <Text style={{ fontSize: 10, color: '#64748B', marginTop: 2 }}>
+                            {roiPct >= 150 ? (fr ? 'Excellent' : 'Excellent') : roiPct >= 100 ? (fr ? 'Bon' : 'Good') : roiPct >= 50 ? (fr ? 'Moyen' : 'Average') : (fr ? 'Faible' : 'Low')}
+                          </Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>CPM</Text>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor }}>\u20AC{cpmVal}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>CPC</Text>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: '#10B981' }}>\u20AC{cpcVal}</Text>
+                        </View>
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                        <Text style={{ flex: 1, fontSize: 11, color: '#92400E', lineHeight: 16 }}>
+                          {fr ? 'Renseignez votre budget mensuel dans le suivi budget ci-dessus pour calculer le ROI.' : 'Enter your monthly budget in the budget tracker above to calculate ROI.'}
+                        </Text>
+                      </View>
+                    )}
+                    {/* Industry comparison */}
+                    <View style={{ backgroundColor: '#F1F5F9', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <MaterialIcons name="analytics" size={12} color="#64748B" />
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase' }}>{fr ? 'Ref. marche sport' : 'Sports market ref.'}</Text>
+                      </View>
+                      {[
+                        { label: 'CPM', yours: cpmVal, market: 6.5, unit: '\u20AC', better: cpmVal > 0 && cpmVal < 6.5 },
+                        { label: 'CPC', yours: cpcVal, market: 0.55, unit: '\u20AC', better: cpcVal > 0 && cpcVal < 0.55 },
+                        { label: 'CTR', yours: ctr, market: 2.1, unit: '%', better: ctr > 2.1 },
+                      ].map((ref, ri) => (
+                        <View key={ri} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                          <Text style={{ width: 32, fontSize: 10, fontWeight: '600', color: '#64748B' }}>{ref.label}</Text>
+                          <View style={{ flex: 1, height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, overflow: 'hidden' }}>
+                            <View style={{ height: '100%', width: `${Math.min(100, ref.yours > 0 ? (ref.yours / Math.max(ref.yours, ref.market) * 100) : 0)}%`, backgroundColor: ref.better ? '#10B981' : '#F59E0B', borderRadius: 3 }} />
+                          </View>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: ref.better ? '#10B981' : '#F59E0B', width: 50, textAlign: 'right' }}>{ref.yours}{ref.unit}</Text>
+                          <Text style={{ fontSize: 9, color: '#94A3B8', width: 50 }}>{fr ? 'moy.' : 'avg.'} {ref.market}{ref.unit}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                );
+              })()}
             </Animated.View>
 
             {/* Export Buttons */}
