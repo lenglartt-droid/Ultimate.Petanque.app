@@ -186,9 +186,8 @@ export default function PartnerProgramScreen() {
           const isRecommended = tier.id === 'silver';
 
           return (
-            <Animated.View
+            <View
               key={tier.id}
-              entering={FadeInDown.duration(300).delay(100 + idx * 80)}
               onLayout={(e) => { cardPositions.current.set(tier.id, e.nativeEvent.layout.y + 200); }}
             >
               <View style={[st.tierCard, isExpanded && { borderColor: tier.color + '40', borderWidth: 2 }]}>
@@ -280,7 +279,7 @@ export default function PartnerProgramScreen() {
                   </Animated.View>
                 ) : null}
               </View>
-            </Animated.View>
+            </View>
           );
         })}
 
