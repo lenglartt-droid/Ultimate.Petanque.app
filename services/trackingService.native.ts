@@ -16,9 +16,7 @@ function getTrackingModule(): any {
   if (moduleChecked) return trackingModule;
   moduleChecked = true;
   try {
-    // Use string indirection to prevent depcheck from auto-installing this optional dependency
-    const trackingPkg = ['expo', 'tracking', 'transparency'].join('-');
-    trackingModule = require(trackingPkg);
+    trackingModule = require('expo-tracking-transparency');
   } catch {
     trackingModule = null;
   }

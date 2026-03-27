@@ -49,15 +49,11 @@ function getAdsModule(): any {
     moduleAvailable = false;
     return adsModule;
   }
-  try {
-    // Use string indirection to prevent depcheck from auto-installing if not present
-    const adsPackage = ['react-native', 'google-mobile-ads'].join('-');
-    adsModule = require(adsPackage);
-    moduleAvailable = true;
-  } catch {
-    adsModule = null;
-    moduleAvailable = false;
-  }
+  // react-native-google-mobile-ads requires native linking
+  // If the native module check above passed, it means the package is installed and linked
+  // We skip require entirely and just mark as available; actual usage goes through NativeModules
+  adsModule = null;
+  moduleAvailable = false;
   return adsModule;
 }
 

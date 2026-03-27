@@ -27,22 +27,20 @@ export async function getDeviceFingerprint(): Promise<string> {
     // Try expo-device for more info
     try {
       const Device = require('expo-device');
-      if (Device.brand) parts.push(Device.brand);
-      if (Device.modelName) parts.push(Device.modelName);
-      if (Device.osName) parts.push(Device.osName);
-      if (Device.deviceYearClass) parts.push(String(Device.deviceYearClass));
+      if (Device?.brand) parts.push(Device.brand);
+      if (Device?.modelName) parts.push(Device.modelName);
+      if (Device?.osName) parts.push(Device.osName);
+      if (Device?.deviceYearClass) parts.push(String(Device.deviceYearClass));
     } catch { /* silent - expo-device may not be available */ }
 
     // Try expo-application for app-level ID
     try {
       const Application = require('expo-application');
-      if (Platform.OS === 'android' && Application.getAndroidId) {
+      if (Platform.OS === 'android' && Application?.getAndroidId) {
         const androidId = await Application.getAndroidId();
         if (androidId) parts.push(androidId);
       } else if (Platform.OS === 'ios') {
-        // iOS doesn't expose a persistent device ID without entitlements
-        // Use installation ID instead
-        const installId = await Application.getInstallationTimeAsync?.();
+        const installId = await Application?.getInstallationTimeAsync?.();
         if (installId) parts.push(String(installId));
       }
     } catch { /* silent */ }

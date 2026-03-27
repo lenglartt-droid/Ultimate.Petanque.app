@@ -26,16 +26,10 @@ function getIapModule(): any {
     moduleAvailable = false;
     return null;
   }
-  try {
-    // Use string indirection to prevent depcheck from auto-installing this optional dependency
-    // react-native-iap requires native linking — auto-install breaks EAS builds
-    const iapPackage = ['react-native', 'iap'].join('-');
-    iapModule = require(iapPackage);
-    moduleAvailable = true;
-  } catch {
-    iapModule = null;
-    moduleAvailable = false;
-  }
+  // react-native-iap requires native linking — not available in preview/Expo Go
+  // Since NativeModules check passed, mark as stub; actual native usage would need a dev build
+  iapModule = null;
+  moduleAvailable = false;
   return iapModule;
 }
 
