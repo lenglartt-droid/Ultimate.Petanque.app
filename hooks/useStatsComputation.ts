@@ -5,24 +5,9 @@
 import { useMemo } from 'react';
 import type { Match, Challenge } from '@/types/petanque';
 
-type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
-
-export function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter): T[] {
-  if (filter === 'all') return items;
-  const now = new Date();
-  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  let startDate: Date;
-  switch (filter) {
-    case 'today': startDate = new Date(startOfDay); break;
-    case 'week': startDate = new Date(startOfDay); startDate.setDate(startDate.getDate() - 7); break;
-    case 'month': startDate = new Date(startOfDay); startDate.setDate(startDate.getDate() - 30); break;
-    case '3months': startDate = new Date(startOfDay); startDate.setMonth(startDate.getMonth() - 3); break;
-    case '6months': startDate = new Date(startOfDay); startDate.setMonth(startDate.getMonth() - 6); break;
-    case 'year': startDate = new Date(startOfDay); startDate.setFullYear(startDate.getFullYear() - 1); break;
-    default: return items;
-  }
-  return items.filter(item => new Date(item.date) >= startDate);
-}
+// Re-export from the shared filtering hook for backward compatibility
+export { filterByTime } from '@/hooks/useFilteredStats';
+export type { TimeFilter } from '@/hooks/useFilteredStats';
 
 export function usePerformanceStats(filteredMatches: Match[]) {
   return useMemo(() => {
