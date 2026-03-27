@@ -106,18 +106,18 @@ function LayoutInner() {
 
   // Initialize Sentry crash reporting
   React.useEffect(() => {
-    initSentry();
+    try { initSentry(); } catch (e) { console.log('[Sentry] Init error:', e); }
   }, []);
 
   React.useEffect(() => {
     isATTPromptNeeded().then(needed => {
       if (needed) setShowATT(true);
-    });
+    }).catch(() => {});
   }, []);
 
   // Register push token for server-side notifications
   React.useEffect(() => {
-    registerPushToken();
+    registerPushToken().catch(() => {});
   }, []);
 
   // Check temp data expiry for non-registered users & update retention on login
@@ -126,7 +126,7 @@ function LayoutInner() {
       if (expired) {
         console.log('[Retention] Temporary onboarding data expired and cleaned up');
       }
-    });
+    }).catch(() => {});
   }, []);
 
   // Handle deep links for event QR codes (?event=CODE)
@@ -153,7 +153,7 @@ function LayoutInner() {
 
     Linking.getInitialURL().then(url => {
       if (url) handleDeepLinkUrl(url);
-    });
+    }).catch(() => {});
 
     const sub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
     return () => sub.remove();
