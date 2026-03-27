@@ -25,7 +25,6 @@ import { fetchSponsorsOnly, Ambassador, isUserSponsor } from '@/services/ambassa
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
-import { fetchDetailedBannerAnalytics } from '@/services/ambassadorAnalyticsService';
 import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
 
 // Partner slot types
