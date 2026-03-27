@@ -77,7 +77,7 @@ Bottom: Tagline "L'app complète pour les joueurs de pétanque"
 
 **Titre**: Ultimate Petanque  
 **Sous-titre** (30 car.): Scores, Stats & Classements  
-**Mots-clés** (100 car.): petanque,boules,score,match,tournoi,terrain,club,classement,defi,statistiques,carte,joueur  
+**Mots-clés** (100 car.): petanque,boules,score,match,tournoi,terrain,club,classement,defi,statistiques,carte,joueur,ambassadeur,partenaire  
 
 **Description** (4000 car. max):
 
@@ -116,14 +116,25 @@ TOURNOIS & PALMARÈS
 
 COMMUNAUTÉ
 • Classements communautaires : joueurs, clubs, marques de boules
-• Programme ambassadeur avec défis sponsorisés
+• Programme ambassadeur 3 niveaux (Découverte, Confirmé, Élite) avec XP et promotion automatique
+• Programme partenaire 3 tiers (Bronze, Argent, Or) avec portail dédié
+• Défis sponsorisés par les ambassadeurs avec attestation de témoins
 • Rendez-vous entre joueurs via codes de partage et QR codes
 • Partage de matchs entre joueurs avec mise à jour automatique des stats
+• Pages publiques de partenaires avec QR code et liens sociaux
+
+PORTAIL PARTENAIRES
+• Tableau de bord ROI avec benchmark et objectifs mensuels
+• Notifications push avec A/B testing et heatmap de performance
+• Éditeur de marque (logo, couleurs, kit de marque)
+• CRM avec suivi des parrainages et export CSV
+• Digest hebdomadaire automatique pour les partenaires Or
 
 PLUS DE FONCTIONNALITÉS
 • Mode hors-ligne complet
 • Annuaire avancé avec détection de doublons et fusion
 • Scanner QR code intégré
+• FAQ organisée par audience (Joueur, Ambassadeur, Partenaire)
 • Disponible en français et en anglais
 • Export de données (CSV/PDF)
 • Score de confiance et système anti-fraude
@@ -133,14 +144,14 @@ Rejoignez la communauté Ultimate Petanque et faites passer votre jeu au niveau 
 
 **Texte promotionnel** (170 car.):
 ```
-L'app complète pour les joueurs de pétanque : scores détaillés, stats avancées, carte des terrains, classements communautaires et défis. Gratuit !
+L'app complète pour la pétanque : scores mène par mène, stats avancées, carte des terrains, classements, programme ambassadeur/partenaire et défis. Gratuit !
 ```
 
 ### 4.2 App Store (iOS) — English
 
 **Title**: Ultimate Petanque  
 **Subtitle** (30 char.): Scores, Stats & Rankings  
-**Keywords** (100 char.): petanque,boules,score,match,tournament,court,club,ranking,challenge,statistics,map,player  
+**Keywords** (100 char.): petanque,boules,score,match,tournament,court,club,ranking,challenge,statistics,map,player,ambassador,partner  
 
 **Description** (4000 char. max):
 
@@ -179,14 +190,25 @@ TOURNAMENTS & HONORS
 
 COMMUNITY
 • Community leaderboards: players, clubs, boules brands
-• Ambassador program with sponsored challenges
+• 3-level ambassador program (Discovery, Confirmed, Elite) with XP and auto-promotion
+• 3-tier partner program (Bronze, Silver, Gold) with dedicated portal
+• Sponsored challenges by ambassadors with witness attestation
 • Player meetups via share codes and QR codes
 • Match sharing between players with automatic stats update
+• Public partner landing pages with QR code and social links
+
+PARTNER PORTAL
+• ROI dashboard with benchmark and monthly goals
+• Push notifications with A/B testing and performance heatmap
+• Brand editor (logo, colors, brand kit)
+• CRM with referral tracking and CSV export
+• Automatic weekly digest for Gold partners
 
 MORE FEATURES
 • Complete offline mode
 • Advanced directory with duplicate detection and merge
 • Built-in QR code scanner
+• Audience-based FAQ (Player, Ambassador, Partner)
 • Available in French and English
 • Data export (CSV/PDF)
 • Trust score and anti-fraud system
@@ -196,7 +218,7 @@ Join the Ultimate Petanque community and take your game to the next level!
 
 **Promotional Text** (170 char.):
 ```
-The complete app for pétanque players: detailed scores, advanced stats, court map, community rankings and challenges. Free to download!
+The complete app for pétanque: end-by-end scoring, advanced stats, court map, community rankings, ambassador/partner programs and challenges. Free!
 ```
 
 ### 4.3 Google Play Store — French
@@ -289,4 +311,4 @@ Use this checklist to ensure all screenshots are captured:
 
 ---
 
-*Guide créé le 26 mars 2026 — Ultimate Petanque v1.1.0*
+*Guide mis à jour le 27 mars 2026 — Ultimate Petanque v1.2.0*

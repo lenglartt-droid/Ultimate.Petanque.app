@@ -7,7 +7,7 @@
     "icon": "./assets/images/app-logo.png",
     "scheme": "ultimatepetanque",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",
@@ -30,6 +30,11 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.ultimatepetanque.app",
+      "config": {
+        "googleMaps": {
+          "apiKey": "YOUR_GOOGLE_MAPS_API_KEY — Google Cloud Console > APIs & Services > Credentials > Create API Key (restrict to Maps SDK for Android)"
+        }
+      },
       "permissions": [
         "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
@@ -100,6 +105,12 @@
       ],
       [
         "expo-tracking-transparency"
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
+        }
       ],
       [
         "react-native-google-mobile-ads",

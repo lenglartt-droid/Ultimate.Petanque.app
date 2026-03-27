@@ -25,7 +25,7 @@ export async function initSentry(): Promise<void> {
   try {
     Sentry = await import('@sentry/react-native');
     Sentry.init({
-      dsn: '', // TODO: Replace with your Sentry DSN
+      dsn: 'YOUR_SENTRY_DSN — Sentry.io > Project Settings > Client Keys (DSN) > Copy DSN string (format: https://xxxxx@o00000.ingest.sentry.io/00000)',
       enableAutoSessionTracking: true,
       sessionTrackingIntervalMillis: 30000,
       tracesSampleRate: 0.2,
