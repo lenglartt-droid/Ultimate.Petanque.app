@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
-import { Match, Challenge, Tournament, Player, PRECISION_ATELIERS, PrecisionAtelier } from '@/services/mockData';
+import { Match, Challenge, Tournament, Player, PrecisionAtelier } from '@/types/petanque';
+import { PRECISION_ATELIERS } from '@/constants/challengeConfig';
 
 export type ExportFormat = 'csv' | 'pdf';
 export type ExportDataType = 'matches' | 'challenges' | 'statistics';

@@ -21,7 +21,7 @@ import Animated, { FadeInDown, FadeIn, useAnimatedStyle, withTiming, useSharedVa
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { Match, Challenge, SeriesInfo } from '@/services/mockData';
+import { Match, Challenge, SeriesInfo } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import ShareRequestModal from '@/components/ui/ShareRequestModal';

@@ -15,7 +15,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { Player } from '@/services/mockData';
+import { Player } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const { width: screenWidth } = Dimensions.get('window');

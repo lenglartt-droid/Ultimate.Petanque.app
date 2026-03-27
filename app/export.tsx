@@ -34,7 +34,7 @@ import {
   getColumnsForDataType,
   ColumnDef,
 } from '@/services/exportService';
-import { Tournament, Match, Challenge, Player } from '@/services/mockData';
+import { Tournament, Match, Challenge, Player } from '@/types/petanque';
 
 // ============================================
 // STEP-BASED EXPORT WIZARD

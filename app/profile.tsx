@@ -30,7 +30,7 @@ import { deactivatePushToken } from '@/services/pushTokenService';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { Club, Terrain } from '@/services/mockData';
+import { Club, Terrain } from '@/types/petanque';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { getPendingShareRequestCount } from '@/services/matchShareService';
 import { isUserAmbassador, isUserSponsor } from '@/services/ambassadorService';

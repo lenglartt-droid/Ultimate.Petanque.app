@@ -40,7 +40,6 @@ import {
   HeadToHead,
   BracketMatch,
   Challenge,
-  ChallengeType,
   ChallengeStats,
   Terrain,
   TournamentNotification,
@@ -69,6 +68,14 @@ import {
   mergeRecords,
   calculatePlayerStatsFromMatches,
 } from '@/services/dbMappers';
+import {
+  computeUserStats,
+  computeChallengeStats,
+  computePlayersWithStats,
+  computeSelfPlayer,
+  computeClubsWithMemberCount,
+} from '@/hooks/useAppComputed';
+import { createGetters } from '@/hooks/useAppGetters';
 import { addMatchOp, updateMatchOp, deleteMatchOp } from '@/services/matchCrudService';
 import { addPlayerOp, updatePlayerOp, deletePlayerOp } from '@/services/playerCrudService';
 import { addClubOp, updateClubOp, deleteClubOp } from '@/services/clubCrudService';
@@ -278,140 +285,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  // ===== Computed: player stats from matches =====
-  const playersWithStats = React.useMemo(() => {
-    if (matches.length === 0) return players;
-    return players.map(player => {
-      const newStats = calculatePlayerStatsFromMatches(matches, player.id, player.stats);
-      if (newStats === player.stats) return player;
-      return { ...player, stats: newStats };
-    });
-  }, [players, matches]);
+  // ===== Computed values (delegated to extracted functions) =====
+  const playersWithStats = React.useMemo(() => computePlayersWithStats(players, matches), [players, matches]);
+  const selfPlayer = React.useMemo(() => computeSelfPlayer(playersWithStats, user?.id), [playersWithStats, user?.id]);
+  const clubsWithMemberCount = React.useMemo(() => computeClubsWithMemberCount(clubs, playersWithStats), [clubs, playersWithStats]);
 
-  const selfPlayer = React.useMemo(() => {
-    if (!user?.id) return null;
-    return playersWithStats.find(p => p.id === user.id) || null;
-  }, [playersWithStats, user?.id]);
+  // ===== Computed: user stats (delegated) =====
+  const userStats = React.useMemo(
+    () => computeUserStats(matches, user?.id, user?.username, sharedMatchIds),
+    [matches, user?.id, user?.username, sharedMatchIds]
+  );
 
-  const clubsWithMemberCount = React.useMemo(() => {
-    return clubs.map(club => {
-      const memberCount = playersWithStats.filter(p => p.clubId === club.id).length;
-      return { ...club, membersCount: Math.max(memberCount, club.membersCount || 0) };
-    });
-  }, [clubs, playersWithStats]);
-
-  // ===== Computed: user stats =====
-  const userStats = React.useMemo(() => {
-    const userId = user?.id;
-    const sharedSet = new Set(sharedMatchIds);
-    let totalMatches = 0;
-    let wins = 0;
-    let losses = 0;
-    let totalTirs = 0;
-    let totalTirsSuccess = 0;
-    let totalPoints = 0;
-    let totalPointsSuccess = 0;
-    let totalCarreaux = 0;
-    let totalDuration = 0;
-    const tournamentIds = new Set<string>();
-
-    matches.forEach(m => {
-      const isShared = sharedSet.has(m.id);
-      const userInA = userId ? m.teamA.players.includes(userId) : false;
-      const userInB = userId ? m.teamB.players.includes(userId) : false;
-      
-      if (isShared && !userInA && !userInB) return;
-      
-      totalMatches++;
-      totalDuration += m.duration || 0;
-      
-      const userTeam = isShared ? (userInA ? 'A' : 'B') : 'A';
-      if (m.winner === userTeam) wins++;
-      else losses++;
-
-      if (m.mode === 'Tournoi' && m.tournamentId) {
-        tournamentIds.add(m.tournamentId);
-      }
-
-      if (m.playerActions) {
-        const targetTeam = userTeam;
-        m.playerActions.filter(pa => pa.team === targetTeam).forEach(pa => {
-          totalTirs += pa.actions.tirs;
-          totalTirsSuccess += pa.actions.tirsSuccess;
-          totalPoints += pa.actions.points;
-          totalPointsSuccess += pa.actions.pointsSuccess;
-          totalCarreaux += pa.actions.carreaux;
-        });
-      }
-    });
-
-    return {
-      playerId: userId || '1',
-      playerName: user?.username || 'Utilisateur',
-      totalMatches,
-      wins,
-      losses,
-      winRate: totalMatches > 0 ? Math.round((wins / totalMatches) * 100 * 10) / 10 : 0,
-      currentStreak: 0,
-      longestStreak: 0,
-      tirSuccessRate: totalTirs > 0 ? Math.round((totalTirsSuccess / totalTirs) * 100 * 10) / 10 : 0,
-      pointSuccessRate: totalPoints > 0 ? Math.round((totalPointsSuccess / totalPoints) * 100 * 10) / 10 : 0,
-      carreauRate: totalTirsSuccess > 0 ? Math.round((totalCarreaux / totalTirsSuccess) * 100 * 10) / 10 : 0,
-      avgMatchDuration: totalMatches > 0 ? Math.round(totalDuration / totalMatches) : 0,
-      tournamentsWon: 0,
-      tournamentsPlayed: tournamentIds.size,
-      weeklyProgress: [],
-      recentOpponents: [],
-    };
-  }, [matches, user, sharedMatchIds]);
-
-  // ===== Computed: challenge stats =====
-  const challengeStats: ChallengeStats = React.useMemo(() => {
-    const byType = {
-      '10_tirs': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
-      '10_tirs_sautee': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
-      'precision': { count: 0, avgSuccess: 0, bestScore: 0, totalSuccess: 0 },
-    };
-
-    let totalShots = 0;
-    let totalSuccess = 0;
-
-    challenges.forEach(c => {
-      const type = byType[c.type];
-      type.count++;
-      
-      if (c.type === 'precision') {
-        const score = c.totalPoints || 0;
-        type.totalSuccess += score;
-        type.bestScore = Math.max(type.bestScore, score);
-        totalShots += 20;
-        totalSuccess += (c.precisionShots?.filter(s => s.points >= 3).length || 0);
-      } else {
-        type.totalSuccess += (c.successRate || 0);
-        type.bestScore = Math.max(type.bestScore, c.successRate || 0);
-        totalShots += (c.totalShots || 0);
-        totalSuccess += (c.successCount || 0);
-      }
-    });
-
-    Object.keys(byType).forEach(key => {
-      const type = byType[key as ChallengeType];
-      type.avgSuccess = type.count > 0 ? Math.round(type.totalSuccess / type.count) : 0;
-    });
-
-    return {
-      totalChallenges: challenges.length,
-      byType: {
-        '10_tirs': { count: byType['10_tirs'].count, avgSuccess: byType['10_tirs'].avgSuccess, bestScore: byType['10_tirs'].bestScore },
-        '10_tirs_sautee': { count: byType['10_tirs_sautee'].count, avgSuccess: byType['10_tirs_sautee'].avgSuccess, bestScore: byType['10_tirs_sautee'].bestScore },
-        'precision': { count: byType['precision'].count, avgSuccess: byType['precision'].avgSuccess, bestScore: byType['precision'].bestScore },
-      },
-      recentChallenges: [...challenges].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 5),
-      totalShots,
-      totalSuccess,
-      overallSuccessRate: totalShots > 0 ? Math.round((totalSuccess / totalShots) * 100) : 0,
-    };
-  }, [challenges]);
+  // ===== Computed: challenge stats (delegated) =====
+  const challengeStats: ChallengeStats = React.useMemo(
+    () => computeChallengeStats(challenges),
+    [challenges]
+  );
 
   // ===== Update retention notification stats when matches change =====
   const prevMatchCountRef = useRef(0);
@@ -1236,96 +1125,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ===== Getters =====
-  const getPlayerById = (id: string) => playersWithStats.find(p => p.id === id);
-  const getClubById = (id: string) => clubsWithMemberCount.find(c => c.id === id);
-  const getTournamentById = (id: string) => tournaments.find(t => t.id === id);
-  const getMatchById = (id: string) => matches.find(m => m.id === id);
-  const getTerrainById = (id: string) => terrains.find(t => t.id === id);
-  
-  const getMatchesByPlayer = (playerId: string) => 
-    matches.filter(m => m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId));
-  
-  const getMatchesByTournament = (tournamentId: string) =>
-    matches.filter(m => m.tournamentId === tournamentId);
-
-  // ===== Head-to-head =====
-  const getHeadToHead = (player1Id: string, player2Id: string): HeadToHead => {
-    const h2hMatches = matches.filter(m => {
-      const player1InA = m.teamA.players.includes(player1Id);
-      const player1InB = m.teamB.players.includes(player1Id);
-      const player2InA = m.teamA.players.includes(player2Id);
-      const player2InB = m.teamB.players.includes(player2Id);
-      return (player1InA && player2InB) || (player1InB && player2InA);
-    });
-
-    const matchDetails = h2hMatches.map(m => {
-      const player1InA = m.teamA.players.includes(player1Id);
-      const player1Team: 'A' | 'B' = player1InA ? 'A' : 'B';
-      const player1Won = m.winner === player1Team;
-      return {
-        id: m.id,
-        date: m.date,
-        player1Team,
-        player1Won,
-        scoreFor: player1InA ? m.teamA.score : m.teamB.score,
-        scoreAgainst: player1InA ? m.teamB.score : m.teamA.score,
-        format: m.format,
-        mode: m.mode,
-      };
-    });
-
-    const totalMatches = matchDetails.length;
-    const player1Wins = matchDetails.filter(m => m.player1Won).length;
-    const player2Wins = totalMatches - player1Wins;
-    const player1AvgScore = totalMatches > 0 ? matchDetails.reduce((sum, m) => sum + m.scoreFor, 0) / totalMatches : 0;
-    const player2AvgScore = totalMatches > 0 ? matchDetails.reduce((sum, m) => sum + m.scoreAgainst, 0) / totalMatches : 0;
-
-    return {
-      player1Id,
-      player2Id,
-      matches: matchDetails,
-      stats: {
-        totalMatches,
-        player1Wins,
-        player2Wins,
-        player1WinRate: totalMatches > 0 ? (player1Wins / totalMatches) * 100 : 0,
-        player1AvgScore: Math.round(player1AvgScore * 10) / 10,
-        player2AvgScore: Math.round(player2AvgScore * 10) / 10,
-        lastMatch: matchDetails.length > 0 
-          ? matchDetails.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0].date 
-          : undefined,
-      },
-    };
-  };
-
-  const getCommonOpponents = (player1Id: string, player2Id: string): string[] => {
-    const player1Opponents = new Set<string>();
-    const player2Opponents = new Set<string>();
-
-    matches.forEach(m => {
-      if (m.teamA.players.includes(player1Id)) {
-        m.teamB.players.forEach(p => player1Opponents.add(p));
-      } else if (m.teamB.players.includes(player1Id)) {
-        m.teamA.players.forEach(p => player1Opponents.add(p));
-      }
-
-      if (m.teamA.players.includes(player2Id)) {
-        m.teamB.players.forEach(p => player2Opponents.add(p));
-      } else if (m.teamB.players.includes(player2Id)) {
-        m.teamA.players.forEach(p => player2Opponents.add(p));
-      }
-    });
-
-    const common: string[] = [];
-    player1Opponents.forEach(id => {
-      if (player2Opponents.has(id) && id !== player1Id && id !== player2Id) {
-        common.push(id);
-      }
-    });
-
-    return common;
-  };
+  // ===== Getters (delegated to extracted module) =====
+  const getters = React.useMemo(
+    () => createGetters(playersWithStats, clubsWithMemberCount, tournaments, matches, terrains),
+    [playersWithStats, clubsWithMemberCount, tournaments, matches, terrains]
+  );
+  const { getPlayerById, getClubById, getTournamentById, getMatchById, getTerrainById, getMatchesByPlayer, getMatchesByTournament, getHeadToHead, getCommonOpponents } = getters;
 
   // ===== Provider =====
   return (

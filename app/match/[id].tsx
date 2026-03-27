@@ -23,7 +23,7 @@ import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { PlayerAction, DetailedShotRecord } from '@/services/mockData';
+import { PlayerAction, DetailedShotRecord } from '@/types/petanque';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';

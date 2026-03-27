@@ -24,7 +24,7 @@ import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
-import { Match } from '@/services/mockData';
+import { Match } from '@/types/petanque';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import {
   getMatchValidationLevel,
