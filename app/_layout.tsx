@@ -612,6 +612,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="partner-program" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="club-ranking/[id]" 
                 options={{ 
                   presentation: 'card',

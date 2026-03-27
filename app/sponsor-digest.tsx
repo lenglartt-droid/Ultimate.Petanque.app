@@ -13,6 +13,8 @@ import theme from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import { Image } from 'expo-image';
+import { LinearGradient as LG2 } from 'expo-linear-gradient';
 import Svg, { Polyline, Circle as SvgCircle, Rect as SvgRect } from 'react-native-svg';
 
 interface DigestEntry {
@@ -89,6 +91,7 @@ export default function SponsorDigestScreen() {
   const [sponsor, setSponsor] = useState<any | null>(null);
   const [digests, setDigests] = useState<DigestEntry[]>([]);
   const [selectedIdx, setSelectedIdx] = useState<number | null>(null);
+  const [exportingDigest, setExportingDigest] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   useEffect(() => {
@@ -352,6 +355,74 @@ export default function SponsorDigestScreen() {
                     </View>
                   </View>
                 ) : null}
+
+                {/* Share / Export Digest */}
+                <View style={{ marginTop: 14 }}>
+                  <Pressable
+                    style={({ pressed }) => [s.shareBtn, exportingDigest && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                    onPress={async () => {
+                      if (!selected || !sponsor) return;
+                      setExportingDigest(true);
+                      try {
+                        const tierCol = isGold ? '#D4A017' : sponsor?.badge_type === 'sponsor' ? '#78909C' : '#A1887F';
+                        const tierLbl = isGold ? (fr ? 'Partenaire Or' : 'Gold Partner') : sponsor?.badge_type === 'sponsor' ? (fr ? 'Partenaire Argent' : 'Silver Partner') : (fr ? 'Partenaire Bronze' : 'Bronze Partner');
+                        const prevRow = previous;
+                        const impChg = prevRow ? (prevRow.impressions > 0 ? Math.round(((selected.impressions - prevRow.impressions) / prevRow.impressions) * 100) : 100) : 0;
+                        const clkChg = prevRow ? (prevRow.clicks > 0 ? Math.round(((selected.clicks - prevRow.clicks) / prevRow.clicks) * 100) : 100) : 0;
+                        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+                          body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#0F172A}
+                          .hdr{text-align:center;padding:24px;border-radius:16px;background:linear-gradient(135deg,${tierCol},${tierCol}CC);color:#FFF;margin-bottom:28px}
+                          .hdr h1{margin:0 0 4px;font-size:20px}.hdr .badge{display:inline-block;background:rgba(255,255,255,0.2);padding:2px 10px;border-radius:6px;font-size:10px;font-weight:800;letter-spacing:0.5px}
+                          .hdr .week{font-size:14px;opacity:0.8;margin-top:8px}
+                          .kpi-row{display:flex;gap:12px;margin-bottom:24px}
+                          .kpi{flex:1;text-align:center;background:#F8FAFC;border-radius:14px;padding:16px;border:1px solid #E2E8F0}
+                          .kpi-val{font-size:28px;font-weight:900}.kpi-lbl{font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;margin-top:4px}
+                          .kpi-chg{font-size:10px;font-weight:800;margin-top:4px}
+                          .section{margin-bottom:24px}.section-title{font-size:14px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #E2E8F0}
+                          .wow-row{display:flex;gap:12px}.wow-cell{flex:1;text-align:center;background:#F8FAFC;border-radius:12px;padding:14px;border:1px solid #E2E8F0}
+                          .wow-lbl{font-size:10px;color:#94A3B8;font-weight:600}.wow-val{font-size:22px;font-weight:900;margin-top:4px}
+                          .footer{text-align:center;font-size:11px;color:#94A3B8;margin-top:28px;padding-top:16px;border-top:1px solid #E2E8F0}
+                        </style></head><body>
+                          <div class="hdr">
+                            <div class="badge">${tierLbl.toUpperCase()}</div>
+                            <h1>${fr ? 'Recap Hebdomadaire' : 'Weekly Recap'}</h1>
+                            <div class="week">${selected.weekLabel}</div>
+                          </div>
+                          <div class="kpi-row">
+                            <div class="kpi"><div class="kpi-val" style="color:#3B82F6">${selected.impressions}</div><div class="kpi-lbl">Impressions</div>${prevRow ? `<div class="kpi-chg" style="color:${impChg >= 0 ? '#10B981' : '#EF4444'}">${impChg >= 0 ? '+' : ''}${impChg}%</div>` : ''}</div>
+                            <div class="kpi"><div class="kpi-val" style="color:#10B981">${selected.clicks}</div><div class="kpi-lbl">${fr ? 'Clics' : 'Clicks'}</div>${prevRow ? `<div class="kpi-chg" style="color:${clkChg >= 0 ? '#10B981' : '#EF4444'}">${clkChg >= 0 ? '+' : ''}${clkChg}%</div>` : ''}</div>
+                            <div class="kpi"><div class="kpi-val" style="color:#F59E0B">${selected.ctr}%</div><div class="kpi-lbl">CTR</div></div>
+                            <div class="kpi"><div class="kpi-val" style="color:#7C3AED">${selected.pushes}</div><div class="kpi-lbl">Push</div></div>
+                          </div>
+                          ${prevRow ? `<div class="section"><div class="section-title">${fr ? 'vs Semaine precedente' : 'vs Previous Week'}</div><div class="wow-row"><div class="wow-cell"><div class="wow-lbl">${fr ? 'Cette semaine' : 'This week'}</div><div class="wow-val" style="color:#6366F1">${selected.impressions}</div></div><div class="wow-cell"><div class="wow-lbl">${fr ? 'Sem. precedente' : 'Previous'}</div><div class="wow-val">${prevRow.impressions}</div></div></div></div>` : ''}
+                          <div class="footer">${sponsor.display_name} &middot; Ultimate Petanque &middot; ${new Date(selected.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div>
+                        </body></html>`;
+                        if (Platform.OS === 'web') {
+                          try {
+                            const win = window.open('', '_blank');
+                            if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 500); }
+                          } catch { showAlert(fr ? 'Erreur' : 'Error'); }
+                        } else {
+                          const Print = require('expo-print');
+                          const SharingModule = require('expo-sharing');
+                          const { uri } = await Print.printToFileAsync({ html, base64: false });
+                          const canShare = await SharingModule.isAvailableAsync();
+                          if (canShare) await SharingModule.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Digest PDF' : 'Digest PDF' });
+                        }
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      } catch (e: any) { showAlert(fr ? 'Erreur' : 'Error', e.message); }
+                      setExportingDigest(false);
+                    }}
+                    disabled={exportingDigest}
+                  >
+                    {exportingDigest ? <ActivityIndicator size="small" color="#6366F1" /> : (
+                      <>
+                        <MaterialIcons name="share" size={16} color="#6366F1" />
+                        <Text style={s.shareBtnText}>{fr ? 'Partager ce digest (PDF)' : 'Share this digest (PDF)'}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
               </Animated.View>
             ) : null}
 
@@ -470,4 +541,6 @@ const s = StyleSheet.create({
   // Info
   infoCard: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#EEF2FF', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: '#C7D2FE' },
   infoText: { flex: 1, fontSize: 12, color: '#4338CA', lineHeight: 18 },
+  shareBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#6366F10A', borderRadius: 12, paddingVertical: 12, borderWidth: 1.5, borderColor: '#6366F120' },
+  shareBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#6366F1' },
 });

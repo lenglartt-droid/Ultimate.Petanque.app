@@ -295,6 +295,69 @@ function getFaqData(language: string): FAQCategory[] {
       ],
     },
     {
+      id: 'ambassadors_program',
+      category: fr ? 'Ambassadeurs' : 'Ambassadors',
+      icon: 'verified',
+      color: '#7C3AED',
+      description: fr ? 'Programme ambassadeur et evenements' : 'Ambassador program and events',
+      questions: [
+        {
+          id: 'am1',
+          q: fr ? 'Comment devenir ambassadeur ?' : 'How do I become an ambassador?',
+          a: fr ? 'Contactez notre equipe via la page ambassadeurs ou par email. Le programme comporte 3 niveaux : Decouverte (profil public + code parrainage), Confirme (5+ parrainages, dashboard analytics, banniere accueil), Elite (20+ parrainages, push illimites, badge dore). Chaque parrainage valide vous rapporte 50 XP.' : 'Contact our team via the ambassadors page or email. The program has 3 levels: Discovery (public profile + referral code), Confirmed (5+ referrals, analytics dashboard, home banner), Elite (20+ referrals, unlimited push, gold badge). Each valid referral earns 50 XP.',
+        },
+        {
+          id: 'am2',
+          q: fr ? 'Comment utiliser mon portail ambassadeur ?' : 'How do I use my ambassador portal?',
+          a: fr ? 'Le portail ambassadeur (accessible depuis le profil > Communaute) affiche vos stats en temps reel : impressions, clics, parrainages, evenements crees. Vous pouvez y creer des defis sponsorises, suivre votre progression vers le niveau superieur, et voir votre code parrainage.' : 'The ambassador portal (accessible from profile > Community) shows your real-time stats: impressions, clicks, referrals, created events. You can create sponsored challenges, track your progression to the next level, and see your referral code.',
+        },
+        {
+          id: 'am3',
+          q: fr ? 'Comment organiser un evenement sponsorise ?' : 'How do I organize a sponsored event?',
+          a: fr ? 'Depuis le portail ambassadeur ou la page Defis, creez un evenement sponsorise. Choisissez le type de defi (10 tirs, precision...), la date, le terrain et le nombre max de participants. Un code unique est genere. Les participants rejoignent via le code ou la liste publique. Les resultats sont valides par des temoins presents.' : 'From the ambassador portal or Challenges page, create a sponsored event. Choose challenge type (10 shots, precision...), date, court and max participants. A unique code is generated. Participants join via code or public list. Results are validated by present witnesses.',
+        },
+        {
+          id: 'am4',
+          q: fr ? 'Comment fonctionne le parrainage ?' : 'How does referral work?',
+          a: fr ? 'Partagez votre code unique (visible dans le portail). Quand un nouveau joueur s inscrit avec votre code, vous gagnez 50 XP et votre compteur augmente. Atteignez les seuils pour monter de niveau : 5 parrainages pour Confirme, 20 pour Elite. L historique complet est dans l onglet CRM du portail.' : 'Share your unique code (visible in the portal). When a new player signs up with your code, you earn 50 XP and your counter increases. Reach thresholds to level up: 5 referrals for Confirmed, 20 for Elite. Full history is in the portal CRM tab.',
+        },
+      ],
+    },
+    {
+      id: 'partners_sponsors',
+      category: fr ? 'Partenaires & Sponsors' : 'Partners & Sponsors',
+      icon: 'handshake',
+      color: '#D4A017',
+      description: fr ? 'Programme partenaire et portail sponsor' : 'Partner program and sponsor portal',
+      questions: [
+        {
+          id: 'sp1',
+          q: fr ? 'Comment devenir partenaire ou sponsor ?' : 'How do I become a partner or sponsor?',
+          a: fr ? 'Consultez la page "Programme Partenaire" depuis Nos Partenaires. Il existe 3 niveaux : Bronze (gratuit, fiche partenaire et marqueur carte), Argent (banniere accueil, 1 push/mois, analytics), Or (push illimites, A/B testing, heatmap, ROI calculator, CRM, digest hebdo). Contactez-nous par email pour souscrire.' : 'Check the "Partner Program" page from Our Partners. There are 3 levels: Bronze (free, partner card and map marker), Silver (home banner, 1 push/month, analytics), Gold (unlimited push, A/B testing, heatmap, ROI calculator, CRM, weekly digest). Contact us by email to subscribe.',
+        },
+        {
+          id: 'sp2',
+          q: fr ? 'Comment utiliser le portail partenaires ?' : 'How do I use the partner portal?',
+          a: fr ? 'Le portail partenaires (accessible depuis le profil > Communaute) offre 6 onglets : ROI (impressions, clics, CTR, benchmark, objectifs, calculateur), Placement (emplacements dans l app), Branding (logo, couleur, apercu banniere et carte), Push (composer, templates, A/B test, programmer), Events (defis sponsorises), CRM (parrainages, export CSV).' : 'The partner portal (accessible from profile > Community) offers 6 tabs: ROI (impressions, clicks, CTR, benchmark, goals, calculator), Placement (app placements), Branding (logo, color, banner and map preview), Push (compose, templates, A/B test, schedule), Events (sponsored challenges), CRM (referrals, CSV export).',
+        },
+        {
+          id: 'sp3',
+          q: fr ? 'Comment fonctionne le A/B testing des push ?' : 'How does push A/B testing work?',
+          a: fr ? 'Activez le toggle A/B lors de la composition d un push. Redigez 2 variantes (titre + message). L app envoie 50% a chaque variante et compare les taux d ouverture. Les resultats apparaissent dans la section "Insights A/B" avec le niveau de confiance statistique, la taille d echantillon recommandee et l historique des tests.' : 'Enable the A/B toggle when composing a push. Write 2 variants (title + message). The app sends 50% to each variant and compares open rates. Results appear in the "A/B Insights" section with statistical confidence level, recommended sample size and test history.',
+        },
+        {
+          id: 'sp4',
+          q: fr ? 'Comment suivre mon ROI et mes objectifs ?' : 'How do I track my ROI and goals?',
+          a: fr ? 'L onglet ROI du portail affiche les KPIs en temps reel (impressions, clics, CTR, portee). Definissez des objectifs mensuels (impressions, clics, CTR) avec des anneaux de progression. Renseignez votre budget pour calculer le CPM, CPC et ROI. Le benchmark compare vos performances avec les autres partenaires de votre tier.' : 'The portal ROI tab shows real-time KPIs (impressions, clicks, CTR, reach). Set monthly goals (impressions, clicks, CTR) with progress rings. Enter your budget to calculate CPM, CPC and ROI. The benchmark compares your performance with other partners in your tier.',
+        },
+        {
+          id: 'sp5',
+          q: fr ? 'Qu est-ce que le digest hebdomadaire ?' : 'What is the weekly digest?',
+          a: fr ? 'Chaque lundi, un recap automatique resume vos performances de la semaine : impressions, clics, CTR, push envoyes. L historique complet est accessible depuis le portail > ROI > "Voir tous les digests". Vous pouvez exporter chaque digest en PDF pour vos rapports.' : 'Every Monday, an automatic recap summarizes your weekly performance: impressions, clicks, CTR, pushes sent. Full history is accessible from portal > ROI > "View all digests". You can export each digest as PDF for your reports.',
+        },
+      ],
+    },
+    {
       id: 'account_settings',
       category: fr ? 'Compte & Parametres' : 'Account & Settings',
       icon: 'settings',

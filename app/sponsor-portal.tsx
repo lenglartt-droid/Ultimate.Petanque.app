@@ -2928,6 +2928,109 @@ export default function SponsorPortalScreen() {
               </Animated.View>
             ) : null}
 
+            {/* A/B Insights Dashboard */}
+            {abHistory.length >= 2 ? (
+              <Animated.View entering={FadeInDown.duration(300).delay(145)} style={st.pushAnalyticsCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="insights" size={18} color="#7C3AED" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Insights A/B' : 'A/B Insights'}</Text>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{fr ? 'Analyse statistique de vos tests' : 'Statistical analysis of your tests'}</Text>
+                  </View>
+                </View>
+                {/* Summary stats */}
+                {(() => {
+                  const totalTests = abHistory.length;
+                  const winsA = abHistory.filter(t => t.winner === 'A').length;
+                  const winsB = abHistory.filter(t => t.winner === 'B').length;
+                  const ties = abHistory.filter(t => t.winner === 'tie').length;
+                  const avgRateA = totalTests > 0 ? Math.round(abHistory.reduce((s, t) => s + t.rateA, 0) / totalTests * 10) / 10 : 0;
+                  const avgRateB = totalTests > 0 ? Math.round(abHistory.reduce((s, t) => s + t.rateB, 0) / totalTests * 10) / 10 : 0;
+                  const bestRate = Math.max(...abHistory.map(t => Math.max(t.rateA, t.rateB)));
+                  // Statistical significance approximation
+                  const avgSampleSize = pushAnalytics.totalSent > 0 ? Math.round(pushAnalytics.totalSent / Math.max(totalTests, 1) / 2) : 25;
+                  const zScore = avgRateA !== avgRateB ? Math.abs(avgRateA - avgRateB) / Math.sqrt((avgRateA * (100 - avgRateA) / Math.max(avgSampleSize, 1)) + (avgRateB * (100 - avgRateB) / Math.max(avgSampleSize, 1))) * 10 : 0;
+                  const confidence = zScore >= 1.96 ? 95 : zScore >= 1.65 ? 90 : zScore >= 1.28 ? 80 : Math.round(zScore / 1.96 * 95);
+                  const isSignificant = confidence >= 90;
+                  // Recommended sample size for 95% confidence
+                  const effectSize = Math.abs(avgRateA - avgRateB) || 5;
+                  const recommendedN = Math.max(30, Math.round(2 * Math.pow(1.96 / (effectSize / 100), 2) * 50));
+                  return (
+                    <>
+                      {/* Win rate summary */}
+                      <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                        <View style={{ flex: 1, backgroundColor: tierColor + '08', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: tierColor + '20' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tierColor }} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: tierColor }}>A</Text>
+                          </View>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor }}>{winsA}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: tierColor, marginTop: 4 }}>{avgRateA}% {fr ? 'moy.' : 'avg.'}</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#F1F5F9', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 4 }}>{fr ? 'EGALITES' : 'TIES'}</Text>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: '#94A3B8' }}>{ties}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>/ {totalTests} tests</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#F59E0B', marginTop: 4 }}>{fr ? 'Record' : 'Best'}: {bestRate}%</Text>
+                        </View>
+                        <View style={{ flex: 1, backgroundColor: '#7C3AED08', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#7C3AED20' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' }} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>B</Text>
+                          </View>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: '#7C3AED' }}>{winsB}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED', marginTop: 4 }}>{avgRateB}% {fr ? 'moy.' : 'avg.'}</Text>
+                        </View>
+                      </View>
+                      {/* Statistical significance */}
+                      <View style={{ backgroundColor: isSignificant ? '#10B98108' : '#F59E0B08', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: isSignificant ? '#10B98120' : '#F59E0B20' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                          <MaterialIcons name={isSignificant ? 'check-circle' : 'warning'} size={18} color={isSignificant ? '#10B981' : '#F59E0B'} />
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: isSignificant ? '#10B981' : '#F59E0B' }}>
+                            {isSignificant ? (fr ? 'Resultats significatifs' : 'Significant results') : (fr ? 'Donnees insuffisantes' : 'Insufficient data')}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: isSignificant ? '#10B981' : '#F59E0B' }}>{confidence}%</Text>
+                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Confiance' : 'Confidence'}</Text>
+                          </View>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>~{avgSampleSize}</Text>
+                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Echantillon' : 'Sample'}</Text>
+                          </View>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#3B82F6' }}>{recommendedN}+</Text>
+                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Recommande' : 'Recommended'}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 10, lineHeight: 16 }}>
+                          {isSignificant
+                            ? (fr ? `Les resultats sont statistiquement significatifs a ${confidence}%. La variante ${winsA > winsB ? 'A' : 'B'} est en tete avec ${winsA > winsB ? avgRateA : avgRateB}% d ouverture moyenne.` : `Results are statistically significant at ${confidence}%. Variant ${winsA > winsB ? 'A' : 'B'} leads with ${winsA > winsB ? avgRateA : avgRateB}% average open rate.`)
+                            : (fr ? `Pour atteindre une confiance de 95%, envoyez au moins ${recommendedN} notifications par variante. Continuez a tester pour obtenir des resultats fiables.` : `To reach 95% confidence, send at least ${recommendedN} notifications per variant. Continue testing for reliable results.`)}
+                        </Text>
+                      </View>
+                      {/* Recommendation */}
+                      <View style={st.abRecommendation}>
+                        <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                        <Text style={st.abRecommendationText}>
+                          {winsA > winsB
+                            ? (fr ? `Variante A gagne ${winsA}/${totalTests} tests. Privilegiez ce style de message pour vos prochains envois.` : `Variant A wins ${winsA}/${totalTests} tests. Prefer this message style for future sends.`)
+                            : winsB > winsA
+                            ? (fr ? `Variante B gagne ${winsB}/${totalTests} tests. Privilegiez ce style de message pour vos prochains envois.` : `Variant B wins ${winsB}/${totalTests} tests. Prefer this message style for future sends.`)
+                            : (fr ? 'Aucune variante ne se demarque clairement. Essayez des messages plus differencies.' : 'No variant clearly stands out. Try more differentiated messages.')}
+                        </Text>
+                      </View>
+                    </>
+                  );
+                })()}
+              </Animated.View>
+            ) : null}
+
             {/* Push Analytics Dashboard */}
             {pushAnalytics.totalSent > 0 ? (
               <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.pushAnalyticsCard}>

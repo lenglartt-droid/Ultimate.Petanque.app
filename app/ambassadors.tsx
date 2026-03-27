@@ -368,7 +368,7 @@ export default function AmbassadorsScreen() {
         )}
 
         {/* CTA */}
-        <Animated.View entering={FadeInDown.duration(400).delay(600)}>
+        <Animated.View entering={FadeIn.duration(400).delay(300)}>
           <LinearGradient colors={['#5B21B6', '#7C3AED']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.ctaGradient}>
             <View style={styles.ctaDecoCircle} />
             <View style={styles.ctaContent}>
