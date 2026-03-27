@@ -1,20 +1,18 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Platform, LayoutAnimation, UIManager,
+  View, Text, ScrollView, Pressable, StyleSheet, Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 
 interface LevelConfig {
   id: AmbassadorLevel;
@@ -147,7 +145,6 @@ export default function AmbassadorProgramScreen() {
   const [expandedLevel, setExpandedLevel] = useState<AmbassadorLevel | null>('decouverte');
 
   const toggleLevel = useCallback((id: AmbassadorLevel) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.selectionAsync();
     setExpandedLevel(prev => prev === id ? null : id);
   }, []);
@@ -260,7 +257,7 @@ export default function AmbassadorProgramScreen() {
 
                 {/* Expanded Content */}
                 {isExpanded ? (
-                  <View style={styles.levelExpanded}>
+                  <Animated.View entering={FadeInDown.duration(250)} exiting={FadeOutUp.duration(150)} style={styles.levelExpanded}>
                     {/* Criteria */}
                     <View style={styles.levelSection}>
                       <View style={styles.levelSectionHeader}>
@@ -321,7 +318,7 @@ export default function AmbassadorProgramScreen() {
                         </View>
                       ))}
                     </View>
-                  </View>
+                  </Animated.View>
                 ) : null}
               </View>
             </Animated.View>

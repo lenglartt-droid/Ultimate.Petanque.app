@@ -238,6 +238,41 @@ export default function RemoveAdsScreen() {
           ))}
         </Animated.View>
 
+        {/* Donation Appeal */}
+        <Animated.View entering={FadeInDown.duration(400).delay(120)} style={styles.donationCard}>
+          <View style={styles.donationGlow} />
+          <View style={styles.donationIconBg}>
+            <MaterialIcons name="volunteer-activism" size={32} color="#F59E0B" />
+          </View>
+          <Text style={styles.donationTitle}>
+            {language === 'fr' ? 'Aidez a faire vivre ce projet' : 'Help keep this project alive'}
+          </Text>
+          <Text style={styles.donationText}>
+            {language === 'fr'
+              ? 'Ultimate Petanque est le fruit d\'un investissement personnel, cree par un passionne pour la communaute. Aucun investisseur, aucune startup — juste l\'amour du jeu. Votre soutien finance directement le developpement, l\'hebergement et les nouvelles fonctionnalites.'
+              : 'Ultimate Petanque is the result of a personal investment, created by a passionate player for the community. No investors, no startup — just the love of the game. Your support directly funds development, hosting and new features.'}
+          </Text>
+          <View style={styles.donationImpact}>
+            {[
+              { icon: 'code', text: language === 'fr' ? 'Developpement continu' : 'Ongoing development' },
+              { icon: 'cloud', text: language === 'fr' ? 'Serveurs et hebergement' : 'Servers and hosting' },
+              { icon: 'auto-awesome', text: language === 'fr' ? 'Nouvelles fonctionnalites' : 'New features' },
+            ].map((item, i) => (
+              <View key={i} style={styles.donationImpactRow}>
+                <View style={styles.donationImpactIcon}>
+                  <MaterialIcons name={item.icon as any} size={14} color="#F59E0B" />
+                </View>
+                <Text style={styles.donationImpactText}>{item.text}</Text>
+              </View>
+            ))}
+          </View>
+          <Text style={styles.donationQuote}>
+            {language === 'fr'
+              ? '"Chaque contribution, aussi petite soit-elle, fait la difference."'
+              : '"Every contribution, no matter how small, makes a difference."'}
+          </Text>
+        </Animated.View>
+
         {/* IAP Purchase Section */}
         <Animated.View entering={FadeInDown.duration(400).delay(160)} style={styles.purchaseCard}>
           <View style={styles.purchaseHeader}>
@@ -439,6 +474,33 @@ const styles = StyleSheet.create({
     backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center',
   },
   promoValidateBtnDisabled: { backgroundColor: theme.textMuted, opacity: 0.5 },
+
+  // Donation
+  donationCard: {
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl,
+    padding: 24, alignItems: 'center' as const, marginBottom: 16, position: 'relative' as const, overflow: 'hidden' as const,
+    borderWidth: 2, borderColor: '#F59E0B30',
+    ...theme.shadows.cardElevated,
+  },
+  donationGlow: {
+    position: 'absolute' as const, top: -40, right: -40, width: 120, height: 120,
+    borderRadius: 60, backgroundColor: '#F59E0B08',
+  },
+  donationIconBg: {
+    width: 64, height: 64, borderRadius: 20, backgroundColor: '#F59E0B12',
+    alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 14,
+    borderWidth: 1, borderColor: '#F59E0B20',
+  },
+  donationTitle: { fontSize: 18, fontWeight: '800' as const, color: '#92400E', marginBottom: 10, textAlign: 'center' as const },
+  donationText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center' as const, lineHeight: 21, marginBottom: 16, maxWidth: 340 },
+  donationImpact: { width: '100%' as any, gap: 8, marginBottom: 16 },
+  donationImpactRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  donationImpactIcon: {
+    width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B10',
+    alignItems: 'center' as const, justifyContent: 'center' as const,
+  },
+  donationImpactText: { flex: 1, fontSize: 13, fontWeight: '500' as const, color: theme.textPrimary },
+  donationQuote: { fontSize: 13, fontStyle: 'italic' as const, color: '#92400E', textAlign: 'center' as const, lineHeight: 19, opacity: 0.8 },
 
   // Info
   infoCard: {

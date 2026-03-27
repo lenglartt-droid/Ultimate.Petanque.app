@@ -25,6 +25,7 @@ import { fetchSponsorsOnly, Ambassador, isUserSponsor } from '@/services/ambassa
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
+import { fetchDetailedBannerAnalytics } from '@/services/ambassadorAnalyticsService';
 import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
 
 // Partner slot types
@@ -336,15 +337,48 @@ export default function PartnersScreen() {
                     </View>
                   ) : null;
                 })()}
-                {/* Website link */}
-                {partner.websiteUrl ? (
-                  <View style={[styles.partnerSlotBtn, { borderColor: brandCol + '40' }]}>
-                    <MaterialIcons name="open-in-new" size={12} color={brandCol} />
-                    <Text style={[styles.partnerSlotBtnText, { color: brandCol }]}>
-                      {language === 'fr' ? 'Visiter' : 'Visit'}
-                    </Text>
-                  </View>
-                ) : null}
+                {/* Action buttons */}
+                <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
+                  {partner.websiteUrl ? (
+                    <Pressable
+                      style={({ pressed }) => [styles.partnerSlotBtn, { borderColor: brandCol + '40', flex: 1 }, pressed && { opacity: 0.7 }]}
+                      onPress={(e) => { e.stopPropagation(); Haptics.selectionAsync(); Linking.openURL(partner.websiteUrl!.startsWith('http') ? partner.websiteUrl! : `https://${partner.websiteUrl}`); }}
+                    >
+                      <MaterialIcons name="open-in-new" size={12} color={brandCol} />
+                      <Text style={[styles.partnerSlotBtnText, { color: brandCol }]}>
+                        {language === 'fr' ? 'Visiter' : 'Visit'}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable
+                    style={({ pressed }) => [styles.partnerSlotBtn, { borderColor: '#3B82F640' }, pressed && { opacity: 0.7 }]}
+                    onPress={async (e) => {
+                      e.stopPropagation();
+                      Haptics.selectionAsync();
+                      try {
+                        const { data: ba } = await fetchDetailedBannerAnalytics(partner.id, 30);
+                        if (!ba) return;
+                        const totalI = ba.totalImpressions;
+                        const totalC = ba.totalClicks;
+                        const ctrV = totalI > 0 ? ((totalC / totalI) * 100).toFixed(1) : '0';
+                        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#0F172A}.h{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid ${brandCol}}.logo{width:48px;height:48px;border-radius:14px;object-fit:cover;border:2px solid ${brandCol}}.t{font-size:20px;font-weight:800}.s{font-size:12px;color:#64748B;margin-top:3px}.kr{display:flex;gap:10px;margin-bottom:24px}.k{flex:1;background:#F8FAFC;border-radius:12px;padding:16px;text-align:center;border:1px solid #E2E8F0}.kv{font-size:24px;font-weight:900}.kl{font-size:9px;color:#94A3B8;margin-top:4px;text-transform:uppercase}.f{margin-top:24px;text-align:center;font-size:10px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:12px}</style></head><body><div class="h">${partner.photo ? `<img src="${partner.photo}" class="logo"/>` : ''}<div><div class="t">${partner.displayName}</div><div class="s">${cfg.label[language]} - 30 ${language === 'fr' ? 'jours' : 'days'}</div></div></div><div class="kr"><div class="k"><div class="kv">${totalI}</div><div class="kl">Impressions</div></div><div class="k"><div class="kv">${totalC}</div><div class="kl">${language === 'fr' ? 'Clics' : 'Clicks'}</div></div><div class="k"><div class="kv" style="color:${brandCol}">${ctrV}%</div><div class="kl">CTR</div></div><div class="k"><div class="kv" style="color:#7C3AED">${ba.uniqueViewers}</div><div class="kl">${language === 'fr' ? 'Portee' : 'Reach'}</div></div></div><div class="f">Ultimate Petanque &middot; ${new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div></body></html>`;
+                        if (Platform.OS === 'web') {
+                          const win = window.open('', '_blank');
+                          if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 500); }
+                        } else {
+                          const Print = require('expo-print');
+                          const SharingModule = require('expo-sharing');
+                          const { uri } = await Print.printToFileAsync({ html, base64: false });
+                          const canShare = await SharingModule.isAvailableAsync();
+                          if (canShare) await SharingModule.shareAsync(uri, { mimeType: 'application/pdf' });
+                        }
+                      } catch { /* silent */ }
+                    }}
+                  >
+                    <MaterialIcons name="download" size={12} color="#3B82F6" />
+                    <Text style={[styles.partnerSlotBtnText, { color: '#3B82F6' }]}>PDF</Text>
+                  </Pressable>
+                </View>
                 {compareMode ? (
                   <View style={[styles.compareCheckbox, compareSelection.includes(partner.id) && styles.compareCheckboxActive]}>
                     {compareSelection.includes(partner.id) ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}

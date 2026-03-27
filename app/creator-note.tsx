@@ -50,6 +50,13 @@ export default function CreatorNoteScreen() {
             </View>
             <Text style={styles.heroTitle}>{t('creatorNote', 'heroTitle')}</Text>
             <Text style={styles.heroSubtitle}>{t('creatorNote', 'heroSubtitle')}</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+              {['sports', 'people', 'public'].map((icon, i) => (
+                <View key={i} style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name={icon as any} size={18} color="rgba(255,255,255,0.6)" />
+                </View>
+              ))}
+            </View>
           </LinearGradient>
         </Animated.View>
 
@@ -84,7 +91,7 @@ export default function CreatorNoteScreen() {
           <Text style={styles.cardText}>{t('creatorNote', 'visionContent')}</Text>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.card}>
+        <Animated.View entering={FadeInDown.duration(400).delay(250)} style={[styles.card, { borderColor: theme.accent + '30', borderWidth: 1.5, backgroundColor: theme.accent + '04' }]}>
           <View style={styles.cardHeader}>
             <View style={[styles.cardIcon, { backgroundColor: theme.accent + '15' }]}>
               <MaterialIcons name="volunteer-activism" size={22} color={theme.accent} />
@@ -92,6 +99,14 @@ export default function CreatorNoteScreen() {
             <Text style={styles.cardTitle}>{t('creatorNote', 'thanksTitle')}</Text>
           </View>
           <Text style={styles.cardText}>{t('creatorNote', 'thanksContent')}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, backgroundColor: '#FEF3C720', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FDE68A40' }}>
+            <MaterialIcons name="favorite" size={16} color="#F59E0B" />
+            <Text style={{ flex: 1, fontSize: 13, color: '#92400E', lineHeight: 19, fontStyle: 'italic' }}>
+              {language === 'fr'
+                ? 'Aucun investisseur, aucune startup — juste un joueur qui croit en vous.'
+                : 'No investors, no startup — just a player who believes in you.'}
+            </Text>
+          </View>
         </Animated.View>
 
         {/* Meetup Highlight Card */}
@@ -166,6 +181,30 @@ export default function CreatorNoteScreen() {
         <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.signature}>
           <MaterialIcons name="favorite" size={16} color={theme.error} />
           <Text style={styles.signatureText}>{t('creatorNote', 'signature')}</Text>
+        </Animated.View>
+
+        {/* Support CTA */}
+        <Animated.View entering={FadeInDown.duration(400).delay(420)} style={[styles.contactCard, { borderColor: '#F59E0B25' }]}>
+          <View style={[styles.contactIconWrap, { backgroundColor: '#F59E0B12' }]}>
+            <MaterialIcons name="favorite" size={28} color="#F59E0B" />
+          </View>
+          <Text style={[styles.contactTitle, { color: '#F59E0B' }]}>
+            {language === 'fr' ? 'Soutenez le projet' : 'Support the project'}
+          </Text>
+          <Text style={styles.contactText}>
+            {language === 'fr'
+              ? 'Chaque don aide a maintenir et ameliorer cette application pour toute la communaute.'
+              : 'Every donation helps maintain and improve this app for the entire community.'}
+          </Text>
+          <Pressable
+            style={[styles.contactBtn, { backgroundColor: '#F59E0B' }]}
+            onPress={() => router.push('/remove-ads' as any)}
+          >
+            <MaterialIcons name="volunteer-activism" size={20} color="#FFF" />
+            <Text style={styles.contactBtnText}>
+              {language === 'fr' ? 'Faire un don' : 'Make a donation'}
+            </Text>
+          </Pressable>
         </Animated.View>
 
         <Text style={styles.versionText}>{t('common', 'version')}</Text>

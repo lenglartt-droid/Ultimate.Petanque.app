@@ -1,19 +1,17 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Platform, Linking, LayoutAnimation, UIManager,
+  View, Text, ScrollView, Pressable, StyleSheet, Platform, Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+
 
 interface TierConfig {
   id: 'bronze' | 'silver' | 'gold';
@@ -42,8 +40,8 @@ const TIERS: TierConfig[] = [
     color: '#A1887F',
     icon: 'military-tech',
     gradient: ['#D7CCC8', '#A1887F'],
-    priceFr: 'Gratuit',
-    priceEn: 'Free',
+    priceFr: 'Sur devis',
+    priceEn: 'On quote',
     criteriaFr: [
       'Etre une marque ou structure liee a la petanque',
       'Fournir un logo et une description',
@@ -170,7 +168,6 @@ export default function PartnerProgramScreen() {
   const [expandedTier, setExpandedTier] = useState<string | null>('bronze');
 
   const toggleTier = useCallback((id: string) => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.selectionAsync();
     setExpandedTier(prev => prev === id ? null : id);
   }, []);
@@ -282,7 +279,7 @@ export default function PartnerProgramScreen() {
 
                 {/* Expanded Content */}
                 {isExpanded ? (
-                  <View style={styles.tierExpanded}>
+                  <Animated.View entering={FadeInDown.duration(250)} exiting={FadeOutUp.duration(150)} style={styles.tierExpanded}>
                     {/* Criteria */}
                     <View style={styles.tierSection}>
                       <View style={styles.tierSectionHeader}>
@@ -330,7 +327,7 @@ export default function PartnerProgramScreen() {
                         {fr ? `Devenir partenaire ${tier.nameFr}` : `Become ${tier.nameEn} partner`}
                       </Text>
                     </Pressable>
-                  </View>
+                  </Animated.View>
                 ) : null}
               </View>
             </Animated.View>
