@@ -12,7 +12,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fetchAmbassadors, Ambassador, isUserAmbassador } from '@/services/ambassadorService';
+import { fetchAmbassadorsOnly, Ambassador, isUserAmbassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { useAuth } from '@/template';
 
@@ -52,7 +52,7 @@ export default function AmbassadorsScreen() {
   const isTablet = screenWidth >= 600;
 
   const loadAmbassadors = useCallback(async () => {
-    const { ambassadors: data } = await fetchAmbassadors();
+    const { ambassadors: data } = await fetchAmbassadorsOnly();
     setAmbassadors(data);
     setAmbassadorsLoading(false);
   }, []);

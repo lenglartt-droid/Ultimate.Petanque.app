@@ -133,6 +133,13 @@ export default function SponsorPortalScreen() {
   // Push analytics state
   const [pushAnalytics, setPushAnalytics] = useState<{ monthly: { month: string; count: number }[]; totalSent: number; estimatedReach: number; avgOpenRate: number; cities: { city: string; count: number }[] }>({ monthly: [], totalSent: 0, estimatedReach: 0, avgOpenRate: 0, cities: [] });
 
+  // Push calendar state
+  const [calendarMonth, setCalendarMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() }; });
+  const [calendarEvents, setCalendarEvents] = useState<Map<string, { type: 'sent' | 'scheduled' | 'ab'; title: string }[]>>(new Map());
+
+  // Template library state
+  const [showTemplates, setShowTemplates] = useState(false);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -316,18 +323,47 @@ export default function SponsorPortalScreen() {
     } catch { /* silent */ }
   }, [supabase]);
 
+  const loadCalendarEvents = useCallback(async (ambId: string) => {
+    try {
+      const startDate = new Date(calendarMonth.year, calendarMonth.month, 1);
+      const endDate = new Date(calendarMonth.year, calendarMonth.month + 1, 0, 23, 59, 59);
+      const { data } = await supabase
+        .from('ambassador_analytics')
+        .select('created_at, source_page, social_platform, event_type')
+        .eq('ambassador_id', ambId)
+        .in('event_type', ['sponsor_push', 'scheduled_push'])
+        .gte('created_at', startDate.toISOString())
+        .lte('created_at', endDate.toISOString());
+      const map = new Map<string, { type: 'sent' | 'scheduled' | 'ab'; title: string }[]>();
+      (data || []).forEach((d: any) => {
+        const day = new Date(d.created_at).getDate().toString();
+        const entry = {
+          type: d.event_type === 'scheduled_push' ? 'scheduled' as const : d.social_platform ? 'ab' as const : 'sent' as const,
+          title: (d.source_page || '').split('|')[0] || 'Push',
+        };
+        if (!map.has(day)) map.set(day, []);
+        map.get(day)!.push(entry);
+      });
+      setCalendarEvents(map);
+    } catch { /* silent */ }
+  }, [supabase, calendarMonth]);
+
   const loadAll = useCallback(async () => {
     const sp = await loadSponsor();
     if (sp) {
-      await Promise.all([loadAnalytics(sp.id), loadEvents(), loadPushQuota(sp), loadRecentPushes(sp.id), loadScheduledPushes(sp.id), loadAbHistory(sp.id), loadLastDigest(sp.id)]);
+      await Promise.all([loadAnalytics(sp.id), loadEvents(), loadPushQuota(sp), loadRecentPushes(sp.id), loadScheduledPushes(sp.id), loadAbHistory(sp.id), loadLastDigest(sp.id), loadCalendarEvents(sp.id)]);
     }
     setLoading(false);
-  }, [loadSponsor, loadAnalytics, loadEvents, loadPushQuota, loadRecentPushes, loadScheduledPushes, loadAbHistory, loadLastDigest]);
+  }, [loadSponsor, loadAnalytics, loadEvents, loadPushQuota, loadRecentPushes, loadScheduledPushes, loadAbHistory, loadLastDigest, loadCalendarEvents]);
 
   useEffect(() => { loadAll(); }, [loadAll]);
   useEffect(() => {
     if (sponsor?.id) loadAnalytics(sponsor.id);
   }, [period, sponsor?.id]);
+
+  useEffect(() => {
+    if (sponsor?.id) loadCalendarEvents(sponsor.id);
+  }, [calendarMonth, sponsor?.id]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -1566,6 +1602,169 @@ export default function SponsorPortalScreen() {
                 </Pressable>
               </Animated.View>
             ) : null}
+
+            {/* Push Templates Library */}
+            {pushQuota?.canSend ? (
+              <Animated.View entering={FadeInDown.duration(300).delay(95)} style={st.pushAnalyticsCard}>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: showTemplates ? 14 : 0 }}
+                  onPress={() => { Haptics.selectionAsync(); setShowTemplates(!showTemplates); }}
+                >
+                  <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#EC489912', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="auto-awesome" size={18} color="#EC4899" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Bibliotheque de templates' : 'Template library'}</Text>
+                    <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>{fr ? 'Messages pre-redigees a personnaliser' : 'Pre-written messages to customize'}</Text>
+                  </View>
+                  <MaterialIcons name={showTemplates ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+                </Pressable>
+                {showTemplates ? (
+                  <Animated.View entering={FadeInDown.duration(200)}>
+                    {[
+                      { cat: fr ? 'Promo' : 'Promo', catColor: '#EF4444', catIcon: 'local-offer' as const, templates: [
+                        { title: fr ? 'Promo flash -20%' : 'Flash sale -20%', body: fr ? 'Profitez de -20% sur toute la gamme ce weekend ! Code : FLASH20' : 'Get -20% on the full range this weekend! Code: FLASH20' },
+                        { title: fr ? 'Livraison offerte' : 'Free shipping', body: fr ? 'Livraison gratuite sur toutes les commandes sans minimum. Offre limitee !' : 'Free shipping on all orders, no minimum. Limited offer!' },
+                      ]},
+                      { cat: fr ? 'Evenement' : 'Event', catColor: '#7C3AED', catIcon: 'event' as const, templates: [
+                        { title: fr ? 'Tournoi ce weekend' : 'Tournament this weekend', body: fr ? 'Rejoignez-nous pour un tournoi exceptionnel ! Inscriptions ouvertes, places limitees.' : 'Join us for an exceptional tournament! Registrations open, limited spots.' },
+                        { title: fr ? 'Masterclass gratuite' : 'Free masterclass', body: fr ? 'Apprenez les techniques des champions lors de notre masterclass gratuite.' : 'Learn champion techniques at our free masterclass.' },
+                      ]},
+                      { cat: fr ? 'Rappel' : 'Reminder', catColor: '#3B82F6', catIcon: 'schedule' as const, templates: [
+                        { title: fr ? 'N oubliez pas !' : 'Don\'t forget!', body: fr ? 'L evenement commence demain ! Verifiez votre inscription et preparez vos boules.' : 'The event starts tomorrow! Check your registration and prepare your boules.' },
+                        { title: fr ? 'Derniere chance' : 'Last chance', body: fr ? 'Plus que quelques heures pour profiter de notre offre. Ne ratez pas cette opportunite !' : 'Only a few hours left to take advantage of our offer. Don\'t miss out!' },
+                      ]},
+                      { cat: fr ? 'Saisonnier' : 'Seasonal', catColor: '#10B981', catIcon: 'wb-sunny' as const, templates: [
+                        { title: fr ? 'La saison reprend !' : 'Season is back!', body: fr ? 'Le beau temps revient et les terrains vous attendent. Preparez votre prochaine partie !' : 'Nice weather is back and the courts are waiting. Prepare your next game!' },
+                        { title: fr ? 'Bonne annee petanquiste !' : 'Happy new year!', body: fr ? 'Tous nos voeux pour cette nouvelle saison ! Decouvrez nos nouveautes.' : 'Best wishes for the new season! Discover our new products.' },
+                      ]},
+                    ].map((cat, ci) => (
+                      <View key={ci} style={{ marginBottom: 14 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                          <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: cat.catColor + '12', alignItems: 'center', justifyContent: 'center' }}>
+                            <MaterialIcons name={cat.catIcon} size={12} color={cat.catColor} />
+                          </View>
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: cat.catColor }}>{cat.cat}</Text>
+                        </View>
+                        {cat.templates.map((tpl, ti) => (
+                          <Pressable
+                            key={ti}
+                            style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#E2E8F0' }, pressed && { backgroundColor: cat.catColor + '08', borderColor: cat.catColor + '30' }]}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              setPushTitle(tpl.title);
+                              setPushBody(tpl.body);
+                              setShowTemplates(false);
+                            }}
+                          >
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155' }} numberOfLines={1}>{tpl.title}</Text>
+                              <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2 }} numberOfLines={2}>{tpl.body}</Text>
+                            </View>
+                            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: cat.catColor + '12', alignItems: 'center', justifyContent: 'center' }}>
+                              <MaterialIcons name="content-copy" size={14} color={cat.catColor} />
+                            </View>
+                          </Pressable>
+                        ))}
+                      </View>
+                    ))}
+                  </Animated.View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {/* Push Calendar View */}
+            {pushAnalytics.totalSent > 0 || scheduledPushes.length > 0 ? (() => {
+              const year = calendarMonth.year;
+              const month = calendarMonth.month;
+              const firstDay = new Date(year, month, 1).getDay();
+              const daysInMonth = new Date(year, month + 1, 0).getDate();
+              const offset = firstDay === 0 ? 6 : firstDay - 1; // Monday start
+              const monthLabel = new Date(year, month).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' });
+              const dayLabels = fr ? ['L', 'M', 'M', 'J', 'V', 'S', 'D'] : ['M', 'T', 'W', 'T', 'F', 'S', 'S'];
+              const today = new Date();
+              const isCurrentMonth = today.getFullYear() === year && today.getMonth() === month;
+              const cells: (number | null)[] = [];
+              for (let i = 0; i < offset; i++) cells.push(null);
+              for (let d = 1; d <= daysInMonth; d++) cells.push(d);
+              while (cells.length % 7 !== 0) cells.push(null);
+              return (
+                <Animated.View entering={FadeInDown.duration(300).delay(110)} style={st.pushAnalyticsCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+                    <Pressable onPress={() => { Haptics.selectionAsync(); setCalendarMonth(prev => { const d = new Date(prev.year, prev.month - 1); return { year: d.getFullYear(), month: d.getMonth() }; }); }} hitSlop={8}>
+                      <MaterialIcons name="chevron-left" size={22} color={tierColor} />
+                    </Pressable>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <MaterialIcons name="calendar-month" size={18} color={tierColor} />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#0F172A', textTransform: 'capitalize' }}>{monthLabel}</Text>
+                    </View>
+                    <Pressable onPress={() => { Haptics.selectionAsync(); setCalendarMonth(prev => { const d = new Date(prev.year, prev.month + 1); return { year: d.getFullYear(), month: d.getMonth() }; }); }} hitSlop={8}>
+                      <MaterialIcons name="chevron-right" size={22} color={tierColor} />
+                    </Pressable>
+                  </View>
+                  {/* Day headers */}
+                  <View style={{ flexDirection: 'row', marginBottom: 6 }}>
+                    {dayLabels.map((dl, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8' }}>{dl}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {/* Calendar grid */}
+                  {Array.from({ length: Math.ceil(cells.length / 7) }).map((_, weekIdx) => (
+                    <View key={weekIdx} style={{ flexDirection: 'row' }}>
+                      {cells.slice(weekIdx * 7, weekIdx * 7 + 7).map((day, di) => {
+                        const dayStr = day?.toString() || '';
+                        const events = day ? calendarEvents.get(dayStr) || [] : [];
+                        const isToday = isCurrentMonth && day === today.getDate();
+                        const hasSent = events.some(e => e.type === 'sent');
+                        const hasScheduled = events.some(e => e.type === 'scheduled');
+                        const hasAB = events.some(e => e.type === 'ab');
+                        return (
+                          <View key={di} style={{ flex: 1, alignItems: 'center', paddingVertical: 5 }}>
+                            {day ? (
+                              <View style={[
+                                { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+                                isToday && { backgroundColor: tierColor, borderRadius: 10 },
+                                !isToday && events.length > 0 && { backgroundColor: tierColor + '10' },
+                              ]}>
+                                <Text style={[
+                                  { fontSize: 13, fontWeight: '500', color: '#334155' },
+                                  isToday && { color: '#FFF', fontWeight: '800' },
+                                  !isToday && events.length > 0 && { fontWeight: '700', color: tierColor },
+                                ]}>{day}</Text>
+                              </View>
+                            ) : <View style={{ width: 32, height: 32 }} />}
+                            {events.length > 0 ? (
+                              <View style={{ flexDirection: 'row', gap: 2, marginTop: 2 }}>
+                                {hasSent ? <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: tierColor }} /> : null}
+                                {hasAB ? <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#7C3AED' }} /> : null}
+                                {hasScheduled ? <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#3B82F6' }} /> : null}
+                              </View>
+                            ) : null}
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                  {/* Legend */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 14, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: tierColor }} />
+                      <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Envoye' : 'Sent'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' }} />
+                      <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>A/B</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />
+                      <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Programme' : 'Scheduled'}</Text>
+                    </View>
+                  </View>
+                </Animated.View>
+              );
+            })() : null}
 
             {/* Scheduled Pushes */}
             {scheduledPushes.filter(sp => sp.status === 'pending').length > 0 ? (
