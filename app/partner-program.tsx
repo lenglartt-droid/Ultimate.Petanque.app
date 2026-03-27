@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Platform, Linking,
+  View, Text, ScrollView, Pressable, StyleSheet, Platform, Linking, LayoutAnimation, UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -10,6 +10,10 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface TierConfig {
   id: 'bronze' | 'silver' | 'gold';
@@ -166,6 +170,7 @@ export default function PartnerProgramScreen() {
   const [expandedTier, setExpandedTier] = useState<string | null>('bronze');
 
   const toggleTier = useCallback((id: string) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.selectionAsync();
     setExpandedTier(prev => prev === id ? null : id);
   }, []);
@@ -396,6 +401,51 @@ export default function PartnerProgramScreen() {
               <MaterialIcons name="arrow-forward" size={20} color="rgba(255,255,255,0.7)" />
             </LinearGradient>
           </Pressable>
+        </Animated.View>
+
+        {/* Testimonials */}
+        <Animated.View entering={FadeInDown.duration(300).delay(420)} style={styles.comparisonCard}>
+          <Text style={styles.comparisonTitle}>{fr ? 'Temoignages partenaires' : 'Partner testimonials'}</Text>
+          {[
+            {
+              name: fr ? 'Club de Petanque Lyon' : 'Lyon Petanque Club',
+              tier: 'gold' as const,
+              quote: fr
+                ? 'Depuis que nous sommes partenaire Or, notre visibilite a explose. Les push notifications ciblees et le dashboard analytique nous permettent de toucher exactement les joueurs que nous cherchons.'
+                : 'Since becoming a Gold partner, our visibility has exploded. Targeted push notifications and the analytics dashboard let us reach exactly the players we are looking for.',
+            },
+            {
+              name: 'Obut Pro',
+              tier: 'silver' as const,
+              quote: fr
+                ? 'Le programme partenaire nous a permis de gagner en notoriete aupres de la communaute. Les outils de communication sont simples et efficaces.'
+                : 'The partner program helped us gain recognition within the community. The communication tools are simple and effective.',
+            },
+            {
+              name: fr ? 'Terrain du Soleil' : 'Sunny Court',
+              tier: 'bronze' as const,
+              quote: fr
+                ? 'Meme en Bronze, la visibilite est au rendez-vous. Notre terrain est maintenant connu de tous les joueurs de la region grace au marqueur carte.'
+                : 'Even at Bronze level, the visibility is there. Our court is now known to all regional players thanks to the map marker.',
+            },
+          ].map((testimonial, i) => {
+            const tCfg = TIERS.find(t => t.id === testimonial.tier)!;
+            return (
+              <View key={i} style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 16, marginBottom: i < 2 ? 10 : 0, borderWidth: 1, borderColor: tCfg.color + '15', borderLeftWidth: 3, borderLeftColor: tCfg.color }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <LinearGradient colors={tCfg.gradient} style={{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name={tCfg.icon as any} size={14} color="#FFF" />
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>{testimonial.name}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: tCfg.color }}>{fr ? tCfg.nameFr : tCfg.nameEn}</Text>
+                  </View>
+                  <MaterialIcons name="format-quote" size={20} color={tCfg.color + '40'} />
+                </View>
+                <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 19, fontStyle: 'italic' }}>"{testimonial.quote}"</Text>
+              </View>
+            );
+          })}
         </Animated.View>
 
         {/* FAQ Section */}

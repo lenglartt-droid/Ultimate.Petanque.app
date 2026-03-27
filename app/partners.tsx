@@ -39,7 +39,7 @@ interface PartnerSlot {
 }
 
 // Max slots per tier (available positions)
-const SLOT_LIMITS = { gold: 2, silver: 3, bronze: 4 };
+const SLOT_LIMITS = { gold: 2, silver: 3, bronze: -1 }; // -1 = unlimited
 
 const CATEGORY_CONFIG = {
   gold: { icon: 'emoji-events' as const, color: '#D4A017', bg: '#FFF8E1', gradient: ['#F9E547', '#D4A017'] as [string, string], label: { fr: 'Or', en: 'Gold' } },
@@ -226,7 +226,8 @@ export default function PartnersScreen() {
     const cfg = CATEGORY_CONFIG[category];
     const isGold = category === 'gold';
     const maxSlots = SLOT_LIMITS[category];
-    const emptyCount = Math.max(0, maxSlots - filledPartners.length);
+    const isUnlimited = maxSlots < 0;
+    const emptyCount = isUnlimited ? 0 : Math.max(0, maxSlots - filledPartners.length);
 
     return (
       <Animated.View key={category} entering={FadeInDown.duration(400).delay(sectionDelay)} style={styles.partnerCategoryBlock}>
@@ -239,7 +240,7 @@ export default function PartnersScreen() {
             {cfg.label[language]}
           </Text>
           <View style={[styles.partnerCatCountBadge, { backgroundColor: cfg.bg }]}>
-            <Text style={[styles.partnerCatCountText, { color: cfg.color }]}>{filledPartners.length}/{maxSlots}</Text>
+            <Text style={[styles.partnerCatCountText, { color: cfg.color }]}>{isUnlimited ? `${filledPartners.length}` : `${filledPartners.length}/${maxSlots}`}</Text>
           </View>
         </View>
 
@@ -581,7 +582,8 @@ export default function PartnersScreen() {
         </View>
 
         {/* ====== CTA SECTION ====== */}
-        <Animated.View entering={FadeIn.duration(400).delay(300)}>
+        {!partnersLoading ? (
+        <Animated.View entering={FadeIn.duration(300)}>
           <LinearGradient
             colors={['#1E3A8A', '#2563EB']}
             start={{ x: 0, y: 0 }}
@@ -636,6 +638,7 @@ export default function PartnersScreen() {
             </View>
           </LinearGradient>
         </Animated.View>
+        ) : null}
       </ScrollView>
 
       {/* Comparison Bar */}

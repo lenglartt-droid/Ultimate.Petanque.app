@@ -2571,27 +2571,99 @@ export default function SponsorPortalScreen() {
                 </Pressable>
 
                 {scheduleEnabled ? (
-                  <Animated.View entering={FadeInDown.duration(200)} style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
-                    <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
-                      <Text style={st.pushFieldLabel}>{fr ? 'Date' : 'Date'}</Text>
-                      <TextInput
-                        style={st.pushInput}
-                        value={scheduleDate}
-                        onChangeText={setScheduleDate}
-                        placeholder="2026-04-15"
-                        placeholderTextColor="#94A3B8"
-                      />
+                  <Animated.View entering={FadeInDown.duration(200)} style={{ marginBottom: 16 }}>
+                    {/* Quick date buttons */}
+                    <Text style={[st.pushFieldLabel, { marginBottom: 8 }]}>{fr ? 'Date rapide' : 'Quick date'}</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 12 }}>
+                      {[
+                        { label: fr ? "Aujourd'hui" : 'Today', getDate: () => { const d = new Date(); return d.toISOString().split('T')[0]; } },
+                        { label: fr ? 'Demain' : 'Tomorrow', getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); return d.toISOString().split('T')[0]; } },
+                        { label: fr ? 'Ce weekend' : 'This weekend', getDate: () => { const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() + (6 - day)); return d.toISOString().split('T')[0]; } },
+                        { label: fr ? 'Lundi prochain' : 'Next Monday', getDate: () => { const d = new Date(); const day = d.getDay(); d.setDate(d.getDate() + (8 - day) % 7 || 7); return d.toISOString().split('T')[0]; } },
+                      ].map((qd, qi) => {
+                        const dateVal = qd.getDate();
+                        const isSelected = scheduleDate === dateVal;
+                        return (
+                          <Pressable
+                            key={qi}
+                            style={[{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, backgroundColor: isSelected ? '#3B82F6' : '#F8FAFC', borderWidth: 1.5, borderColor: isSelected ? '#3B82F6' : '#E2E8F0' }]}
+                            onPress={() => { Haptics.selectionAsync(); setScheduleDate(dateVal); }}
+                          >
+                            <MaterialIcons name="event" size={14} color={isSelected ? '#FFF' : '#64748B'} />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: isSelected ? '#FFF' : '#334155' }}>{qd.label}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </ScrollView>
+                    {/* Date & Time inputs with icons */}
+                    <View style={{ flexDirection: 'row', gap: 10 }}>
+                      <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
+                        <Text style={st.pushFieldLabel}>{fr ? 'Date' : 'Date'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: scheduleDate ? '#3B82F630' : '#E2E8F0', overflow: 'hidden' }}>
+                          <View style={{ width: 40, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: scheduleDate ? '#3B82F610' : '#F1F5F9' }}>
+                            <MaterialIcons name="calendar-today" size={16} color={scheduleDate ? '#3B82F6' : '#94A3B8'} />
+                          </View>
+                          <TextInput
+                            style={[st.pushInput, { flex: 1, borderWidth: 0, backgroundColor: 'transparent' }]}
+                            value={scheduleDate}
+                            onChangeText={setScheduleDate}
+                            placeholder="YYYY-MM-DD"
+                            placeholderTextColor="#94A3B8"
+                          />
+                        </View>
+                        {scheduleDate ? (
+                          <Text style={{ fontSize: 10, color: '#3B82F6', fontWeight: '600', marginTop: 4, marginLeft: 4 }}>
+                            {(() => { try { return new Date(scheduleDate + 'T12:00:00').toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long' }); } catch { return ''; } })()}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
+                        <Text style={st.pushFieldLabel}>{fr ? 'Heure' : 'Time'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: scheduleTime ? '#3B82F630' : '#E2E8F0', overflow: 'hidden' }}>
+                          <View style={{ width: 40, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: scheduleTime ? '#3B82F610' : '#F1F5F9' }}>
+                            <MaterialIcons name="schedule" size={16} color={scheduleTime ? '#3B82F6' : '#94A3B8'} />
+                          </View>
+                          <TextInput
+                            style={[st.pushInput, { flex: 1, borderWidth: 0, backgroundColor: 'transparent' }]}
+                            value={scheduleTime}
+                            onChangeText={setScheduleTime}
+                            placeholder="HH:MM"
+                            placeholderTextColor="#94A3B8"
+                          />
+                        </View>
+                      </View>
                     </View>
-                    <View style={[st.pushField, { flex: 1, marginBottom: 0 }]}>
-                      <Text style={st.pushFieldLabel}>{fr ? 'Heure' : 'Time'}</Text>
-                      <TextInput
-                        style={st.pushInput}
-                        value={scheduleTime}
-                        onChangeText={setScheduleTime}
-                        placeholder="09:00"
-                        placeholderTextColor="#94A3B8"
-                      />
+                    {/* Quick time slots */}
+                    <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+                      {[
+                        { label: fr ? 'Matin' : 'Morning', time: '09:00', icon: 'wb-sunny' as const },
+                        { label: fr ? 'Midi' : 'Noon', time: '12:00', icon: 'light-mode' as const },
+                        { label: fr ? 'Apres-midi' : 'Afternoon', time: '15:00', icon: 'wb-cloudy' as const },
+                        { label: fr ? 'Soiree' : 'Evening', time: '19:00', icon: 'nights-stay' as const },
+                      ].map((ts, ti) => {
+                        const isSelected = scheduleTime === ts.time;
+                        return (
+                          <Pressable
+                            key={ti}
+                            style={{ flex: 1, alignItems: 'center', gap: 4, paddingVertical: 10, borderRadius: 12, backgroundColor: isSelected ? '#3B82F6' : '#F8FAFC', borderWidth: 1.5, borderColor: isSelected ? '#3B82F6' : '#E2E8F0' }}
+                            onPress={() => { Haptics.selectionAsync(); setScheduleTime(ts.time); }}
+                          >
+                            <MaterialIcons name={ts.icon} size={16} color={isSelected ? '#FFF' : '#64748B'} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: isSelected ? '#FFF' : '#334155' }}>{ts.label}</Text>
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: isSelected ? 'rgba(255,255,255,0.7)' : '#94A3B8' }}>{ts.time}</Text>
+                          </Pressable>
+                        );
+                      })}
                     </View>
+                    {/* Heatmap suggestion */}
+                    {bestSendTime ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, backgroundColor: '#FFFBEB', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#FDE68A' }}>
+                        <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                        <Text style={{ flex: 1, fontSize: 11, color: '#92400E', lineHeight: 15 }}>
+                          {fr ? `Creneau optimal : ${bestSendTime.day}, ${bestSendTime.slot}` : `Best time: ${bestSendTime.day}, ${bestSendTime.slot}`}
+                        </Text>
+                      </View>
+                    ) : null}
                   </Animated.View>
                 ) : null}
 

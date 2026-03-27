@@ -1,6 +1,6 @@
 import React, { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, Pressable, StyleSheet, Platform,
+  View, Text, ScrollView, Pressable, StyleSheet, Platform, LayoutAnimation, UIManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -11,6 +11,10 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface LevelConfig {
   id: AmbassadorLevel;
@@ -143,6 +147,7 @@ export default function AmbassadorProgramScreen() {
   const [expandedLevel, setExpandedLevel] = useState<AmbassadorLevel | null>('decouverte');
 
   const toggleLevel = useCallback((id: AmbassadorLevel) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     Haptics.selectionAsync();
     setExpandedLevel(prev => prev === id ? null : id);
   }, []);
