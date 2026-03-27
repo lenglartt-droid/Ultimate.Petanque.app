@@ -1597,7 +1597,7 @@ export default function SponsorPortalScreen() {
                       {/* Email CTA */}
                       <View style={{ alignItems: 'center', paddingVertical: 14, backgroundColor: '#F8FAFC', borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
                         <View style={{ backgroundColor: tierColor, paddingHorizontal: 24, paddingVertical: 10, borderRadius: 12 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>{fr ? 'Voir le portail sponsor' : 'View sponsor portal'} →</Text>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>{fr ? 'Voir le portail partenaires' : 'View partner portal'} →</Text>
                         </View>
                       </View>
                       {/* Email footer */}
