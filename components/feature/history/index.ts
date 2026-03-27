@@ -8,3 +8,4 @@ export type { SeriesGroup } from './SeriesCard';
 export { MeetupCard } from './MeetupCard';
 export type { MeetupWithMeta } from './MeetupCard';
 export { SectionHeader } from './SectionHeader';
+export { ChallengeStatsSummary } from './ChallengeStatsSummary';

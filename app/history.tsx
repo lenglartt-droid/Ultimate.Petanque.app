@@ -17,7 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, useAnimatedStyle, withTiming, useSharedValue } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -25,6 +25,11 @@ import { Match, Challenge, SeriesInfo } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
 import { MatchCard } from '@/components/feature/history/MatchCard';
 import { ChallengeCard, CHALLENGE_CONFIG } from '@/components/feature/history/ChallengeCard';
+import { SeriesCard } from '@/components/feature/history/SeriesCard';
+import type { SeriesGroup } from '@/components/feature/history/SeriesCard';
+import { SectionHeader } from '@/components/feature/history/SectionHeader';
+import { MeetupCard } from '@/components/feature/history/MeetupCard';
+import { ChallengeStatsSummary } from '@/components/feature/history/ChallengeStatsSummary';
 import { filterByPeriod, getDateKey, PERIOD_DAYS, PERIOD_KEYS, PERIOD_IDS } from '@/hooks/useFilteredStats';
 import type { PeriodOption } from '@/hooks/useFilteredStats';
 import ShareModal from '@/components/ui/ShareModal';
@@ -63,19 +68,7 @@ const TRAINING_SUB_FILTERS: TrainingSubFilterDef[] = [
   { id: 'series', labelKey: 'series', icon: 'replay' },
 ];
 
-// Types
-interface SeriesGroup {
-  seriesId: string;
-  matches: Match[];
-  teamAWins: number;
-  teamBWins: number;
-  seriesWinner: 'A' | 'B' | null;
-  isComplete: boolean;
-  format: string;
-  teamANames: string[];
-  teamBNames: string[];
-  date: string;
-}
+// Types (SeriesGroup imported from @/components/feature/history/SeriesCard)
 
 type HistoryItem = 
   | { type: 'match'; data: Match; date: string }
@@ -86,260 +79,7 @@ type HistoryItem =
   | { type: 'ad'; date: string; adIndex: number };
 
 // Utility functions (getDateKey, filterByPeriod, PERIOD_DAYS, PERIOD_KEYS, PERIOD_IDS imported from @/hooks/useFilteredStats)
-
-// MatchCard and ChallengeCard imported from @/components/feature/history/
-
-// Series Card Component
-const SeriesCard = React.memo(({ series, onMatchPress, t, language }: { series: SeriesGroup; onMatchPress: (match: Match) => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
-  const [expanded, setExpanded] = useState(false);
-  const rotateAnim = useSharedValue(0);
-  
-  const isWin = series.seriesWinner === 'A';
-  const seriesScore = `${series.teamAWins}-${series.teamBWins}`;
-  
-  const handleToggle = useCallback(() => {
-    Haptics.selectionAsync();
-    rotateAnim.value = withTiming(expanded ? 0 : 1, { duration: 200 });
-    setExpanded(!expanded);
-  }, [expanded, rotateAnim]);
-
-  const chevronStyle = useAnimatedStyle(() => ({
-    transform: [{ rotate: `${rotateAnim.value * 180}deg` }],
-  }));
-
-  const getResultText = () => {
-    if (!series.isComplete) return t('history', 'inProgress');
-    return isWin ? t('history', 'seriesWon') : t('history', 'seriesLost');
-  };
-
-  return (
-    <View style={styles.seriesCard}>
-      <Pressable style={styles.seriesHeader} onPress={handleToggle}>
-        <View style={[styles.seriesIndicator, { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }]} />
-        
-        <View style={styles.seriesHeaderContent}>
-          <View style={styles.seriesHeaderTop}>
-            <View style={styles.seriesBadgeContainer}>
-              <View style={[styles.seriesBadge, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons name="replay" size={12} color={theme.accent} />
-                <Text style={[styles.badgeText, { color: theme.accent }]}>Best of 3</Text>
-              </View>
-              <View style={[styles.badge, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="fitness-center" size={12} color={theme.primary} />
-                <Text style={[styles.badgeText, { color: theme.primary }]}>{t('formats', series.format)}</Text>
-              </View>
-            </View>
-            <Text style={styles.timeText}>
-              {new Date(series.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </View>
-
-          <View style={styles.seriesTeamsRow}>
-            <View style={styles.seriesTeamCol}>
-              <Text style={styles.seriesTeamLabel}>{t('history', 'me')}</Text>
-              <Text style={styles.seriesTeamNames} numberOfLines={1}>
-                {series.teamANames.slice(0, 2).join(' • ')}
-              </Text>
-            </View>
-            
-            <View style={styles.seriesScoreContainer}>
-              <View style={[
-                styles.seriesScoreBadge,
-                { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }
-              ]}>
-                <Text style={styles.seriesScoreText}>{seriesScore}</Text>
-              </View>
-              <Text style={[
-                styles.seriesResultLabel,
-                { color: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }
-              ]}>
-                {getResultText()}
-              </Text>
-            </View>
-            
-            <View style={[styles.seriesTeamCol, styles.teamRight]}>
-              <Text style={styles.seriesTeamLabel}>{t('history', 'opp')}</Text>
-              <Text style={styles.seriesTeamNames} numberOfLines={1}>
-                {series.teamBNames.slice(0, 2).join(' • ')}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.seriesFooter}>
-            <View style={styles.matchCountRow}>
-              {series.matches.map((match, idx) => (
-                <View
-                  key={match.id}
-                  style={[
-                    styles.matchDot,
-                    { backgroundColor: match.winner === 'A' ? theme.success : theme.error }
-                  ]}
-                />
-              ))}
-            </View>
-            <View style={styles.expandButton}>
-              <Text style={styles.expandText}>{expanded ? t('history', 'collapse') : t('history', 'seeMatches')}</Text>
-              <Animated.View style={chevronStyle}>
-                <MaterialIcons name="expand-more" size={18} color={theme.primary} />
-              </Animated.View>
-            </View>
-          </View>
-        </View>
-      </Pressable>
-
-      {expanded && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchList}>
-          {series.matches.map((match) => (
-            <MatchCard key={match.id} match={match} onPress={() => onMatchPress(match)} compact t={t} language={language} />
-          ))}
-        </Animated.View>
-      )}
-    </View>
-  );
-});
-
-// ChallengeCard imported from @/components/feature/history/ChallengeCard
-
-const SectionHeader = React.memo(({ title }: { title: string }) => (
-  <View style={styles.sectionHeader}>
-    <View style={styles.sectionDot} />
-    <Text style={styles.sectionTitle}>{title}</Text>
-    <View style={styles.sectionLine} />
-  </View>
-));
-
-// Challenge Stats Summary
-const ChallengeStatsSummary = React.memo(({ challenges, t }: { challenges: Challenge[]; t: (s: string, k: string) => string }) => {
-  const stats = useMemo(() => {
-    const byType = {
-      '10_tirs': challenges.filter(c => c.type === '10_tirs'),
-      '10_tirs_sautee': challenges.filter(c => c.type === '10_tirs_sautee'),
-      'precision': challenges.filter(c => c.type === 'precision'),
-    };
-    
-    const avgRate = (arr: Challenge[]) => {
-      if (arr.length === 0) return 0;
-      return Math.round(arr.reduce((sum, c) => sum + (c.successRate || c.totalPoints || 0), 0) / arr.length);
-    };
-
-    return {
-      total: challenges.length,
-      byType: {
-        '10_tirs': { count: byType['10_tirs'].length, avg: avgRate(byType['10_tirs']) },
-        '10_tirs_sautee': { count: byType['10_tirs_sautee'].length, avg: avgRate(byType['10_tirs_sautee']) },
-        'precision': { count: byType['precision'].length, avg: avgRate(byType['precision']) },
-      },
-    };
-  }, [challenges]);
-
-  if (challenges.length === 0) return null;
-
-  return (
-    <View style={styles.challengeStatsCard}>
-      <View style={styles.challengeStatsHeader}>
-        <MaterialIcons name="track-changes" size={18} color={theme.primary} />
-        <Text style={styles.challengeStatsTitle}>{t('history', 'challengeSummary')}</Text>
-        <View style={styles.challengeStatsCount}>
-          <Text style={styles.challengeStatsCountText}>{stats.total}</Text>
-        </View>
-      </View>
-      <View style={styles.challengeStatsGrid}>
-        {(Object.keys(CHALLENGE_CONFIG) as (keyof typeof CHALLENGE_CONFIG)[]).map(type => {
-          const cfg = CHALLENGE_CONFIG[type];
-          const challengeName = t('challenge', cfg.nameKey);
-          const data = stats.byType[type];
-          if (data.count === 0) return null;
-          return (
-            <View key={type} style={styles.challengeStatItem}>
-              <View style={[styles.challengeStatIcon, { backgroundColor: cfg.color + '15' }]}>
-                <MaterialIcons name={cfg.icon} size={16} color={cfg.color} />
-              </View>
-              <View style={styles.challengeStatInfo}>
-                <Text style={styles.challengeStatName}>{challengeName}</Text>
-                <Text style={styles.challengeStatMeta}>{data.count} {data.count > 1 ? t('history', 'challenges').toLowerCase() : t('history', 'challenges').toLowerCase()} • {data.avg}{type === 'precision' ? ' pts' : '%'} {t('history', 'avg')}</Text>
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </View>
-  );
-});
-
-// Meetup Card Component
-const MeetupCard = React.memo(({ meetup, onPress, t, language }: { meetup: Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }; onPress: () => void; t: (s: string, k: string) => string; language: 'fr' | 'en' }) => {
-  const mDate = new Date(meetup.date);
-  const isCreator = meetup._source === 'created';
-  const isPast = mDate < new Date();
-  const daysUntil = Math.max(0, Math.ceil((mDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
-
-  return (
-    <Pressable style={styles.meetupCard} onPress={onPress}>
-      <View style={[styles.meetupCardIndicator, { backgroundColor: isPast ? theme.textMuted : theme.accent }]} />
-      <View style={styles.meetupCardContent}>
-        <View style={styles.meetupCardHeader}>
-          <View style={[styles.badge, { backgroundColor: isCreator ? theme.primary + '15' : theme.accent + '15' }]}>
-            <MaterialIcons
-              name={isCreator ? 'person' : 'mail'}
-              size={12}
-              color={isCreator ? theme.primary : theme.accent}
-            />
-            <Text style={[styles.badgeText, { color: isCreator ? theme.primary : theme.accent }]}>
-              {isCreator ? t('history', 'meetupCreator') : t('history', 'meetupInvited')}
-            </Text>
-          </View>
-          {!isPast && daysUntil <= 1 ? (
-            <View style={[styles.badge, { backgroundColor: theme.warning + '15' }]}>
-              <MaterialIcons name="local-fire-department" size={12} color={theme.warning} />
-              <Text style={[styles.badgeText, { color: theme.warning }]}>
-                {daysUntil === 0 ? t('notifications', 'todayLabel') : t('notifications', 'tomorrowLabel')}
-              </Text>
-            </View>
-          ) : isPast ? (
-            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.badgeText, { color: theme.textMuted }]}>{t('history', 'meetupPast')}</Text>
-            </View>
-          ) : null}
-          <Text style={styles.timeText}>
-            {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-          </Text>
-        </View>
-
-        <Text style={styles.meetupCardTitle} numberOfLines={1}>{meetup.title}</Text>
-
-        <View style={styles.meetupCardMeta}>
-          {meetup.terrain_name ? (
-            <View style={styles.meetupMetaItem}>
-              <MaterialIcons name="place" size={12} color={theme.textMuted} />
-              <Text style={styles.meetupMetaText} numberOfLines={1}>{meetup.terrain_name}{meetup.terrain_city ? ` - ${meetup.terrain_city}` : ''}</Text>
-            </View>
-          ) : null}
-          <View style={styles.meetupMetaItem}>
-            <MaterialIcons name="event" size={12} color={theme.textMuted} />
-            <Text style={styles.meetupMetaText}>
-              {mDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.meetupCardFooter}>
-          <View style={[styles.meetupParticipantsBadge, { backgroundColor: theme.success + '12' }]}>
-            <MaterialIcons name="group" size={12} color={theme.success} />
-            <Text style={[styles.meetupParticipantsText, { color: theme.success }]}>
-              {meetup._acceptedCount || 0}/{meetup.max_participants} {t('history', 'meetupParticipants')}
-            </Text>
-          </View>
-          {meetup.share_code ? (
-            <View style={[styles.badge, { backgroundColor: theme.backgroundSecondary }]}>
-              <MaterialIcons name="qr-code" size={10} color={theme.textMuted} />
-              <Text style={[styles.badgeText, { color: theme.textMuted }]}>{meetup.share_code}</Text>
-            </View>
-          ) : null}
-        </View>
-      </View>
-    </Pressable>
-  );
-});
+// Components (MatchCard, ChallengeCard, SeriesCard, SectionHeader, MeetupCard, ChallengeStatsSummary) imported from @/components/feature/history/
 
 export default function HistoryScreen() {
   const insets = useSafeAreaInsets();
