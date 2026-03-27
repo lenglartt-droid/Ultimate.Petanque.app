@@ -45,12 +45,11 @@ import {
   PrecisionAtelier,
   PrecisionDistance,
   PrecisionShot,
-  PRECISION_ATELIERS,
-  PRECISION_DISTANCES,
   PrecisionAtelierConfig,
   PrecisionScoringOption,
   Player,
-} from '@/services/mockData';
+} from '@/types/petanque';
+import { PRECISION_ATELIERS, PRECISION_DISTANCES } from '@/constants/challengeConfig';
 
 const getScreenWidth = () => Math.max(1, Dimensions.get('window').width);
 const INITIAL_WIDTH = getScreenWidth();

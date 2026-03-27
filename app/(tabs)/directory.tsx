@@ -22,7 +22,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import config from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
-import { Terrain, Player, Club, Tournament } from '@/services/mockData';
+import { Terrain, Player, Club, Tournament } from '@/types/petanque';
 import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';

@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for matches.
  * No logic changes from original implementation.
  */
-import { Match } from '@/services/mockData';
+import { Match } from '@/types/petanque';
 import { enqueueOperation, buildMatchDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 import { mapMatchFromDb } from '@/services/dbMappers';
 import { snapshotRankings, detectAndNotifyRankingChanges } from '@/services/rankingChangeService';

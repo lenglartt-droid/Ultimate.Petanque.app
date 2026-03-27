@@ -45,7 +45,7 @@ import {
   Terrain,
   TournamentNotification,
   BoulesSet,
-} from '@/services/mockData';
+} from '@/types/petanque';
 
 // Empty fallbacks instead of mock data — reduces bundle size ~15-20KB
 const EMPTY_PLAYERS: Player[] = [];

@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for players.
  * No logic changes from original implementation.
  */
-import { Player } from '@/services/mockData';
+import { Player } from '@/types/petanque';
 import { logModification } from '@/services/modificationLogService';
 import { enqueueOperation, buildPlayerDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 import { mapPlayerFromDb } from '@/services/dbMappers';

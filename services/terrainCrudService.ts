@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for terrains.
  * No logic changes from original implementation.
  */
-import { Terrain } from '@/services/mockData';
+import { Terrain } from '@/types/petanque';
 import { logModification } from '@/services/modificationLogService';
 import { enqueueOperation, buildTerrainDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 

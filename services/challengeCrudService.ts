@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for challenges.
  * No logic changes from original implementation.
  */
-import { Challenge } from '@/services/mockData';
+import { Challenge } from '@/types/petanque';
 import { enqueueOperation, buildChallengeDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 
 interface ChallengeCrudDeps {

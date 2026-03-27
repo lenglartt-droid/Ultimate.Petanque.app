@@ -17,7 +17,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import MergeComparisonModal, { MergeField } from './MergeComparisonModal';
-import { Player, Club, Terrain, Tournament } from '@/services/mockData';
+import { Player, Club, Terrain, Tournament } from '@/types/petanque';
 import { saveMergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 
 type MergeItemType = 'player' | 'club' | 'terrain' | 'tournament';

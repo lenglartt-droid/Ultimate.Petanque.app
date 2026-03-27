@@ -25,7 +25,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { BoulesSet } from '@/services/mockData';
+import { BoulesSet } from '@/types/petanque';
 import { uploadBoulesSetPhoto } from '@/services/storageService';
 import { BOULES_BRANDS, BOULES_DATABASE, getModelsByBrand, findModel, BoulesModel, getBrandImage } from '@/constants/boulesDatabase';
 import AdBanner from '@/components/ui/AdBanner';

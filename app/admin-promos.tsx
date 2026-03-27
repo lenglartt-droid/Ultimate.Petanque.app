@@ -33,7 +33,7 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { fetchDeviceClusters, getDeviceRegistrationStats, DeviceCluster } from '@/services/multiAccountService';
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, fetchDailyAnalyticsCounts, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDailySponsoredChallengeCounts } from '@/services/ambassadorAnalyticsService';
-import { Challenge } from '@/services/mockData';
+import { Challenge } from '@/types/petanque';
 import { getSponsoredEvents, getEventParticipants, publishResults, cancelSponsoredEvent, SponsoredEvent } from '@/services/sponsoredEventService';
 import Svg, { Path as SvgPath } from 'react-native-svg';
 import { uploadImageToStorage } from '@/services/storageService';

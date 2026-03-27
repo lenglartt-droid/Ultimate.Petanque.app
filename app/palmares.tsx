@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Tournament, Match } from '@/services/mockData';
+import { Tournament, Match } from '@/types/petanque';
 import AdBanner from '@/components/ui/AdBanner';
 
 const { width: screenWidth } = Dimensions.get('window');

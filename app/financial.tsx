@@ -15,7 +15,7 @@ import * as Haptics from '@/services/haptics';
 import Svg, { Rect, G, Text as SvgText, Line } from 'react-native-svg';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
-import { Club } from '@/services/mockData';
+import { Club } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function FinancialScreen() {

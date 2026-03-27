@@ -1,5 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Player, Club, Tournament, Match, Challenge, Terrain } from '@/services/mockData';
+import { Player, Club, Tournament, Match, Challenge, Terrain } from '@/types/petanque';
 
 const CACHE_PREFIX = 'petanque_cache_';
 const CACHE_VERSION_KEY = `${CACHE_PREFIX}version`;

@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for clubs.
  * No logic changes from original implementation.
  */
-import { Club, Terrain } from '@/services/mockData';
+import { Club, Terrain } from '@/types/petanque';
 import { logModification } from '@/services/modificationLogService';
 import { enqueueOperation, buildClubDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 

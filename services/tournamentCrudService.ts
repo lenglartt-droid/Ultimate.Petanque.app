@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete for tournaments.
  * No logic changes from original implementation.
  */
-import { Tournament, Match, BracketMatch } from '@/services/mockData';
+import { Tournament, Match, BracketMatch } from '@/types/petanque';
 import { logModification } from '@/services/modificationLogService';
 import { enqueueOperation, buildTournamentDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 

@@ -3,7 +3,7 @@
  * Extracted from contexts/AppContext.tsx — handles add, update, delete, setPrimary for boules sets.
  * No logic changes from original implementation.
  */
-import { BoulesSet } from '@/services/mockData';
+import { BoulesSet } from '@/types/petanque';
 import { mapBoulesSetFromDb } from '@/services/dbMappers';
 
 interface BoulesSetCrudDeps {
