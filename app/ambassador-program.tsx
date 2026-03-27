@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Platform,
 } from 'react-native';
@@ -143,11 +143,22 @@ export default function AmbassadorProgramScreen() {
   const { language } = useLanguage();
   const fr = language === 'fr';
   const [expandedLevel, setExpandedLevel] = useState<AmbassadorLevel | null>('decouverte');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const cardPositions = useRef<Map<string, number>>(new Map());
 
   const toggleLevel = useCallback((id: AmbassadorLevel) => {
     Haptics.selectionAsync();
+    const isExpanding = expandedLevel !== id;
     setExpandedLevel(prev => prev === id ? null : id);
-  }, []);
+    if (isExpanding) {
+      setTimeout(() => {
+        const y = cardPositions.current.get(id);
+        if (y !== undefined && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: Math.max(0, y - 80), animated: true });
+        }
+      }, 100);
+    }
+  }, [expandedLevel]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -176,6 +187,7 @@ export default function AmbassadorProgramScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
@@ -223,6 +235,7 @@ export default function AmbassadorProgramScreen() {
             <Animated.View
               key={level.id}
               entering={FadeInDown.duration(300).delay(100 + idx * 80)}
+              onLayout={(e) => { cardPositions.current.set(level.id, e.nativeEvent.layout.y + 200); }}
             >
               <View style={[styles.levelCard, isExpanded && { borderColor: level.color + '50' }]}>
                 {/* Level Header */}

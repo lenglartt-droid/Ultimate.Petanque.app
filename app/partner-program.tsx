@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Platform, Linking,
 } from 'react-native';
@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -166,11 +166,22 @@ export default function PartnerProgramScreen() {
   const { language } = useLanguage();
   const fr = language === 'fr';
   const [expandedTier, setExpandedTier] = useState<string | null>('bronze');
+  const scrollViewRef = useRef<ScrollView>(null);
+  const cardPositions = useRef<Map<string, number>>(new Map());
 
   const toggleTier = useCallback((id: string) => {
     Haptics.selectionAsync();
+    const isExpanding = expandedTier !== id;
     setExpandedTier(prev => prev === id ? null : id);
-  }, []);
+    if (isExpanding) {
+      setTimeout(() => {
+        const y = cardPositions.current.get(id);
+        if (y !== undefined && scrollViewRef.current) {
+          scrollViewRef.current.scrollTo({ y: Math.max(0, y - 80), animated: true });
+        }
+      }, 100);
+    }
+  }, [expandedTier]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -199,6 +210,7 @@ export default function PartnerProgramScreen() {
       </View>
 
       <ScrollView
+        ref={scrollViewRef}
         style={{ flex: 1 }}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
@@ -245,6 +257,7 @@ export default function PartnerProgramScreen() {
             <Animated.View
               key={tier.id}
               entering={FadeInDown.duration(300).delay(100 + idx * 80)}
+              onLayout={(e) => { cardPositions.current.set(tier.id, e.nativeEvent.layout.y + 200); }}
             >
               <View style={[styles.tierCard, isExpanded && { borderColor: tier.color + '50' }]}>
                 {/* Tier Header */}
@@ -279,7 +292,7 @@ export default function PartnerProgramScreen() {
 
                 {/* Expanded Content */}
                 {isExpanded ? (
-                  <Animated.View entering={FadeInDown.duration(250)} style={styles.tierExpanded}>
+                  <Animated.View entering={FadeIn.duration(250)} style={styles.tierExpanded}>
                     {/* Criteria */}
                     <View style={styles.tierSection}>
                       <View style={styles.tierSectionHeader}>
