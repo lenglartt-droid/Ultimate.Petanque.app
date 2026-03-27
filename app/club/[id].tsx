@@ -23,7 +23,7 @@ import { Image } from 'expo-image';
 import * as ImagePicker from 'expo-image-picker';
 // expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import * as Linking2 from 'expo-linking';
-import { decode } from 'base64-arraybuffer';
+import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
 import { uploadImageToStorage } from '@/services/storageService';
 import theme, { blurhash } from '@/constants/theme';

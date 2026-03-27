@@ -9,13 +9,22 @@
     },
     "preview": {
       "android": {
-        "buildType": "apk"
+        "buildType": "apk",
+        "image": "latest"
       },
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
+      }
     },
     "production": {
       "android": {
-        "buildType": "app-bundle"
+        "buildType": "app-bundle",
+        "image": "latest"
+      },
+      "autoIncrement": true,
+      "env": {
+        "EXPO_NO_TELEMETRY": "1"
       }
     }
   },
