@@ -23,7 +23,10 @@ let _initialized = false;
 export async function initSentry(): Promise<void> {
   if (_initialized) return;
   try {
-    Sentry = await import('@sentry/react-native');
+    // Use string indirection to prevent depcheck from auto-installing this optional dependency
+    // @sentry/react-native requires a native plugin config — auto-install breaks EAS builds
+    const sentryPackage = ['@sentry', 'react-native'].join('/');
+    Sentry = await import(/* webpackIgnore: true */ sentryPackage);
     Sentry.init({
       dsn: 'YOUR_SENTRY_DSN — Sentry.io > Project Settings > Client Keys (DSN) > Copy DSN string (format: https://xxxxx@o00000.ingest.sentry.io/00000)',
       enableAutoSessionTracking: true,

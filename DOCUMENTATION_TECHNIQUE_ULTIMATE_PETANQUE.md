@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.2.0  
+**Version :** 1.2.1  
 **Date :** 27 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -17,6 +17,7 @@
 | **Scheme** | `ultimatepetanque://` |
 | **Plateformes** | iOS, Android, Web (preview) |
 | **Langues** | Français (défaut), Anglais |
+| **Version** | 1.2.0 |
 
 ### 1.2 Objectif principal
 
@@ -36,10 +37,12 @@ Fournir un outil complet aux joueurs de pétanque pour enregistrer leurs parties
 - **Carte interactive** avec géolocalisation des terrains, clubs, joueurs et tournois
 - **Partage cross-joueurs** : matchs et défis partagés entre comptes avec permissions, édition collaborative et mise à jour automatique des statistiques
 - **Programme ambassadeur** avec analytiques de visibilité et défis sponsorisés
+- **Programme partenaire** avec portail dédié 6 onglets (ROI, Placement, Branding, Push, Events, CRM)
 - **Classements communautaires** : joueurs, clubs, marques de boules, avec filtres géographiques
 - **Système de rendez-vous** entre joueurs via codes de partage et QR codes
 - **Bilan hebdomadaire** avec sparkline d'activité quotidienne bicolore (matchs/défis)
-- **FAQ contextuelle** structurée par situations réelles du joueur (entraînement, tournoi, déplacement)
+- **FAQ contextuelle** structurée par audience (Joueur, Ambassadeur, Partenaire)
+- **Pages légales complètes** : politique de confidentialité et CGU mises à jour couvrant tous les programmes, avec versions statiques HTML hébergeables
 
 ### 1.5 Fonctionnement global
 
@@ -98,6 +101,10 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 42 | **Digest hebdomadaire sponsor** | Récapitulatif automatique chaque lundi pour partenaires Or : impressions, clics, CTR, push envoyés, comparaison semaine précédente. Aperçu email intégré au portail avec preview branded, historique des digests, export PDF | Moyenne |
 | 43 | **A/B Testing push avancé** | Test A/B avec split 50/50, variantes titre+message, résultats avec taux d'ouverture par variante, historique complet des tests, dashboard Insights A/B avec analyse de significativité statistique (confiance, taille échantillon, recommandations), visualisation win/loss/tie | Élevée |
 | 44 | **Analytics sponsorisé avancé** | Heatmap performance par jour/créneau horaire avec score optimal, benchmark concurrents par tier (impressions, CTR, portée, push), calendrier push avec légende (envoyé/programmé/A/B), statistiques push mensuelles avec graphique barres, distribution géographique des cibles | Élevée |
+| 45 | **Pages légales mises à jour (v1.2.0)** | Politique de confidentialité : 6 nouvelles sections (programme ambassadeur, programme partenaire, score de confiance, badges/gamification, événements sponsorisés, push/crash). CGU : 3 nouvelles sections (programme ambassadeur, trust score/anti-triche, événements sponsorisés). Pages statiques HTML bilingues hébergeables (`public/privacy-policy.html`, `public/terms-of-service.html`) | Moyenne |
+| 46 | **Note du créateur enrichie** | Titre "Créé par un passionné, pour la communauté", message communautaire "12 millions de joueurs", 5 nouvelles fonctionnalités (trust score, badges, ambassadeur, partenaire, push A/B), section donation intégrée, section RDV terrain mise en valeur | Faible |
+| 47 | **Descriptions store** | Guide complet `STORE_ASSETS_GUIDE.md` v1.2.0 avec descriptions FR/EN (titre 30 chars, description 4000 chars, mots-clés), couvrant programme ambassadeur/partenaire, portail, événements, FAQ par audience | Faible |
+| 48 | **Universal Links** | Fichiers `.well-known/apple-app-site-association` (iOS) et `.well-known/assetlinks.json` (Android) avec placeholders documentés, guide d'hébergement complet `UNIVERSAL_LINKS_SETUP.md` | Faible |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -114,22 +121,23 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 
 | Composant | Technologie |
 |---|---|
-| **Framework** | React Native + Expo SDK (New Architecture) |
+| **Framework** | React Native + Expo SDK |
 | **Langage** | TypeScript |
 | **Navigation** | Expo Router (file-based routing) |
 | **Backend** | OnSpace Cloud (compatible Supabase) |
-| **Base de données** | PostgreSQL (via OnSpace Cloud) — 24 tables, 90+ politiques RLS |
+| **Base de données** | PostgreSQL (via OnSpace Cloud) — 24+ tables, 90+ politiques RLS |
 | **Auth** | Supabase Auth (OTP email + mot de passe) |
 | **Storage** | Supabase Storage (5 buckets : avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
-| **Edge Functions** | Deno (8 fonctions : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, validate-receipt, weekly-cron) |
+| **Edge Functions** | Deno (7 fonctions : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron) |
 | **State Management** | React Context API (AppContext + LanguageContext) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
 | **Cartes** | react-native-maps (mobile), react-leaflet (web) |
 | **Notifications** | expo-notifications |
 | **Publicités** | react-native-google-mobile-ads |
-| **Animations** | react-native-reanimated |
+| **Animations** | react-native-reanimated (~3.17.5) avec plugin Babel |
 | **Charts** | react-native-svg (custom) |
+| **QR Codes** | react-native-qrcode-svg |
 
 ### 3.2 Structure des données (24+ tables)
 
@@ -142,7 +150,7 @@ tournaments            → Tournois (user_id, phases/teams JSONB, is_public, reg
 matches                → Matchs (user_id, team_a/team_b JSONB, menes JSONB, player_actions JSONB, participant_user_ids uuid[], series_info JSONB)
 challenges             → Défis (user_id, shots JSONB, precision_shots JSONB, detailed_shots JSONB, participant_user_ids uuid[], sponsor_id)
 boules_sets            → Jeux de boules (user_id, is_primary, purchase_price)
-ambassadors            → Ambassadeurs (user_id, player_id, badge_type, is_featured)
+ambassadors            → Ambassadeurs (user_id, player_id, badge_type, is_featured, ambassador_level, referral_code, referral_count, total_referral_xp, brand_color)
 ambassador_analytics   → Analytics ambassadeurs (event_type, social_platform, source_page)
 sponsored_events       → Événements sponsorisés (ambassador_id, share_code unique)
 sponsored_event_participants → Participants événements
@@ -208,6 +216,10 @@ app/
 ├── palmares.tsx          ← Palmarès (résultats tournois)
 ├── equipment.tsx         ← Gestion des boules
 ├── scanner.tsx           ← Scanner QR code
+├── privacy-policy.tsx    ← Politique de confidentialité (24 sections)
+├── terms.tsx             ← CGU (27 sections)
+├── creator-note.tsx      ← Note du créateur (16 fonctionnalités, section donation)
+├── remove-ads.tsx        ← Suppression pubs / Donation
 └── ... (30+ autres pages)
 ```
 
@@ -233,7 +245,8 @@ services/
 ├── badgeService.ts             ← 10 badges, XP, progression
 ├── leaderboardService.ts       ← Classements communautaires (joueurs, clubs, boules)
 ├── rankingChangeService.ts     ← Détection changement de classement
-├── sentryService.ts            ← Crash reporting Sentry
+├── sentryService.native.ts     ← Crash reporting Sentry (placeholder DSN documenté)
+├── sentryService.web.ts        ← Stub Sentry pour web
 ├── notificationPreferencesService.ts ← Préférences notifications par type
 ├── pushTokenService.ts         ← Enregistrement tokens push
 ├── offlineQueueService.ts      ← Queue offline, replay, conflits
@@ -246,8 +259,13 @@ services/
 ├── publicItemsService.ts       ← Items publics (carte)
 ├── exportService.ts            ← Export CSV/PDF
 ├── iapService.native.ts        ← In-App Purchase (natif)
+├── iapService.web.ts           ← Stub IAP pour web
 ├── adService.native.ts         ← AdMob (natif)
-└── ... (20+ autres services spécialisés)
+├── adService.web.ts            ← Stub AdMob pour web
+├── haptics.native.ts / .web.ts ← Vibrations (platform-specific)
+├── location.native.ts / .web.ts ← Géolocalisation (platform-specific)
+├── camera.native.ts / .web.ts  ← Caméra (platform-specific)
+└── ... (autres services spécialisés)
 ```
 
 ### 3.5 Sécurité (RLS)
@@ -256,8 +274,32 @@ services/
 - Patterns : `authenticated_*_own_*` (CRUD propre), `admin_*` (admin), `public_select_*` (lecture publique), `participant_*_shared_*` (items partagés), `shared_select_*` (items partagés via code)
 - **9 triggers** DB : auto-création profil, sync metadata, soft deletes sur 7 tables
 - **5 fonctions DB** : handle_new_user, sync_user_metadata, is_meetup_creator, log_soft_delete, get_premium_user_ids
-- **8 Edge Functions** : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, validate-receipt, weekly-cron
+- **7 Edge Functions** : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron
 - **30+ index** de performance
+
+### 3.6 Configuration de build
+
+#### babel.config.js
+```js
+module.exports = function (api) {
+  api.cache(true)  // IMPORTANT: doit être true pour les builds EAS
+  return {
+    presets: ['babel-preset-expo'],
+    plugins: ['react-native-reanimated/plugin'],  // OBLIGATOIRE pour les animations
+  }
+}
+```
+
+#### app.json — Points critiques
+- `newArchEnabled: false` — désactivé pour compatibilité avec react-native-qrcode-svg et react-native-google-mobile-ads
+- Plugin `expo-camera` déclaré pour le scanner QR
+- Plugin `react-native-google-mobile-ads` avec IDs de test (à remplacer pour la production)
+- `android.config.googleMaps.apiKey` — placeholder documenté (à remplir)
+
+#### eas.json — Profils de build
+- `development` : client de développement, distribution interne
+- `preview` : APK Android pour tests internes
+- `production` : AAB Android + iOS pour les stores
 
 ---
 
@@ -283,13 +325,21 @@ services/
 - Système de rendez-vous (meetups) avec QR codes
 - Offline mode avec queue, replay et delta sync
 - i18n FR/EN complet (700+ clés)
-- FAQ par audience (3 onglets, 8+4+5 catégories, 56+ questions)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - Tests unitaires et d'intégration
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
-- Données de démonstration optimisées (8 joueurs, 4 clubs, 5 terrains, 3 tournois, 12 matchs, 6 défis couvrant 100% des fonctionnalités)
+- Données de démonstration optimisées (8 joueurs, 4 clubs, 5 terrains, 3 tournois, 12 matchs, 6 défis)
+- **Pages légales complètes** : politique de confidentialité (24 sections) et CGU (27 sections) couvrant tous les programmes
+- **Pages HTML statiques** bilingues pour hébergement public (`public/privacy-policy.html`, `public/terms-of-service.html`)
+- **Note du créateur** enrichie avec 16 fonctionnalités, section donation, message communautaire
+- **Guide descriptions store** v1.2.0 (`STORE_ASSETS_GUIDE.md`)
+- **Fichiers Universal Links** : `.well-known/apple-app-site-association` et `.well-known/assetlinks.json`
+- **Guide Universal Links** complet (`UNIVERSAL_LINKS_SETUP.md`)
+- **Configuration EAS** avec profils de build documentés (`eas.json`)
+- **Placeholder Sentry DSN** documenté dans `sentryService.native.ts`
+- **Placeholder Google Maps API Key** documenté dans `app.json`
 
 ### 4.2 Ce qui est partiellement implémenté
 
@@ -299,11 +349,11 @@ services/
 ### 4.3 Ce qui est manquant
 
 - Tests sur appareils réels (IAP, notifications, deep links)
-- Configuration EAS Build pour production
-- Configuration Google Maps API Key pour la carte (Android)
-- Assets App Store / Play Store (screenshots, descriptions)
-- IDs AdMob de production
-- Configuration Sentry DSN
+- IDs AdMob de production (remplacer les IDs de test dans `app.json`)
+- Google Maps API Key réelle (remplacer le placeholder dans `app.json`)
+- Sentry DSN réel (remplacer le placeholder dans `sentryService.native.ts`)
+- Credentials Apple pour soumission (Apple ID, Team ID, ASC App ID dans `eas.json`)
+- Service account Google Play (fichier JSON pour `eas.json`)
 
 ---
 
@@ -315,16 +365,17 @@ services/
 |---|---|---|---|---|---|
 | 1 | **Google OAuth** | Activer l'authentification Google | Dashboard OnSpace Cloud → User → Auth Settings → Enable Google Provider, renseigner Client ID & Secret | Google Cloud Console : créer projet, configurer OAuth consent screen, créer credentials (Web + iOS + Android) | Haute |
 | 2 | **AdMob Production** | Remplacer IDs de test | Modifier `app.json` (androidAppId, iosAppId) avec IDs réels | Google AdMob Console : créer app iOS + Android, créer ad units (banner + interstitial) | Haute |
-| 3 | **EAS Build** | Configurer les builds de production | — | Installer EAS CLI, `eas build:configure`, créer `eas.json` avec profils dev/preview/production | Haute |
+| 3 | **EAS Build** | Profils déjà configurés dans `eas.json` | — | Installer EAS CLI, remplir les placeholders dans `eas.json` (Apple ID, Team ID, ASC App ID, service account JSON) | Haute |
 | 4 | **Certificats iOS** | Provisioning profiles et certificats | — | Apple Developer : créer App ID, Distribution Certificate, Provisioning Profile (ou laisser EAS gérer) | Haute |
 | 5 | **Keystore Android** | Générer le keystore de signature | — | EAS gère automatiquement ou générer manuellement via `keytool` | Haute |
 | 6 | **Notifications Push** | Configurer les credentials push | Dashboard OnSpace → Cloud → Secrets (si APNs key nécessaire) | Apple Developer : créer APNs Key (.p8) | Moyenne |
-| 7 | **Deep Linking prod** | Configurer les associated domains | — | Apple Developer : Associated Domains + `apple-app-site-association` ; Google : Digital Asset Links | Moyenne |
-| 8 | **Google Maps API** | Configurer la clé API Google Maps pour Android | Ajouter la clé dans `app.json` sous `android.config.googleMaps.apiKey` | Google Cloud Console : activer Maps SDK for Android/iOS, créer clé API restreinte | Haute |
+| 7 | **Deep Linking prod** | Fichiers Universal Links déjà créés (`.well-known/`) | Héberger les fichiers sur `ultimatepetanque.app` (voir `UNIVERSAL_LINKS_SETUP.md`) | Remplacer placeholders (Team ID, Bundle ID, package fingerprint) | Moyenne |
+| 8 | **Google Maps API** | Placeholder dans `app.json` prêt | Remplacer `YOUR_GOOGLE_MAPS_API_KEY` dans `app.json` | Google Cloud Console : activer Maps SDK for Android/iOS, créer clé API restreinte | Haute |
 | 9 | **Tests réels IAP** | Tester les achats in-app | — | App Store Connect : créer IAP (€5.99), sandbox testers ; Google Play Console : créer produit, licence testing | Haute |
-| 10 | **Sentry DSN** | Configurer le monitoring de crashs | — | Sentry.io : créer projet, récupérer DSN, configurer dans `sentryService.ts` | Moyenne |
+| 10 | **Sentry DSN** | Placeholder dans `sentryService.native.ts` prêt | — | Sentry.io : créer projet, récupérer DSN, remplacer le placeholder | Moyenne |
 | 11 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute |
-| 12 | **Assets Stores** | Screenshots, descriptions, icônes | — | Capturer screenshots sur simulateurs, rédiger descriptions FR/EN | Haute |
+| 12 | **Assets Stores** | Guide complet dans `STORE_ASSETS_GUIDE.md` | — | Capturer screenshots, rédiger descriptions en suivant le guide | Haute |
+| 13 | **Pages légales hébergées** | Fichiers HTML prêts dans `public/` | Héberger `public/privacy-policy.html` et `public/terms-of-service.html` sur une URL publique | Renseigner les URLs dans les stores | Haute |
 
 ---
 
@@ -335,7 +386,7 @@ services/
 #### Prérequis
 
 - Compte Apple Developer ($99/an)
-- EAS CLI configuré avec credentials Apple
+- EAS CLI configuré avec credentials Apple (remplir `eas.json` → submit → ios)
 - App Store Connect : app créée avec Bundle ID `com.ultimatepetanque.app`
 
 #### Étapes détaillées
@@ -348,12 +399,11 @@ services/
    - Catégorie secondaire : Utilities
 
 2. **Configurer les métadonnées**
-   - Description (FR + EN, max 4000 caractères)
+   - Description (FR + EN) — voir `STORE_ASSETS_GUIDE.md`
    - Mots-clés (max 100 caractères)
-   - URL de support
-   - URL de politique de confidentialité (obligatoire)
+   - URL de support : `ultimate.petanque.app@gmail.com`
+   - URL de politique de confidentialité : URL hébergée de `public/privacy-policy.html`
    - Screenshots (6.7" iPhone 15 Pro Max, 6.1" iPhone 15, 12.9" iPad Pro)
-   - App Preview vidéo (optionnel mais recommandé)
 
 3. **Configurer les In-App Purchases**
    - Produit : "Supprimer les publicités" — €5.99 (non-consumable)
@@ -369,17 +419,12 @@ services/
    eas submit --platform ios
    ```
 
-6. **Review Apple** (délai : 1-3 jours ouvrés)
-   - L'app doit fonctionner sans connexion (✅ mode offline)
-   - Les IAP doivent utiliser le système Apple (✅)
-   - Le tracking ATT doit être implémenté (✅)
-
 ### 6.2 Publication sur Google Play Store
 
 #### Prérequis
 
 - Compte Google Play Developer ($25 one-time)
-- EAS CLI configuré
+- EAS CLI configuré (remplir `eas.json` → submit → android avec service account JSON)
 - Google Play Console : app créée
 
 #### Étapes détaillées
@@ -388,23 +433,15 @@ services/
    - Nom : "Ultimate Petanque"
    - Package : `com.ultimatepetanque.app`
    - Catégorie : Sports
-   - Type de contenu : Tout public
 
 2. **Store Listing**
-   - Titre court (30 caractères) + Description complète (4000 caractères)
+   - Descriptions FR/EN — voir `STORE_ASSETS_GUIDE.md`
    - Icône (512×512 PNG)
    - Feature Graphic (1024×500 PNG)
-   - Screenshots (min 2, phone + tablet recommandé)
-   - Politique de confidentialité URL
+   - Screenshots (min 2)
+   - URL politique de confidentialité : URL hébergée de `public/privacy-policy.html`
 
-3. **Configurer les produits in-app**
-   - Produit : `remove_ads` — €5.99
-
-4. **Data Safety**
-   - Remplir la déclaration de sécurité des données
-   - Types de données : email, localisation approximative, données d'utilisation
-
-5. **Build et soumission**
+3. **Build et soumission**
    ```bash
    eas build --platform android --profile production
    eas submit --platform android
@@ -416,9 +453,9 @@ services/
 
 ### 7.1 Améliorations prioritaires
 
-1. **Monitoring en production** : Sentry est intégré via `services/sentryService.ts`. **Action restante** : configurer le DSN Sentry et installer `@sentry/react-native`.
+1. **Monitoring en production** : Sentry est intégré via `services/sentryService.native.ts` avec un placeholder DSN documenté. **Action** : créer un projet sur Sentry.io et remplacer le DSN.
 
-2. **Rate limiting** : Les Edge Functions `validate-promo-code` (5 req/60s) et `record-purchase` (3 req/60s) disposent d'un rate limiter avec réponses 429. Pour un rate limiting persistant, envisager une table `rate_limits` en DB.
+2. **Rate limiting** : Les Edge Functions `validate-promo-code` (5 req/60s) et `record-purchase` (3 req/60s) disposent d'un rate limiter avec réponses 429.
 
 3. **Validation des données** : Ajouter une validation côté serveur pour les données critiques (scores, statistiques).
 
@@ -427,13 +464,17 @@ services/
 ### 7.2 Bonnes pratiques déjà en place
 
 - Architecture Data-Logic-UI (services → hooks → components)
+- Services platform-specific (.native.ts / .web.ts) pour tous les modules natifs
 - RLS activé sur toutes les tables avec politiques séparées
 - Delta sync avec soft deletes
 - Cache local avec fallback offline
-- i18n complet (700+ clés FR/EN)
+- i18n complet (700+ clés FR/EN) répartis sur 2 fichiers (i18n.ts + i18nExtra.ts)
+- Plugin Babel Reanimated configuré
+- `newArchEnabled: false` pour compatibilité maximale des librairies
+- `api.cache(true)` dans babel.config.js pour optimisation des builds
 - Tests unitaires et d'intégration
-- Données de démonstration optimisées couvrant 100% des fonctionnalités
 - Design system unifié et harmonisé
+- Pages légales complètes avec versions HTML statiques hébergeables
 
 ### 7.3 Risques à anticiper
 
@@ -444,14 +485,14 @@ services/
 | **Délai de review Apple** | Planification | Prévoir 1-7 jours ouvrés, soumettre tôt dans la semaine |
 | **Google OAuth rejeté** | Fonctionnel | Le système fonctionne déjà sans OAuth (OTP + mot de passe) |
 
-### 7.4 Points d'attention spécifiques
+### 7.4 Points d'attention pour le build
 
-- Les **IDs AdMob dans `app.json`** sont des IDs de test. **Ne pas publier avec ces IDs**.
-- Le **scheme de deep linking** fonctionne mais les **Universal Links iOS** nécessitent `apple-app-site-association`.
-- Le **système de notifications push** combine locales et serveur (5 types). Les préférences par type sont respectées côté serveur.
-- La **carte interactive** nécessite une **Google Maps API Key** pour Android.
-- Le **partage cross-joueurs** met à jour automatiquement les statistiques du destinataire à l'acceptation (matchs, défis 1v1, Best of 3, tournois).
-- Les **données de démonstration** (`mockData.ts`) sont optimisées : 8 joueurs, 4 clubs, 5 terrains, 3 tournois, 12 matchs, 6 défis couvrant tous les cas d'usage.
+- Les **IDs AdMob dans `app.json`** sont des IDs de test (`ca-app-pub-3940256099942544`). **Ne pas publier avec ces IDs**.
+- Le `newArchEnabled` est à `false` dans `app.json` — ne pas changer pour éviter des incompatibilités.
+- Le plugin `react-native-reanimated/plugin` dans `babel.config.js` est **obligatoire** — son absence cause des crashs.
+- `api.cache(true)` dans `babel.config.js` — ne pas changer en `false` (ralentit significativement les builds).
+- Le plugin `expo-camera` doit être déclaré dans `app.json` pour que le scanner QR fonctionne.
+- La **Google Maps API Key** doit être configurée pour que la carte fonctionne sur Android.
 
 ---
 
@@ -498,18 +539,6 @@ eas submit --platform android
 eas update --branch production --message "Fix: description"
 ```
 
-### 8.4 KPIs à surveiller
-
-| KPI | Objectif V1 (3 mois) |
-|---|---|
-| Téléchargements | 1000+ |
-| Rétention J7 | > 30% |
-| Rétention J30 | > 15% |
-| Taux de crash | < 1% |
-| Note moyenne store | > 4.0/5 |
-| Matchs créés/jour | 50+ |
-| Taux conversion premium | > 3% |
-
 ---
 
 ## ANNEXES
@@ -520,6 +549,7 @@ eas update --branch production --message "Fix: description"
 npx expo start              # Développement local
 eas build --platform ios --profile production    # Build iOS
 eas build --platform android --profile preview   # Build Android APK
+eas build --platform android --profile production # Build Android AAB
 eas submit --platform ios   # Soumission iOS
 eas submit --platform android   # Soumission Android
 npx jest                    # Tests
@@ -535,10 +565,24 @@ npx depcheck                # Vérifier dépendances
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé service role (Edge Functions) | OnSpace Cloud Secrets |
 | `SUPABASE_DB_URL` | URL directe PostgreSQL | OnSpace Cloud Secrets |
 
-### Annexe C — Comptes de test
+### Annexe C — Placeholders à remplir avant publication
+
+| Fichier | Placeholder | Description |
+|---|---|---|
+| `app.json` | `YOUR_GOOGLE_MAPS_API_KEY` | Clé Google Maps API (Android) |
+| `app.json` | AdMob IDs (`ca-app-pub-3940256099942544~*`) | Remplacer par IDs de production |
+| `eas.json` | `YOUR_APPLE_ID_EMAIL` | Email du compte Apple Developer |
+| `eas.json` | `YOUR_ASC_APP_ID` | App Store Connect → App → Apple ID (numérique) |
+| `eas.json` | `YOUR_TEAM_ID` | Apple Developer → Membership → Team ID |
+| `eas.json` | `./google-service-account.json` | Clé JSON du service account Google Play |
+| `sentryService.native.ts` | DSN Sentry | Sentry.io → Project Settings → DSN |
+| `.well-known/apple-app-site-association` | `TEAMID` | Apple Team ID |
+| `.well-known/assetlinks.json` | SHA256 fingerprint | Fingerprint du keystore Android |
+
+### Annexe D — Comptes de test
 
 Créer un compte via l'écran de login avec n'importe quel email valide. Le système OTP enverra un code à 4 chiffres. Mot de passe minimum : 6 caractères.
 
 ---
 
-*Document mis à jour le 27 mars 2026 — Ultimate Petanque v1.2.0*
+*Document mis à jour le 27 mars 2026 — Ultimate Petanque v1.2.1*

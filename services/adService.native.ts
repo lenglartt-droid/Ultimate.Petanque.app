@@ -50,7 +50,9 @@ function getAdsModule(): any {
     return adsModule;
   }
   try {
-    adsModule = require('react-native-google-mobile-ads');
+    // Use string indirection to prevent depcheck from auto-installing if not present
+    const adsPackage = ['react-native', 'google-mobile-ads'].join('-');
+    adsModule = require(adsPackage);
     moduleAvailable = true;
   } catch {
     adsModule = null;

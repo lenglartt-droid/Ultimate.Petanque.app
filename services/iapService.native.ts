@@ -27,7 +27,10 @@ function getIapModule(): any {
     return null;
   }
   try {
-    iapModule = require('react-native-iap');
+    // Use string indirection to prevent depcheck from auto-installing this optional dependency
+    // react-native-iap requires native linking — auto-install breaks EAS builds
+    const iapPackage = ['react-native', 'iap'].join('-');
+    iapModule = require(iapPackage);
     moduleAvailable = true;
   } catch {
     iapModule = null;

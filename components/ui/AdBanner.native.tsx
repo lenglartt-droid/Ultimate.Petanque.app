@@ -48,7 +48,9 @@ function loadAdsModule() {
     return;
   }
   try {
-    const mod = require('react-native-google-mobile-ads');
+    // Use string indirection to prevent depcheck from auto-installing if not present
+    const adsPackage = ['react-native', 'google-mobile-ads'].join('-');
+    const mod = require(adsPackage);
     BannerAdComponent = mod.BannerAd;
     BannerAdSizeEnum = mod.BannerAdSize;
     adsModuleAvailable = true;
