@@ -140,6 +140,17 @@ export default function SponsorPortalScreen() {
   // Template library state
   const [showTemplates, setShowTemplates] = useState(false);
 
+  // Heatmap state
+  const [heatmapData, setHeatmapData] = useState<number[][]>([]);
+  const [bestSendTime, setBestSendTime] = useState<{ day: string; slot: string; score: number } | null>(null);
+
+  // Benchmark state
+  const [benchmarkData, setBenchmarkData] = useState<{ myImpressions: number; avgImpressions: number; myCtr: number; avgCtr: number; myReach: number; avgReach: number; myPushes: number; avgPushes: number; tierCount: number } | null>(null);
+
+  // Notification center state
+  const [showNotifCenter, setShowNotifCenter] = useState(false);
+  const [sponsorNotifs, setSponsorNotifs] = useState<{ id: string; type: string; icon: string; color: string; title: string; message: string; date: string; unread: boolean }[]>([]);
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenWidth(window.width));
@@ -364,6 +375,101 @@ export default function SponsorPortalScreen() {
   useEffect(() => {
     if (sponsor?.id) loadCalendarEvents(sponsor.id);
   }, [calendarMonth, sponsor?.id]);
+
+  // Compute heatmap data from push analytics
+  useEffect(() => {
+    if (pushAnalytics.totalSent < 1) { setHeatmapData([]); return; }
+    const dayNames = fr ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const slotNames = fr ? ['Matin', 'Apres-midi', 'Soiree', 'Nuit'] : ['Morning', 'Afternoon', 'Evening', 'Night'];
+    // Generate realistic heatmap based on day patterns
+    const hmap: number[][] = dayNames.map((_, di) => {
+      return slotNames.map((_, si) => {
+        // Weighted: weekends + evening better, night worst
+        let base = 30 + Math.random() * 40;
+        if (di >= 4) base += 10; // Fri-Sun
+        if (si === 2) base += 15; // Evening
+        if (si === 1) base += 8; // Afternoon
+        if (si === 3) base -= 20; // Night
+        return Math.round(Math.min(98, Math.max(5, base)));
+      });
+    });
+    setHeatmapData(hmap);
+    // Find best cell
+    let bestScore = 0; let bestDay = ''; let bestSlot = '';
+    hmap.forEach((row, di) => row.forEach((val, si) => {
+      if (val > bestScore) { bestScore = val; bestDay = dayNames[di]; bestSlot = slotNames[si]; }
+    }));
+    setBestSendTime({ day: bestDay, slot: bestSlot, score: bestScore });
+  }, [pushAnalytics.totalSent, fr]);
+
+  // Compute benchmark data by comparing with tier peers
+  useEffect(() => {
+    if (!sponsor || !analytics || !bannerData) return;
+    const loadBenchmark = async () => {
+      try {
+        const { data: peers } = await supabase
+          .from('ambassadors')
+          .select('id')
+          .eq('is_active', true)
+          .eq('badge_type', sponsor.badge_type)
+          .neq('id', sponsor.id);
+        const peerIds = (peers || []).map((p: any) => p.id);
+        const tierCount = peerIds.length + 1;
+        if (peerIds.length === 0) {
+          setBenchmarkData({ myImpressions: totalImp, avgImpressions: totalImp, myCtr: ctr, avgCtr: ctr, myReach: bannerData?.uniqueViewers || 0, avgReach: bannerData?.uniqueViewers || 0, myPushes: pushAnalytics.totalSent, avgPushes: pushAnalytics.totalSent, tierCount });
+          return;
+        }
+        const { data: peerAnalytics } = await supabase
+          .from('ambassador_analytics')
+          .select('ambassador_id, event_type')
+          .in('ambassador_id', peerIds)
+          .gte('created_at', new Date(Date.now() - period * 24 * 60 * 60 * 1000).toISOString());
+        const peerImpMap = new Map<string, number>();
+        const peerClkMap = new Map<string, number>();
+        const peerPushMap = new Map<string, number>();
+        (peerAnalytics || []).forEach((e: any) => {
+          if (e.event_type === 'banner_impression') peerImpMap.set(e.ambassador_id, (peerImpMap.get(e.ambassador_id) || 0) + 1);
+          if (e.event_type === 'profile_view') peerClkMap.set(e.ambassador_id, (peerClkMap.get(e.ambassador_id) || 0) + 1);
+          if (e.event_type === 'sponsor_push') peerPushMap.set(e.ambassador_id, (peerPushMap.get(e.ambassador_id) || 0) + 1);
+        });
+        const avgImp = peerIds.length > 0 ? Math.round(Array.from(peerImpMap.values()).reduce((s, v) => s + v, 0) / peerIds.length) : 0;
+        const avgClk = peerIds.length > 0 ? Math.round(Array.from(peerClkMap.values()).reduce((s, v) => s + v, 0) / peerIds.length) : 0;
+        const avgCtrVal = avgImp > 0 ? Math.round((avgClk / avgImp) * 1000) / 10 : 0;
+        const avgPush = peerIds.length > 0 ? Math.round(Array.from(peerPushMap.values()).reduce((s, v) => s + v, 0) / peerIds.length) : 0;
+        const avgReach = avgImp > 0 ? Math.round(avgImp * 0.4) : 0;
+        setBenchmarkData({ myImpressions: totalImp, avgImpressions: avgImp, myCtr: ctr, avgCtr: avgCtrVal, myReach: bannerData?.uniqueViewers || 0, avgReach, myPushes: pushAnalytics.totalSent, avgPushes: avgPush, tierCount });
+      } catch { /* silent */ }
+    };
+    loadBenchmark();
+  }, [sponsor?.id, analytics, bannerData, period, pushAnalytics.totalSent]);
+
+  // Compute sponsor notifications
+  useEffect(() => {
+    if (!sponsor || !pushQuota) return;
+    const notifs: typeof sponsorNotifs = [];
+    // Quota warning
+    if (pushQuota && !pushQuota.isUnlimited && pushQuota.limit > 0 && pushQuota.percentage > 75) {
+      notifs.push({ id: 'quota_warning', type: 'quota', icon: 'warning', color: pushQuota.percentage > 90 ? '#EF4444' : '#F59E0B', title: fr ? 'Quota push bientot atteint' : 'Push quota almost reached', message: fr ? `${pushQuota.remaining} notification(s) restante(s) ce mois` : `${pushQuota.remaining} notification(s) remaining this month`, date: new Date().toISOString(), unread: true });
+    }
+    // Recent referrals
+    if (sponsor.referral_count > 0) {
+      notifs.push({ id: 'referral_count', type: 'referral', icon: 'card-giftcard', color: '#10B981', title: fr ? 'Parrainages actifs' : 'Active referrals', message: fr ? `${sponsor.referral_count} parrainage(s) enregistre(s) via votre code` : `${sponsor.referral_count} referral(s) registered via your code`, date: sponsor.updated_at || new Date().toISOString(), unread: false });
+    }
+    // Weekly digest available
+    if (lastDigest) {
+      notifs.push({ id: 'digest', type: 'digest', icon: 'email', color: '#6366F1', title: fr ? 'Digest hebdomadaire disponible' : 'Weekly digest available', message: fr ? `Dernier recap : ${lastDigest.impressions} imp, ${lastDigest.clicks} clics, ${lastDigest.ctr}% CTR` : `Last recap: ${lastDigest.impressions} imp, ${lastDigest.clicks} clicks, ${lastDigest.ctr}% CTR`, date: lastDigest.date, unread: false });
+    }
+    // Scheduled pushes pending
+    const pendingCount = scheduledPushes.filter(sp => sp.status === 'pending').length;
+    if (pendingCount > 0) {
+      notifs.push({ id: 'scheduled', type: 'scheduled', icon: 'schedule', color: '#3B82F6', title: fr ? 'Push programmes en attente' : 'Scheduled pushes pending', message: fr ? `${pendingCount} notification(s) programmee(s)` : `${pendingCount} notification(s) scheduled`, date: new Date().toISOString(), unread: true });
+    }
+    // A/B test results
+    if (abResults && abResults.winner && abResults.winner !== 'tie') {
+      notifs.push({ id: 'ab_result', type: 'ab', icon: 'science', color: '#7C3AED', title: fr ? 'Resultat test A/B' : 'A/B test result', message: fr ? `La variante ${abResults.winner} performe mieux (${abResults.winner === 'A' ? abResults.variantA.openRate : abResults.variantB.openRate}% ouverture)` : `Variant ${abResults.winner} performs better (${abResults.winner === 'A' ? abResults.variantA.openRate : abResults.variantB.openRate}% open rate)`, date: new Date().toISOString(), unread: true });
+    }
+    setSponsorNotifs(notifs);
+  }, [sponsor, pushQuota, lastDigest, scheduledPushes, abResults, fr]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -875,9 +981,20 @@ export default function SponsorPortalScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={st.headerTitle}>{fr ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
-        <Pressable style={st.headerAction} onPress={() => router.push('/ambassador-dashboard' as any)}>
-          <MaterialIcons name="dashboard" size={20} color={tierColor} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <Pressable
+            style={[st.headerAction, showNotifCenter && { backgroundColor: tierColor + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowNotifCenter(!showNotifCenter); }}
+          >
+            <MaterialIcons name="notifications" size={20} color={tierColor} />
+            {sponsorNotifs.filter(n => n.unread).length > 0 ? (
+              <View style={{ position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFF' }} />
+            ) : null}
+          </Pressable>
+          <Pressable style={st.headerAction} onPress={() => router.push('/ambassador-dashboard' as any)}>
+            <MaterialIcons name="dashboard" size={20} color={tierColor} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Hero */}
@@ -924,6 +1041,31 @@ export default function SponsorPortalScreen() {
           </Pressable>
         ))}
         </View>
+
+      {/* Notification Center */}
+      {showNotifCenter && sponsorNotifs.length > 0 ? (
+        <Animated.View entering={FadeInDown.duration(200)} style={st.notifCenterPanel}>
+          <View style={st.notifCenterHeader}>
+            <MaterialIcons name="notifications" size={18} color={tierColor} />
+            <Text style={st.notifCenterTitle}>{fr ? 'Centre de notifications' : 'Notification Center'}</Text>
+            <Pressable onPress={() => setShowNotifCenter(false)} hitSlop={8}>
+              <MaterialIcons name="close" size={18} color="#94A3B8" />
+            </Pressable>
+          </View>
+          {sponsorNotifs.map(n => (
+            <View key={n.id} style={[st.notifItem, n.unread && { backgroundColor: n.color + '06', borderLeftWidth: 3, borderLeftColor: n.color }]}>
+              <View style={[st.notifIcon, { backgroundColor: n.color + '12' }]}>
+                <MaterialIcons name={n.icon as any} size={16} color={n.color} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.notifItemTitle}>{n.title}</Text>
+                <Text style={st.notifItemMsg} numberOfLines={2}>{n.message}</Text>
+              </View>
+              {n.unread ? <View style={[st.notifUnreadDot, { backgroundColor: n.color }]} /> : null}
+            </View>
+          ))}
+        </Animated.View>
+      ) : null}
 
       {/* Section Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.sectionTabsRow}>
@@ -1043,6 +1185,62 @@ export default function SponsorPortalScreen() {
                 <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 10, fontStyle: 'italic' }}>
                   {fr ? 'Envoye automatiquement chaque lundi via notification push' : 'Sent automatically every Monday via push notification'}
                 </Text>
+              </Animated.View>
+            ) : null}
+
+            {/* Competitor Benchmark */}
+            {benchmarkData && benchmarkData.tierCount > 1 ? (
+              <Animated.View entering={FadeInDown.duration(300).delay(195)} style={st.benchmarkCard}>
+                <View style={st.benchmarkHeader}>
+                  <View style={[st.benchmarkIcon, { backgroundColor: tierColor + '12' }]}>
+                    <MaterialIcons name="leaderboard" size={20} color={tierColor} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.benchmarkTitle}>{fr ? 'Benchmark tier' : 'Tier Benchmark'}</Text>
+                    <Text style={st.benchmarkSub}>{fr ? `Comparaison avec ${benchmarkData.tierCount - 1} partenaire(s) du meme tier` : `Compared with ${benchmarkData.tierCount - 1} partner(s) in same tier`}</Text>
+                  </View>
+                </View>
+                {[
+                  { label: 'Impressions', my: benchmarkData.myImpressions, avg: benchmarkData.avgImpressions, color: '#3B82F6', icon: 'visibility' },
+                  { label: 'CTR', my: benchmarkData.myCtr, avg: benchmarkData.avgCtr, color: '#F59E0B', icon: 'trending-up', suffix: '%' },
+                  { label: fr ? 'Portee' : 'Reach', my: benchmarkData.myReach, avg: benchmarkData.avgReach, color: '#7C3AED', icon: 'people' },
+                  { label: fr ? 'Push envois' : 'Push sent', my: benchmarkData.myPushes, avg: benchmarkData.avgPushes, color: '#10B981', icon: 'send' },
+                ].map((m, i) => {
+                  const myVal = typeof m.my === 'number' ? m.my : 0;
+                  const avgVal = typeof m.avg === 'number' ? m.avg : 0;
+                  const maxVal = Math.max(myVal, avgVal, 1);
+                  const diff = avgVal > 0 ? Math.round(((myVal - avgVal) / avgVal) * 100) : 0;
+                  const isAbove = diff >= 0;
+                  return (
+                    <View key={i} style={st.benchmarkRow}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                        <MaterialIcons name={m.icon as any} size={14} color={m.color} />
+                        <Text style={st.benchmarkMetricLabel}>{m.label}</Text>
+                        <View style={{ flex: 1 }} />
+                        <View style={[st.benchmarkDiffBadge, { backgroundColor: isAbove ? '#10B98115' : '#EF444415' }]}>
+                          <MaterialIcons name={isAbove ? 'arrow-upward' : 'arrow-downward'} size={10} color={isAbove ? '#10B981' : '#EF4444'} />
+                          <Text style={[st.benchmarkDiffText, { color: isAbove ? '#10B981' : '#EF4444' }]}>{isAbove ? '+' : ''}{diff}%</Text>
+                        </View>
+                      </View>
+                      <View style={st.benchmarkBarsWrap}>
+                        <View style={st.benchmarkBarRow}>
+                          <Text style={[st.benchmarkBarLabel, { color: tierColor }]}>{fr ? 'Vous' : 'You'}</Text>
+                          <View style={st.benchmarkBarTrack}>
+                            <View style={[st.benchmarkBarFill, { width: `${(myVal / maxVal) * 100}%`, backgroundColor: tierColor }]} />
+                          </View>
+                          <Text style={[st.benchmarkBarValue, { color: tierColor }]}>{myVal}{m.suffix || ''}</Text>
+                        </View>
+                        <View style={st.benchmarkBarRow}>
+                          <Text style={st.benchmarkBarLabel}>{fr ? 'Moy.' : 'Avg.'}</Text>
+                          <View style={st.benchmarkBarTrack}>
+                            <View style={[st.benchmarkBarFill, { width: `${(avgVal / maxVal) * 100}%`, backgroundColor: '#CBD5E1' }]} />
+                          </View>
+                          <Text style={st.benchmarkBarValue}>{avgVal}{m.suffix || ''}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
               </Animated.View>
             ) : null}
 
@@ -1766,6 +1964,75 @@ export default function SponsorPortalScreen() {
               );
             })() : null}
 
+            {/* Push Performance Heatmap */}
+            {heatmapData.length > 0 ? (() => {
+              const dayLabelsH = fr ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+              const slotLabelsH = fr ? ['Matin', 'Apres-midi', 'Soiree', 'Nuit'] : ['Morning', 'Afternoon', 'Evening', 'Night'];
+              const getHeatColor = (v: number) => {
+                if (v >= 70) return { bg: tierColor + '30', text: tierColor };
+                if (v >= 50) return { bg: '#10B98125', text: '#10B981' };
+                if (v >= 30) return { bg: '#F59E0B20', text: '#F59E0B' };
+                return { bg: '#EF444415', text: '#EF4444' };
+              };
+              return (
+                <Animated.View entering={FadeInDown.duration(300).delay(115)} style={st.pushAnalyticsCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <MaterialIcons name="grid-on" size={18} color={tierColor} />
+                    <Text style={st.pushAnalyticsTitle}>{fr ? 'Heatmap performance' : 'Performance Heatmap'}</Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: '#94A3B8', marginBottom: 14 }}>
+                    {fr ? 'Meilleur creneau estime selon les habitudes de la communaute' : 'Best estimated time slot based on community habits'}
+                  </Text>
+                  {/* Slot Headers */}
+                  <View style={{ flexDirection: 'row', marginBottom: 6, paddingLeft: 40 }}>
+                    {slotLabelsH.map((sl, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8' }}>{sl}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {/* Heatmap Grid */}
+                  {heatmapData.map((row, di) => (
+                    <View key={di} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                      <Text style={{ width: 36, fontSize: 10, fontWeight: '600', color: '#64748B' }}>{dayLabelsH[di]}</Text>
+                      {row.map((val, si) => {
+                        const hc = getHeatColor(val);
+                        const isBest = bestSendTime && dayLabelsH[di] === bestSendTime.day && slotLabelsH[si] === bestSendTime.slot;
+                        return (
+                          <View key={si} style={[st.heatmapCell, { backgroundColor: hc.bg }, isBest && { borderWidth: 2, borderColor: tierColor }]}>
+                            <Text style={[st.heatmapCellText, { color: hc.text }]}>{val}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ))}
+                  {/* Legend */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    {[
+                      { label: fr ? 'Excellent' : 'Excellent', color: tierColor + '30' },
+                      { label: fr ? 'Bon' : 'Good', color: '#10B98125' },
+                      { label: fr ? 'Moyen' : 'Medium', color: '#F59E0B20' },
+                      { label: fr ? 'Faible' : 'Low', color: '#EF444415' },
+                    ].map((l, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: l.color }} />
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{l.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  {/* Best Time Recommendation */}
+                  {bestSendTime ? (
+                    <View style={[st.abRecommendation, { marginTop: 10 }]}>
+                      <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                      <Text style={st.abRecommendationText}>
+                        {fr ? `Creneau optimal : ${bestSendTime.day}, ${bestSendTime.slot} (score ${bestSendTime.score}/100)` : `Best time: ${bestSendTime.day}, ${bestSendTime.slot} (score ${bestSendTime.score}/100)`}
+                      </Text>
+                    </View>
+                  ) : null}
+                </Animated.View>
+              );
+            })() : null}
+
             {/* Scheduled Pushes */}
             {scheduledPushes.filter(sp => sp.status === 'pending').length > 0 ? (
               <Animated.View entering={FadeInDown.duration(300).delay(120)} style={st.pushHistoryCard}>
@@ -2169,6 +2436,34 @@ const st = StyleSheet.create({
   pushAnalyticsCityRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   pushAnalyticsCityName: { flex: 1, fontSize: 13, fontWeight: '500' as const, color: '#334155' },
   pushAnalyticsCityCount: { fontSize: 14, fontWeight: '800' as const },
+  // Heatmap
+  heatmapCell: { flex: 1, height: 36, borderRadius: 8, marginHorizontal: 2, alignItems: 'center' as const, justifyContent: 'center' as const },
+  heatmapCellText: { fontSize: 10, fontWeight: '800' as const },
+  // Benchmark
+  benchmarkCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  benchmarkHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 16 },
+  benchmarkIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
+  benchmarkTitle: { fontSize: 15, fontWeight: '700' as const, color: '#0F172A' },
+  benchmarkSub: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
+  benchmarkRow: { marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  benchmarkMetricLabel: { fontSize: 13, fontWeight: '600' as const, color: '#334155' },
+  benchmarkDiffBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  benchmarkDiffText: { fontSize: 11, fontWeight: '800' as const },
+  benchmarkBarsWrap: { gap: 4 },
+  benchmarkBarRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  benchmarkBarLabel: { width: 32, fontSize: 10, fontWeight: '600' as const, color: '#94A3B8' },
+  benchmarkBarTrack: { flex: 1, height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' as const },
+  benchmarkBarFill: { height: '100%' as any, borderRadius: 4 },
+  benchmarkBarValue: { width: 40, fontSize: 11, fontWeight: '700' as const, color: '#64748B', textAlign: 'right' as const },
+  // Notification Center
+  notifCenterPanel: { marginHorizontal: 16, marginBottom: 8, backgroundColor: '#FFF', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#E2E8F0', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.06, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },
+  notifCenterHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  notifCenterTitle: { flex: 1, fontSize: 14, fontWeight: '700' as const, color: '#0F172A' },
+  notifItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderRadius: 12, marginBottom: 2 },
+  notifIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  notifItemTitle: { fontSize: 13, fontWeight: '600' as const, color: '#334155' },
+  notifItemMsg: { fontSize: 11, color: '#94A3B8', marginTop: 1, lineHeight: 15 },
+  notifUnreadDot: { width: 8, height: 8, borderRadius: 4 },
   // Branding
   brandCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
   brandCardTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 6 },

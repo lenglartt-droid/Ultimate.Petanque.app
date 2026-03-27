@@ -33,7 +33,7 @@ import { useApp } from '@/contexts/AppContext';
 import { Club, Terrain } from '@/services/mockData';
 import { getUnreadShareNotificationCount } from '@/services/shareService';
 import { getPendingShareRequestCount } from '@/services/matchShareService';
-import { isUserAmbassador } from '@/services/ambassadorService';
+import { isUserAmbassador, isUserSponsor } from '@/services/ambassadorService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
@@ -130,6 +130,7 @@ export default function ProfileScreen() {
   const [pendingMatchInviteCount, setPendingMatchInviteCount] = useState(0);
   const [pendingWitnessCount, setPendingWitnessCount] = useState(0);
   const [isAmbassador, setIsAmbassador] = useState(false);
+  const [isSponsor, setIsSponsor] = useState(false);
   
   // Notification preferences
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
@@ -205,10 +206,11 @@ export default function ProfileScreen() {
     saveNotificationPreferences(updated).catch(() => {});
   };
 
-  // Check ambassador status
+  // Check ambassador & sponsor status
   useEffect(() => {
     if (!user?.id) return;
     isUserAmbassador(user.id).then(setIsAmbassador);
+    isUserSponsor(user.id).then(setIsSponsor);
   }, [user?.id]);
 
   // Load federation card URL
@@ -1751,6 +1753,16 @@ export default function ProfileScreen() {
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
+              {isSponsor ? (
+                <>
+                  <View style={styles.compactMenuDivider} />
+                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/sponsor-portal' as any); }}>
+                    <View style={[styles.compactMenuIcon, { backgroundColor: '#D4A017' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#D4A017" /></View>
+                    <Text style={[styles.compactMenuText, { color: '#D4A017', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color="#D4A017" />
+                  </Pressable>
+                </>
+              ) : null}
               <View style={styles.compactMenuDivider} />
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/trust-score' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="verified-user" size={16} color="#3B82F6" /></View>

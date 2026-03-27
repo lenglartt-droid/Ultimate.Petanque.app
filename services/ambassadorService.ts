@@ -41,6 +41,40 @@ let cachedAmbassadorUserIds: Set<string> | null = null;
 let lastFetchTime = 0;
 const CACHE_TTL = 60000; // 1 minute
 
+/** Fetch only true ambassadors (excludes sponsors/partners) */
+export async function fetchAmbassadorsOnly(): Promise<{ ambassadors: Ambassador[]; error: string | null }> {
+  const { ambassadors, error } = await fetchAmbassadors();
+  if (error) return { ambassadors: [], error };
+  const filtered = ambassadors.filter(a => a.badgeType === 'ambassador' || !['gold_sponsor', 'sponsor', 'partner'].includes(a.badgeType));
+  return { ambassadors: filtered, error: null };
+}
+
+/** Fetch only sponsors/partners (excludes pure ambassadors) */
+export async function fetchSponsorsOnly(): Promise<{ ambassadors: Ambassador[]; error: string | null }> {
+  const { ambassadors, error } = await fetchAmbassadors();
+  if (error) return { ambassadors: [], error };
+  const filtered = ambassadors.filter(a => ['gold_sponsor', 'sponsor', 'partner'].includes(a.badgeType));
+  return { ambassadors: filtered, error: null };
+}
+
+/** Check if a user is a sponsor/partner */
+export async function isUserSponsor(userId: string): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('ambassadors')
+      .select('id, badge_type')
+      .eq('user_id', userId)
+      .eq('is_active', true)
+      .in('badge_type', ['gold_sponsor', 'sponsor', 'partner'])
+      .limit(1);
+    if (error) return false;
+    return (data && data.length > 0) || false;
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; error: string | null }> {
   const now = Date.now();
   if (cachedAmbassadors && now - lastFetchTime < CACHE_TTL) {
