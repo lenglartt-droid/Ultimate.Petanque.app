@@ -1,9 +1,12 @@
 /**
- * Sentry Crash Reporting Service — Web no-op stub
- * Prevents the web bundler from resolving @sentry/react-native
+ * Sentry Crash Reporting Service — Web stub
+ * On web, Sentry is not initialized (no native module).
+ * All calls are no-ops or dev-only console logs.
  */
 
-export async function initSentry(): Promise<void> {}
+export async function initSentry(): Promise<void> {
+  if (__DEV__) console.log('[Sentry-web] Skipped — native module not available on web');
+}
 
 export function captureException(error: unknown, _context?: Record<string, any>): void {
   if (__DEV__) console.error('[Sentry-web] Exception:', error);

@@ -1,5 +1,12 @@
 // PetanqueScore Configuration
 
+// ============================================
+// SENTRY - Crash Reporting
+// ============================================
+// Replace with your real DSN from: https://sentry.io → Settings → Client Keys (DSN)
+// Format: https://XXXX@oXXXXX.ingest.sentry.io/XXXXXXX
+export const SENTRY_DSN = 'YOUR_SENTRY_DSN';
+
 // Tournament Levels
 export const tournamentLevels = [
   'Loisir / Amical',

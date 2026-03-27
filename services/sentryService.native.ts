@@ -5,6 +5,11 @@
  * Wraps @sentry/react-native to provide a consistent API
  * and graceful fallback when the SDK is unavailable.
  *
+ * PRODUCTION SETUP:
+ *   1. Replace SENTRY_DSN below with your real DSN from https://sentry.io → Settings → Client Keys (DSN)
+ *   2. Replace organization/project in app.json → @sentry/react-native/expo plugin
+ *   3. (Optional) Set SENTRY_AUTH_TOKEN env var for source map uploads during EAS builds
+ *
  * Usage:
  *   import { captureException, captureMessage, addBreadcrumb, setUser } from '@/services/sentryService';
  *   captureException(error);
@@ -13,29 +18,32 @@
  *   setUser({ id: userId, email });
  */
 
-let Sentry: any = null;
+import * as Sentry from '@sentry/react-native';
+import { SENTRY_DSN } from '@/constants/config';
+
 let _initialized = false;
 
 /**
  * Initialize Sentry. Call once at app startup (in _layout.tsx).
- * If @sentry/react-native is not installed, logs a warning and continues.
+ * Requires @sentry/react-native plugin in app.json and a valid DSN.
  */
 export async function initSentry(): Promise<void> {
   if (_initialized) return;
   try {
-    // Use string indirection to prevent depcheck from auto-installing this optional dependency
-    // @sentry/react-native requires a native plugin config — auto-install breaks EAS builds
-    const sentryPackage = ['@sentry', 'react-native'].join('/');
-    Sentry = await import(/* webpackIgnore: true */ sentryPackage);
+    if (!SENTRY_DSN || SENTRY_DSN === 'YOUR_SENTRY_DSN') {
+      console.log('[Sentry] No DSN configured, crash reporting disabled. Set SENTRY_DSN in constants/config.ts');
+      return;
+    }
     Sentry.init({
-      dsn: 'YOUR_SENTRY_DSN — Sentry.io > Project Settings > Client Keys (DSN) > Copy DSN string (format: https://xxxxx@o00000.ingest.sentry.io/00000)',
+      dsn: SENTRY_DSN,
       enableAutoSessionTracking: true,
       sessionTrackingIntervalMillis: 30000,
-      tracesSampleRate: 0.2,
+      tracesSampleRate: __DEV__ ? 1.0 : 0.2,
+      profilesSampleRate: __DEV__ ? 0 : 0.1,
       enableNative: true,
       debug: __DEV__,
-      beforeSend(event: any) {
-        // Strip sensitive data
+      environment: __DEV__ ? 'development' : 'production',
+      beforeSend(event) {
         if (event.user) {
           delete event.user.ip_address;
         }
@@ -45,9 +53,7 @@ export async function initSentry(): Promise<void> {
     _initialized = true;
     console.log('[Sentry] Initialized successfully');
   } catch (e) {
-    // SDK not installed — silent degradation
-    console.log('[Sentry] SDK not available, crash reporting disabled. Install @sentry/react-native to enable.');
-    Sentry = null;
+    console.log('[Sentry] Initialization failed:', e);
   }
 }
 
@@ -55,9 +61,9 @@ export async function initSentry(): Promise<void> {
  * Capture an exception (error object).
  */
 export function captureException(error: unknown, context?: Record<string, any>): void {
-  if (Sentry) {
+  if (_initialized) {
     if (context) {
-      Sentry.withScope((scope: any) => {
+      Sentry.withScope((scope) => {
         Object.entries(context).forEach(([key, value]) => {
           scope.setExtra(key, value);
         });
@@ -67,7 +73,6 @@ export function captureException(error: unknown, context?: Record<string, any>):
       Sentry.captureException(error);
     }
   }
-  // Always log to console in dev
   if (__DEV__) {
     console.error('[Sentry] Exception:', error);
   }
@@ -80,7 +85,7 @@ export function captureMessage(
   message: string,
   level: 'fatal' | 'error' | 'warning' | 'info' | 'debug' = 'info'
 ): void {
-  if (Sentry) {
+  if (_initialized) {
     Sentry.captureMessage(message, level);
   }
   if (__DEV__) {
@@ -97,7 +102,7 @@ export function addBreadcrumb(breadcrumb: {
   level?: 'fatal' | 'error' | 'warning' | 'info' | 'debug';
   data?: Record<string, any>;
 }): void {
-  if (Sentry) {
+  if (_initialized) {
     Sentry.addBreadcrumb(breadcrumb);
   }
 }
@@ -107,7 +112,7 @@ export function addBreadcrumb(breadcrumb: {
  * Call after login.
  */
 export function setUser(user: { id: string; email?: string; username?: string } | null): void {
-  if (Sentry) {
+  if (_initialized) {
     Sentry.setUser(user);
   }
 }
@@ -116,7 +121,7 @@ export function setUser(user: { id: string; email?: string; username?: string } 
  * Set a tag for filtering in the Sentry dashboard.
  */
 export function setTag(key: string, value: string): void {
-  if (Sentry) {
+  if (_initialized) {
     Sentry.setTag(key, value);
   }
 }
@@ -126,7 +131,7 @@ export function setTag(key: string, value: string): void {
  * Falls back to the component itself if Sentry is unavailable.
  */
 export function wrapWithSentry<T>(component: T): T {
-  if (Sentry?.wrap) {
+  if (_initialized) {
     return Sentry.wrap(component);
   }
   return component;
@@ -136,7 +141,7 @@ export function wrapWithSentry<T>(component: T): T {
  * Navigation integration — call when route changes.
  */
 export function setRoute(routeName: string): void {
-  if (Sentry) {
+  if (_initialized) {
     addBreadcrumb({
       category: 'navigation',
       message: `Navigate to ${routeName}`,
