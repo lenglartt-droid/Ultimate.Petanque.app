@@ -6,7 +6,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -257,7 +257,7 @@ export default function AmbassadorProgramScreen() {
 
                 {/* Expanded Content */}
                 {isExpanded ? (
-                  <Animated.View entering={FadeInDown.duration(250)} exiting={FadeOutUp.duration(150)} style={styles.levelExpanded}>
+                  <Animated.View entering={FadeInDown.duration(250)} style={styles.levelExpanded}>
                     {/* Criteria */}
                     <View style={styles.levelSection}>
                       <View style={styles.levelSectionHeader}>
