@@ -270,19 +270,19 @@ export default function PartnersScreen() {
                 }}
               >
                 {/* Logo with brand color ring */}
-                <View style={{ position: 'relative' as const, marginBottom: 8 }}>
+                <View style={{ position: 'relative' as const, marginBottom: 10 }}>
                   {partner.photo ? (
-                    <View style={[{ borderWidth: 2.5, borderColor: brandCol + '40', borderRadius: isGold ? 20 : 18 }]}>
+                    <View style={[{ borderWidth: 3, borderColor: brandCol + '50', borderRadius: isGold ? 28 : 24, ...Platform.select({ ios: { shadowColor: brandCol, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }, android: { elevation: 4 }, default: {} }) }]}>
                       <Image source={{ uri: partner.photo }} style={[styles.partnerLogo, isGold && styles.partnerLogoGold, { marginBottom: 0 }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                     </View>
                   ) : (
-                    <LinearGradient colors={[brandCol, brandCol + 'CC']} style={[styles.partnerLogoFallback, isGold && styles.partnerLogoGold, { marginBottom: 0 }]}>
-                      <MaterialIcons name={cfg.icon} size={isGold ? 28 : 22} color="#FFF" />
+                    <LinearGradient colors={[brandCol, brandCol + 'CC']} style={[styles.partnerLogoFallback, isGold && styles.partnerLogoGold, { marginBottom: 0, ...Platform.select({ ios: { shadowColor: brandCol, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8 }, android: { elevation: 4 }, default: {} }) }]}>
+                      <MaterialIcons name={cfg.icon} size={isGold ? 36 : 28} color="#FFF" />
                     </LinearGradient>
                   )}
                   {/* Tier icon overlay */}
-                  <View style={{ position: 'absolute', bottom: -4, right: -4, width: 22, height: 22, borderRadius: 11, backgroundColor: cfg.color, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#FFF' }}>
-                    <MaterialIcons name={cfg.icon} size={10} color="#FFF" />
+                  <View style={{ position: 'absolute', bottom: -4, right: -4, width: 26, height: 26, borderRadius: 13, backgroundColor: cfg.color, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#FFF' }}>
+                    <MaterialIcons name={cfg.icon} size={12} color="#FFF" />
                   </View>
                 </View>
                 <Text style={[styles.partnerSlotTitle, { color: theme.textPrimary, fontWeight: '700', fontSize: 14 }]} numberOfLines={1}>
@@ -407,14 +407,7 @@ export default function PartnersScreen() {
             >
               <MaterialIcons name="dashboard" size={20} color="#D4A017" />
             </Pressable>
-          ) : null}
-          <Pressable
-            style={[styles.backBtn, compareMode && { backgroundColor: '#7C3AED15' }]}
-            onPress={() => { Haptics.selectionAsync(); setCompareMode(!compareMode); if (compareMode) setCompareSelection([]); }}
-            hitSlop={8}
-          >
-            <MaterialIcons name="compare-arrows" size={20} color={compareMode ? '#7C3AED' : theme.textMuted} />
-          </Pressable>
+          ) : <View style={{ width: 40 }} />}
         </View>
       </View>
 
@@ -641,74 +634,7 @@ export default function PartnersScreen() {
         ) : null}
       </ScrollView>
 
-      {/* Comparison Bar */}
-      {compareMode ? (
-        <Animated.View entering={FadeInDown.duration(200)} style={styles.compareBar}>
-          {compareSelection.length < 2 ? (
-            <View style={styles.compareBarContent}>
-              <MaterialIcons name="compare-arrows" size={18} color="#7C3AED" />
-              <Text style={styles.compareBarText}>
-                {compareSelection.length === 0
-                  ? (language === 'fr' ? 'Selectionnez 2 partenaires' : 'Select 2 partners')
-                  : (language === 'fr' ? '1 selectionne, choisissez le 2eme' : '1 selected, choose 2nd')}
-              </Text>
-              <Pressable style={styles.compareBarClose} onPress={() => { setCompareMode(false); setCompareSelection([]); }}>
-                <MaterialIcons name="close" size={16} color="#94A3B8" />
-              </Pressable>
-            </View>
-          ) : (() => {
-            const p1 = partners.find(p => p.id === compareSelection[0]);
-            const p2 = partners.find(p => p.id === compareSelection[1]);
-            if (!p1 || !p2) return null;
-            const p1Imp = p1.analytics?.bannerImpressions || 0;
-            const p1Clk = (p1.analytics?.profileViews || 0) + (p1.analytics?.socialClicks || 0);
-            const p1Ctr = p1Imp > 0 ? Math.round((p1Clk / p1Imp) * 1000) / 10 : 0;
-            const p2Imp = p2.analytics?.bannerImpressions || 0;
-            const p2Clk = (p2.analytics?.profileViews || 0) + (p2.analytics?.socialClicks || 0);
-            const p2Ctr = p2Imp > 0 ? Math.round((p2Clk / p2Imp) * 1000) / 10 : 0;
-            return (
-              <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-                <View style={styles.compareHeader}>
-                  <Text style={styles.compareHeaderText}>{language === 'fr' ? 'Comparaison' : 'Comparison'}</Text>
-                  <Pressable onPress={() => { setCompareMode(false); setCompareSelection([]); }} hitSlop={8}>
-                    <MaterialIcons name="close" size={18} color="#94A3B8" />
-                  </Pressable>
-                </View>
-                <View style={styles.compareRow}>
-                  <View style={styles.compareCell}><Text style={styles.compareName} numberOfLines={1}>{p1.displayName}</Text></View>
-                  <View style={styles.compareLabelCell}><Text style={styles.compareLabelText}> </Text></View>
-                  <View style={styles.compareCell}><Text style={styles.compareName} numberOfLines={1}>{p2.displayName}</Text></View>
-                </View>
-                {[
-                  { label: 'Impressions', v1: p1Imp, v2: p2Imp, color: '#3B82F6' },
-                  { label: language === 'fr' ? 'Clics' : 'Clicks', v1: p1Clk, v2: p2Clk, color: '#10B981' },
-                  { label: 'CTR', v1: p1Ctr, v2: p2Ctr, color: '#F59E0B', suffix: '%' },
-                  { label: language === 'fr' ? 'Reseaux' : 'Social', v1: p1.analytics?.socialClicks || 0, v2: p2.analytics?.socialClicks || 0, color: '#7C3AED' },
-                ].map((m, i) => {
-                  const maxV = Math.max(m.v1, m.v2, 1);
-                  return (
-                    <View key={i} style={styles.compareRow}>
-                      <View style={styles.compareCell}>
-                        <Text style={[styles.compareValue, m.v1 >= m.v2 && { color: m.color, fontWeight: '900' as const }]}>{m.v1}{m.suffix || ''}</Text>
-                        <View style={styles.compareBarTrack}><View style={[styles.compareBarFill, { width: `${(m.v1 / maxV) * 100}%`, backgroundColor: m.v1 >= m.v2 ? m.color : '#CBD5E1' }]} /></View>
-                      </View>
-                      <View style={styles.compareLabelCell}><Text style={styles.compareLabelText}>{m.label}</Text></View>
-                      <View style={styles.compareCell}>
-                        <Text style={[styles.compareValue, m.v2 >= m.v1 && { color: m.color, fontWeight: '900' as const }]}>{m.v2}{m.suffix || ''}</Text>
-                        <View style={styles.compareBarTrack}><View style={[styles.compareBarFill, { width: `${(m.v2 / maxV) * 100}%`, backgroundColor: m.v2 >= m.v1 ? m.color : '#CBD5E1' }]} /></View>
-                      </View>
-                    </View>
-                  );
-                })}
-                <Pressable style={styles.compareResetBtn} onPress={() => setCompareSelection([])}>
-                  <MaterialIcons name="refresh" size={14} color="#7C3AED" />
-                  <Text style={styles.compareResetText}>{language === 'fr' ? 'Reinitialiser' : 'Reset'}</Text>
-                </Pressable>
-              </ScrollView>
-            );
-          })()}
-        </Animated.View>
-      ) : null}
+
     </SafeAreaView>
   );
 }
@@ -953,13 +879,13 @@ const styles = StyleSheet.create({
   partnerSlotsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
   partnerSlotsGridGold: {},
   partnerSlotCard: {
-    flex: 1, minWidth: 140,
+    flex: 1, minWidth: 160,
     backgroundColor: theme.surface, borderRadius: 16,
     padding: 16, alignItems: 'center',
     borderWidth: 1.5, borderStyle: 'dashed' as any,
     ...theme.shadows.card,
   },
-  partnerSlotCardGold: { minWidth: 150, paddingVertical: 20 },
+  partnerSlotCardGold: { minWidth: 180, paddingVertical: 24 },
   partnerSlotCardModern: {
     borderStyle: 'solid' as any,
     borderTopWidth: 3.5,
@@ -977,9 +903,9 @@ const styles = StyleSheet.create({
   },
   partnerSlotTitle: { fontSize: 13, fontWeight: '600', color: theme.textSecondary, marginBottom: 2 },
   partnerSlotCategory: { fontSize: 11, color: theme.textMuted, marginBottom: 12 },
-  partnerLogo: { width: 56, height: 56, borderRadius: 16, overflow: 'hidden' as const, marginBottom: 10 },
-  partnerLogoGold: { width: 64, height: 64, borderRadius: 18 },
-  partnerLogoFallback: { width: 56, height: 56, borderRadius: 16, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 10 },
+  partnerLogo: { width: 80, height: 80, borderRadius: 22, overflow: 'hidden' as const, marginBottom: 10 },
+  partnerLogoGold: { width: 96, height: 96, borderRadius: 26 },
+  partnerLogoFallback: { width: 80, height: 80, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 10 },
   partnerTierBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, marginTop: 4, marginBottom: 6 },
   partnerTierBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.5 },
   partnerStatsRow: { flexDirection: 'row' as const, gap: 8, marginBottom: 8 },
