@@ -125,6 +125,36 @@ export default function PrivacyPolicyScreen() {
       content: t('privacy', 'childrenContent'),
     },
     {
+      icon: 'star',
+      color: '#F59E0B',
+      title: t('privacyExtended', 'ambassadorProgramTitle'),
+      content: t('privacyExtended', 'ambassadorProgramContent'),
+    },
+    {
+      icon: 'handshake',
+      color: '#7C3AED',
+      title: t('privacyExtended', 'partnerProgramTitle'),
+      content: t('privacyExtended', 'partnerProgramContent'),
+    },
+    {
+      icon: 'verified-user',
+      color: '#10B981',
+      title: t('privacyExtended', 'trustScoreTitle'),
+      content: t('privacyExtended', 'trustScoreContent'),
+    },
+    {
+      icon: 'military-tech',
+      color: '#D97706',
+      title: t('privacyExtended', 'badgesGamificationTitle'),
+      content: t('privacyExtended', 'badgesGamificationContent'),
+    },
+    {
+      icon: 'event-available',
+      color: theme.carreauColor,
+      title: t('privacyExtended', 'sponsoredEventsTitle'),
+      content: t('privacyExtended', 'sponsoredEventsContent'),
+    },
+    {
       icon: 'update',
       color: theme.carreauColor,
       title: t('privacy', 'changesTitle'),

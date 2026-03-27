@@ -103,8 +103,8 @@ export default function CreatorNoteScreen() {
             <MaterialIcons name="favorite" size={16} color="#F59E0B" />
             <Text style={{ flex: 1, fontSize: 13, color: '#92400E', lineHeight: 19, fontStyle: 'italic' }}>
               {language === 'fr'
-                ? 'Aucun investisseur, aucune startup — juste un joueur qui croit en vous.'
-                : 'No investors, no startup — just a player who believes in you.'}
+                ? '12 millions de joueurs de petanque sur la planete. Rencontrons nous !'
+                : '12 million petanque players on the planet. Let us meet!'}
             </Text>
           </View>
         </Animated.View>
@@ -148,9 +148,14 @@ export default function CreatorNoteScreen() {
             { icon: 'map', color: '#8B5CF6', label: t('creatorNote', 'featureMap') },
             { icon: 'event', color: theme.warning, label: t('creatorNote', 'featureMeetups') },
             { icon: 'leaderboard', color: '#D97706', label: t('creatorNote', 'featureLeaderboard') },
-            { icon: 'link', color: '#6366F1', label: t('creatorNote', 'featureDeepLinking') },
-            { icon: 'cached', color: theme.tirColor, label: t('creatorNote', 'featureCaching') },
+            { icon: 'verified-user', color: '#10B981', label: t('creatorNote', 'featureTrustScore') },
+            { icon: 'military-tech', color: '#F59E0B', label: t('creatorNote', 'featureBadges') },
+            { icon: 'campaign', color: '#EF4444', label: t('creatorNote', 'featureAmbassador') },
+            { icon: 'handshake', color: '#7C3AED', label: t('creatorNote', 'featurePartner') },
+            { icon: 'notifications-active', color: '#6366F1', label: t('creatorNote', 'featurePush') },
             { icon: 'share', color: theme.primary, label: t('creatorNote', 'featureSharing') },
+            { icon: 'qr-code-scanner', color: '#0EA5E9', label: t('creatorNote', 'featureDeepLinking') },
+            { icon: 'cached', color: theme.tirColor, label: t('creatorNote', 'featureCaching') },
           ].map((f, i) => (
             <View key={i} style={styles.featureRow}>
               <View style={[styles.featureIcon, { backgroundColor: f.color + '12' }]}>
