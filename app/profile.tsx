@@ -1732,43 +1732,48 @@ export default function ProfileScreen() {
 
             {expandedSections.community ? (
             <View style={styles.compactMenuGroup}>
-              {isAmbassador ? (
-                <>
-                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassador-dashboard' as any); }}>
-                    <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#7C3AED" /></View>
-                    <Text style={[styles.compactMenuText, { color: '#7C3AED', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color="#7C3AED" />
-                  </Pressable>
-                  <View style={styles.compactMenuDivider} />
-                </>
-              ) : null}
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
-                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#FFD700' + '15' }]}><MaterialIcons name="handshake" size={16} color="#FFD700" /></View>
-                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              {isSponsor ? (
-                <>
-                  <View style={styles.compactMenuDivider} />
-                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/sponsor-portal' as any); }}>
-                    <View style={[styles.compactMenuIcon, { backgroundColor: '#D4A017' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#D4A017" /></View>
-                    <Text style={[styles.compactMenuText, { color: '#D4A017', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color="#D4A017" />
-                  </Pressable>
-                </>
-              ) : null}
-              <View style={styles.compactMenuDivider} />
+              {/* 1. Voir mon score de confiance */}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/trust-score' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="verified-user" size={16} color="#3B82F6" /></View>
                 <Text style={styles.compactMenuText}>{(extraTranslations.trustScore?.viewTrustScore as any)?.[language] || 'View my trust score'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
+              <View style={styles.compactMenuDivider} />
+              {/* 2. Nos Ambassadeurs */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              {/* 3. Portail Ambassadeur (si ambassadeur) */}
+              {isAmbassador ? (
+                <>
+                  <View style={styles.compactMenuDivider} />
+                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassador-dashboard' as any); }}>
+                    <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#7C3AED" /></View>
+                    <Text style={[styles.compactMenuText, { color: '#7C3AED', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color="#7C3AED" />
+                  </Pressable>
+                </>
+              ) : null}
+              <View style={styles.compactMenuDivider} />
+              {/* 4. Nos Partenaires */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#FFD700' + '15' }]}><MaterialIcons name="handshake" size={16} color="#FFD700" /></View>
+                <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Partenaires' : 'Our Partners'}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              {/* 5. Portail Partenaires (si sponsor) */}
+              {isSponsor ? (
+                <>
+                  <View style={styles.compactMenuDivider} />
+                  <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/sponsor-portal' as any); }}>
+                    <View style={[styles.compactMenuIcon, { backgroundColor: '#D4A017' + '15' }]}><MaterialIcons name="dashboard" size={16} color="#D4A017" /></View>
+                    <Text style={[styles.compactMenuText, { color: '#D4A017', fontWeight: '700' }]}>{language === 'fr' ? 'Portail Partenaires' : 'Partner Portal'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color="#D4A017" />
+                  </Pressable>
+                </>
+              ) : null}
             </View>
 
             ) : null}

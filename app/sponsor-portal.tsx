@@ -1241,13 +1241,13 @@ export default function SponsorPortalScreen() {
           <Pressable style={st.backBtn} onPress={() => router.back()}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
-          <Text style={st.headerTitle}>{fr ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
+          <Text style={st.headerTitle}>{fr ? 'Portail Partenaires' : 'Partner Portal'}</Text>
           <View style={{ width: 40 }} />
         </View>
         <View style={st.loadingWrap}>
           <MaterialIcons name="lock" size={48} color={theme.textMuted} />
           <Text style={st.emptyText}>
-            {fr ? "Vous n'etes pas enregistre comme sponsor/partenaire." : 'You are not registered as a sponsor/partner.'}
+            {fr ? "Vous n'etes pas enregistre comme partenaire." : 'You are not registered as a partner.'}
           </Text>
           <Pressable style={st.emptyBtn} onPress={() => router.push('/partnerships' as any)}>
             <MaterialIcons name="handshake" size={18} color="#FFF" />
@@ -1293,7 +1293,7 @@ export default function SponsorPortalScreen() {
       {/* Onboarding Guide Overlay */}
       {showOnboarding ? (() => {
         const steps = [
-          { icon: 'palette', color: '#7C3AED', bg: '#7C3AED12', title: fr ? 'Bienvenue sur le Portail Sponsor' : 'Welcome to the Sponsor Portal', desc: fr ? 'Gerez votre branding, push notifications, analytiques et parrainages depuis un seul endroit.' : 'Manage your branding, push notifications, analytics and referrals from one place.' },
+          { icon: 'palette', color: '#7C3AED', bg: '#7C3AED12', title: fr ? 'Bienvenue sur le Portail Partenaires' : 'Welcome to the Partner Portal', desc: fr ? 'Gerez votre branding, push notifications, analytiques et parrainages depuis un seul endroit.' : 'Manage your branding, push notifications, analytics and referrals from one place.' },
           { icon: 'palette', color: '#EC4899', bg: '#EC489912', title: fr ? '1. Personnalisez votre marque' : '1. Customize your brand', desc: fr ? 'Uploadez votre logo, choisissez votre couleur de marque et previsualisez vos bannieres et marqueurs carte.' : 'Upload your logo, choose your brand color and preview your banners and map markers.' },
           { icon: 'notifications', color: '#3B82F6', bg: '#3B82F612', title: fr ? '2. Envoyez des notifications' : '2. Send notifications', desc: fr ? 'Composez des push cibles avec A/B testing, programmation et templates pre-redigees.' : 'Compose targeted push with A/B testing, scheduling and pre-written templates.' },
           { icon: 'insights', color: '#10B981', bg: '#10B98112', title: fr ? '3. Suivez vos performances' : '3. Track your performance', desc: fr ? 'Impressions, clics, CTR, benchmark concurrents et export PDF/CSV de vos analytics.' : 'Impressions, clicks, CTR, competitor benchmark and PDF/CSV export of your analytics.' },
@@ -1336,7 +1336,7 @@ export default function SponsorPortalScreen() {
         <Pressable style={st.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={st.headerTitle}>{fr ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
+        <Text style={st.headerTitle}>{fr ? 'Portail Partenaires' : 'Partner Portal'}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Pressable
             style={[st.headerAction, showNotifCenter && { backgroundColor: tierColor + '15' }]}

@@ -13,7 +13,7 @@ import theme from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
+import Svg, { Polyline, Circle as SvgCircle, Rect as SvgRect } from 'react-native-svg';
 
 interface DigestEntry {
   id: string;
@@ -40,6 +40,39 @@ function Sparkline({ data, width, height, color }: { data: number[]; width: numb
       <Polyline points={points} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
       <SvgCircle cx={lastX} cy={lastY} r={4} fill={color} />
     </Svg>
+  );
+}
+
+function ComparisonBarChart({ label, current, previous, color, suffix, fr }: { label: string; current: number; previous: number; color: string; suffix?: string; fr: boolean }) {
+  const max = Math.max(current, previous, 1);
+  const diff = previous > 0 ? Math.round(((current - previous) / previous) * 100) : (current > 0 ? 100 : 0);
+  const isUp = diff >= 0;
+  const barW = 140;
+  const barH = 48;
+  const gap = 6;
+  const bw = (barW - gap) / 2;
+  const h1 = Math.max(6, (previous / max) * (barH - 4));
+  const h2 = Math.max(6, (current / max) * (barH - 4));
+  return (
+    <View style={{ flex: 1, alignItems: 'center' }}>
+      <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 6, textTransform: 'uppercase' }}>{label}</Text>
+      <View style={{ width: barW, height: barH, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'center', gap }}>
+        <Svg width={bw} height={barH}>
+          <SvgRect x={0} y={barH - h1} width={bw} height={h1} rx={4} ry={4} fill="#CBD5E1" opacity={0.6} />
+        </Svg>
+        <Svg width={bw} height={barH}>
+          <SvgRect x={0} y={barH - h2} width={bw} height={h2} rx={4} ry={4} fill={color} />
+        </Svg>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+        <Text style={{ fontSize: 9, color: '#94A3B8' }}>{previous}{suffix || ''}</Text>
+        <Text style={{ fontSize: 13, fontWeight: '900', color }}>{current}{suffix || ''}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 3, backgroundColor: isUp ? '#10B98112' : '#EF444412', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+        <MaterialIcons name={isUp ? 'arrow-upward' : 'arrow-downward'} size={8} color={isUp ? '#10B981' : '#EF4444'} />
+        <Text style={{ fontSize: 9, fontWeight: '800', color: isUp ? '#10B981' : '#EF4444' }}>{isUp ? '+' : ''}{diff}%</Text>
+      </View>
+    </View>
   );
 }
 
@@ -289,6 +322,33 @@ export default function SponsorDigestScreen() {
                         <Text style={s.wowCellLabel}>{fr ? 'Sem. precedente' : 'Previous week'}</Text>
                         <Text style={s.wowCellValue}>{previous.impressions}</Text>
                       </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Comparison Bar Charts */}
+                {previous ? (
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 }}>
+                      <MaterialIcons name="bar-chart" size={16} color="#6366F1" />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Comparaison visuelle' : 'Visual Comparison'}</Text>
+                    </View>
+                    {/* Legend */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#CBD5E1', opacity: 0.6 }} />
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Sem. precedente' : 'Previous'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#6366F1' }} />
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Cette semaine' : 'This week'}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 4 }}>
+                      <ComparisonBarChart label="Impressions" current={selected.impressions} previous={previous.impressions} color="#3B82F6" fr={fr} />
+                      <ComparisonBarChart label={fr ? 'Clics' : 'Clicks'} current={selected.clicks} previous={previous.clicks} color="#10B981" fr={fr} />
+                      <ComparisonBarChart label="CTR" current={parseFloat(selected.ctr)} previous={parseFloat(previous.ctr)} color="#F59E0B" suffix="%" fr={fr} />
+                      <ComparisonBarChart label="Push" current={selected.pushes} previous={previous.pushes} color="#7C3AED" fr={fr} />
                     </View>
                   </View>
                 ) : null}

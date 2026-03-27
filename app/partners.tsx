@@ -78,6 +78,21 @@ function MiniSparkline({ data, width, height, color }: { data: number[]; width: 
   );
 }
 
+// Card Sparkline for partner cards (7-day impression mini chart)
+function CardSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
+  if (!data || data.length < 2) return null;
+  const max = Math.max(...data, 1);
+  const pad = 1;
+  const w = width - pad * 2;
+  const h = height - pad * 2;
+  const points = data.map((v, i) => `${pad + (i / (data.length - 1)) * w},${pad + h - (v / max) * h}`).join(' ');
+  return (
+    <Svg width={width} height={height}>
+      <Polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.7} />
+    </Svg>
+  );
+}
+
 export default function PartnersScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
@@ -97,6 +112,9 @@ export default function PartnersScreen() {
   const [showRoi, setShowRoi] = useState(false);
 
   const [isSponsor, setIsSponsor] = useState(false);
+
+  // 7-day impression data per partner for sparklines
+  const [partnerDailyData, setPartnerDailyData] = useState<Map<string, number[]>>(new Map());
 
   // Comparison state
   const [compareMode, setCompareMode] = useState(false);
@@ -121,6 +139,29 @@ export default function PartnersScreen() {
         analytics: stats.get(p.id) || { profileViews: 0, socialClicks: 0, bannerImpressions: 0, socialBreakdown: {} },
       }));
       setPartners(withAnalytics);
+
+      // Load 7-day daily impressions for sparklines
+      const supabase = getSupabaseClient();
+      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+      const ids = sponsorPartners.map(p => p.id);
+      if (ids.length > 0) {
+        const { data: dailyEvents } = await supabase
+          .from('ambassador_analytics')
+          .select('ambassador_id, created_at')
+          .in('ambassador_id', ids)
+          .eq('event_type', 'banner_impression')
+          .gte('created_at', sevenDaysAgo);
+        if (dailyEvents) {
+          const map = new Map<string, number[]>();
+          ids.forEach(id => map.set(id, [0, 0, 0, 0, 0, 0, 0]));
+          dailyEvents.forEach((ev: any) => {
+            const dayIdx = Math.min(6, Math.floor((Date.now() - new Date(ev.created_at).getTime()) / (24 * 60 * 60 * 1000)));
+            const arr = map.get(ev.ambassador_id);
+            if (arr) arr[6 - dayIdx] = (arr[6 - dayIdx] || 0) + 1;
+          });
+          setPartnerDailyData(map);
+        }
+      }
     } catch { /* silent */ }
     setPartnersLoading(false);
   }, []);
@@ -213,7 +254,7 @@ export default function PartnersScreen() {
             <Animated.View
               key={partner.id}
               entering={FadeIn.duration(300).delay(sectionDelay + 100 + idx * 60)}
-              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, { borderColor: brandCol + '25', borderStyle: 'solid' as any, borderTopWidth: 3.5, borderTopColor: brandCol, overflow: 'hidden' as const }]}
+              style={[styles.partnerSlotCard, isGold && styles.partnerSlotCardGold, styles.partnerSlotCardModern, { borderColor: brandCol + '20', borderTopColor: brandCol }]}
             >
               <Pressable
                 style={({ pressed }) => [{ alignItems: 'center' as const, width: '100%' }, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
@@ -275,13 +316,25 @@ export default function PartnersScreen() {
                     ) : null}
                   </View>
                 ) : null}
-                {/* Recent activity dot */}
-                {impCount > 5 ? (
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
-                    <Text style={{ fontSize: 9, fontWeight: '600', color: '#22C55E' }}>{language === 'fr' ? 'Actif' : 'Active'}</Text>
-                  </View>
-                ) : null}
+                {/* 7-day sparkline trend */}
+                {(() => {
+                  const dailyData = partnerDailyData.get(partner.id);
+                  const hasData = dailyData && dailyData.some(v => v > 0);
+                  return hasData ? (
+                    <View style={{ width: '100%', alignItems: 'center', marginBottom: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                        <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' }} />
+                        <Text style={{ fontSize: 8, fontWeight: '700', color: '#22C55E' }}>7{language === 'fr' ? 'j' : 'd'}</Text>
+                      </View>
+                      <CardSparkline data={dailyData!} width={isGold ? 100 : 80} height={20} color={brandCol} />
+                    </View>
+                  ) : impCount > 5 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#22C55E' }}>{language === 'fr' ? 'Actif' : 'Active'}</Text>
+                    </View>
+                  ) : null;
+                })()}
                 {/* Website link */}
                 {partner.websiteUrl ? (
                   <View style={[styles.partnerSlotBtn, { borderColor: brandCol + '40' }]}>
@@ -474,7 +527,7 @@ export default function PartnersScreen() {
                   </View>
                   <Pressable style={roiStyles.portalLink} onPress={() => router.push('/sponsor-portal' as any)}>
                     <MaterialIcons name="dashboard" size={16} color="#7C3AED" />
-                    <Text style={roiStyles.portalLinkText}>{language === 'fr' ? 'Portail Sponsor' : 'Sponsor Portal'}</Text>
+                    <Text style={roiStyles.portalLinkText}>{language === 'fr' ? 'Portail Partenaires' : 'Partner Portal'}</Text>
                     <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
                   </Pressable>
                 </>
@@ -528,7 +581,7 @@ export default function PartnersScreen() {
         </View>
 
         {/* ====== CTA SECTION ====== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(800)}>
+        <Animated.View entering={FadeIn.duration(400).delay(300)}>
           <LinearGradient
             colors={['#1E3A8A', '#2563EB']}
             start={{ x: 0, y: 0 }}
@@ -895,6 +948,17 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   partnerSlotCardGold: { minWidth: 150, paddingVertical: 20 },
+  partnerSlotCardModern: {
+    borderStyle: 'solid' as any,
+    borderTopWidth: 3.5,
+    overflow: 'hidden' as const,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.08, shadowRadius: 16 },
+      android: { elevation: 5 },
+      default: {},
+    }),
+  },
   partnerSlotIconBg: {
     width: 44, height: 44, borderRadius: 14,
     alignItems: 'center', justifyContent: 'center', marginBottom: 10,
