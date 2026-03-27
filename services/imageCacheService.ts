@@ -42,7 +42,8 @@ function collectBoulesPhotoUrls(boulesSets: { photo?: string | null }[]): string
 
 /**
  * Prefetch critical images (avatars, terrain thumbnails, boules photos).
- * Batches into groups to avoid overwhelming the network.
+ * Uses priority-based prefetching: first 10 visible items load immediately,
+ * remaining items load in the background after a short delay.
  * Respects cooldown to prevent redundant calls.
  */
 export async function prefetchImages(data: {
@@ -54,35 +55,56 @@ export async function prefetchImages(data: {
   if (now - lastPrefetchTimestamp < PREFETCH_COOLDOWN_MS) return;
   lastPrefetchTimestamp = now;
 
-  const urls: string[] = [];
+  // Priority: collect first 10 player avatars (visible on home/directory)
+  const priorityUrls: string[] = [];
+  const secondaryUrls: string[] = [];
 
   if (data.players) {
-    urls.push(...collectAvatarUrls(data.players));
+    const avatarUrls = collectAvatarUrls(data.players);
+    priorityUrls.push(...avatarUrls.slice(0, 10));
+    secondaryUrls.push(...avatarUrls.slice(10));
   }
   if (data.terrains) {
-    urls.push(...collectTerrainPhotoUrls(data.terrains));
+    const terrainUrls = collectTerrainPhotoUrls(data.terrains);
+    // First 5 terrain photos are priority (visible on map/directory)
+    const remaining = Math.max(0, 10 - priorityUrls.length);
+    priorityUrls.push(...terrainUrls.slice(0, Math.min(5, remaining)));
+    secondaryUrls.push(...terrainUrls.slice(Math.min(5, remaining)));
   }
   if (data.boulesSets) {
-    urls.push(...collectBoulesPhotoUrls(data.boulesSets));
+    secondaryUrls.push(...collectBoulesPhotoUrls(data.boulesSets));
   }
 
   // Deduplicate
-  const uniqueUrls = [...new Set(urls)];
+  const uniquePriority = [...new Set(priorityUrls)];
+  const prioritySet = new Set(uniquePriority);
+  const uniqueSecondary = [...new Set(secondaryUrls)].filter(u => !prioritySet.has(u));
 
-  if (uniqueUrls.length === 0) return;
-
-  // Batch prefetch in groups of 10 to avoid overwhelming the network
-  const BATCH_SIZE = 10;
-  for (let i = 0; i < uniqueUrls.length; i += BATCH_SIZE) {
-    const batch = uniqueUrls.slice(i, i + BATCH_SIZE);
+  // Phase 1: Prefetch priority images immediately (first visible items)
+  if (uniquePriority.length > 0) {
     try {
-      await Image.prefetch(batch);
+      await Image.prefetch(uniquePriority);
+      console.log(`Priority prefetched ${uniquePriority.length} images`);
     } catch {
-      // Silent - prefetch failure should not block the app
+      // Silent
     }
   }
 
-  console.log(`Prefetched ${uniqueUrls.length} images`);
+  // Phase 2: Background prefetch remaining images after 2s delay
+  if (uniqueSecondary.length > 0) {
+    setTimeout(async () => {
+      const BATCH_SIZE = 10;
+      for (let i = 0; i < uniqueSecondary.length; i += BATCH_SIZE) {
+        const batch = uniqueSecondary.slice(i, i + BATCH_SIZE);
+        try {
+          await Image.prefetch(batch);
+        } catch {
+          // Silent
+        }
+      }
+      console.log(`Background prefetched ${uniqueSecondary.length} images`);
+    }, 2000);
+  }
 }
 
 /**

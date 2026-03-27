@@ -552,13 +552,19 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             {(matches.length === 0 && challenges.length === 0) ? (
               <View style={st.emptyCard}>
-                <View style={st.emptyIconBg}><MaterialIcons name="sports" size={44} color={theme.primary} /></View>
+                <Image source={require('@/assets/images/empty-home.png')} style={st.emptyImage} contentFit="contain" transition={300} />
                 <Text style={st.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
                 <Text style={st.emptyText}>{t('home', 'welcomeText')}</Text>
-                <Pressable style={st.emptyCta} onPress={() => router.push('/match/new')}>
-                  <MaterialIcons name="play-arrow" size={20} color="#FFF" />
-                  <Text style={st.emptyCtaText}>{t('home', 'firstMatch')}</Text>
-                </Pressable>
+                <View style={st.emptyActionsRow}>
+                  <Pressable style={st.emptyCta} onPress={() => router.push('/match/new')}>
+                    <MaterialIcons name="sports" size={18} color="#FFF" />
+                    <Text style={st.emptyCtaText}>{t('home', 'match')}</Text>
+                  </Pressable>
+                  <Pressable style={st.emptyCtaSecondary} onPress={() => router.push('/challenge/new')}>
+                    <MaterialIcons name="track-changes" size={18} color={theme.primary} />
+                    <Text style={st.emptyCtaSecondaryText}>{t('home', 'challenge')}</Text>
+                  </Pressable>
+                </View>
               </View>
             ) : (
               <CompactHistory recentResults={recentResults} matches={matches} hasData={matches.length > 0 || challenges.length > 0} language={language} t={t} />
@@ -717,11 +723,14 @@ const st = StyleSheet.create({
 
   // EMPTY STATE
   emptyCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 32, alignItems: 'center', ...theme.shadows.card },
-  emptyIconBg: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
+  emptyImage: { width: 160, height: 160, marginBottom: 16 },
   emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 20 },
-  emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
+  emptyActionsRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+  emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 14, borderRadius: 14 },
   emptyCtaText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  emptyCtaSecondary: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary + '12', paddingHorizontal: 18, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.primary + '30' },
+  emptyCtaSecondaryText: { fontSize: 14, fontWeight: '600', color: theme.primary },
 
   // WITNESS
   witnessAlertCard: { backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A' },

@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Image } from 'expo-image';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import Svg, { Circle, Line, G, Text as SvgText, Rect, Polygon } from 'react-native-svg';
@@ -25,7 +26,6 @@ import SponsorBanner from '@/components/ui/SponsorBanner';
 
 
 
-// TYPES & CONSTANTS
 type TimeFilter = 'today' | 'week' | 'month' | '3months' | '6months' | 'year' | 'all';
 type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year' | '2years' | '5years' | '10years' | '25years';
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
@@ -59,7 +59,6 @@ const CATEGORY_TAB_KEYS: { id: StatsCategory; key: string; icon: string; color: 
   { id: 'errors', key: 'errors', icon: 'error-outline', color: theme.error },
 ];
 
-// HELPER FUNCTIONS
 function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter): T[] {
   if (filter === 'all') return items;
   
@@ -99,8 +98,7 @@ function filterByTime<T extends { date: string }>(items: T[], filter: TimeFilter
 }
 
 // COMPONENTS
-
-// Progress Ring Component - Glassmorphism
+const _ProgressRingTag='glassmorphism';
 function ProgressRing({ 
   value, 
   size = 80,
@@ -166,7 +164,6 @@ function ProgressRing({
   );
 }
 
-// Stat Row Component
 function StatRow({
   label, 
   value, 
@@ -200,7 +197,6 @@ function StatRow({
   );
 }
 
-// Section Header - Modernized
 function SectionHeader({title, subtitle, icon, color }: { 
   title: string; 
   subtitle?: string;
@@ -224,7 +220,6 @@ function SectionHeader({title, subtitle, icon, color }: {
   );
 }
 
-// Progress Bar - Glassmorphism
 function ProgressBar({ value, color, showValue = true }: { value: number; color: string; showValue?: boolean }) {
   return (
     <View style={styles.progressBarContainer}>
@@ -245,7 +240,6 @@ function ProgressBar({ value, color, showValue = true }: { value: number; color:
   );
 }
 
-// Breakdown Bar
 function BreakdownBar({items }: { items: { label: string; value: number; color: string }[] }) {
   const total = items.reduce((sum, item) => sum + item.value, 0);
   
@@ -282,7 +276,6 @@ function BreakdownBar({items }: { items: { label: string; value: number; color: 
   );
 }
 
-// NA Placeholder
 function NAPlaceholder({message }: { message: string }) {
   return (
     <View style={styles.naPlaceholder}>
@@ -292,7 +285,6 @@ function NAPlaceholder({message }: { message: string }) {
   );
 }
 
-// MAIN COMPONENT
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, tournaments, players, terrains, boulesSets, getMatchesByTournament, selfPlayer } = useApp();
@@ -1590,12 +1582,12 @@ export default function StatsScreen() {
 
         {!hasData ? (
           <View style={styles.emptyState}>
-            <MaterialIcons name="bar-chart" size={64} color={theme.textMuted} />
-            <Text style={styles.emptyTitle}>{t('stats', 'noStatsYet')}</Text>
-            <Text style={styles.emptyText}>{t('stats', 'playToSee')}</Text>
+            <Image source={require('@/assets/images/empty-stats.png')} style={styles.emptyImage} contentFit="contain" />
+            <Text style={styles.emptyTitle}>{t('stats','noStatsYet')}</Text>
+            <Text style={styles.emptyText}>{t('stats','playToSee')}</Text>
             <Pressable style={styles.emptyButton} onPress={() => router.push('/match/new')}>
-              <MaterialIcons name="add" size={20} color="#FFF" />
-              <Text style={styles.emptyButtonText}>{t('stats', 'newMatch')}</Text>
+              <MaterialIcons name="sports" size={18} color="#FFF" />
+              <Text style={styles.emptyButtonText}>{t('stats','newMatch')}</Text>
             </Pressable>
           </View>
         ) : (
@@ -3848,11 +3840,12 @@ const styles = StyleSheet.create({
   naPlaceholder: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 8, marginTop: 8, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm },
   naText: { fontSize: 11, color: theme.textMuted, flex: 1 },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 12 },
-  emptyState: { alignItems: 'center', paddingVertical: 56 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginTop: 20 },
-  emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, marginBottom: 28, maxWidth: 280, lineHeight: 21 },
-  emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 28, paddingVertical: 16, borderRadius: 16 },
-  emptyButtonText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  emptyState:{alignItems:'center',paddingVertical:40},
+  emptyImage:{width:160,height:160,marginBottom:8},
+  emptyTitle:{fontSize:20,fontWeight:'700',color:theme.textPrimary,marginTop:8},
+  emptyText:{fontSize:14,color:theme.textSecondary,textAlign:'center',marginTop:8,marginBottom:24,maxWidth:280,lineHeight:21},
+  emptyButton:{flexDirection:'row',alignItems:'center',gap:8,backgroundColor:theme.primary,paddingHorizontal:28,paddingVertical:16,borderRadius:16},
+  emptyButtonText:{fontSize:15,fontWeight:'700',color:'#FFF'},
   durationHero: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
   durationMain: { flex: 1, alignItems: 'center' },
   durationMainValue: { fontSize: 32, fontWeight: '700', color: theme.accent, marginTop: 4 },

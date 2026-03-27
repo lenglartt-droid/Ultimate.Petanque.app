@@ -1415,9 +1415,7 @@ export default function HistoryScreen() {
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <View style={styles.emptyIcon}>
-              <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
-            </View>
+            <Image source={require('@/assets/images/empty-history.png')} style={{ width: 140, height: 140, marginBottom: 16 }} contentFit="contain" transition={300} />
             <Text style={styles.emptyTitle}>{t('history', 'noResults')}</Text>
             <Text style={styles.emptyText}>{t('history', 'noActivity')}</Text>
             <Pressable 
