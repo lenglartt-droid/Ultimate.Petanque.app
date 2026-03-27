@@ -2760,6 +2760,18 @@ export default function SponsorPortalScreen() {
                         { title: fr ? 'La saison reprend !' : 'Season is back!', body: fr ? 'Le beau temps revient et les terrains vous attendent. Preparez votre prochaine partie !' : 'Nice weather is back and the courts are waiting. Prepare your next game!' },
                         { title: fr ? 'Bonne annee petanquiste !' : 'Happy new year!', body: fr ? 'Tous nos voeux pour cette nouvelle saison ! Decouvrez nos nouveautes.' : 'Best wishes for the new season! Discover our new products.' },
                       ]},
+                      { cat: fr ? 'Partenariat' : 'Partnership', catColor: '#6366F1', catIcon: 'handshake' as const, templates: [
+                        { title: fr ? 'Nouveau partenaire officiel !' : 'New official partner!', body: fr ? 'Nous sommes fiers de rejoindre la communaute Ultimate Petanque. Decouvrez nos offres exclusives pour les joueurs !' : 'We are proud to join the Ultimate Petanque community. Discover our exclusive offers for players!' },
+                        { title: fr ? 'Ensemble pour la petanque' : 'Together for petanque', body: fr ? 'Notre partenariat avec Ultimate Petanque est officiel ! Profitez d avantages exclusifs avec le code dans notre profil.' : 'Our partnership with Ultimate Petanque is official! Enjoy exclusive benefits with the code in our profile.' },
+                      ]},
+                      { cat: fr ? 'Lancement' : 'Product launch', catColor: '#F97316', catIcon: 'rocket-launch' as const, templates: [
+                        { title: fr ? 'Nouveau produit disponible !' : 'New product available!', body: fr ? 'Decouvrez notre derniere innovation pour les joueurs de petanque. Disponible des maintenant !' : 'Discover our latest innovation for petanque players. Available now!' },
+                        { title: fr ? 'Exclusivite : nouvelle gamme' : 'Exclusive: new range', body: fr ? 'Soyez les premiers a decouvrir notre nouvelle gamme. Lancement exclusif pour la communaute Ultimate Petanque.' : 'Be the first to discover our new range. Exclusive launch for the Ultimate Petanque community.' },
+                      ]},
+                      { cat: fr ? 'Communaute' : 'Community', catColor: '#0EA5E9', catIcon: 'groups' as const, templates: [
+                        { title: fr ? 'Cap franchi : merci a vous !' : 'Milestone reached: thank you!', body: fr ? 'Grace a vous, nous avons atteint un nouveau cap ! Merci pour votre soutien et votre confiance.' : 'Thanks to you, we have reached a new milestone! Thank you for your support and trust.' },
+                        { title: fr ? 'La communaute grandit !' : 'The community grows!', body: fr ? 'Chaque jour, de nouveaux joueurs rejoignent Ultimate Petanque. Ensemble, faisons vivre notre sport !' : 'Every day, new players join Ultimate Petanque. Together, let us keep our sport alive!' },
+                      ]},
                     ].map((cat, ci) => (
                       <View key={ci} style={{ marginBottom: 14 }}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
