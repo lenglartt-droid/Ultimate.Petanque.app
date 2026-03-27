@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Conditions Générales d'Utilisation — Ultimate Petanque</title>
+  <style>
+    :root {
+      --primary: #2563EB;
+      --bg: #F8FAFC;
+      --surface: #FFFFFF;
+      --text: #0F172A;
+      --text-secondary: #64748B;
+      --border: #E2E8F0;
+      --accent: #10B981;
+      --warning: #F59E0B;
+      --error: #EF4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 0;
+    }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 16px;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .lang-switch {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .lang-switch button {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .lang-switch button.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .container { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+    .hero {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .hero-icon {
+      width: 64px; height: 64px; border-radius: 32px;
+      background: rgba(37,99,235,0.1);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 28px; margin-bottom: 12px;
+    }
+    .hero h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .hero .subtitle { font-size: 14px; color: var(--text-secondary); }
+    .date-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); padding: 6px 14px; border-radius: 20px;
+      border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+      font-weight: 500; margin-top: 12px;
+    }
+    .acceptance {
+      display: flex; align-items: center; gap: 10px;
+      background: rgba(16,185,129,0.08); border-radius: 10px;
+      padding: 14px; margin-bottom: 16px;
+      border: 1px solid rgba(16,185,129,0.2);
+    }
+    .acceptance span { font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
+    .section {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .section-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .section-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .section-title { font-size: 16px; font-weight: 700; flex: 1; }
+    .section-content { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+    .contact-box {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      text-align: center;
+      margin-top: 20px;
+    }
+    .contact-box p { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .contact-box a {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(37,99,235,0.08); padding: 12px 20px;
+      border-radius: 10px; border: 1px solid rgba(37,99,235,0.2);
+      color: var(--primary); text-decoration: none; font-weight: 600; font-size: 14px;
+    }
+    .contact-box a:hover { background: rgba(37,99,235,0.15); }
+    .footer { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 20px; }
+    [lang="en"] { display: none; }
+    body.en [lang="fr"] { display: none; }
+    body.en [lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 lang="fr">Conditions Générales d'Utilisation</h1>
+    <h1 lang="en">Terms of Use</h1>
+    <p>Ultimate Petanque</p>
+    <div class="lang-switch">
+      <button class="active" onclick="setLang('fr')">Français</button>
+      <button onclick="setLang('en')">English</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="hero">
+      <div class="hero-icon">📋</div>
+      <h2 lang="fr">Conditions Générales d'Utilisation</h2>
+      <h2 lang="en">Terms of Use</h2>
+      <div class="subtitle">Ultimate Petanque</div>
+      <div class="date-badge">
+        <span lang="fr">Date d'entrée en vigueur : 2026-03-20</span>
+        <span lang="en">Effective date: 2026-03-20</span>
+      </div>
+    </div>
+
+    <div class="acceptance">
+      <span>✅</span>
+      <span lang="fr">En utilisant Ultimate Petanque, vous acceptez ces conditions.</span>
+      <span lang="en">By using Ultimate Petanque, you accept these terms.</span>
+    </div>
+
+    <!-- Object -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">⚖️</div>
+        <div class="section-title" lang="fr">Objet</div>
+        <div class="section-title" lang="en">Purpose</div>
+      </div>
+      <div class="section-content" lang="fr">Ultimate Petanque est une application de suivi de performances pour la pétanque.</div>
+      <div class="section-content" lang="en">Ultimate Petanque is a performance tracking app for petanque.</div>
+    </div>
+
+    <!-- Account -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">👤</div>
+        <div class="section-title" lang="fr">Compte</div>
+        <div class="section-title" lang="en">Account</div>
+      </div>
+      <div class="section-content" lang="fr">Vous êtes responsable de la sécurité de votre compte et de vos identifiants.</div>
+      <div class="section-content" lang="en">You are responsible for the security of your account and credentials.</div>
+    </div>
+
+    <!-- Features -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">⚽</div>
+        <div class="section-title" lang="fr">Fonctionnalités</div>
+        <div class="section-title" lang="en">Features</div>
+      </div>
+      <div class="section-content" lang="fr">Matchs avec notation détaillée, défis (10 tirs, sautée, précision), tournois avec phases et palmarès, annuaire avec détection de doublons et fusion, carte interactive avec fiches publiques, statistiques avancées avec filtres, équipement (base de données 40+ modèles de boules), partage par code avec permissions, rendez-vous terrain avec invitations directes, bilan financier, classement communautaire avec badge Premium, export de données (CSV/PDF avec graphiques SVG), suppression des publicités par achat in-app ou code promo, page partenaires et liens profonds.</div>
+      <div class="section-content" lang="en">Matches with detailed notation, challenges (10 shots, lob, precision), tournaments with phases and achievements, directory with duplicate detection and merge, interactive map with public items, advanced statistics with filters, equipment (40+ boules model database), sharing by code with permissions, terrain meetups with direct invitations, financial summary, community leaderboard with Premium badge, data export (CSV/PDF with SVG charts), ad removal via in-app purchase or promo code, partners page and deep linking.</div>
+    </div>
+
+    <!-- Responsibilities -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">📝</div>
+        <div class="section-title" lang="fr">Responsabilités</div>
+        <div class="section-title" lang="en">Responsibilities</div>
+      </div>
+      <div class="section-content" lang="fr">Vous êtes responsable du contenu que vous créez et partagez.</div>
+      <div class="section-content" lang="en">You are responsible for the content you create and share.</div>
+    </div>
+
+    <!-- Sharing Rules -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">🔗</div>
+        <div class="section-title" lang="fr">Règles de partage</div>
+        <div class="section-title" lang="en">Sharing rules</div>
+      </div>
+      <div class="section-content" lang="fr">Le partage se fait par code unique avec aperçu. Permissions lecture seule ou modification. Toggle contacts disponible uniquement pour vos propres fiches. Les contacts d'autres joueurs restent protégés.</div>
+      <div class="section-content" lang="en">Sharing is done by unique code with preview. Read-only or edit permissions. Contact toggle available only for your own cards. Other players' contacts remain protected.</div>
+    </div>
+
+    <!-- Intellectual Property -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">©️</div>
+        <div class="section-title" lang="fr">Propriété intellectuelle</div>
+        <div class="section-title" lang="en">Intellectual property</div>
+      </div>
+      <div class="section-content" lang="fr">L'application et son contenu sont protégés par le droit d'auteur.</div>
+      <div class="section-content" lang="en">The app and its content are protected by copyright.</div>
+    </div>
+
+    <!-- Data Privacy -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">🔐</div>
+        <div class="section-title" lang="fr">Données personnelles</div>
+        <div class="section-title" lang="en">Personal data</div>
+      </div>
+      <div class="section-content" lang="fr">Consultez notre politique de confidentialité pour plus de détails.</div>
+      <div class="section-content" lang="en">See our privacy policy for more details.</div>
+    </div>
+
+    <!-- Prohibited -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">🚫</div>
+        <div class="section-title" lang="fr">Usages interdits</div>
+        <div class="section-title" lang="en">Prohibited uses</div>
+      </div>
+      <div class="section-content" lang="fr">Utilisation abusive, spam, contenu illicite ou tentative de piratage sont interdits.</div>
+      <div class="section-content" lang="en">Abuse, spam, illegal content or hacking attempts are prohibited.</div>
+    </div>
+
+    <!-- Warranty -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">⚠️</div>
+        <div class="section-title" lang="fr">Garantie</div>
+        <div class="section-title" lang="en">Warranty</div>
+      </div>
+      <div class="section-content" lang="fr">L'application est fournie en l'état sans garantie.</div>
+      <div class="section-content" lang="en">The app is provided as-is without warranty.</div>
+    </div>
+
+    <!-- Liability -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">🛡️</div>
+        <div class="section-title" lang="fr">Responsabilité</div>
+        <div class="section-title" lang="en">Liability</div>
+      </div>
+      <div class="section-content" lang="fr">Nous ne sommes pas responsables des dommages indirects liés à l'utilisation.</div>
+      <div class="section-content" lang="en">We are not liable for indirect damages related to use.</div>
+    </div>
+
+    <!-- Termination -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">❌</div>
+        <div class="section-title" lang="fr">Résiliation</div>
+        <div class="section-title" lang="en">Termination</div>
+      </div>
+      <div class="section-content" lang="fr">Vous pouvez supprimer votre compte à tout moment. Nous nous réservons le droit de suspendre les comptes en cas d'abus.</div>
+      <div class="section-content" lang="en">You can delete your account at any time. We reserve the right to suspend accounts in case of abuse.</div>
+    </div>
+
+    <!-- Changes -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">🔄</div>
+        <div class="section-title" lang="fr">Modifications</div>
+        <div class="section-title" lang="en">Changes</div>
+      </div>
+      <div class="section-content" lang="fr">Nous pouvons modifier ces conditions. Les changements seront notifiés.</div>
+      <div class="section-content" lang="en">We may modify these terms. Changes will be notified.</div>
+    </div>
+
+    <!-- Governing Law -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">⚖️</div>
+        <div class="section-title" lang="fr">Loi applicable</div>
+        <div class="section-title" lang="en">Governing law</div>
+      </div>
+      <div class="section-content" lang="fr">Ces conditions sont régies par le droit français.</div>
+      <div class="section-content" lang="en">These terms are governed by French law.</div>
+    </div>
+
+    <!-- Public Items -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">🌐</div>
+        <div class="section-title" lang="fr">Fiches publiques</div>
+        <div class="section-title" lang="en">Public items</div>
+      </div>
+      <div class="section-content" lang="fr">Vous êtes responsable du contenu publié. Les fiches publiques sont visibles par tous, en lecture seule. Vous pouvez retirer la visibilité à tout moment.</div>
+      <div class="section-content" lang="en">You are responsible for published content. Public items are visible to all, read-only. You can remove visibility at any time.</div>
+    </div>
+
+    <!-- Meetups -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">📅</div>
+        <div class="section-title" lang="fr">Rendez-vous terrain</div>
+        <div class="section-title" lang="en">Terrain Meetups</div>
+      </div>
+      <div class="section-content" lang="fr">Les rendez-vous permettent aux utilisateurs de planifier des sessions de jeu sur un terrain. Les invitations sont envoyées directement aux joueurs publics ou partagés, y compris depuis le classement communautaire. L'organisateur peut annuler le RDV à tout moment. Les participants peuvent accepter ou décliner.</div>
+      <div class="section-content" lang="en">Meetups allow users to schedule playing sessions at a court. Invitations are sent directly to public or shared players, including from the community leaderboard. The organizer can cancel the meetup at any time. Participants can accept or decline.</div>
+    </div>
+
+    <!-- Equipment -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(217,119,6,0.1)">🎱</div>
+        <div class="section-title" lang="fr">Équipement</div>
+        <div class="section-title" lang="en">Equipment</div>
+      </div>
+      <div class="section-content" lang="fr">Vous pouvez enregistrer vos sets de boules avec leurs caractéristiques (marque, modèle, diamètre, poids, dureté, prix, photo). Une base de données de plus de 40 modèles de 9 marques permet le remplissage automatique. Les performances par set sont suivies automatiquement à travers les matchs et les défis.</div>
+      <div class="section-content" lang="en">You can register your boules sets with their characteristics (brand, model, diameter, weight, hardness, price, photo). A database of over 40 models from 9 brands enables auto-fill. Performance per set is automatically tracked through matches and challenges.</div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(217,119,6,0.1)">🏆</div>
+        <div class="section-title" lang="fr">Classement communautaire</div>
+        <div class="section-title" lang="en">Community Leaderboard</div>
+      </div>
+      <div class="section-content" lang="fr">Le classement communautaire affiche les joueurs publics classés par performance (taux de victoire, matchs, tir, carreaux). Seuls les joueurs ayant rendu leur profil public et joué au moins 1 match apparaissent. Les joueurs Premium sont identifiés par un badge étoile argentée. Les statistiques sont calculées automatiquement à partir des matchs enregistrés.</div>
+      <div class="section-content" lang="en">The community leaderboard shows public players ranked by performance (win rate, matches, shot, carreau). Only players who made their profile public and played at least 1 match appear. Premium players are identified by a silver star badge. Statistics are automatically calculated from recorded matches.</div>
+    </div>
+
+    <!-- Deep Linking -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">🔗</div>
+        <div class="section-title" lang="fr">Liens profonds</div>
+        <div class="section-title" lang="en">Deep Linking</div>
+      </div>
+      <div class="section-content" lang="fr">L'application supporte les liens profonds pour les codes de partage et les codes de rendez-vous. Les liens au format ultimatepetanque://share/CODE ou ultimatepetanque://meetup/CODE ouvrent automatiquement la fiche ou le rendez-vous correspondant.</div>
+      <div class="section-content" lang="en">The app supports deep links for share codes and meeting codes. Links in the format ultimatepetanque://share/CODE or ultimatepetanque://meetup/CODE automatically open the corresponding card or meeting.</div>
+    </div>
+
+    <!-- Premium -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(168,180,192,0.15)">⭐</div>
+        <div class="section-title" lang="fr">Premium et suppression des publicités</div>
+        <div class="section-title" lang="en">Premium and ad removal</div>
+      </div>
+      <div class="section-content" lang="fr">Les utilisateurs peuvent supprimer les publicités via un achat intégré unique (5,99 euros) sur Google Play ou Apple App Store, ou en utilisant un code promo valide. Le statut Premium est lié au compte utilisateur et synchronisé sur tous les appareils. Les achats sont non remboursables sauf dans les conditions prévues par les stores. Un badge étoile argentée identifie les utilisateurs Premium.</div>
+      <div class="section-content" lang="en">Users can remove ads via a one-time in-app purchase (5.99 EUR) on Google Play or Apple App Store, or by using a valid promo code. Premium status is linked to the user account and synced across all devices. Purchases are non-refundable except under store policies. A silver star badge identifies Premium users.</div>
+    </div>
+
+    <!-- Export -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">📥</div>
+        <div class="section-title" lang="fr">Export de données</div>
+        <div class="section-title" lang="en">Data export</div>
+      </div>
+      <div class="section-content" lang="fr">L'export permet de générer des fichiers CSV ou PDF contenant vos données de matchs, défis, tournois et statistiques. Les presets intelligents incluent : par tournoi, par saison (septembre-juin), comparatif entre périodes, par match unique, par joueur et par défi. Les PDF peuvent contenir des graphiques SVG (progression de score, radar de performance, barres de tir). Les fichiers sont générés localement et partagés via le système natif.</div>
+      <div class="section-content" lang="en">Export allows generating CSV or PDF files containing your match, challenge, tournament and statistics data. Smart presets include: by tournament, by season (September-June), comparative between periods, by single match, by player and by challenge. PDFs may contain SVG charts (score progression, performance radar, shot bars). Files are generated locally and shared via the native system.</div>
+    </div>
+
+    <!-- Partners -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(217,119,6,0.1)">🤝</div>
+        <div class="section-title" lang="fr">Partenaires</div>
+        <div class="section-title" lang="en">Partners</div>
+      </div>
+      <div class="section-content" lang="fr">La page partenaires affiche les partenaires officiels de l'application (Gold, Silver, Bronze). Les espaces partenaires sont distincts du contenu publicitaire AdMob. Si vous souhaitez devenir partenaire, contactez-nous par email.</div>
+      <div class="section-content" lang="en">The partners page displays official app partners (Gold, Silver, Bronze). Partner spaces are distinct from AdMob advertising content. If you wish to become a partner, contact us by email.</div>
+    </div>
+
+    <!-- Push Notifications -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(124,58,237,0.1)">🔔</div>
+        <div class="section-title" lang="fr">Notifications push</div>
+        <div class="section-title" lang="en">Push Notifications</div>
+      </div>
+      <div class="section-content" lang="fr">L'application envoie des notifications push serveur pour les événements ambassadeurs proches (rayon de 200km), les invitations meetup, les changements de classement, les demandes de partage de matchs/défis, et les rappels d'événements. L'utilisateur peut activer ou désactiver chaque type de notification individuellement depuis son profil. Les notifications sont envoyées via l'API Expo Push. Les tokens push sont stockés dans notre base de données et automatiquement désactivés à la déconnexion. L'utilisateur accepte de recevoir des notifications par défaut lors de l'inscription et peut modifier ses préférences à tout moment.</div>
+      <div class="section-content" lang="en">The application sends server-side push notifications for nearby ambassador events (200km radius), meetup invitations, ranking changes, match/challenge share requests, and event reminders. Users can enable or disable each notification type individually from their profile. Notifications are sent via the Expo Push API. Push tokens are stored in our database and automatically deactivated on logout. Users accept receiving notifications by default upon registration and can modify their preferences at any time.</div>
+    </div>
+
+    <!-- Abuse Protection -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">🚦</div>
+        <div class="section-title" lang="fr">Protection contre les abus</div>
+        <div class="section-title" lang="en">Abuse Protection</div>
+      </div>
+      <div class="section-content" lang="fr">Les fonctions sensibles de l'application (validation de codes promo, enregistrement d'achats) sont protégées par un système de limitation de requêtes (rate limiting). Les tentatives excessives (plus de 5 validations de code promo ou 3 enregistrements d'achat par minute) seront temporairement bloquées. Cette mesure protège contre les attaques par force brute et les abus. L'utilisateur bloqué recevra un message d'erreur et pourra réessayer après un court délai.</div>
+      <div class="section-content" lang="en">Sensitive application functions (promo code validation, purchase recording) are protected by a rate limiting system. Excessive attempts (more than 5 promo code validations or 3 purchase recordings per minute) will be temporarily blocked. This measure protects against brute force attacks and abuse. Blocked users will receive an error message and can retry after a short delay.</div>
+    </div>
+
+    <!-- Contact -->
+    <div class="contact-box">
+      <p lang="fr">Des questions ?</p>
+      <p lang="en">Questions?</p>
+      <a href="mailto:ultimate.petanque.app@gmail.com?subject=CGU%20-%20Ultimate%20Petanque">
+        ✉️ ultimate.petanque.app@gmail.com
+      </a>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.2.0 — March 27, 2026</div>
+  </div>
+
+  <script>
+    function setLang(lang) {
+      document.body.className = lang === 'en' ? 'en' : '';
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(lang === 'en' ? 'English' : 'Fran'));
+      });
+    }
+  </script>
+</body>
+</html>

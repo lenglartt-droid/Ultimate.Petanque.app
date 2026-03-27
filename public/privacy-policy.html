@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Politique de confidentialité — Ultimate Petanque</title>
+  <style>
+    :root {
+      --primary: #2563EB;
+      --bg: #F8FAFC;
+      --surface: #FFFFFF;
+      --text: #0F172A;
+      --text-secondary: #64748B;
+      --border: #E2E8F0;
+      --accent: #10B981;
+      --warning: #F59E0B;
+      --error: #EF4444;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      padding: 0;
+    }
+    .header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 24px 16px;
+      text-align: center;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header h1 { font-size: 20px; font-weight: 700; }
+    .header p { font-size: 13px; color: var(--text-secondary); margin-top: 4px; }
+    .lang-switch {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+    .lang-switch button {
+      padding: 6px 16px;
+      border-radius: 20px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .lang-switch button.active {
+      background: var(--primary);
+      color: white;
+      border-color: var(--primary);
+    }
+    .container { max-width: 720px; margin: 0 auto; padding: 24px 16px 48px; }
+    .hero {
+      text-align: center;
+      margin-bottom: 28px;
+    }
+    .hero-icon {
+      width: 64px; height: 64px; border-radius: 32px;
+      background: rgba(37,99,235,0.1);
+      display: inline-flex; align-items: center; justify-content: center;
+      font-size: 28px; margin-bottom: 12px;
+    }
+    .hero h2 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .hero .subtitle { font-size: 14px; color: var(--text-secondary); }
+    .date-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--surface); padding: 6px 14px; border-radius: 20px;
+      border: 1px solid var(--border); font-size: 13px; color: var(--text-secondary);
+      font-weight: 500; margin-top: 12px;
+    }
+    .section {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 12px;
+      border: 1px solid var(--border);
+    }
+    .section-header {
+      display: flex; align-items: center; gap: 12px; margin-bottom: 12px;
+    }
+    .section-icon {
+      width: 38px; height: 38px; border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    .section-title { font-size: 16px; font-weight: 700; flex: 1; }
+    .section-content { font-size: 14px; color: var(--text-secondary); line-height: 1.7; }
+    .contact-box {
+      background: var(--surface);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      text-align: center;
+      margin-top: 20px;
+    }
+    .contact-box p { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+    .contact-box a {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(37,99,235,0.08); padding: 12px 20px;
+      border-radius: 10px; border: 1px solid rgba(37,99,235,0.2);
+      color: var(--primary); text-decoration: none; font-weight: 600; font-size: 14px;
+    }
+    .contact-box a:hover { background: rgba(37,99,235,0.15); }
+    .footer { text-align: center; font-size: 12px; color: var(--text-secondary); margin-top: 20px; }
+    [lang="en"] { display: none; }
+    body.en [lang="fr"] { display: none; }
+    body.en [lang="en"] { display: block; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1 lang="fr">Politique de confidentialité</h1>
+    <h1 lang="en">Privacy Policy</h1>
+    <p>Ultimate Petanque</p>
+    <div class="lang-switch">
+      <button class="active" onclick="setLang('fr')">Français</button>
+      <button onclick="setLang('en')">English</button>
+    </div>
+  </div>
+  <div class="container">
+    <div class="hero">
+      <div class="hero-icon">🔒</div>
+      <h2 lang="fr">Politique de confidentialité</h2>
+      <h2 lang="en">Privacy Policy</h2>
+      <div class="subtitle">Ultimate Petanque</div>
+      <div class="date-badge">
+        <span lang="fr">Date d'entrée en vigueur : 2026-03-20</span>
+        <span lang="en">Effective date: 2026-03-20</span>
+      </div>
+    </div>
+
+    <!-- Introduction -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">ℹ️</div>
+        <div class="section-title" lang="fr">Introduction</div>
+        <div class="section-title" lang="en">Introduction</div>
+      </div>
+      <div class="section-content" lang="fr">Ultimate Petanque respecte votre vie privée. Cette politique explique comment nous collectons, utilisons et protégeons vos données dans le cadre de toutes les fonctionnalités de l'application, y compris les achats intégrés, les codes promo, l'export de données et la publicité.</div>
+      <div class="section-content" lang="en">Ultimate Petanque respects your privacy. This policy explains how we collect, use and protect your data across all app features, including in-app purchases, promo codes, data export and advertising.</div>
+    </div>
+
+    <!-- Data Collected -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">💾</div>
+        <div class="section-title" lang="fr">Données collectées</div>
+        <div class="section-title" lang="en">Data collected</div>
+      </div>
+      <div class="section-content" lang="fr">Compte (email, mot de passe chiffré), profil (rôle, niveau, club, photo, téléphone, email de contact, latéralité, statut Premium), données de jeu (matchs, défis, tournois, mènes, actions détaillées), annuaire (joueurs, clubs, terrains, tournois), équipement (sets de boules avec marque, modèle, diamètre, poids, dureté, prix, photos), localisation (saisie manuelle), carte de fédération, carte de club, classement communautaire (statistiques des joueurs publics), données d'achat (reçus in-app purchase, codes promo utilisés) et données d'export (fichiers CSV/PDF générés localement).</div>
+      <div class="section-content" lang="en">Account (email, encrypted password), profile (role, level, club, photo, phone, contact email, handedness, Premium status), game data (matches, challenges, tournaments, ends, detailed actions), directory (players, clubs, courts, tournaments), equipment (boules sets with brand, model, diameter, weight, hardness, price, photos), location (manually entered), federation card, club card, community leaderboard (public player statistics), purchase data (in-app purchase receipts, promo codes used) and export data (CSV/PDF files generated locally).</div>
+    </div>
+
+    <!-- Data Usage -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">⚙️</div>
+        <div class="section-title" lang="fr">Utilisation des données</div>
+        <div class="section-title" lang="en">Data usage</div>
+      </div>
+      <div class="section-content" lang="fr">Vos données sont utilisées pour : le fonctionnement de l'application et les statistiques avancées, la synchronisation entre appareils, le classement communautaire (profils publics uniquement), la validation des achats in-app et codes promo, l'affichage conditionnel des publicités (masquées pour les utilisateurs Premium), et la génération de rapports d'export (CSV/PDF avec graphiques SVG).</div>
+      <div class="section-content" lang="en">Your data is used for: app functionality and advanced statistics, cross-device synchronization, community leaderboard (public profiles only), in-app purchase and promo code validation, conditional ad display (hidden for Premium users), and export report generation (CSV/PDF with SVG charts).</div>
+    </div>
+
+    <!-- Data Sharing -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">🔗</div>
+        <div class="section-title" lang="fr">Partage des données</div>
+        <div class="section-title" lang="en">Data sharing</div>
+      </div>
+      <div class="section-content" lang="fr">Vos données ne sont partagées qu'avec votre consentement explicite via les fonctionnalités de partage et de publication. Le toggle contacts dans l'aperçu contrôle la visibilité de vos coordonnées. Les contacts d'autres joueurs ne sont jamais partagés. Les données d'achat in-app sont transmises à Google Play ou Apple App Store pour validation. Aucune donnée n'est vendue à des tiers.</div>
+      <div class="section-content" lang="en">Your data is only shared with your explicit consent via sharing and publishing features. The contact toggle in preview controls your contact visibility. Other players' contacts are never shared. In-app purchase data is transmitted to Google Play or Apple App Store for validation. No data is sold to third parties.</div>
+    </div>
+
+    <!-- Data Storage -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">☁️</div>
+        <div class="section-title" lang="fr">Stockage des données</div>
+        <div class="section-title" lang="en">Data storage</div>
+      </div>
+      <div class="section-content" lang="fr">Données stockées en cloud sécurisé avec cache local pour utilisation hors-ligne. Synchronisation delta automatique avec synchronisation complète périodique. Les fichiers d'export (CSV/PDF) sont générés localement et partagés via le système natif de l'appareil. Les reçus d'achat sont stockés de manière sécurisée côté serveur.</div>
+      <div class="section-content" lang="en">Data stored in secure cloud with local cache for offline use. Automatic delta synchronization with periodic full sync. Export files (CSV/PDF) are generated locally and shared via the device native sharing system. Purchase receipts are stored securely server-side.</div>
+    </div>
+
+    <!-- Security -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">🛡️</div>
+        <div class="section-title" lang="fr">Sécurité</div>
+        <div class="section-title" lang="en">Security</div>
+      </div>
+      <div class="section-content" lang="fr">Chiffrement des données, authentification sécurisée par OTP ou mot de passe, Row Level Security sur toutes les tables, validation serveur des codes promo via Edge Functions, et vérification des reçus d'achat.</div>
+      <div class="section-content" lang="en">Data encryption, secure authentication via OTP or password, Row Level Security on all tables, server-side promo code validation via Edge Functions, and purchase receipt verification.</div>
+    </div>
+
+    <!-- User Rights -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">👤</div>
+        <div class="section-title" lang="fr">Vos droits</div>
+        <div class="section-title" lang="en">Your rights</div>
+      </div>
+      <div class="section-content" lang="fr">Accès, modification et suppression de vos données à tout moment. Contrôle de la visibilité publique et du partage avec aperçu. Toggle contacts pour vos propres fiches. Export complet de vos données en CSV ou PDF. Suppression définitive du compte avec vérification par email.</div>
+      <div class="section-content" lang="en">Access, modify and delete your data at any time. Control public visibility and sharing with preview. Contact toggle for your own cards. Full data export in CSV or PDF. Permanent account deletion with email verification.</div>
+    </div>
+
+    <!-- Sharing Feature -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">👥</div>
+        <div class="section-title" lang="fr">Fonctionnalité de partage</div>
+        <div class="section-title" lang="en">Sharing feature</div>
+      </div>
+      <div class="section-content" lang="fr">Partage par code unique avec permissions lecture seule ou modification. Aperçu avant partage. Les contacts sont contrôlables via toggle pour vos propres fiches uniquement. Les liens profonds (ultimatepetanque://) permettent un accès direct aux fiches et rendez-vous partagés.</div>
+      <div class="section-content" lang="en">Sharing by unique code with read-only or edit permissions. Preview before sharing. Contacts are controllable via toggle for your own cards only. Deep links (ultimatepetanque://) allow direct access to shared cards and meetings.</div>
+    </div>
+
+    <!-- Public Items -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">🌐</div>
+        <div class="section-title" lang="fr">Fiches publiques</div>
+        <div class="section-title" lang="en">Public items</div>
+      </div>
+      <div class="section-content" lang="fr">Les fiches publiques sont visibles par tous sur la carte. Aperçu avant publication. Détection de doublons avec les fiches publiques existantes. Le badge Premium (étoile argentée) est affiché à côté des noms des joueurs Premium sur le classement et la carte.</div>
+      <div class="section-content" lang="en">Public items are visible to everyone on the map. Preview before publishing. Duplicate detection with existing public items. The Premium badge (silver star) is displayed next to Premium player names on the leaderboard and map.</div>
+    </div>
+
+    <!-- Meetups -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">📅</div>
+        <div class="section-title" lang="fr">Rendez-vous terrain</div>
+        <div class="section-title" lang="en">Terrain Meetups</div>
+      </div>
+      <div class="section-content" lang="fr">Les rendez-vous permettent de planifier des sessions de jeu. Les données des RDV (titre, date, terrain, participants) sont stockées de manière sécurisée. Seuls le créateur et les participants invités ont accès aux détails du RDV. Les codes de partage sont générés aléatoirement. Les invitations peuvent être envoyées depuis l'annuaire ou le classement communautaire.</div>
+      <div class="section-content" lang="en">Meetups allow scheduling playing sessions. Meetup data (title, date, terrain, participants) is stored securely. Only the creator and invited participants have access to meetup details. Share codes are randomly generated. Invitations can be sent from the directory or the community leaderboard.</div>
+    </div>
+
+    <!-- Leaderboard -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(217,119,6,0.1)">🏆</div>
+        <div class="section-title" lang="fr">Classement communautaire</div>
+        <div class="section-title" lang="en">Community Leaderboard</div>
+      </div>
+      <div class="section-content" lang="fr">Le classement communautaire affiche les statistiques des joueurs ayant rendu leur profil public avec badge Premium argenté pour les utilisateurs Premium. Seuls les joueurs publics avec au moins 1 match sont visibles. Les statistiques (taux de victoire, tir, carreaux) sont calculées automatiquement. Le classement ne collecte aucune donnée supplémentaire.</div>
+      <div class="section-content" lang="en">The community leaderboard displays statistics of players who made their profile public with a silver Premium badge for Premium users. Only public players with at least 1 match are visible. Statistics (win rate, shot, carreau) are calculated automatically. The leaderboard does not collect any additional data.</div>
+    </div>
+
+    <!-- Push Notifications -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(124,58,237,0.1)">🔔</div>
+        <div class="section-title" lang="fr">Notifications push</div>
+        <div class="section-title" lang="en">Push Notifications</div>
+      </div>
+      <div class="section-content" lang="fr">L'application peut envoyer des notifications push pour vous alerter sur des événements proches (dans un rayon de 200km), des invitations à des rendez-vous, des changements de classement, et des demandes de partage. Vous pouvez contrôler précisément quels types de notifications vous souhaitez recevoir depuis votre profil (section Notifications). Vos préférences sont stockées de manière sécurisée et respectées côté serveur. Le token push de votre appareil est enregistré dans notre base de données et désactivé automatiquement à la déconnexion.</div>
+      <div class="section-content" lang="en">The application may send push notifications to alert you about nearby events (within 200km radius), meetup invitations, ranking changes, and share requests. You can precisely control which notification types you want to receive from your profile (Notifications section). Your preferences are stored securely and respected server-side. Your device push token is registered in our database and automatically deactivated on logout.</div>
+    </div>
+
+    <!-- Crash Reports -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">🐛</div>
+        <div class="section-title" lang="fr">Rapports de crash et monitoring</div>
+        <div class="section-title" lang="en">Crash Reports &amp; Monitoring</div>
+      </div>
+      <div class="section-content" lang="fr">L'application utilise Sentry pour collecter automatiquement les rapports de crash et erreurs techniques. Ces rapports contiennent des informations techniques (type d'appareil, version OS, stack trace) mais aucune donnée personnelle identifiable. Votre adresse IP est automatiquement supprimée des rapports. Ces données sont utilisées exclusivement pour améliorer la stabilité de l'application.</div>
+      <div class="section-content" lang="en">The application uses Sentry to automatically collect crash reports and technical errors. These reports contain technical information (device type, OS version, stack trace) but no personally identifiable data. Your IP address is automatically stripped from reports. This data is used exclusively to improve application stability.</div>
+    </div>
+
+    <!-- Advertising -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">📢</div>
+        <div class="section-title" lang="fr">Publicité</div>
+        <div class="section-title" lang="en">Advertising</div>
+      </div>
+      <div class="section-content" lang="fr">L'application affiche des bannières publicitaires et des interstitiels via Google AdMob. Les publicités sont supprimées pour les utilisateurs Premium (achat in-app ou code promo). Aucune donnée personnelle n'est partagée avec les réseaux publicitaires au-delà des identifiants publicitaires standards de l'appareil.</div>
+      <div class="section-content" lang="en">The app displays banner ads and interstitials via Google AdMob. Ads are removed for Premium users (in-app purchase or promo code). No personal data is shared with advertising networks beyond the device standard advertising identifiers.</div>
+    </div>
+
+    <!-- Purchases -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">🛒</div>
+        <div class="section-title" lang="fr">Achats intégrés et codes promo</div>
+        <div class="section-title" lang="en">In-app purchases and promo codes</div>
+      </div>
+      <div class="section-content" lang="fr">L'achat de suppression des publicités (5,99 euros) est traité par Google Play ou Apple App Store. Les reçus sont validés et stockés côté serveur. Les codes promo sont validés via une Edge Function sécurisée. Le statut Premium est synchronisé sur tous vos appareils.</div>
+      <div class="section-content" lang="en">The ad removal purchase (5.99 EUR) is processed by Google Play or Apple App Store. Receipts are validated and stored server-side. Promo codes are validated via a secure Edge Function. Premium status is synced across all your devices.</div>
+    </div>
+
+    <!-- Export -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(99,102,241,0.1)">📥</div>
+        <div class="section-title" lang="fr">Export de données</div>
+        <div class="section-title" lang="en">Data export</div>
+      </div>
+      <div class="section-content" lang="fr">Les exports CSV et PDF sont générés entièrement sur votre appareil. Les fichiers contiennent vos données de matchs, défis, tournois et statistiques selon le preset choisi. Les PDF peuvent inclure des graphiques SVG (progression de score, radar de performance). Les fichiers sont partagés via le système natif et ne transitent pas par nos serveurs.</div>
+      <div class="section-content" lang="en">CSV and PDF exports are generated entirely on your device. Files contain your match, challenge, tournament and statistics data based on the chosen preset. PDFs may include SVG charts (score progression, performance radar). Files are shared via the native system and do not pass through our servers.</div>
+    </div>
+
+    <!-- Children -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(16,185,129,0.1)">👶</div>
+        <div class="section-title" lang="fr">Enfants</div>
+        <div class="section-title" lang="en">Children</div>
+      </div>
+      <div class="section-content" lang="fr">L'application n'est pas destinée aux enfants de moins de 13 ans. Les achats intégrés nécessitent l'autorisation parentale le cas échéant.</div>
+      <div class="section-content" lang="en">The app is not intended for children under 13. In-app purchases require parental authorization where applicable.</div>
+    </div>
+
+    <!-- Changes -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">🔄</div>
+        <div class="section-title" lang="fr">Modifications</div>
+        <div class="section-title" lang="en">Changes</div>
+      </div>
+      <div class="section-content" lang="fr">Nous pouvons modifier cette politique. Les changements seront notifiés dans l'application. La dernière mise à jour intègre les sections sur la publicité, les achats intégrés, les codes promo et l'export de données.</div>
+      <div class="section-content" lang="en">We may modify this policy. Changes will be notified in the app. The latest update includes sections on advertising, in-app purchases, promo codes and data export.</div>
+    </div>
+
+    <!-- Contact -->
+    <div class="contact-box">
+      <p lang="fr">Des questions ?</p>
+      <p lang="en">Questions?</p>
+      <a href="mailto:ultimate.petanque.app@gmail.com?subject=Privacy%20-%20Ultimate%20Petanque">
+        ✉️ ultimate.petanque.app@gmail.com
+      </a>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.2.0 — March 27, 2026</div>
+  </div>
+
+  <script>
+    function setLang(lang) {
+      document.body.className = lang === 'en' ? 'en' : '';
+      document.querySelectorAll('.lang-switch button').forEach(btn => {
+        btn.classList.toggle('active', btn.textContent.includes(lang === 'en' ? 'English' : 'Fran'));
+      });
+    }
+  </script>
+</body>
+</html>
