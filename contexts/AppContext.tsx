@@ -33,13 +33,6 @@ import { loadSyncConfig, getSyncConfig, onSyncConfigChange, setBatterySaverMode,
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getSharedMatchIds, getSharedChallengeIds, getReceivedShareRequests, startShareRequestPolling, stopShareRequestPolling } from '@/services/matchShareService';
 import {
-  mockPlayers,
-  mockClubs,
-  mockTournaments,
-  mockMatches,
-  mockChallenges,
-  mockTerrains,
-  currentUserStats,
   Player,
   Club,
   Tournament,
@@ -53,6 +46,14 @@ import {
   TournamentNotification,
   BoulesSet,
 } from '@/services/mockData';
+
+// Empty fallbacks instead of mock data — reduces bundle size ~15-20KB
+const EMPTY_PLAYERS: Player[] = [];
+const EMPTY_CLUBS: Club[] = [];
+const EMPTY_TOURNAMENTS: Tournament[] = [];
+const EMPTY_MATCHES: Match[] = [];
+const EMPTY_CHALLENGES: Challenge[] = [];
+const EMPTY_TERRAINS: Terrain[] = [];
 
 // ============================================
 // Extracted services & mappers
@@ -90,7 +91,24 @@ interface AppContextType {
   matches: Match[];
   challenges: Challenge[];
   terrains: Terrain[];
-  userStats: typeof currentUserStats;
+  userStats: {
+    playerId: string;
+    playerName: string;
+    totalMatches: number;
+    wins: number;
+    losses: number;
+    winRate: number;
+    currentStreak: number;
+    longestStreak: number;
+    tirSuccessRate: number;
+    pointSuccessRate: number;
+    carreauRate: number;
+    avgMatchDuration: number;
+    tournamentsWon: number;
+    tournamentsPlayed: number;
+    weeklyProgress: any[];
+    recentOpponents: any[];
+  };
   challengeStats: ChallengeStats;
   boulesSets: BoulesSet[];
   loading: boolean;
@@ -747,12 +765,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ===== Primary data loader =====
   const loadData = useCallback(async () => {
     if (!user?.id) {
-      setPlayers(mockPlayers);
-      setClubs(mockClubs);
-      setTournaments(mockTournaments);
-      setMatches(mockMatches);
-      setChallenges(mockChallenges);
-      setTerrains(mockTerrains);
+      setPlayers(EMPTY_PLAYERS);
+      setClubs(EMPTY_CLUBS);
+      setTournaments(EMPTY_TOURNAMENTS);
+      setMatches(EMPTY_MATCHES);
+      setChallenges(EMPTY_CHALLENGES);
+      setTerrains(EMPTY_TERRAINS);
       setLoading(false);
       return;
     }
@@ -809,27 +827,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
         }
       }
 
-      setPlayers(dbPlayers.length > 0 ? dbPlayers : mockPlayers);
+      setPlayers(dbPlayers);
 
       if (clubsRes.data) {
         const dbClubs = clubsRes.data.map(mapClubFromDb);
-        setClubs(dbClubs.length > 0 ? dbClubs : mockClubs);
+        setClubs(dbClubs);
       }
       if (terrainsRes.data) {
         const dbTerrains = terrainsRes.data.map(mapTerrainFromDb);
-        setTerrains(dbTerrains.length > 0 ? dbTerrains : mockTerrains);
+        setTerrains(dbTerrains);
       }
       if (tournamentsRes.data) {
         const dbTournaments = tournamentsRes.data.map(mapTournamentFromDb);
-        setTournaments(dbTournaments.length > 0 ? dbTournaments : mockTournaments);
+        setTournaments(dbTournaments);
       }
       if (matchesRes.data) {
         const dbMatches = matchesRes.data.map(mapMatchFromDb);
-        setMatches(dbMatches.length > 0 ? dbMatches : mockMatches);
+        setMatches(dbMatches);
       }
       if (challengesRes.data) {
         const dbChallenges = challengesRes.data.map(mapChallengeFromDb);
-        setChallenges(dbChallenges.length > 0 ? dbChallenges : mockChallenges);
+        setChallenges(dbChallenges);
       }
 
       initialLoadDone.current = true;
@@ -858,12 +876,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (cached.terrains.length > 0) setTerrains(cached.terrains);
           setIsOfflineMode(true);
         } else {
-          setPlayers(mockPlayers);
-          setClubs(mockClubs);
-          setTournaments(mockTournaments);
-          setMatches(mockMatches);
-          setChallenges(mockChallenges);
-          setTerrains(mockTerrains);
+          setPlayers(EMPTY_PLAYERS);
+          setClubs(EMPTY_CLUBS);
+          setTournaments(EMPTY_TOURNAMENTS);
+          setMatches(EMPTY_MATCHES);
+          setChallenges(EMPTY_CHALLENGES);
+          setTerrains(EMPTY_TERRAINS);
         }
       }
     } finally {
