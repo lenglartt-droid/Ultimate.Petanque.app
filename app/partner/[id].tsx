@@ -10,6 +10,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown, FadeIn, FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
 import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import QRCode from 'react-native-qrcode-svg';
 import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -525,6 +526,74 @@ export default function PartnerDetailScreen() {
             </Animated.View>
           ) : null}
 
+          {/* ====== QR CODE CARD ====== */}
+          <Animated.View entering={FadeInDown.duration(400).delay(375)} style={st.card}>
+            <View style={st.cardHeader}>
+              <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                <MaterialIcons name="qr-code-2" size={18} color={tierColor} />
+              </View>
+              <Text style={st.cardTitle}>{fr ? 'QR Code Partenaire' : 'Partner QR Code'}</Text>
+            </View>
+            <Text style={{ fontSize: 13, color: '#64748B', lineHeight: 19, marginBottom: 16 }}>
+              {fr
+                ? 'Scannez ou partagez ce QR code pour acceder directement au profil partenaire.'
+                : 'Scan or share this QR code to access the partner profile directly.'}
+            </Text>
+            <View style={st.qrContainer}>
+              <View style={[st.qrFrame, { borderColor: tierColor + '25' }]}>
+                <View style={[st.qrCornerTL, { borderColor: tierColor }]} />
+                <View style={[st.qrCornerTR, { borderColor: tierColor }]} />
+                <View style={[st.qrCornerBL, { borderColor: tierColor }]} />
+                <View style={[st.qrCornerBR, { borderColor: tierColor }]} />
+                <QRCode
+                  value={`https://ultimatepetanque.app/partners?id=${partner.id}`}
+                  size={180}
+                  color={tierColor}
+                  backgroundColor="#FFFFFF"
+                />
+              </View>
+              <Text style={[st.qrLabel, { color: tierColor }]}>{partner.display_name}</Text>
+              <Text style={st.qrUrl}>ultimatepetanque.app</Text>
+            </View>
+            <View style={st.qrActions}>
+              <Pressable
+                style={({ pressed }) => [st.qrShareBtn, { backgroundColor: tierColor }, pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
+                onPress={async () => {
+                  Haptics.selectionAsync();
+                  try {
+                    await Share.share({
+                      message: `${partner.display_name} - ${fr ? 'Partenaire' : 'Partner'} Ultimate Petanque\nhttps://ultimatepetanque.app/partners?id=${partner.id}`,
+                    });
+                  } catch { /* silent */ }
+                }}
+              >
+                <MaterialIcons name="share" size={16} color="#FFF" />
+                <Text style={st.qrShareBtnText}>{fr ? 'Partager le QR' : 'Share QR'}</Text>
+              </Pressable>
+              <Pressable
+                style={({ pressed }) => [st.qrCopyBtn, { borderColor: tierColor + '30' }, pressed && { opacity: 0.8 }]}
+                onPress={async () => {
+                  Haptics.selectionAsync();
+                  try {
+                    const Clipboard = require('expo-clipboard');
+                    await Clipboard.setStringAsync(`https://ultimatepetanque.app/partners?id=${partner.id}`);
+                  } catch { /* silent */ }
+                }}
+              >
+                <MaterialIcons name="content-copy" size={16} color={tierColor} />
+                <Text style={[st.qrCopyBtnText, { color: tierColor }]}>{fr ? 'Copier le lien' : 'Copy link'}</Text>
+              </Pressable>
+            </View>
+            <View style={st.qrTip}>
+              <MaterialIcons name="lightbulb-outline" size={14} color="#94A3B8" />
+              <Text style={st.qrTipText}>
+                {fr
+                  ? 'Ideal pour vos supports marketing, flyers et reseaux sociaux'
+                  : 'Ideal for your marketing materials, flyers and social media'}
+              </Text>
+            </View>
+          </Animated.View>
+
           {/* ====== WEBSITE CTA ====== */}
           {partner.website_url ? (
             <Animated.View entering={FadeInDown.duration(400).delay(400)}>
@@ -730,4 +799,38 @@ const st = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4,
   },
   footerText: { fontSize: 12, fontWeight: '600' },
+
+  // ====== QR CODE ======
+  qrContainer: { alignItems: 'center' as const, marginBottom: 16 },
+  qrFrame: {
+    padding: 20, borderRadius: 20, borderWidth: 1.5,
+    backgroundColor: '#FFF', position: 'relative' as const,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.06, shadowRadius: 12 },
+      android: { elevation: 3 },
+      default: {},
+    }),
+  },
+  qrCornerTL: { position: 'absolute' as const, top: -2, left: -2, width: 24, height: 24, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 12 },
+  qrCornerTR: { position: 'absolute' as const, top: -2, right: -2, width: 24, height: 24, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 12 },
+  qrCornerBL: { position: 'absolute' as const, bottom: -2, left: -2, width: 24, height: 24, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 12 },
+  qrCornerBR: { position: 'absolute' as const, bottom: -2, right: -2, width: 24, height: 24, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 12 },
+  qrLabel: { fontSize: 14, fontWeight: '800' as const, marginTop: 12, letterSpacing: 0.3 },
+  qrUrl: { fontSize: 11, color: '#94A3B8', marginTop: 3, fontWeight: '500' as const },
+  qrActions: { flexDirection: 'row' as const, gap: 10, marginBottom: 12 },
+  qrShareBtn: {
+    flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
+    gap: 8, paddingVertical: 13, borderRadius: 14,
+  },
+  qrShareBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+  qrCopyBtn: {
+    flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
+    gap: 8, paddingVertical: 13, borderRadius: 14, borderWidth: 1.5, backgroundColor: '#FFF',
+  },
+  qrCopyBtnText: { fontSize: 13, fontWeight: '700' as const },
+  qrTip: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8,
+    backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12,
+  },
+  qrTipText: { flex: 1, fontSize: 11, color: '#94A3B8', lineHeight: 16, fontWeight: '500' as const },
 });
