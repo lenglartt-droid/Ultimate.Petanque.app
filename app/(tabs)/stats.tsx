@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -28,7 +28,7 @@ import SponsorBanner from '@/components/ui/SponsorBanner';
 
 import { filterByTime } from '@/hooks/useFilteredStats';
 import type { TimeFilter } from '@/hooks/useFilteredStats';
-import { usePerformanceStats, useTirStats, usePointStats } from '@/hooks/useStatsComputation';
+import { usePerformanceStats, useTirStats, usePointStats, useErrorStats } from '@/hooks/useStatsComputation';
 import { ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar, NAPlaceholder } from '@/components/feature/stats/StatsPrimitives';
 import { PerformanceSection } from '@/components/feature/stats/PerformanceSection';
 import { TirSection } from '@/components/feature/stats/TirSection';
@@ -80,9 +80,9 @@ export default function StatsScreen() {
   const { timeFilter: timeFilterParam } = useLocalSearchParams<{ timeFilter?: string }>();
 
   // Translated filter/tab arrays
-  const TIME_FILTERS = useMemo(() => TIME_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) || t('common', f.key) })), [language]);
-  const PROGRESSION_FILTERS = useMemo(() => PROGRESSION_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
-  const CATEGORY_TABS = useMemo(() => CATEGORY_TAB_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
+  const TIME_FILTERS = React.useMemo(() => TIME_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) || t('common', f.key) })), [language]);
+  const PROGRESSION_FILTERS = React.useMemo(() => PROGRESSION_FILTER_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
+  const CATEGORY_TABS = React.useMemo(() => CATEGORY_TAB_KEYS.map(f => ({ ...f, label: t('stats', f.key) })), [language]);
   
   // Responsive dimensions for tablet
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -124,7 +124,7 @@ export default function StatsScreen() {
   const timeFilteredChallenges = filterByTime(challenges, timeFilter);
 
   // Apply item filter on top of time filter
-  const filteredMatches = useMemo(() => {
+  const filteredMatches = React.useMemo(() => {
     if (itemFilterType === 'match' && selectedMatchId) {
       return timeFilteredMatches.filter(m => m.id === selectedMatchId);
     }
@@ -149,7 +149,7 @@ export default function StatsScreen() {
     return timeFilteredMatches;
   }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId]);
 
-  const filteredChallenges = useMemo(() => {
+  const filteredChallenges = React.useMemo(() => {
     if (itemFilterType === 'challenge' && selectedChallengeId) {
       return timeFilteredChallenges.filter(c => c.id === selectedChallengeId);
     }
@@ -167,7 +167,7 @@ export default function StatsScreen() {
   }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId]);
 
   // Active filter label
-  const activeFilterLabel = useMemo(() => {
+  const activeFilterLabel = React.useMemo(() => {
     if (itemFilterType === 'match' && selectedMatchId) {
       const m = matches.find(m => m.id === selectedMatchId);
       if (m) {
@@ -313,152 +313,10 @@ export default function StatsScreen() {
 // POINT STATS — delegated to shared hook
   const pointStats = usePointStats(filteredMatches, performanceStats.totalMenes);
 
-// ERROR ANALYSIS STATS
-  const errorStats = useMemo(() => {
-    // Total errors
-    const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
-    const totalPointErrors = pointStats.totalPoints - pointStats.pointsSuccess;
-    const totalErrors = totalTirErrors + totalPointErrors;
-    
-    // Error rate by match duration
-    const shortMatches = filteredMatches.filter(m => m.duration && m.duration < 30);
-    const mediumMatches = filteredMatches.filter(m => m.duration && m.duration >= 30 && m.duration < 60);
-    const longMatches = filteredMatches.filter(m => m.duration && m.duration >= 60);
-    
-    const getErrorRate = (matchList: typeof filteredMatches) => {
-      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
-      matchList.forEach(m => {
-        if (m.playerActions) {
-          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-            tirs += pa.actions.tirs;
-            tirsSuccess += pa.actions.tirsSuccess;
-            points += pa.actions.points;
-            pointsSuccess += pa.actions.pointsSuccess;
-          });
-        }
-      });
-      const totalAttempts = tirs + points;
-      const totalSuccess = tirsSuccess + pointsSuccess;
-      return totalAttempts > 0 ? Math.round(((totalAttempts - totalSuccess) / totalAttempts) * 100) : 0;
-    };
-    
-    const shortMatchErrorRate = getErrorRate(shortMatches);
-    const mediumMatchErrorRate = getErrorRate(mediumMatches);
-    const longMatchErrorRate = getErrorRate(longMatches);
-    
-    // Error by format
-    const errorByFormat: Record<string, { errors: number; total: number; rate: number }> = {};
-    ['Tête-à-tête', 'Doublette', 'Triplette'].forEach(format => {
-      const formatMatches = filteredMatches.filter(m => m.format === format);
-      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
-      formatMatches.forEach(m => {
-        if (m.playerActions) {
-          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-            tirs += pa.actions.tirs;
-            tirsSuccess += pa.actions.tirsSuccess;
-            points += pa.actions.points;
-            pointsSuccess += pa.actions.pointsSuccess;
-          });
-        }
-      });
-      const total = tirs + points;
-      const errors = total - (tirsSuccess + pointsSuccess);
-      errorByFormat[format] = {
-        errors, total, rate: total > 0 ? Math.round((errors / total) * 100) : 0,
-      };
-    });
-    
-    // Error by mode
-    const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
-    const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
-    const trainingErrorRate = getErrorRate(trainingMatches);
-    const tournamentErrorRate = getErrorRate(tournamentMatches);
-    
-    // Consecutive errors analysis (streaks of failures)
-    let maxConsecutiveErrors = 0;
-    let currentConsecutiveErrors = 0;
-    let totalErrorStreaks = 0;
-    
-    filteredMatches.forEach(match => {
-      if (match.playerActions) {
-        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
-          if ((pa as any).detailedShots) {
-            (pa as any).detailedShots.forEach((shot: any) => {
-              if (!shot.success) {
-                currentConsecutiveErrors++;
-                maxConsecutiveErrors = Math.max(maxConsecutiveErrors, currentConsecutiveErrors);
-              } else {
-                if (currentConsecutiveErrors >= 3) totalErrorStreaks++;
-                currentConsecutiveErrors = 0;
-              }
-            });
-          }
-        });
-      }
-    });
-    
-    // Detailed tir error types - shot result (where the shot went)
-    const tirErrorResults = {
-      courtDroite: tirStats.tirCourtDroite,
-      courtGauche: tirStats.tirCourtGauche,
-      long: tirStats.tirLong,
-      tirBouchon: tirStats.tirBouchon,
-    };
-    const totalTirErrorResults = Object.values(tirErrorResults).reduce((a, b) => a + b, 0);
-    
-    // Technique failure rates (separate from results to avoid double counting)
-    const tirErrorByTechnique = {
-      auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success,
-      auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success,
-      enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success,
-    };
-    const totalTirErrorByTechnique = Object.values(tirErrorByTechnique).reduce((a, b) => a + b, 0);
-    
-    // Combined for backward compat - use results as primary, technique as secondary
-    const tirErrorTypes = { ...tirErrorResults };
-    const totalTirErrorTyped = totalTirErrorResults > 0 ? totalTirErrorResults : totalTirErrorByTechnique;
-    
-    // Detailed point error types
-    const pointErrorTypes = {
-      rate: pointStats.pointRate,
-      crochete: pointStats.pointCrochete,
-      sorti: pointStats.pointSorti,
-      rouleRate: pointStats.pointRoule.total - pointStats.pointRoule.success,
-      plombeRate: pointStats.pointPlombe.total - pointStats.pointPlombe.success,
-      demiPorteeRate: pointStats.pointDemiPortee.total - pointStats.pointDemiPortee.success,
-      porteeRate: pointStats.pointPortee.total - pointStats.pointPortee.success,
-    };
-    const totalPointErrorTyped = Object.values(pointErrorTypes).reduce((a, b) => a + b, 0);
-    
-    // Most common error
-    const allErrors = [
-      { type: t('stats', 'errorCourtDroite'), count: tirErrorResults.courtDroite, category: 'tir' },
-      { type: t('stats', 'errorCourtGauche'), count: tirErrorResults.courtGauche, category: 'tir' },
-      { type: t('stats', 'errorLong'), count: tirErrorResults.long, category: 'tir' },
-      { type: t('stats', 'errorTirBouchon'), count: tirErrorResults.tirBouchon, category: 'tir' },
-      { type: t('stats', 'errorPointRate'), count: pointErrorTypes.rate, category: 'point' },
-      { type: t('stats', 'errorPointCrochete'), count: pointErrorTypes.crochete, category: 'point' },
-      { type: t('stats', 'errorPointSorti'), count: pointErrorTypes.sorti, category: 'point' },
-    ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
-    
-    const mostCommonError = allErrors.length > 0 ? allErrors[0] : null;
-    
-    return {
-      totalErrors, totalTirErrors, totalPointErrors,
-      tirErrorRate: tirStats.missedRate, pointErrorRate: 100 - pointStats.successRate,
-      shortMatchErrorRate, mediumMatchErrorRate, longMatchErrorRate,
-      shortMatchCount: shortMatches.length, mediumMatchCount: mediumMatches.length, longMatchCount: longMatches.length,
-      errorByFormat, trainingErrorRate, tournamentErrorRate,
-      maxConsecutiveErrors, totalErrorStreaks,
-      tirErrorTypes, totalTirErrorTyped,
-      tirErrorResults, totalTirErrorResults,
-      tirErrorByTechnique, totalTirErrorByTechnique,
-      pointErrorTypes, totalPointErrorTyped,
-      mostCommonError, allErrors,
-    };
-  }, [filteredMatches, tirStats, pointStats, language]);
+// ERROR ANALYSIS STATS — delegated to shared hook
+  const errorStats = useErrorStats(filteredMatches, tirStats, pointStats, t);
 
-  const boulesSetStats = useMemo(() => {
+  const boulesSetStats = React.useMemo(() => {
     const bySet: Record<string, {
       name: string; brand?: string; diameter?: number; weight?: number;
       matches: number; wins: number;
@@ -514,7 +372,7 @@ export default function StatsScreen() {
     return { bySet, sets, hasData: sets.length > 0, totalWithBoules };
   }, [filteredMatches, filteredChallenges, boulesSets]);
 
-  const terrainTypeStats = useMemo(() => {
+  const terrainTypeStats = React.useMemo(() => {
     const getTerrainType = (match: typeof filteredMatches[0]): string | null => {
       if ((match as any).terrainType) return (match as any).terrainType;
       if (match.tournamentId) {
@@ -559,7 +417,7 @@ export default function StatsScreen() {
     return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
   }, [filteredMatches, tournaments]);
 
-  const precisionWorkshopStats = useMemo(() => {
+  const precisionWorkshopStats = React.useMemo(() => {
     const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
     if (precisionChallenges.length === 0) return null;
 
@@ -613,7 +471,7 @@ export default function StatsScreen() {
     };
   }, [filteredChallenges]);
 
-  const progressionData = useMemo(() => {
+  const progressionData = React.useMemo(() => {
     const selectedFilter = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
     const weeksToShow = selectedFilter.weeks;
     
@@ -745,7 +603,7 @@ export default function StatsScreen() {
   }, [matches, progressionFilter]);
 
   // Calculate trends
-  const trends = useMemo(() => {
+  const trends = React.useMemo(() => {
     const data = progressionData.weeklyData;
     if (data.length < 2) return { winRate: 'neutral', tirRate: 'neutral', pointRate: 'neutral', errorRate: 'neutral' };
     
@@ -773,7 +631,7 @@ export default function StatsScreen() {
     };
   }, [progressionData]);
 
-  const challengeProgressionData = useMemo(() => {
+  const challengeProgressionData = React.useMemo(() => {
     const sel = PROGRESSION_FILTERS.find(f => f.id === progressionFilter) || PROGRESSION_FILTERS[1];
     const weeksToShow = sel.weeks;
     const sorted = [...challenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -794,7 +652,7 @@ export default function StatsScreen() {
   // ============================================
   // TOURNAMENT PROGRESSION DATA
   // ============================================
-  const tournamentProgressionData = useMemo(() => {
+  const tournamentProgressionData = React.useMemo(() => {
     const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
     if (finishedTournaments.length === 0) return { items: [], hasData: false };
     const RESULT_RANKS: Record<string, number> = { '1er': 100, '2ème': 85, '3ème': 70, 'Demi-finale': 55, 'Quart de finale': 40, '1/8 finale': 25, 'Poules': 10, 'Autre': 5 };
