@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 
 interface NetworkStatus {
   isConnected: boolean;
@@ -20,32 +19,46 @@ export function useNetworkStatus(): NetworkStatus {
   const wasOffline = useRef(false);
 
   useEffect(() => {
-    const unsubscribe = NetInfo.addEventListener((state: NetInfoState) => {
-      const connected = state.isConnected ?? false;
-      const reachable = state.isInternetReachable;
+    let NetInfo: any = null;
+    try {
+      NetInfo = require('@react-native-community/netinfo').default;
+    } catch (e) {
+      console.log('[useNetworkStatus] NetInfo not available, assuming online');
+      return;
+    }
 
-      setIsConnected(connected);
-      setIsInternetReachable(reachable);
+    let unsubscribe: (() => void) | null = null;
+    try {
+      unsubscribe = NetInfo.addEventListener((state: any) => {
+        const connected = state?.isConnected ?? true;
+        const reachable = state?.isInternetReachable;
 
-      // Detect offline → online transition
-      if (connected && (reachable === true || reachable === null) && wasOffline.current) {
-        setJustReconnected(true);
-        // Auto-reset the flag after a short delay
-        setTimeout(() => setJustReconnected(false), 500);
-      }
+        setIsConnected(connected);
+        setIsInternetReachable(reachable);
 
-      wasOffline.current = !connected;
-    });
+        // Detect offline → online transition
+        if (connected && (reachable === true || reachable === null) && wasOffline.current) {
+          setJustReconnected(true);
+          setTimeout(() => setJustReconnected(false), 500);
+        }
+
+        wasOffline.current = !connected;
+      });
+    } catch (e) {
+      console.log('[useNetworkStatus] addEventListener error:', e);
+    }
 
     // Initial check
-    NetInfo.fetch().then((state: NetInfoState) => {
-      const connected = state.isConnected ?? false;
-      setIsConnected(connected);
-      setIsInternetReachable(state.isInternetReachable);
-      wasOffline.current = !connected;
-    });
+    try {
+      NetInfo.fetch().then((state: any) => {
+        const connected = state?.isConnected ?? true;
+        setIsConnected(connected);
+        setIsInternetReachable(state?.isInternetReachable);
+        wasOffline.current = !connected;
+      }).catch(() => {});
+    } catch { /* silent */ }
 
-    return () => unsubscribe();
+    return () => { try { unsubscribe?.(); } catch { /* silent */ } };
   }, []);
 
   return { isConnected, isInternetReachable, justReconnected };
