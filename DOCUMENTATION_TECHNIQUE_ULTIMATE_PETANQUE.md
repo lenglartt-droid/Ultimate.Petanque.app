@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.2.8  
+**Version :** 1.2.9  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Divers
 ```
 
-### 3.7 Suite de tests (30 fichiers, 580+ tests)
+### 3.7 Suite de tests (32 fichiers, 700+ tests)
 
 ```
 __tests__/
@@ -318,6 +318,8 @@ __tests__/
 │   ├── leaderboardService.test.ts      ← Tests classements (getPeriodDateRange 8 périodes, LEADERBOARD_MIN_MATCHES, sortLeaderboard 5 modes tri + tiebreaker, anti-triche recomputation stats exclusion solo, shadow ban trust <25, poids validation matchs pondérés, filtres géographiques, 500 joueurs performance) (60+ tests)
 │   ├── pushQuotaService.test.ts        ← Tests quotas push (getPushLimit matrice badge×level, getDaysUntilReset, computePushQuota limité/illimité/interdit, resetLabel FR/EN, pourcentages, matrice complète 9 combinaisons, cas limites) (50+ tests)
 │   ├── ambassadorService.test.ts       ← Tests ambassadeurs (AMBASSADOR_LEVELS 3 niveaux/seuils/couleurs/icônes, XP computation, referral code generation format/initiales/charset safe, filtrage ambassadors-only/sponsors-only, isUserSponsor, getFeaturedAmbassadors fallback, promotion eligibilité decouverte→confirme→elite AND logic, progression pourcentages, mapping données, scénarios mixtes) (60+ tests)
+│   ├── sponsoredEventService.test.ts   ← Tests événements sponsorisés (generateEventCode format/charset/unicité, challenge limit matrice badge×level gold/silver/bronze/ambassador, mapEvent mapping champs, leaderboard agrégation scoring/ranking/podiums/wins/avgScore/tri, assignRanks par score desc, comptage attestations témoins, déduplication invitations, scope validation, statuts transitions, cas limites 50 participants) (60+ tests)
+│   ├── ambassadorAnalyticsService.test.ts ← Tests analytics ambassadeurs (computeThreshold 4 périodes, buildDateKeys génération/tri/format dates, groupByAmbassadorAndDate agrégation/zero-fill/multi-ambassadeur, analytics agrégation profile_view/social_click/banner_impression/socialBreakdown par plateforme, computeCTR calcul/arrondi/cas limites, banner analytics détaillé impressionsByPage/clicksByPage/uniqueViewers/évolution quotidienne, comptage défis sponsorisés, pipeline complet filtrage temporel, 1000 événements performance) (70+ tests)
 │   ├── modificationLogService.test.ts ← Tests logs de modification
 │   └── providerHierarchy.test.ts      ← Tests hiérarchie providers
 └── e2e/
@@ -432,7 +434,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
-- **Suite de tests complète** : 30 fichiers (580+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), flux meetup E2E et partage cross-joueurs
+- **Suite de tests complète** : 32 fichiers (700+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E et partage cross-joueurs
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -577,7 +579,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
-- Suite de tests complète : 30 fichiers de tests (580+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
+- Suite de tests complète : 32 fichiers de tests (700+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -694,4 +696,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.8*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.9*
