@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.2.1  
-**Date:** March 27, 2026  
+**Version:** 1.2.2  
+**Date:** March 28, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
 ---
@@ -129,7 +129,7 @@ The user registers via email OTP + password, their player profile is created aut
 | **Auth** | Supabase Auth (email OTP + password) |
 | **Storage** | Supabase Storage (5 buckets: avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
 | **Edge Functions** | Deno (7 functions: delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron) |
-| **State Management** | React Context API (AppContext + LanguageContext) |
+| **State Management** | React Context API (AppContext + LanguageContext) + extracted hooks (useStatsComputation, useProgressionStats, useItemFilter, useFilteredStats, useAppComputed, useAppGetters) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
 | **Maps** | react-native-maps (mobile), react-leaflet (web) |
@@ -223,7 +223,98 @@ app/
 └── ... (30+ other pages)
 ```
 
-### 3.4 Service Architecture (50+ services)
+### 3.4 Hooks Architecture (12+ hooks)
+
+```
+hooks/
+├── useStatsComputation.ts     ← 4 centralized stats hooks (usePerformanceStats, useTirStats, usePointStats, useErrorStats)
+├── useProgressionStats.ts     ← 7 progression hooks (useBoulesSetStats, useTerrainTypeStats, usePrecisionWorkshopStats, useProgressionData, useTrends, useChallengeProgressionData, useTournamentProgressionData)
+├── useItemFilter.ts           ← Item filter hook (match, challenge, tournament, opponent, partner, terrain, boules) — 8 states, 3 memos, 9 callbacks
+├── useFilteredStats.ts        ← Time filtering (filterByTime)
+├── useAppComputed.ts          ← Computed data (selfPlayer, statistics)
+├── useAppGetters.ts           ← 9 getters (getMatchesByTournament, etc.)
+├── useFavorites.ts            ← Favorites management
+├── useBadges.ts               ← Badge progression
+├── useMeetups.ts              ← Meetups
+├── useLanguage.ts             ← i18n hook
+├── useResponsiveDimensions.ts ← Responsive dimensions
+└── useNetworkStatus.native.ts / .web.ts ← Network status
+```
+
+### 3.5 Stats Component Architecture
+
+```
+components/feature/stats/
+├── PerformanceSection.tsx     ← Performance section (wins, formats, ends, terrain, boules)
+├── TirSection.tsx             ← Shooting section (success rate, carreaux, Type×Impact cross tables)
+├── PointSection.tsx           ← Pointing section (success rate, quality, Type×Quality cross tables)
+├── ErrorsSection.tsx          ← Errors section (rates, types, streaks, coaching)
+├── ProgressionModal.tsx       ← Progression modal (~300 lines SVG charts, trend cards, summary table)
+├── ItemPickerModal.tsx        ← Item picker modal (~400 lines, 7 pickers with search)
+├── StatsPrimitives.tsx        ← Shared components (ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar, InsightBox)
+├── statsSharedStyles.ts       ← Shared stats styles
+└── index.ts                   ← Barrel export
+```
+
+### 3.6 Modular i18n (26 files)
+
+```
+constants/i18n/
+├── index.ts              ← Barrel export (merges all topic files)
+├── common.ts             ← Common keys (buttons, labels, errors)
+├── home.ts               ← Home
+├── stats.ts              ← Statistics
+├── match.ts              ← Matches
+├── challenge.ts          ← Challenges
+├── tournament.ts         ← Tournaments
+├── tournamentEnums.ts    ← Tournament enums (formats, types, phases)
+├── player.ts             ← Players
+├── club.ts               ← Clubs
+├── terrain.ts            ← Terrains
+├── equipment.ts          ← Equipment (boules)
+├── directory.ts          ← Directory
+├── history.ts            ← History
+├── profile.ts            ← Profile
+├── map.ts                ← Map
+├── share.ts              ← Sharing
+├── meetup.ts             ← Meetups
+├── leaderboard.ts        ← Leaderboards
+├── palmares.ts           ← Hall of fame
+├── financial.ts          ← Financial
+├── notifications.ts      ← Notifications
+├── password.ts           ← Password
+├── sync.ts               ← Synchronization
+├── legal.ts              ← Legal pages
+├── trustAndReports.ts    ← Trust and reports
+├── gameAndUI.ts          ← Game and UI
+└── misc.ts               ← Miscellaneous
+```
+
+### 3.7 Test Suite (14 files)
+
+```
+__tests__/
+├── unit/
+│   ├── useStatsComputation.test.ts    ← Tests for usePerformanceStats, useTirStats, usePointStats (20+ tests)
+│   ├── useErrorStats.test.ts          ← Tests for useErrorStats (20 tests: errors by duration/format/mode, types, streaks)
+│   ├── useProgressionStats.test.ts    ← Tests for useProgressionData, useTrends, useTournamentProgressionData, useBoulesSetStats, useTerrainTypeStats (40+ tests)
+│   ├── useFilteredStats.test.ts       ← Tests for filterByTime
+│   ├── useAppComputed.test.ts         ← Tests for useAppComputed
+│   ├── useAppGetters.test.ts          ← Tests for useAppGetters
+│   ├── statsSections.test.ts          ← Integration tests for stats sections
+│   ├── crudServices.test.ts           ← CRUD services tests
+│   ├── dataTypes.test.ts              ← Data types tests
+│   ├── databaseSchema.test.ts         ← DB schema tests
+│   ├── i18n.test.ts                   ← i18n tests
+│   ├── modificationLogService.test.ts ← Modification log tests
+│   └── providerHierarchy.test.ts      ← Provider hierarchy tests
+└── e2e/
+    ├── auth-flow.test.ts              ← Authentication flow tests
+    ├── crossPlayerSharing.test.ts     ← Cross-player sharing tests
+    └── selfplayer-verification.test.ts ← selfPlayer verification tests
+```
+
+### 3.8 Service Architecture (50+ services)
 
 ```
 services/
@@ -268,7 +359,7 @@ services/
 └── ... (other specialized services)
 ```
 
-### 3.5 Security (RLS)
+### 3.9 Security (RLS)
 
 - **90+ RLS policies** active on all tables
 - Patterns: `authenticated_*_own_*` (own CRUD), `admin_*` (admin), `public_select_*` (public read), `participant_*_shared_*` (shared items), `shared_select_*` (items shared via code)
@@ -277,7 +368,7 @@ services/
 - **7 Edge Functions**: delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron
 - **30+ performance indexes**
 
-### 3.6 Build Configuration
+### 3.10 Build Configuration
 
 #### babel.config.js
 ```js
@@ -324,9 +415,10 @@ module.exports = function (api) {
 - Automatic weekly digest for Gold partners
 - Meetup system with QR codes
 - Offline mode with queue, replay, and delta sync
-- Complete FR/EN i18n (700+ keys)
+- Complete FR/EN i18n (700+ keys, 26 modular files)
 - Harmonized design system (#0F172A headers, glassmorphic cards, 12 optimized AdBanners)
-- Unit and integration tests
+- **Refactored stats architecture**: centralized hooks, extracted components, shared primitives
+- **Comprehensive test suite**: 14 files (80+ unit and integration tests)
 - AdMob ads (test IDs)
 - Working deep linking
 - Anti-fraud (fingerprinting, trust scores, multi-account detection)
@@ -468,7 +560,9 @@ module.exports = function (api) {
 - RLS enabled on all tables with separate policies
 - Delta sync with soft deletes
 - Local cache with offline fallback
-- Complete i18n (700+ FR/EN keys) split across 2 files (i18n.ts + i18nExtra.ts)
+- Complete i18n (700+ FR/EN keys) modularized into 26 topic-specific files under `constants/i18n/` with barrel export
+- Refactored stats architecture: centralized hooks (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), extracted components (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), shared primitives (`StatsPrimitives`, `statsSharedStyles`)
+- Comprehensive test suite: 14 test files (unit + integration) covering hooks, services, stats components, data types, DB schema
 - Reanimated Babel plugin configured
 - `newArchEnabled: false` for maximum library compatibility
 - `api.cache(true)` in babel.config.js for build optimization
@@ -585,4 +679,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 27, 2026 — Ultimate Petanque v1.2.1*
+*Document updated on March 28, 2026 — Ultimate Petanque v1.2.2*
