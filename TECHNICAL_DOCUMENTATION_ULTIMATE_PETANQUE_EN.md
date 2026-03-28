@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.2.4  
+**Version:** 1.2.5  
 **Date:** March 28, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Miscellaneous
 ```
 
-### 3.7 Test Suite (21 files, 230+ tests)
+### 3.7 Test Suite (24 files, 310+ tests)
 
 ```
 __tests__/
@@ -311,13 +311,15 @@ __tests__/
 │   ├── dataTypes.test.ts              ← Data types tests
 │   ├── databaseSchema.test.ts         ← DB schema tests
 │   ├── i18n.test.ts                   ← i18n tests
+│   ├── exportService.test.ts           ← CSV/PDF export tests (column selection, period/season/tournament/player filtering, escapeCsv, computePeriodStats, comparatives, presets, large datasets) (50+ tests)
 │   ├── modificationLogService.test.ts ← Modification log tests
 │   └── providerHierarchy.test.ts      ← Provider hierarchy tests
 └── e2e/
     ├── auth-flow.test.ts              ← Authentication flow tests
     ├── crossPlayerSharing.test.ts     ← Cross-player sharing tests (10 phases, 20+ tests)
     ├── selfplayer-verification.test.ts ← selfPlayer verification tests
-    └── badge-flow.test.ts             ← Badge unlock E2E flow: context construction, condition evaluation, XP calculation, level progression, DB award lifecycle, trust/ambassador badges, duplicate prevention (50+ tests across 8 phases)
+    ├── badge-flow.test.ts             ← Badge unlock E2E flow: context construction, condition evaluation, XP calculation, level progression, DB award lifecycle, trust/ambassador badges, duplicate prevention (50+ tests across 8 phases)
+    └── meetup-flow.test.ts            ← Meetup full E2E flow: creation → creator auto-accept → share code lookup → accept/decline → participant counting → direct invitation → cancellation → deletion → listing → invitable users (30+ tests across 9 phases)
 ```
 
 ### 3.8 Service Architecture (50+ services)
@@ -424,7 +426,7 @@ module.exports = function (api) {
 - Complete FR/EN i18n (700+ keys, 26 modular files)
 - Harmonized design system (#0F172A headers, glassmorphic cards, 12 optimized AdBanners)
 - **Refactored stats architecture**: centralized hooks, extracted components, shared primitives
-- **Comprehensive test suite**: 21 files (230+ unit, integration, and E2E tests) covering all hooks, services, components, badge lifecycle, meetup logic, and cross-player sharing
+- **Comprehensive test suite**: 24 files (310+ unit, integration, and E2E tests) covering all hooks, services, components, badge lifecycle, meetup logic, CSV/PDF export, meetup E2E flow, and cross-player sharing
 - AdMob ads (test IDs)
 - Working deep linking
 - Anti-fraud (fingerprinting, trust scores, multi-account detection)
@@ -569,7 +571,7 @@ module.exports = function (api) {
 - Local cache with offline fallback
 - Complete i18n (700+ FR/EN keys) modularized into 26 topic-specific files under `constants/i18n/` with barrel export
 - Refactored stats architecture: centralized hooks (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), extracted components (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), shared primitives (`StatsPrimitives`, `statsSharedStyles`)
-- Comprehensive test suite: 21 test files (230+ unit + integration + E2E tests) covering stats hooks (11 hooks), item filtering, badges/XP with full lifecycle, favorites, responsive breakpoints, meetup deduplication/sorting, services, stats components, data types, DB schema, cross-player sharing, and badge unlock flow
+- Comprehensive test suite: 24 test files (310+ unit + integration + E2E tests) covering stats hooks (11 hooks), item filtering, badges/XP with full lifecycle, favorites, responsive breakpoints, meetup deduplication/sorting, CSV/PDF export (columns, filters, stats, presets), meetup E2E flow (9 phases), services, stats components, data types, DB schema, cross-player sharing, and badge unlock flow
 - Reanimated Babel plugin configured
 - `newArchEnabled: false` for maximum library compatibility
 - `api.cache(true)` in babel.config.js for build optimization
@@ -686,4 +688,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 28, 2026 — Ultimate Petanque v1.2.4*
+*Document updated on March 28, 2026 — Ultimate Petanque v1.2.5*
