@@ -330,6 +330,257 @@ describe('useTournamentProgressionData', () => {
 });
 
 // ============================================================
+// Inline computeChallengeProgressionData (mirrors useChallengeProgressionData)
+// ============================================================
+function computeChallengeProgressionData(challenges: Challenge[], weeksToShow: number) {
+  const sorted = [...challenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  if (sorted.length === 0) return { weeklyData: [] as any[], hasData: false };
+  const now = new Date();
+  const start = new Date(now); start.setDate(start.getDate() - (weeksToShow * 7)); start.setDate(start.getDate() - start.getDay());
+  const TYPES = ['10_tirs', '10_tirs_sautee', 'precision'] as const;
+  const cur = new Date(start);
+  const weeklyData: { week: string; byType: Record<string, { count: number; avgRate: number }> }[] = [];
+  while (cur <= now) {
+    const ws = new Date(cur); const we = new Date(cur); we.setDate(we.getDate() + 6);
+    const wc = sorted.filter(c => { const d = new Date(c.date); return d >= ws && d <= we; });
+    const byType: Record<string, { count: number; avgRate: number }> = {};
+    TYPES.forEach(type => {
+      const tc = wc.filter(c => c.type === type);
+      let tr = 0;
+      tc.forEach(c => {
+        if (type === 'precision') { tr += (c.maxPoints && c.maxPoints > 0) ? ((c.totalPoints || 0) / c.maxPoints) * 100 : 0; }
+        else { tr += c.successRate || 0; }
+      });
+      byType[type] = { count: tc.length, avgRate: tc.length > 0 ? Math.round(tr / tc.length) : 0 };
+    });
+    weeklyData.push({ week: `${ws.getDate()}/${ws.getMonth() + 1}`, byType });
+    cur.setDate(cur.getDate() + 7);
+  }
+  return { weeklyData, hasData: weeklyData.some(w => Object.values(w.byType).some(t => t.count > 0)) };
+}
+
+// ============================================================
+// Tests: useChallengeProgressionData
+// ============================================================
+describe('useChallengeProgressionData', () => {
+  test('empty challenges returns no data', () => {
+    const result = computeChallengeProgressionData([], 8);
+    expect(result.hasData).toBe(false);
+    expect(result.weeklyData).toHaveLength(0);
+  });
+
+  test('groups challenges into weekly buckets', () => {
+    const now = new Date();
+    const recent = new Date(now); recent.setDate(recent.getDate() - 2);
+    const challenges = [
+      makeChallenge({ id: 'c1', type: '10_tirs', date: recent.toISOString(), successRate: 80 }),
+      makeChallenge({ id: 'c2', type: '10_tirs', date: recent.toISOString(), successRate: 60 }),
+    ];
+    const result = computeChallengeProgressionData(challenges, 4);
+    expect(result.hasData).toBe(true);
+    const weekWithData = result.weeklyData.find((w: any) => w.byType['10_tirs'].count > 0);
+    expect(weekWithData).toBeDefined();
+    expect(weekWithData!.byType['10_tirs'].count).toBe(2);
+    expect(weekWithData!.byType['10_tirs'].avgRate).toBe(70); // (80+60)/2
+  });
+
+  test('separates challenge types', () => {
+    const now = new Date();
+    const recent = new Date(now); recent.setDate(recent.getDate() - 1);
+    const challenges = [
+      makeChallenge({ id: 'c1', type: '10_tirs', date: recent.toISOString(), successRate: 90 }),
+      makeChallenge({ id: 'c2', type: '10_tirs_sautee', date: recent.toISOString(), successRate: 60 }),
+    ];
+    const result = computeChallengeProgressionData(challenges, 4);
+    const weekWithData = result.weeklyData.find((w: any) => w.byType['10_tirs'].count > 0);
+    expect(weekWithData!.byType['10_tirs'].avgRate).toBe(90);
+    expect(weekWithData!.byType['10_tirs_sautee'].avgRate).toBe(60);
+  });
+
+  test('precision type uses totalPoints/maxPoints formula', () => {
+    const now = new Date();
+    const recent = new Date(now); recent.setDate(recent.getDate() - 1);
+    const challenges = [
+      makeChallenge({ id: 'c1', type: 'precision', date: recent.toISOString(), totalPoints: 80, maxPoints: 100 }),
+    ];
+    const result = computeChallengeProgressionData(challenges, 4);
+    const weekWithData = result.weeklyData.find((w: any) => w.byType['precision'].count > 0);
+    expect(weekWithData!.byType['precision'].avgRate).toBe(80);
+  });
+
+  test('precision with zero maxPoints gives 0 rate', () => {
+    const now = new Date();
+    const recent = new Date(now); recent.setDate(recent.getDate() - 1);
+    const challenges = [
+      makeChallenge({ id: 'c1', type: 'precision', date: recent.toISOString(), totalPoints: 50, maxPoints: 0 }),
+    ];
+    const result = computeChallengeProgressionData(challenges, 4);
+    const weekWithData = result.weeklyData.find((w: any) => w.byType['precision'].count > 0);
+    expect(weekWithData!.byType['precision'].avgRate).toBe(0);
+  });
+
+  test('weeks without challenges have zero counts', () => {
+    const now = new Date();
+    const old = new Date(now); old.setDate(old.getDate() - 30);
+    const challenges = [makeChallenge({ id: 'c1', date: old.toISOString() })];
+    const result = computeChallengeProgressionData(challenges, 4);
+    const emptyWeeks = result.weeklyData.filter((w: any) => w.byType['10_tirs'].count === 0);
+    expect(emptyWeeks.length).toBeGreaterThan(0);
+    emptyWeeks.forEach((w: any) => {
+      expect(w.byType['10_tirs'].avgRate).toBe(0);
+      expect(w.byType['10_tirs_sautee'].avgRate).toBe(0);
+      expect(w.byType['precision'].avgRate).toBe(0);
+    });
+  });
+
+  test('output weekly data has byType with all 3 challenge types', () => {
+    const now = new Date();
+    const challenges = [makeChallenge({ id: 'c1', date: now.toISOString() })];
+    const result = computeChallengeProgressionData(challenges, 4);
+    result.weeklyData.forEach((w: any) => {
+      expect(w.byType).toHaveProperty('10_tirs');
+      expect(w.byType).toHaveProperty('10_tirs_sautee');
+      expect(w.byType).toHaveProperty('precision');
+    });
+  });
+});
+
+// ============================================================
+// Inline computePrecisionWorkshopStats (mirrors usePrecisionWorkshopStats)
+// ============================================================
+function computePrecisionWorkshopStats(filteredChallenges: Challenge[]) {
+  const precisionChallenges = filteredChallenges.filter(c => c.type === 'precision' && c.precisionShots && c.precisionShots.length > 0);
+  if (precisionChallenges.length === 0) return null;
+  const ATELIERS = ['boule_seule', 'derriere_but', 'entre_2_boules', 'sautee', 'tir_but'] as const;
+  const atelierData: Record<string, { totalShots: number; totalPoints: number; maxSingleShot: number; sessions: number; bestSessionScore: number; sessionScores: { date: string; score: number }[]; successCount: number; maxSessionPoints: number; }> = {};
+  ATELIERS.forEach(a => { atelierData[a] = { totalShots: 0, totalPoints: 0, maxSingleShot: 0, sessions: 0, bestSessionScore: 0, sessionScores: [], successCount: 0, maxSessionPoints: 0 }; });
+  const sortedChallenges = [...precisionChallenges].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  sortedChallenges.forEach(c => {
+    const sessionAtelierScores: Record<string, { score: number; shots: number }> = {};
+    c.precisionShots!.forEach(ps => {
+      const data = atelierData[ps.atelier];
+      if (data) {
+        data.totalShots++; data.totalPoints += ps.points; data.maxSingleShot = Math.max(data.maxSingleShot, ps.points);
+        if (ps.points >= 3) data.successCount++;
+        if (!sessionAtelierScores[ps.atelier]) sessionAtelierScores[ps.atelier] = { score: 0, shots: 0 };
+        sessionAtelierScores[ps.atelier].score += ps.points; sessionAtelierScores[ps.atelier].shots++;
+      }
+    });
+    Object.entries(sessionAtelierScores).forEach(([atelier, info]) => {
+      if (atelierData[atelier]) {
+        atelierData[atelier].sessions++;
+        atelierData[atelier].sessionScores.push({ date: c.date, score: info.score });
+        atelierData[atelier].bestSessionScore = Math.max(atelierData[atelier].bestSessionScore, info.score);
+        atelierData[atelier].maxSessionPoints = Math.max(atelierData[atelier].maxSessionPoints, info.shots * 5);
+      }
+    });
+  });
+  const activeAteliers = ATELIERS.filter(a => atelierData[a].totalShots > 0);
+  return { atelierData, totalSessions: precisionChallenges.length, activeAteliers, hasData: activeAteliers.length > 0 };
+}
+
+// ============================================================
+// Tests: usePrecisionWorkshopStats
+// ============================================================
+describe('usePrecisionWorkshopStats', () => {
+  test('returns null for no precision challenges', () => {
+    const challenges = [makeChallenge({ type: '10_tirs' })];
+    expect(computePrecisionWorkshopStats(challenges)).toBeNull();
+  });
+
+  test('returns null for precision challenges without shots', () => {
+    const challenges = [makeChallenge({ type: 'precision', precisionShots: undefined })];
+    expect(computePrecisionWorkshopStats(challenges)).toBeNull();
+  });
+
+  test('returns null for precision challenges with empty shots array', () => {
+    const challenges = [makeChallenge({ type: 'precision', precisionShots: [] })];
+    expect(computePrecisionWorkshopStats(challenges)).toBeNull();
+  });
+
+  test('computes stats for single atelier', () => {
+    const challenges = [makeChallenge({
+      type: 'precision',
+      precisionShots: [
+        { atelier: 'boule_seule', points: 4 },
+        { atelier: 'boule_seule', points: 2 },
+        { atelier: 'boule_seule', points: 5 },
+      ],
+    })];
+    const result = computePrecisionWorkshopStats(challenges)!;
+    expect(result.hasData).toBe(true);
+    expect(result.totalSessions).toBe(1);
+    expect(result.activeAteliers).toContain('boule_seule');
+    const bs = result.atelierData['boule_seule'];
+    expect(bs.totalShots).toBe(3);
+    expect(bs.totalPoints).toBe(11);
+    expect(bs.maxSingleShot).toBe(5);
+    expect(bs.successCount).toBe(2); // points >= 3: 4 and 5
+    expect(bs.sessions).toBe(1);
+    expect(bs.bestSessionScore).toBe(11);
+  });
+
+  test('tracks multiple ateliers separately', () => {
+    const challenges = [makeChallenge({
+      type: 'precision',
+      precisionShots: [
+        { atelier: 'boule_seule', points: 3 },
+        { atelier: 'sautee', points: 5 },
+        { atelier: 'tir_but', points: 1 },
+      ],
+    })];
+    const result = computePrecisionWorkshopStats(challenges)!;
+    expect(result.activeAteliers).toHaveLength(3);
+    expect(result.atelierData['boule_seule'].totalShots).toBe(1);
+    expect(result.atelierData['sautee'].totalShots).toBe(1);
+    expect(result.atelierData['tir_but'].totalShots).toBe(1);
+  });
+
+  test('tracks best session score across multiple sessions', () => {
+    const challenges = [
+      makeChallenge({
+        id: 'c1', type: 'precision', date: '2025-01-01',
+        precisionShots: [{ atelier: 'boule_seule', points: 3 }, { atelier: 'boule_seule', points: 2 }],
+      }),
+      makeChallenge({
+        id: 'c2', type: 'precision', date: '2025-01-10',
+        precisionShots: [{ atelier: 'boule_seule', points: 5 }, { atelier: 'boule_seule', points: 5 }],
+      }),
+    ];
+    const result = computePrecisionWorkshopStats(challenges)!;
+    expect(result.totalSessions).toBe(2);
+    expect(result.atelierData['boule_seule'].sessions).toBe(2);
+    expect(result.atelierData['boule_seule'].bestSessionScore).toBe(10); // 5+5
+    expect(result.atelierData['boule_seule'].sessionScores).toHaveLength(2);
+  });
+
+  test('maxSessionPoints based on shots * 5', () => {
+    const challenges = [makeChallenge({
+      type: 'precision',
+      precisionShots: [
+        { atelier: 'sautee', points: 3 },
+        { atelier: 'sautee', points: 4 },
+        { atelier: 'sautee', points: 2 },
+      ],
+    })];
+    const result = computePrecisionWorkshopStats(challenges)!;
+    expect(result.atelierData['sautee'].maxSessionPoints).toBe(15); // 3 shots * 5
+  });
+
+  test('ignores unknown ateliers', () => {
+    const challenges = [makeChallenge({
+      type: 'precision',
+      precisionShots: [
+        { atelier: 'boule_seule', points: 3 },
+        { atelier: 'unknown_atelier' as any, points: 5 },
+      ],
+    })];
+    const result = computePrecisionWorkshopStats(challenges)!;
+    expect(result.activeAteliers).toEqual(['boule_seule']);
+  });
+});
+
+// ============================================================
 // Inline computeBoulesSetStats (mirrors useBoulesSetStats)
 // ============================================================
 function computeBoulesSetStats(

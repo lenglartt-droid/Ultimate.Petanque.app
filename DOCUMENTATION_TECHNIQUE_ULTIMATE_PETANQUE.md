@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.2.1  
-**Date :** 27 mars 2026  
+**Version :** 1.2.3  
+**Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
 ---
@@ -129,7 +129,7 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | **Auth** | Supabase Auth (OTP email + mot de passe) |
 | **Storage** | Supabase Storage (5 buckets : avatars, boules-photos, club-cards, federation-cards, terrain-photos) |
 | **Edge Functions** | Deno (7 fonctions : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron) |
-| **State Management** | React Context API (AppContext + LanguageContext) |
+| **State Management** | React Context API (AppContext + LanguageContext) + hooks extraits (useStatsComputation, useProgressionStats, useItemFilter, useFilteredStats, useAppComputed, useAppGetters) |
 | **Cache** | AsyncStorage |
 | **Images** | expo-image |
 | **Cartes** | react-native-maps (mobile), react-leaflet (web) |
@@ -223,7 +223,102 @@ app/
 └── ... (30+ autres pages)
 ```
 
-### 3.4 Architecture des services (50+ services)
+### 3.4 Architecture des hooks (12+ hooks)
+
+```
+hooks/
+├── useStatsComputation.ts     ← 4 hooks stats centralisés (usePerformanceStats, useTirStats, usePointStats, useErrorStats)
+├── useProgressionStats.ts     ← 7 hooks progression (useBoulesSetStats, useTerrainTypeStats, usePrecisionWorkshopStats, useProgressionData, useTrends, useChallengeProgressionData, useTournamentProgressionData)
+├── useItemFilter.ts           ← Hook filtrage par item (match, défi, tournoi, adversaire, partenaire, terrain, boules) — 8 états, 3 memos, 9 callbacks
+├── useFilteredStats.ts        ← Filtrage temporel (filterByTime)
+├── useAppComputed.ts          ← Données calculées (selfPlayer, statistics)
+├── useAppGetters.ts           ← 9 getters (getMatchesByTournament, etc.)
+├── useFavorites.ts            ← Gestion des favoris
+├── useBadges.ts               ← Progression des badges
+├── useMeetups.ts              ← Rendez-vous
+├── useLanguage.ts             ← Hook i18n
+├── useResponsiveDimensions.ts ← Dimensions responsive
+└── useNetworkStatus.native.ts / .web.ts ← État réseau
+```
+
+### 3.5 Architecture des composants stats
+
+```
+components/feature/stats/
+├── PerformanceSection.tsx     ← Section Performance (victoires, formats, mènes, terrain, boules)
+├── TirSection.tsx             ← Section Tir (taux de réussite, carreaux, tableaux croisés Type×Impact)
+├── PointSection.tsx           ← Section Point (taux de réussite, qualité, tableaux croisés Type×Qualité)
+├── ErrorsSection.tsx          ← Section Erreurs (taux, types, séries, coaching)
+├── ProgressionModal.tsx       ← Modal progression (~300 lignes SVG charts, trend cards, summary table)
+├── ItemPickerModal.tsx        ← Modal sélection d'item (~400 lignes, 7 pickers avec recherche)
+├── StatsPrimitives.tsx        ← Composants partagés (ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar, InsightBox)
+├── statsSharedStyles.ts       ← Styles partagés stats
+└── index.ts                   ← Barrel export
+```
+
+### 3.6 i18n modulaire (26 fichiers)
+
+```
+constants/i18n/
+├── index.ts              ← Barrel export (fusionne tous les fichiers thématiques)
+├── common.ts             ← Clés communes (boutons, labels, erreurs)
+├── home.ts               ← Accueil
+├── stats.ts              ← Statistiques
+├── match.ts              ← Matchs
+├── challenge.ts          ← Défis
+├── tournament.ts         ← Tournois
+├── tournamentEnums.ts    ← Enums tournois (formats, types, phases)
+├── player.ts             ← Joueurs
+├── club.ts               ← Clubs
+├── terrain.ts            ← Terrains
+├── equipment.ts          ← Équipement (boules)
+├── directory.ts          ← Annuaire
+├── history.ts            ← Historique
+├── profile.ts            ← Profil
+├── map.ts                ← Carte
+├── share.ts              ← Partage
+├── meetup.ts             ← Rendez-vous
+├── leaderboard.ts        ← Classements
+├── palmares.ts           ← Palmarès
+├── financial.ts          ← Financier
+├── notifications.ts      ← Notifications
+├── password.ts           ← Mot de passe
+├── sync.ts               ← Synchronisation
+├── legal.ts              ← Pages légales
+├── trustAndReports.ts    ← Confiance et signalements
+├── gameAndUI.ts          ← Jeu et interface
+└── misc.ts               ← Divers
+```
+
+### 3.7 Suite de tests (18 fichiers)
+
+```
+__tests__/
+├── unit/
+│   ├── useStatsComputation.test.ts    ← Tests usePerformanceStats, useTirStats, usePointStats (20+ tests)
+│   ├── useErrorStats.test.ts          ← Tests useErrorStats (20 tests : erreurs par durée/format/mode, types, séries)
+│   ├── useProgressionStats.test.ts    ← Tests useProgressionData, useTrends, useTournamentProgressionData, useBoulesSetStats, useTerrainTypeStats, useChallengeProgressionData, usePrecisionWorkshopStats (60+ tests)
+│   ├── useItemFilter.test.ts          ← Tests filtrage par item (filteredMatches, filteredChallenges, activeFilterLabel, cas limites) (40+ tests)
+│   ├── useFilteredStats.test.ts       ← Tests filterByTime
+│   ├── useAppComputed.test.ts         ← Tests useAppComputed
+│   ├── useAppGetters.test.ts          ← Tests useAppGetters
+│   ├── useBadges.test.ts              ← Tests calcul XP, badge context, niveaux (25+ tests)
+│   ├── useFavorites.test.ts           ← Tests toggle/check favoris terrains et clubs (20+ tests)
+│   ├── useResponsiveDimensions.test.ts ← Tests breakpoints responsive phone/tablet/desktop (15 tests)
+│   ├── statsSections.test.ts          ← Tests d'intégration sections stats
+│   ├── crudServices.test.ts           ← Tests services CRUD
+│   ├── dataTypes.test.ts              ← Tests types de données
+│   ├── databaseSchema.test.ts         ← Tests schéma DB
+│   ├── i18n.test.ts                   ← Tests i18n
+│   ├── modificationLogService.test.ts ← Tests logs de modification
+│   └── providerHierarchy.test.ts      ← Tests hiérarchie providers
+└── e2e/
+    ├── auth-flow.test.ts              ← Tests flux authentification
+    ├── crossPlayerSharing.test.ts     ← Tests partage cross-joueurs
+    └── selfplayer-verification.test.ts ← Tests vérification selfPlayer
+```
+
+### 3.8 Architecture des services (50+ services)
 
 ```
 services/
@@ -268,7 +363,7 @@ services/
 └── ... (autres services spécialisés)
 ```
 
-### 3.5 Sécurité (RLS)
+### 3.9 Sécurité (RLS)
 
 - **90+ politiques RLS** actives sur toutes les tables
 - Patterns : `authenticated_*_own_*` (CRUD propre), `admin_*` (admin), `public_select_*` (lecture publique), `participant_*_shared_*` (items partagés), `shared_select_*` (items partagés via code)
@@ -277,7 +372,7 @@ services/
 - **7 Edge Functions** : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron
 - **30+ index** de performance
 
-### 3.6 Configuration de build
+### 3.10 Configuration de build
 
 #### babel.config.js
 ```js
@@ -324,9 +419,10 @@ module.exports = function (api) {
 - Digest hebdomadaire automatique pour partenaires Or
 - Système de rendez-vous (meetups) avec QR codes
 - Offline mode avec queue, replay et delta sync
-- i18n FR/EN complet (700+ clés)
+- i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
-- Tests unitaires et d'intégration
+- **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
+- **Suite de tests complète** : 18 fichiers (160+ tests unitaires et d'intégration)
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -376,6 +472,7 @@ module.exports = function (api) {
 | 11 | **Tests appareils** | Tester sur iOS et Android physiques | Télécharger APK via OnSpace, utiliser QR code OnSpace App pour iOS | — | Haute |
 | 12 | **Assets Stores** | Guide complet dans `STORE_ASSETS_GUIDE.md` | — | Capturer screenshots, rédiger descriptions en suivant le guide | Haute |
 | 13 | **Pages légales hébergées** | Fichiers HTML prêts dans `public/` | Héberger `public/privacy-policy.html` et `public/terms-of-service.html` sur une URL publique | Renseigner les URLs dans les stores | Haute |
+| 14 | **QR Codes partage** | Page "Invitez vos amis !" avec QR codes dynamiques | Remplacer les URLs des QR codes par les liens de téléchargement réels (App Store + Google Play) dans les composants QR de partage | Copier les liens stores depuis App Store Connect et Google Play Console | Moyenne |
 
 ---
 
@@ -468,7 +565,9 @@ module.exports = function (api) {
 - RLS activé sur toutes les tables avec politiques séparées
 - Delta sync avec soft deletes
 - Cache local avec fallback offline
-- i18n complet (700+ clés FR/EN) répartis sur 2 fichiers (i18n.ts + i18nExtra.ts)
+- i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
+- Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
+- Suite de tests complète : 18 fichiers de tests (160+ tests unitaires + intégration) couvrant hooks stats (11 hooks), filtrage par item, badges/XP, favoris, responsive, services, composants stats, types de données, schéma DB
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -585,4 +684,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 27 mars 2026 — Ultimate Petanque v1.2.1*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.3*
