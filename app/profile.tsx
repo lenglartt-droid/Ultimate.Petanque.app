@@ -904,6 +904,7 @@ export default function ProfileScreen() {
         <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
           {/* Avatar with photo picker */}
           <Pressable 
+            testID="profile-avatar"
             style={styles.avatarContainer}
             onPress={showPhotoOptions}
             disabled={uploadingPhoto}
@@ -1878,6 +1879,7 @@ export default function ProfileScreen() {
         {!isEditing && (
           <View style={styles.logoutSection}>
             <Pressable 
+              testID="logout-button"
               style={styles.logoutButton}
               onPress={handleLogout}
               disabled={operationLoading}
@@ -1893,6 +1895,7 @@ export default function ProfileScreen() {
             </Pressable>
 
             <Pressable 
+              testID="delete-account-button"
               style={styles.deleteAccountButton}
               onPress={() => setShowDeleteModal(true)}
             >
