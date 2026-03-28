@@ -7,3 +7,5 @@ export { PerformanceSection } from './PerformanceSection';
 export { TirSection } from './TirSection';
 export { PointSection } from './PointSection';
 export { ErrorsSection } from './ErrorsSection';
+export { ProgressionModal } from './ProgressionModal';
+export { ItemPickerModal } from './ItemPickerModal';
