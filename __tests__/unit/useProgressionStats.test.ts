@@ -328,3 +328,308 @@ describe('useTournamentProgressionData', () => {
     expect(item).toHaveProperty('resultRank');
   });
 });
+
+// ============================================================
+// Inline computeBoulesSetStats (mirrors useBoulesSetStats)
+// ============================================================
+function computeBoulesSetStats(
+  filteredMatches: Match[],
+  filteredChallenges: Challenge[],
+  boulesSets: { id: string; name: string; brand?: string; diameter?: number; weight?: number }[],
+) {
+  const bySet: Record<string, {
+    name: string; brand?: string; diameter?: number; weight?: number;
+    matches: number; wins: number;
+    tirs: number; tirsSuccess: number; carreaux: number;
+    points: number; pointsSuccess: number;
+    challenges: number;
+    devantBoule: number; pointQualitiesSuccess: number;
+  }> = {};
+
+  filteredMatches.forEach(match => {
+    if (!match.boulesSetId) return;
+    const bs = boulesSets.find(b => b.id === match.boulesSetId);
+    if (!bs) return;
+    if (!bySet[match.boulesSetId]) bySet[match.boulesSetId] = {
+      name: bs.name, brand: bs.brand, diameter: bs.diameter, weight: bs.weight,
+      matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0, challenges: 0,
+      devantBoule: 0, pointQualitiesSuccess: 0,
+    };
+    const s = bySet[match.boulesSetId];
+    s.matches++;
+    if (match.winner === 'A') s.wins++;
+    if (match.playerActions) {
+      match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+        s.tirs += pa.actions.tirs;
+        s.tirsSuccess += pa.actions.tirsSuccess;
+        s.carreaux += pa.actions.carreaux;
+        s.points += pa.actions.points;
+        s.pointsSuccess += pa.actions.pointsSuccess;
+      });
+    }
+  });
+
+  filteredChallenges.forEach(ch => {
+    if (!ch.boulesSetId) return;
+    const bs = boulesSets.find(b => b.id === ch.boulesSetId);
+    if (!bs) return;
+    if (!bySet[ch.boulesSetId]) bySet[ch.boulesSetId] = {
+      name: bs.name, brand: bs.brand, diameter: bs.diameter, weight: bs.weight,
+      matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0, challenges: 0,
+      devantBoule: 0, pointQualitiesSuccess: 0,
+    };
+    bySet[ch.boulesSetId].challenges++;
+  });
+
+  const sets = Object.keys(bySet).sort((a, b) => (bySet[b].matches + bySet[b].challenges) - (bySet[a].matches + bySet[a].challenges));
+  const totalWithBoules = sets.reduce((sum, id) => sum + bySet[id].matches, 0);
+  return { bySet, sets, hasData: sets.length > 0, totalWithBoules };
+}
+
+// ============================================================
+// Tests: useBoulesSetStats
+// ============================================================
+describe('useBoulesSetStats', () => {
+  const BS_A = { id: 'bs-a', name: 'Obut ATX', brand: 'Obut', diameter: 71, weight: 690 };
+  const BS_B = { id: 'bs-b', name: 'MS 2110', brand: 'MS', diameter: 72, weight: 700 };
+
+  test('returns empty when no boules set data', () => {
+    const result = computeBoulesSetStats([], [], []);
+    expect(result.hasData).toBe(false);
+    expect(result.sets).toHaveLength(0);
+    expect(result.totalWithBoules).toBe(0);
+  });
+
+  test('groups matches by boules set', () => {
+    const matches = [
+      makeMatch({ id: 'm1', boulesSetId: 'bs-a', winner: 'A' }),
+      makeMatch({ id: 'm2', boulesSetId: 'bs-a', winner: 'B' }),
+      makeMatch({ id: 'm3', boulesSetId: 'bs-b', winner: 'A' }),
+    ];
+    const result = computeBoulesSetStats(matches, [], [BS_A, BS_B]);
+    expect(result.hasData).toBe(true);
+    expect(result.sets).toHaveLength(2);
+    expect(result.bySet['bs-a'].matches).toBe(2);
+    expect(result.bySet['bs-a'].wins).toBe(1);
+    expect(result.bySet['bs-b'].matches).toBe(1);
+    expect(result.bySet['bs-b'].wins).toBe(1);
+  });
+
+  test('ignores matches without boulesSetId', () => {
+    const matches = [
+      makeMatch({ id: 'm1', boulesSetId: 'bs-a' }),
+      makeMatch({ id: 'm2', boulesSetId: undefined }),
+    ];
+    const result = computeBoulesSetStats(matches, [], [BS_A]);
+    expect(result.totalWithBoules).toBe(1);
+  });
+
+  test('ignores matches with unknown boules set id', () => {
+    const matches = [makeMatch({ id: 'm1', boulesSetId: 'unknown-id' })];
+    const result = computeBoulesSetStats(matches, [], [BS_A]);
+    expect(result.hasData).toBe(false);
+  });
+
+  test('accumulates tir/point stats from team A actions', () => {
+    const matches = [makeMatch({
+      id: 'm1', boulesSetId: 'bs-a',
+      playerActions: [
+        { playerId: 'p1', playerName: 'A', team: 'A', actions: { tirs: 10, tirsSuccess: 8, points: 6, pointsSuccess: 4, carreaux: 3 } },
+        { playerId: 'p2', playerName: 'B', team: 'B', actions: { tirs: 12, tirsSuccess: 9, points: 8, pointsSuccess: 6, carreaux: 5 } },
+      ],
+    })];
+    const result = computeBoulesSetStats(matches, [], [BS_A]);
+    const set = result.bySet['bs-a'];
+    expect(set.tirs).toBe(10);        // only team A
+    expect(set.tirsSuccess).toBe(8);
+    expect(set.carreaux).toBe(3);
+    expect(set.points).toBe(6);
+    expect(set.pointsSuccess).toBe(4);
+  });
+
+  test('counts challenges per boules set', () => {
+    const challenges = [
+      makeChallenge({ id: 'c1', boulesSetId: 'bs-a' }),
+      makeChallenge({ id: 'c2', boulesSetId: 'bs-a' }),
+      makeChallenge({ id: 'c3', boulesSetId: 'bs-b' }),
+    ];
+    const result = computeBoulesSetStats([], challenges, [BS_A, BS_B]);
+    expect(result.bySet['bs-a'].challenges).toBe(2);
+    expect(result.bySet['bs-b'].challenges).toBe(1);
+  });
+
+  test('sorts sets by total activity (matches + challenges) descending', () => {
+    const matches = [
+      makeMatch({ id: 'm1', boulesSetId: 'bs-b' }),
+      makeMatch({ id: 'm2', boulesSetId: 'bs-b' }),
+      makeMatch({ id: 'm3', boulesSetId: 'bs-b' }),
+    ];
+    const challenges = [
+      makeChallenge({ id: 'c1', boulesSetId: 'bs-a' }),
+    ];
+    const result = computeBoulesSetStats(matches, challenges, [BS_A, BS_B]);
+    expect(result.sets[0]).toBe('bs-b'); // 3 matches > 1 challenge
+    expect(result.sets[1]).toBe('bs-a');
+  });
+
+  test('populates brand/diameter/weight from boules set', () => {
+    const matches = [makeMatch({ id: 'm1', boulesSetId: 'bs-a' })];
+    const result = computeBoulesSetStats(matches, [], [BS_A]);
+    const set = result.bySet['bs-a'];
+    expect(set.name).toBe('Obut ATX');
+    expect(set.brand).toBe('Obut');
+    expect(set.diameter).toBe(71);
+    expect(set.weight).toBe(690);
+  });
+
+  test('challenge-only set still appears in results', () => {
+    const challenges = [makeChallenge({ id: 'c1', boulesSetId: 'bs-a' })];
+    const result = computeBoulesSetStats([], challenges, [BS_A]);
+    expect(result.hasData).toBe(true);
+    expect(result.bySet['bs-a'].matches).toBe(0);
+    expect(result.bySet['bs-a'].challenges).toBe(1);
+    expect(result.totalWithBoules).toBe(0); // totalWithBoules counts matches only
+  });
+});
+
+// ============================================================
+// Inline computeTerrainTypeStats (mirrors useTerrainTypeStats)
+// ============================================================
+function computeTerrainTypeStats(
+  filteredMatches: Match[],
+  tournaments: Tournament[],
+) {
+  const getTerrainType = (match: Match): string | null => {
+    if ((match as any).terrainType) return (match as any).terrainType;
+    if (match.tournamentId) {
+      const tour = tournaments.find(t => t.id === match.tournamentId);
+      if (tour?.terrainType) return tour.terrainType;
+    }
+    return null;
+  };
+
+  const byTerrain: Record<string, {
+    matches: number; wins: number;
+    tirs: number; tirsSuccess: number; carreaux: number;
+    points: number; pointsSuccess: number;
+  }> = {};
+
+  filteredMatches.forEach(match => {
+    const tt = getTerrainType(match);
+    if (!tt) return;
+    if (!byTerrain[tt]) byTerrain[tt] = { matches: 0, wins: 0, tirs: 0, tirsSuccess: 0, carreaux: 0, points: 0, pointsSuccess: 0 };
+    const s = byTerrain[tt];
+    s.matches++;
+    if (match.winner === 'A') s.wins++;
+    if (match.playerActions) {
+      match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+        s.tirs += pa.actions.tirs;
+        s.tirsSuccess += pa.actions.tirsSuccess;
+        s.carreaux += pa.actions.carreaux;
+        s.points += pa.actions.points;
+        s.pointsSuccess += pa.actions.pointsSuccess;
+      });
+    }
+  });
+
+  const types = Object.keys(byTerrain).sort((a, b) => byTerrain[b].matches - byTerrain[a].matches);
+  const totalTerrainMatches = types.reduce((sum, t) => sum + byTerrain[t].matches, 0);
+  return { byTerrain, types, hasData: types.length > 0, totalTerrainMatches };
+}
+
+// ============================================================
+// Tests: useTerrainTypeStats
+// ============================================================
+describe('useTerrainTypeStats', () => {
+  test('returns empty when no terrain type data', () => {
+    const result = computeTerrainTypeStats([makeMatch()], []);
+    expect(result.hasData).toBe(false);
+    expect(result.types).toHaveLength(0);
+  });
+
+  test('groups matches by direct terrainType', () => {
+    const matches = [
+      makeMatch({ id: 'm1', terrainType: 'Gravillon' as any, winner: 'A' }),
+      makeMatch({ id: 'm2', terrainType: 'Gravillon' as any, winner: 'B' }),
+      makeMatch({ id: 'm3', terrainType: 'Terre battue' as any, winner: 'A' }),
+    ] as any[];
+    const result = computeTerrainTypeStats(matches, []);
+    expect(result.hasData).toBe(true);
+    expect(result.types).toContain('Gravillon');
+    expect(result.types).toContain('Terre battue');
+    expect(result.byTerrain['Gravillon'].matches).toBe(2);
+    expect(result.byTerrain['Gravillon'].wins).toBe(1);
+    expect(result.byTerrain['Terre battue'].matches).toBe(1);
+    expect(result.byTerrain['Terre battue'].wins).toBe(1);
+  });
+
+  test('falls back to tournament terrainType when match has none', () => {
+    const matches = [makeMatch({ id: 'm1', tournamentId: 'tour-1' })];
+    const tournaments = [makeTournament({ id: 'tour-1', terrainType: 'Sable' } as any)];
+    const result = computeTerrainTypeStats(matches, tournaments);
+    expect(result.hasData).toBe(true);
+    expect(result.byTerrain['Sable'].matches).toBe(1);
+  });
+
+  test('direct match terrainType takes precedence over tournament', () => {
+    const matches = [makeMatch({ id: 'm1', tournamentId: 'tour-1', terrainType: 'Asphalte' as any })] as any[];
+    const tournaments = [makeTournament({ id: 'tour-1', terrainType: 'Sable' } as any)];
+    const result = computeTerrainTypeStats(matches, tournaments);
+    expect(result.byTerrain['Asphalte']).toBeDefined();
+    expect(result.byTerrain['Sable']).toBeUndefined();
+  });
+
+  test('accumulates tir/point stats per terrain type', () => {
+    const matches = [
+      makeMatch({
+        id: 'm1', terrainType: 'Gravillon' as any,
+        playerActions: [
+          { playerId: 'p1', playerName: 'A', team: 'A', actions: { tirs: 8, tirsSuccess: 6, points: 5, pointsSuccess: 3, carreaux: 2 } },
+          { playerId: 'p2', playerName: 'B', team: 'B', actions: { tirs: 10, tirsSuccess: 7, points: 7, pointsSuccess: 5, carreaux: 4 } },
+        ],
+      }),
+      makeMatch({
+        id: 'm2', terrainType: 'Gravillon' as any,
+        playerActions: [
+          { playerId: 'p1', playerName: 'A', team: 'A', actions: { tirs: 12, tirsSuccess: 9, points: 4, pointsSuccess: 2, carreaux: 1 } },
+        ],
+      }),
+    ] as any[];
+    const result = computeTerrainTypeStats(matches, []);
+    const g = result.byTerrain['Gravillon'];
+    expect(g.tirs).toBe(20);         // 8 + 12 (team A only)
+    expect(g.tirsSuccess).toBe(15);  // 6 + 9
+    expect(g.carreaux).toBe(3);      // 2 + 1
+    expect(g.points).toBe(9);        // 5 + 4
+    expect(g.pointsSuccess).toBe(5); // 3 + 2
+  });
+
+  test('sorts types by match count descending', () => {
+    const matches = [
+      makeMatch({ id: 'm1', terrainType: 'Sable' as any }),
+      makeMatch({ id: 'm2', terrainType: 'Gravillon' as any }),
+      makeMatch({ id: 'm3', terrainType: 'Gravillon' as any }),
+      makeMatch({ id: 'm4', terrainType: 'Gravillon' as any }),
+    ] as any[];
+    const result = computeTerrainTypeStats(matches, []);
+    expect(result.types[0]).toBe('Gravillon');
+    expect(result.types[1]).toBe('Sable');
+  });
+
+  test('totalTerrainMatches sums all typed matches', () => {
+    const matches = [
+      makeMatch({ id: 'm1', terrainType: 'Sable' as any }),
+      makeMatch({ id: 'm2', terrainType: 'Gravillon' as any }),
+      makeMatch({ id: 'm3' }), // no terrain type
+    ] as any[];
+    const result = computeTerrainTypeStats(matches, []);
+    expect(result.totalTerrainMatches).toBe(2);
+  });
+
+  test('matches without playerActions do not crash', () => {
+    const matches = [makeMatch({ id: 'm1', terrainType: 'Sable' as any, playerActions: undefined })] as any[];
+    expect(() => computeTerrainTypeStats(matches, [])).not.toThrow();
+    const result = computeTerrainTypeStats(matches, []);
+    expect(result.byTerrain['Sable'].tirs).toBe(0);
+  });
+});

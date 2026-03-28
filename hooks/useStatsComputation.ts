@@ -1,5 +1,5 @@
 /**
- * Shared stats computation hook.
+ * Shared stats computation hooks.
  * Extracts heavy useMemo calculations from stats.tsx.
  */
 import { useMemo } from 'react';
@@ -321,4 +321,153 @@ export function usePointStats(filteredMatches: Match[], totalMenes: number) {
       failureQualitiesTotal,
     };
   }, [filteredMatches, totalMenes]);
+}
+
+export function useErrorStats(
+  filteredMatches: Match[],
+  tirStats: { totalTirs: number; tirsSuccess: number; missedRate: number; tirCourtDroite: number; tirCourtGauche: number; tirLong: number; tirBouchon: number; tirAuFer: { total: number; success: number }; tirAuPlomb: { total: number; success: number }; tirEnRafle: { total: number; success: number }; hasCrossResultData: boolean; totalCrossResultTracked: number },
+  pointStats: { totalPoints: number; pointsSuccess: number; successRate: number; pointRate: number; pointCrochete: number; pointSorti: number; pointRoule: { total: number; success: number }; pointPlombe: { total: number; success: number }; pointDemiPortee: { total: number; success: number }; pointPortee: { total: number; success: number } },
+  t: (section: string, key: string) => string,
+) {
+  return useMemo(() => {
+    const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
+    const totalPointErrors = pointStats.totalPoints - pointStats.pointsSuccess;
+    const totalErrors = totalTirErrors + totalPointErrors;
+
+    // Error rate by match duration
+    const shortMatches = filteredMatches.filter(m => m.duration && m.duration < 30);
+    const mediumMatches = filteredMatches.filter(m => m.duration && m.duration >= 30 && m.duration < 60);
+    const longMatches = filteredMatches.filter(m => m.duration && m.duration >= 60);
+
+    const getErrorRate = (matchList: Match[]) => {
+      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
+      matchList.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            tirs += pa.actions.tirs;
+            tirsSuccess += pa.actions.tirsSuccess;
+            points += pa.actions.points;
+            pointsSuccess += pa.actions.pointsSuccess;
+          });
+        }
+      });
+      const totalAttempts = tirs + points;
+      const totalSuccess = tirsSuccess + pointsSuccess;
+      return totalAttempts > 0 ? Math.round(((totalAttempts - totalSuccess) / totalAttempts) * 100) : 0;
+    };
+
+    const shortMatchErrorRate = getErrorRate(shortMatches);
+    const mediumMatchErrorRate = getErrorRate(mediumMatches);
+    const longMatchErrorRate = getErrorRate(longMatches);
+
+    // Error by format
+    const errorByFormat: Record<string, { errors: number; total: number; rate: number }> = {};
+    ['Tête-à-tête', 'Doublette', 'Triplette'].forEach(format => {
+      const formatMatches = filteredMatches.filter(m => m.format === format);
+      let tirs = 0, tirsSuccess = 0, points = 0, pointsSuccess = 0;
+      formatMatches.forEach(m => {
+        if (m.playerActions) {
+          m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+            tirs += pa.actions.tirs;
+            tirsSuccess += pa.actions.tirsSuccess;
+            points += pa.actions.points;
+            pointsSuccess += pa.actions.pointsSuccess;
+          });
+        }
+      });
+      const total = tirs + points;
+      const errors = total - (tirsSuccess + pointsSuccess);
+      errorByFormat[format] = {
+        errors, total, rate: total > 0 ? Math.round((errors / total) * 100) : 0,
+      };
+    });
+
+    // Error by mode
+    const trainingMatches = filteredMatches.filter(m => m.mode === 'Entraînement');
+    const tournamentMatches = filteredMatches.filter(m => m.mode === 'Tournoi');
+    const trainingErrorRate = getErrorRate(trainingMatches);
+    const tournamentErrorRate = getErrorRate(tournamentMatches);
+
+    // Consecutive errors analysis
+    let maxConsecutiveErrors = 0;
+    let currentConsecutiveErrors = 0;
+    let totalErrorStreaks = 0;
+
+    filteredMatches.forEach(match => {
+      if (match.playerActions) {
+        match.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          if ((pa as any).detailedShots) {
+            (pa as any).detailedShots.forEach((shot: any) => {
+              if (!shot.success) {
+                currentConsecutiveErrors++;
+                maxConsecutiveErrors = Math.max(maxConsecutiveErrors, currentConsecutiveErrors);
+              } else {
+                if (currentConsecutiveErrors >= 3) totalErrorStreaks++;
+                currentConsecutiveErrors = 0;
+              }
+            });
+          }
+        });
+      }
+    });
+
+    // Detailed tir error types - shot result
+    const tirErrorResults = {
+      courtDroite: tirStats.tirCourtDroite,
+      courtGauche: tirStats.tirCourtGauche,
+      long: tirStats.tirLong,
+      tirBouchon: tirStats.tirBouchon,
+    };
+    const totalTirErrorResults = Object.values(tirErrorResults).reduce((a, b) => a + b, 0);
+
+    // Technique failure rates
+    const tirErrorByTechnique = {
+      auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success,
+      auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success,
+      enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success,
+    };
+    const totalTirErrorByTechnique = Object.values(tirErrorByTechnique).reduce((a, b) => a + b, 0);
+
+    const tirErrorTypes = { ...tirErrorResults };
+    const totalTirErrorTyped = totalTirErrorResults > 0 ? totalTirErrorResults : totalTirErrorByTechnique;
+
+    // Detailed point error types
+    const pointErrorTypes = {
+      rate: pointStats.pointRate,
+      crochete: pointStats.pointCrochete,
+      sorti: pointStats.pointSorti,
+      rouleRate: pointStats.pointRoule.total - pointStats.pointRoule.success,
+      plombeRate: pointStats.pointPlombe.total - pointStats.pointPlombe.success,
+      demiPorteeRate: pointStats.pointDemiPortee.total - pointStats.pointDemiPortee.success,
+      porteeRate: pointStats.pointPortee.total - pointStats.pointPortee.success,
+    };
+    const totalPointErrorTyped = Object.values(pointErrorTypes).reduce((a, b) => a + b, 0);
+
+    // Most common error
+    const allErrors = [
+      { type: t('stats', 'errorCourtDroite'), count: tirErrorResults.courtDroite, category: 'tir' },
+      { type: t('stats', 'errorCourtGauche'), count: tirErrorResults.courtGauche, category: 'tir' },
+      { type: t('stats', 'errorLong'), count: tirErrorResults.long, category: 'tir' },
+      { type: t('stats', 'errorTirBouchon'), count: tirErrorResults.tirBouchon, category: 'tir' },
+      { type: t('stats', 'errorPointRate'), count: pointErrorTypes.rate, category: 'point' },
+      { type: t('stats', 'errorPointCrochete'), count: pointErrorTypes.crochete, category: 'point' },
+      { type: t('stats', 'errorPointSorti'), count: pointErrorTypes.sorti, category: 'point' },
+    ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
+
+    const mostCommonError = allErrors.length > 0 ? allErrors[0] : null;
+
+    return {
+      totalErrors, totalTirErrors, totalPointErrors,
+      tirErrorRate: tirStats.missedRate, pointErrorRate: 100 - pointStats.successRate,
+      shortMatchErrorRate, mediumMatchErrorRate, longMatchErrorRate,
+      shortMatchCount: shortMatches.length, mediumMatchCount: mediumMatches.length, longMatchCount: longMatches.length,
+      errorByFormat, trainingErrorRate, tournamentErrorRate,
+      maxConsecutiveErrors, totalErrorStreaks,
+      tirErrorTypes, totalTirErrorTyped,
+      tirErrorResults, totalTirErrorResults,
+      tirErrorByTechnique, totalTirErrorByTechnique,
+      pointErrorTypes, totalPointErrorTyped,
+      mostCommonError, allErrors,
+    };
+  }, [filteredMatches, tirStats, pointStats, t]);
 }
