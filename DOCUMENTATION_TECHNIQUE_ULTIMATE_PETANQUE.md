@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.2.5  
+**Version :** 1.2.6  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Divers
 ```
 
-### 3.7 Suite de tests (24 fichiers, 310+ tests)
+### 3.7 Suite de tests (26 fichiers, 380+ tests)
 
 ```
 __tests__/
@@ -312,6 +312,8 @@ __tests__/
 │   ├── databaseSchema.test.ts         ← Tests schéma DB
 │   ├── i18n.test.ts                   ← Tests i18n
 │   ├── exportService.test.ts           ← Tests export CSV/PDF (sélection colonnes, filtrage période/saison/tournoi/joueur, escapeCsv, computePeriodStats, comparatifs, préréglages, gros volumes) (50+ tests)
+│   ├── streakService.test.ts           ← Tests séries consécutives (computeStreakFromDates, déduplication, bestStreak, playedToday, streakAtRisk, getStreakStatus FR/EN, getDailyActivityLast7Days, 365 jours) (40+ tests)
+│   ├── trustScoreService.test.ts       ← Tests score de confiance (computeQuickTrustScore 10 facteurs, seuils niveaux, couleurs/icônes/labels FR/EN, badges descriptions, poids validation match, stacking pénalités, cas limites) (70+ tests)
 │   ├── modificationLogService.test.ts ← Tests logs de modification
 │   └── providerHierarchy.test.ts      ← Tests hiérarchie providers
 └── e2e/
@@ -426,7 +428,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
-- **Suite de tests complète** : 24 fichiers (310+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, flux meetup E2E et partage cross-joueurs
+- **Suite de tests complète** : 26 fichiers (380+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, flux meetup E2E et partage cross-joueurs
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -571,7 +573,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
-- Suite de tests complète : 24 fichiers de tests (310+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
+- Suite de tests complète : 26 fichiers de tests (380+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -688,4 +690,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.5*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.6*
