@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.2.9  
+**Version:** 1.3.2  
 **Date:** March 28, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Miscellaneous
 ```
 
-### 3.7 Test Suite (32 files, 700+ tests)
+### 3.7 Test Suite (61 files, 2100+ tests)
 
 ```
 __tests__/
@@ -320,8 +320,37 @@ __tests__/
 │   ├── ambassadorService.test.ts       ← Ambassador tests (AMBASSADOR_LEVELS 3 levels/thresholds/colors/icons, XP computation, referral code generation format/initials/safe charset, ambassadors-only/sponsors-only filtering, isUserSponsor, getFeaturedAmbassadors fallback, promotion eligibility decouverte→confirme→elite AND logic, progress percentages, data mapping, mixed scenarios) (60+ tests)
 │   ├── sponsoredEventService.test.ts   ← Sponsored event tests (generateEventCode format/charset/uniqueness, challenge limit badge×level matrix gold/silver/bronze/ambassador, mapEvent field mapping, leaderboard aggregation scoring/ranking/podiums/wins/avgScore/sort, assignRanks by score desc, witness attestation counting, invitation deduplication, scope validation, status transitions, 50-participant edge cases) (60+ tests)
 │   ├── ambassadorAnalyticsService.test.ts ← Ambassador analytics tests (computeThreshold 4 periods, buildDateKeys generation/ordering/format, groupByAmbassadorAndDate aggregation/zero-fill/multi-ambassador, analytics aggregation profile_view/social_click/banner_impression/socialBreakdown by platform, computeCTR calculation/rounding/edge cases, detailed banner analytics impressionsByPage/clicksByPage/uniqueViewers/daily evolution, sponsored challenge counting, full pipeline with time filtering, 1000-event performance) (70+ tests)
+│   ├── dbMappers.test.ts               ← Tests for 7 DB→types mappers (mapPlayerFromDb, mapClubFromDb, mapTerrainFromDb, mapTournamentFromDb, mapMatchFromDb, mapChallengeFromDb, mapBoulesSetFromDb), mergeRecords (upsert/append/empty), calculatePlayerStatsFromMatches (wins/losses/tirRate/pointRate/carreauRate/avgPoints) (50+ tests)
+│   ├── collaborativeEditService.test.ts ← Collaborative edit diff tests (computeMatchDiffs score/winner/format/duration/menes/playerActions, computeChallengeDiffs simple fields/shots/precisionShots, formatMenesSummary, formatActionsSummary, FR/EN labels) (40+ tests)
+│   ├── emailValidationService.test.ts   ← Email validation tests (isDisposableEmail direct domain/pattern, isValidEmailFormat valid/invalid formats, case insensitive) (30+ tests)
+│   ├── deviceFingerprintService.test.ts ← Device fingerprint tests (simpleHash deterministic/format, generateRandomId length/charset/uniqueness, canCreateAccount max accounts/cooldown/email bypass, constants) (30+ tests)
+│   ├── shareService.test.ts             ← Share service tests (generateShareCode format/length/charset/uniqueness, mapSharedItemRow/mapNotificationRow mapping, 6 share types, read/write permissions, expiration logic) (30+ tests)
+│   ├── offlineQueueService.test.ts      ← Offline queue tests (buildMatchDbPayload/buildPlayerDbPayload/buildUpdateDbPayload camelCase→snake_case mapping, temp ID resolution, ReplayResult structure, skip undefined) (35+ tests)
+│   ├── matchShareService.test.ts        ← Match share tests (mapRow DB→MatchShareRequest, 3 statuses/2 permissions, trimSeenIds 200 max, filterNewRequests deduplication) (25+ tests)
+│   ├── rankingChangeService.test.ts     ← Ranking change tests (detectChanges up/down/same, new entrants ignored, filterSignificant threshold, multi-changes) (20+ tests)
+│   ├── weeklyLeaderboardService.test.ts ← Weekly leaderboard tests (getCurrentWeekStart Monday 00:00, getPreviousWeekStart -7d, formatDateISO padding, getWeekEnd Sunday 23:59, WEEKLY_MIN_MATCHES, computeRankChange up/down/same/new, getSubRankings city/club grouping/sorting) (35+ tests)
+│   ├── badgeService.test.ts             ← Badge service tests (12 badge conditions, XP_LEVELS 4 levels/thresholds, getLevelFromXp, getNextLevel, getXpProgress, calculateTotalXp formula, badge conditions exact thresholds) (45+ tests)
+│   ├── cacheService.test.ts             ← Cache service tests (6 cache keys, CACHE_VERSION, isCacheValid version/timestamp/maxAge, safeParse invalid JSON fallback) (20+ tests)
+│   ├── boulesClubLeaderboardService.test.ts ← Boules+Club leaderboard tests (aggregateBoulesData brand/model/role filter/userId dedup/stats avg, sortBoulesLeaderboard 5 modes, compositeScore weighted formula 40/25/20/15, sortClubLeaderboard 6 modes) (40+ tests)
 │   ├── modificationLogService.test.ts ← Modification log tests
-│   └── providerHierarchy.test.ts      ← Provider hierarchy tests
+│   ├── providerHierarchy.test.ts      ← Provider hierarchy tests
+│   ├── meetupService.test.ts           ← Meetup tests (generateShareCode format/prefix/safe charset RDV-, filterNewInvitations dedup, getAcceptedCount/isMeetupFull, deduplicateInvitableUsers, sortMeetupsByDate, filterActiveMeetups, computeReminderDates 3 levels, MeetupResponse statuses, InvitableUser sources, PendingInvitation mapping, edge cases) (50+ tests)
+│   ├── mergeHistoryService.test.ts     ← Merge history tests (mapMergeLogRow, isUndoable exact 24h window, getUndoTimeRemaining FR/EN hours+minutes/expired, tableMap 4 types, ReassignedRelation 5 types, sourceSnapshot preservation, edge cases) (35+ tests)
+│   ├── storageService.test.ts          ← Storage tests (getMimeType png/webp/jpg/unknown, getExtension deep paths/file URI, generateFileName uniqueness/format/timestamp, buildStoragePath, isRemoteUrl https/http/file/data, filterSuccessfulUploads, BUCKET_MAP 5 buckets with limits/MIME, upload pipeline simulation) (40+ tests)
+│   ├── eventNotificationService.test.ts ← Event notification tests (mapEventNotificationRow with joins, 7 notification types, computeEventReminderDates 3 levels with identifiers, buildWitnessNotifications sender exclusion/participant name/event title/action URL, shouldNotifyCreator self-prevention, getUnreadNotifications/getWitnessRequests filtering, 50-participant edge cases) (50+ tests)
+│   ├── notificationService.test.ts     ← Local notification tests (computeTournamentReminderDates 1week/3days/1day with times 9am/9am/6pm, buildShareRequestPayload match/challenge read/write with icons/labels FR, ANDROID_CHANNELS 3 channels, getTournamentIdentifiers, edge cases) (35+ tests)
+│   ├── pushTokenService.test.ts        ← Push token tests (buildPushTokenUpsert format/platform/timestamp, buildTriggerPayload 7 types, buildDeactivateUpdate, parseTriggerResult null/undefined/partial, handleTriggerError, VALID_PUSH_TYPES 7 types, VALID_PLATFORMS 2, Expo token format, edge cases) (35+ tests)
+│   ├── retentionNotificationService.test.ts ← Retention tests (computeRetentionDates J0+4h/J1 6pm/J3 12pm/J7 10am with proximity adjustment, getJ0Text FR/EN singular/plural carreaux, getJ1Text registered/non-registered, getJ7Text weekly summary/expiration, RETENTION_IDENTIFIERS 4 stages, computeTempDataExpiry 7d, checkExpiry expired/remaining/boundary, RetentionState) (55+ tests)
+│   ├── multiAccountService.test.ts     ← Multi-account tests (groupByFingerprint grouping/email dedup/null email/skip empty fp, filterMultiAccountClusters 2+ threshold/sort by size desc, computeDeviceStats totalDevices/totalRegistrations/multiAccountDevices/same email dedup/skip empty fp/1000 devices performance, DeviceCluster types) (40+ tests)
+│   ├── edgeFunctions-rateLimiter.test.ts ← Rate limiter tests (sliding window, remaining count, retryAfterMs, window reset, rateLimitResponse 429/headers/CORS, different keys, promo 5/60s, purchase 3/60s, edge cases) (40+ tests)
+│   ├── edgeFunctions-push.test.ts      ← Push helpers tests (buildPushMessage defaults/options/channelId/badge/priority/ttl, haversineDistance Paris-Lyon/Paris-Marseille/Paris-London/antipodal/equator/southern hemisphere/proximity 200km, filterValidTokens ExponentPushToken format, batchMessages 100-limit, PushTicket types) (45+ tests)
+│   ├── edgeFunctions-validatePromoCode.test.ts ← validate-promo-code tests (normalizeCode trim/uppercase, validateCodeInput null/undefined/empty/number, checkExpiry null/future/past/boundary, checkMaxUses current<max/equal/overflow/single-use, rate limit key format/constants, 5 error codes, full pipeline) (40+ tests)
+│   ├── edgeFunctions-detectSuspicious.test.ts ← detect-suspicious tests (getLevelStr 5 levels, getStatus 3 statuses, 11 factors: multiPlayerRatio 30pts, diversity 20pts, modification 15pts, dailyMatches, statsRegularity, accountAge 5pts, shortMatches, multiAccount 10pts, reports, inactivityDecay floor 30, threshold crossing detection) (50+ tests)
+│   ├── edgeFunctions-sendPush.test.ts  ← send-push tests (12 trigger types validation, buildRankingMessage up/down/diff, buildShareRequestMessage match/challenge read/write, buildWeeklySummaryBody 4 rank changes, canSendSponsorPush gold/silver/ambassador levels/bronze, filterByPreference enabled/disabled/independent) (45+ tests)
+│   ├── edgeFunctions-recordPurchase.test.ts ← record-purchase tests (rate limit key purchase:, constants 3/60s, validatePurchaseInput missing fields, isDuplicateTransaction, buildReceiptInsert with/without transactionId, platforms, HTTP status codes 400/401/409/429) (25+ tests)
+│   ├── edgeFunctions-weeklyCron.test.ts ← weekly-cron tests (6 default tasks, token cleanup 90d/180d thresholds, share expiry null/future/past, engagement eligibility inactive/reminder dedup, computeDigestKPIs aggregation/CTR, weekOverWeek change, A/B variant splitting 50/50, engagement messages 3 variants, batch limit 100) (40+ tests)
+│   ├── edgeFunctions-notifyReferral.test.ts ← notify-referral tests (normalizeReferralCode, anonymizeEmail privacy/null/domain preservation, buildReferralPushBody +50XP, getAmbassadorLevelLabel 3 levels, buildPushPayload complete structure, buildAnalyticsRow with/without referred user, error scenarios missing code/ambassador/email) (30+ tests)
+│   └── edgeFunctions-deleteAccount.test.ts ← delete-account tests (DELETION_ORDER 10 tables FK ordering, OWNER_ID_TABLES 3 fallback tables, getDeleteColumn/getFallbackColumn, 3 additional cleanups shared_with/accessor/modifier, storage path construction, success/error response structure, deletion completeness all entity tables) (30+ tests)
 └── e2e/
     ├── auth-flow.test.ts              ← Authentication flow tests
     ├── crossPlayerSharing.test.ts     ← Cross-player sharing tests (10 phases, 20+ tests)
@@ -434,7 +463,7 @@ module.exports = function (api) {
 - Complete FR/EN i18n (700+ keys, 26 modular files)
 - Harmonized design system (#0F172A headers, glassmorphic cards, 12 optimized AdBanners)
 - **Refactored stats architecture**: centralized hooks, extracted components, shared primitives
-- **Comprehensive test suite**: 32 files (700+ unit, integration, and E2E tests) covering all hooks, services, components, badge lifecycle, meetup logic, CSV/PDF export, streak computation, trust score calculation, notification preferences, community leaderboards with anti-cheat, push quotas by partner tier, ambassadors (3 levels, auto-promotion, referral codes, XP), sponsored events (event codes, tier limits, aggregated leaderboard, witnesses, invitations), ambassador analytics (aggregation, CTR, detailed banners, daily sparklines), meetup E2E flow, and cross-player sharing
+- **Comprehensive test suite**: 61 files (2100+ unit, integration, and E2E tests) covering all hooks, services, components, badge lifecycle, meetup logic, CSV/PDF export, streak computation, trust score calculation, notification preferences, community leaderboards with anti-cheat, push quotas by partner tier, ambassadors (3 levels, auto-promotion, referral codes, XP), sponsored events (event codes, tier limits, aggregated leaderboard, witnesses, invitations), ambassador analytics (aggregation, CTR, detailed banners, daily sparklines), meetup E2E flow, and cross-player sharing
 - AdMob ads (test IDs)
 - Working deep linking
 - Anti-fraud (fingerprinting, trust scores, multi-account detection)
@@ -579,7 +608,7 @@ module.exports = function (api) {
 - Local cache with offline fallback
 - Complete i18n (700+ FR/EN keys) modularized into 26 topic-specific files under `constants/i18n/` with barrel export
 - Refactored stats architecture: centralized hooks (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), extracted components (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), shared primitives (`StatsPrimitives`, `statsSharedStyles`)
-- Comprehensive test suite: 32 test files (700+ unit + integration + E2E tests) covering stats hooks (11 hooks), item filtering, badges/XP with full lifecycle, favorites, responsive breakpoints, meetup deduplication/sorting, CSV/PDF export (columns, filters, stats, presets), streak computation (consecutive days, deduplication, daily activity FR/EN), trust score calculation (10 weighted factors, levels, match validation weights), notification preferences (5 types, load/save/upsert, user isolation), community leaderboards (8 periods, 5 sort modes, anti-cheat, shadow ban, weighted validation), push quotas by partner tier (badge×level matrix, limits, monthly reset, i18n), ambassadors (3 levels, auto-promotion, referral codes, XP, filtering), sponsored events (event codes, tier-based challenge limits, aggregated leaderboard, witness attestation, invitation deduplication), ambassador analytics (4-period thresholds, daily date keys, multi-ambassador aggregation, CTR calculation, detailed banner analytics, sponsored challenge counting), meetup E2E flow (9 phases), services, stats components, data types, DB schema, cross-player sharing, and badge unlock flow
+- Comprehensive test suite: 61 test files (2100+ unit + integration + E2E tests) covering stats hooks (11 hooks), item filtering, badges/XP with full lifecycle, favorites, responsive breakpoints, meetup deduplication/sorting, CSV/PDF export (columns, filters, stats, presets), streak computation (consecutive days, deduplication, daily activity FR/EN), trust score calculation (10 weighted factors, levels, match validation weights), notification preferences (5 types, load/save/upsert, user isolation), community leaderboards (8 periods, 5 sort modes, anti-cheat, shadow ban, weighted validation), push quotas by partner tier (badge×level matrix, limits, monthly reset, i18n), ambassadors (3 levels, auto-promotion, referral codes, XP, filtering), sponsored events (event codes, tier-based challenge limits, aggregated leaderboard, witness attestation, invitation deduplication), ambassador analytics (4-period thresholds, daily date keys, multi-ambassador aggregation, CTR calculation, detailed banner analytics, sponsored challenge counting), meetup E2E flow (9 phases), services, stats components, data types, DB schema, cross-player sharing, and badge unlock flow
 - Reanimated Babel plugin configured
 - `newArchEnabled: false` for maximum library compatibility
 - `api.cache(true)` in babel.config.js for build optimization
@@ -696,4 +725,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 28, 2026 — Ultimate Petanque v1.2.9*
+*Document updated on March 28, 2026 — Ultimate Petanque v1.3.2*

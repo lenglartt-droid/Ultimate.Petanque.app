@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.3.0  
+**Version :** 1.3.2  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Divers
 ```
 
-### 3.7 Suite de tests (44 fichiers, 1300+ tests)
+### 3.7 Suite de tests (61 fichiers, 2100+ tests)
 
 ```
 __tests__/
@@ -333,7 +333,24 @@ __tests__/
 │   ├── cacheService.test.ts             ← Tests cache (6 clés cache, CACHE_VERSION, isCacheValid version/timestamp/maxAge, safeParse fallback JSON invalide) (20+ tests)
 │   ├── boulesClubLeaderboardService.test.ts ← Tests classements boules+clubs (aggregateBoulesData brand/model/role filter/dedup userId/stats avg, sortBoulesLeaderboard 5 modes, compositeScore formule pondérée 40/25/20/15, sortClubLeaderboard 6 modes) (40+ tests)
 │   ├── modificationLogService.test.ts ← Tests logs de modification
-│   └── providerHierarchy.test.ts      ← Tests hiérarchie providers
+│   ├── providerHierarchy.test.ts      ← Tests hiérarchie providers
+│   ├── meetupService.test.ts           ← Tests meetups (generateShareCode format/prefix/charset safe RDV-, filterNewInvitations déduplication, getAcceptedCount/isMeetupFull, deduplicateInvitableUsers, sortMeetupsByDate, filterActiveMeetups, computeReminderDates 3 niveaux, MeetupResponse statuts, InvitableUser sources, PendingInvitation mapping, edge cases) (50+ tests)
+│   ├── mergeHistoryService.test.ts     ← Tests historique fusions (mapMergeLogRow, isUndoable fenêtre 24h exacte, getUndoTimeRemaining FR/EN heures+minutes/expiré, tableMap 4 types, ReassignedRelation 5 types, sourceSnapshot préservation, edge cases) (35+ tests)
+│   ├── storageService.test.ts          ← Tests stockage (getMimeType png/webp/jpg/unknown, getExtension deep paths/file URI, generateFileName unicité/format/timestamp, buildStoragePath, isRemoteUrl https/http/file/data, filterSuccessfulUploads, BUCKET_MAP 5 buckets avec limites/MIME, pipeline upload simulation) (40+ tests)
+│   ├── eventNotificationService.test.ts ← Tests notifications événements (mapEventNotificationRow avec jointures, 7 types notification, computeEventReminderDates 3 niveaux avec identifiants, buildWitnessNotifications exclusion sender/participant name/event title/action URL, shouldNotifyCreator self-prevention, getUnreadNotifications/getWitnessRequests filtrage, edge cases 50 participants) (50+ tests)
+│   ├── notificationService.test.ts     ← Tests notifications locales (computeTournamentReminderDates 1semaine/3jours/1jour avec horaires 9h/9h/18h, buildShareRequestPayload match/challenge read/write avec icônes/labels FR, ANDROID_CHANNELS 3 canaux, getTournamentIdentifiers, edge cases) (35+ tests)
+│   ├── pushTokenService.test.ts        ← Tests tokens push (buildPushTokenUpsert format/platform/timestamp, buildTriggerPayload 7 types, buildDeactivateUpdate, parseTriggerResult null/undefined/partiel, handleTriggerError, VALID_PUSH_TYPES 7 types, VALID_PLATFORMS 2, format token Expo, edge cases) (35+ tests)
+│   ├── retentionNotificationService.test.ts ← Tests rétention (computeRetentionDates J0+4h/J1 18h/J3 12h/J7 10h avec ajustement proximité, getJ0Text FR/EN singulier/pluriel carreaux, getJ1Text registered/non-registered, getJ7Text résumé hebdo/expiration, RETENTION_IDENTIFIERS 4 stages, computeTempDataExpiry 7j, checkExpiry expired/remaining/boundary, RetentionState) (55+ tests)
+│   ├── multiAccountService.test.ts     ← Tests multi-comptes (groupByFingerprint regroupement/déduplication email/null email/skip empty fp, filterMultiAccountClusters seuil 2+/tri par taille desc, computeDeviceStats totalDevices/totalRegistrations/multiAccountDevices/same email dedup/skip empty fp/1000 devices performance, DeviceCluster types) (40+ tests)
+│   ├── edgeFunctions-rateLimiter.test.ts ← Tests rate limiter (sliding window, remaining count, retryAfterMs, window reset, rateLimitResponse 429/headers/CORS, different keys, promo 5/60s, purchase 3/60s, edge cases) (40+ tests)
+│   ├── edgeFunctions-push.test.ts      ← Tests push helpers (buildPushMessage defaults/options/channelId/badge/priority/ttl, haversineDistance Paris-Lyon/Paris-Marseille/Paris-London/antipodal/equator/southern hemisphere/proximity 200km, filterValidTokens ExponentPushToken format, batchMessages 100-limit, PushTicket types) (45+ tests)
+│   ├── edgeFunctions-validatePromoCode.test.ts ← Tests validate-promo-code (normalizeCode trim/uppercase, validateCodeInput null/undefined/empty/number, checkExpiry null/future/past/boundary, checkMaxUses current<max/equal/overflow/single-use, rate limit key format/constants, 5 error codes, full pipeline) (40+ tests)
+│   ├── edgeFunctions-detectSuspicious.test.ts ← Tests detect-suspicious (getLevelStr 5 levels, getStatus 3 statuses, 11 factors: multiPlayerRatio 30pts, diversity 20pts, modification 15pts, dailyMatches, statsRegularity, accountAge 5pts, shortMatches, multiAccount 10pts, reports, inactivityDecay floor 30, threshold crossing detection) (50+ tests)
+│   ├── edgeFunctions-sendPush.test.ts  ← Tests send-push (12 trigger types validation, buildRankingMessage up/down/diff, buildShareRequestMessage match/challenge read/write, buildWeeklySummaryBody 4 rank changes, canSendSponsorPush gold/silver/ambassador levels/bronze, filterByPreference enabled/disabled/independent) (45+ tests)
+│   ├── edgeFunctions-recordPurchase.test.ts ← Tests record-purchase (rate limit key purchase:, constants 3/60s, validatePurchaseInput missing fields, isDuplicateTransaction, buildReceiptInsert with/without transactionId, platforms, HTTP status codes 400/401/409/429) (25+ tests)
+│   ├── edgeFunctions-weeklyCron.test.ts ← Tests weekly-cron (6 default tasks, token cleanup 90d/180d thresholds, share expiry null/future/past, engagement eligibility inactive/reminder dedup, computeDigestKPIs aggregation/CTR, weekOverWeek change, A/B variant splitting 50/50, engagement messages 3 variants, batch limit 100) (40+ tests)
+│   ├── edgeFunctions-notifyReferral.test.ts ← Tests notify-referral (normalizeReferralCode, anonymizeEmail privacy/null/domain preservation, buildReferralPushBody +50XP, getAmbassadorLevelLabel 3 levels, buildPushPayload complete structure, buildAnalyticsRow with/without referred user, error scenarios missing code/ambassador/email) (30+ tests)
+│   └── edgeFunctions-deleteAccount.test.ts ← Tests delete-account (DELETION_ORDER 10 tables FK ordering, OWNER_ID_TABLES 3 fallback tables, getDeleteColumn/getFallbackColumn, 3 additional cleanups shared_with/accessor/modifier, storage path construction, success/error response structure, deletion completeness all entity tables) (30+ tests)
 └── e2e/
     ├── auth-flow.test.ts              ← Tests flux authentification
     ├── crossPlayerSharing.test.ts     ← Tests partage cross-joueurs (10 phases, 20+ tests)
@@ -446,7 +463,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
-- **Suite de tests complète** : 44 fichiers (1300+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E et partage cross-joueurs
+- **Suite de tests complète** : 61 fichiers (2100+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E et partage cross-joueurs
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -591,7 +608,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
-- Suite de tests complète : 44 fichiers de tests (1300+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
+- Suite de tests complète : 61 fichiers de tests (2100+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -708,4 +725,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.0*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.2*
