@@ -174,6 +174,80 @@ function computePointStats(filteredMatches: Match[], totalMenes: number) {
 }
 
 // ============================================================
+// Inline computeErrorStats (mirrors useErrorStats without React context)
+// ============================================================
+function computeErrorStats(
+  filteredMatches: Match[],
+  tirStats: ReturnType<typeof computeTirStats>,
+  pointStats: ReturnType<typeof computePointStats>,
+  t: (s: string, k: string) => string,
+) {
+  const totalTirErrors = tirStats.totalTirs - tirStats.tirsSuccess;
+  const totalPointErrors = pointStats.totalPoints - pointStats.pointsSuccess;
+  const totalErrors = totalTirErrors + totalPointErrors;
+
+  const shortMatches = filteredMatches.filter(m => m.duration && m.duration < 30);
+  const mediumMatches = filteredMatches.filter(m => m.duration && m.duration >= 30 && m.duration < 60);
+  const longMatches = filteredMatches.filter(m => m.duration && m.duration >= 60);
+
+  const getErrorRate = (matchList: Match[]) => {
+    let tirs = 0, tirsS = 0, points = 0, pointsS = 0;
+    matchList.forEach(m => {
+      if (m.playerActions) {
+        m.playerActions.filter(pa => pa.team === 'A').forEach(pa => {
+          tirs += pa.actions.tirs; tirsS += pa.actions.tirsSuccess;
+          points += pa.actions.points; pointsS += pa.actions.pointsSuccess;
+        });
+      }
+    });
+    const tot = tirs + points; const suc = tirsS + pointsS;
+    return tot > 0 ? Math.round(((tot - suc) / tot) * 100) : 0;
+  };
+
+  const errorByFormat: Record<string, { errors: number; total: number; rate: number }> = {};
+  ['T\u00eate-\u00e0-t\u00eate', 'Doublette', 'Triplette'].forEach(format => {
+    const fm = filteredMatches.filter(m => m.format === format);
+    let t2 = 0, ts = 0, p = 0, ps = 0;
+    fm.forEach(m => { if (m.playerActions) m.playerActions.filter(pa => pa.team === 'A').forEach(pa => { t2 += pa.actions.tirs; ts += pa.actions.tirsSuccess; p += pa.actions.points; ps += pa.actions.pointsSuccess; }); });
+    const tot = t2 + p; const err = tot - (ts + ps);
+    errorByFormat[format] = { errors: err, total: tot, rate: tot > 0 ? Math.round((err / tot) * 100) : 0 };
+  });
+
+  const tirErrorResults = { courtDroite: tirStats.tirCourtDroite, courtGauche: tirStats.tirCourtGauche, long: tirStats.tirLong, tirBouchon: tirStats.tirBouchon };
+  const totalTirErrorResults = Object.values(tirErrorResults).reduce((a, b) => a + b, 0);
+  const tirErrorByTechnique = { auFerRate: tirStats.tirAuFer.total - tirStats.tirAuFer.success, auPlombRate: tirStats.tirAuPlomb.total - tirStats.tirAuPlomb.success, enRafleRate: tirStats.tirEnRafle.total - tirStats.tirEnRafle.success };
+  const totalTirErrorByTechnique = Object.values(tirErrorByTechnique).reduce((a, b) => a + b, 0);
+  const tirErrorTypes = { ...tirErrorResults };
+  const totalTirErrorTyped = totalTirErrorResults > 0 ? totalTirErrorResults : totalTirErrorByTechnique;
+  const pointErrorTypes = { rate: pointStats.pointRate, crochete: pointStats.pointCrochete, sorti: pointStats.pointSorti, rouleRate: pointStats.pointRoule.total - pointStats.pointRoule.success, plombeRate: pointStats.pointPlombe.total - pointStats.pointPlombe.success, demiPorteeRate: pointStats.pointDemiPortee.total - pointStats.pointDemiPortee.success, porteeRate: pointStats.pointPortee.total - pointStats.pointPortee.success };
+  const totalPointErrorTyped = Object.values(pointErrorTypes).reduce((a, b) => a + b, 0);
+  const allErrors = [
+    { type: t('stats', 'errorCourtDroite'), count: tirErrorResults.courtDroite, category: 'tir' },
+    { type: t('stats', 'errorCourtGauche'), count: tirErrorResults.courtGauche, category: 'tir' },
+    { type: t('stats', 'errorLong'), count: tirErrorResults.long, category: 'tir' },
+    { type: t('stats', 'errorTirBouchon'), count: tirErrorResults.tirBouchon, category: 'tir' },
+    { type: t('stats', 'errorPointRate'), count: pointErrorTypes.rate, category: 'point' },
+    { type: t('stats', 'errorPointCrochete'), count: pointErrorTypes.crochete, category: 'point' },
+    { type: t('stats', 'errorPointSorti'), count: pointErrorTypes.sorti, category: 'point' },
+  ].filter(e => e.count > 0).sort((a, b) => b.count - a.count);
+  const mostCommonError = allErrors.length > 0 ? allErrors[0] : null;
+
+  return {
+    totalErrors, totalTirErrors, totalPointErrors,
+    tirErrorRate: tirStats.missedRate, pointErrorRate: 100 - pointStats.successRate,
+    shortMatchErrorRate: getErrorRate(shortMatches), mediumMatchErrorRate: getErrorRate(mediumMatches), longMatchErrorRate: getErrorRate(longMatches),
+    shortMatchCount: shortMatches.length, mediumMatchCount: mediumMatches.length, longMatchCount: longMatches.length,
+    errorByFormat, trainingErrorRate: getErrorRate(filteredMatches.filter(m => m.mode === 'Entra\u00eenement')), tournamentErrorRate: getErrorRate(filteredMatches.filter(m => m.mode === 'Tournoi')),
+    maxConsecutiveErrors: 0, totalErrorStreaks: 0,
+    tirErrorTypes, totalTirErrorTyped,
+    tirErrorResults, totalTirErrorResults,
+    tirErrorByTechnique, totalTirErrorByTechnique,
+    pointErrorTypes, totalPointErrorTyped,
+    mostCommonError, allErrors,
+  };
+}
+
+// ============================================================
 // PerformanceSection Data Contract
 // ============================================================
 describe('PerformanceSection data contract', () => {
@@ -340,7 +414,7 @@ describe('ErrorsSection data contract', () => {
     const tir = computeTirStats(matches, [], perf.totalMenes);
     const point = computePointStats(matches, perf.totalMenes);
 
-    // Derive errorStats inline (mirrors stats.tsx errorStats useMemo)
+    // Derive errorStats inline (mirrors useErrorStats hook)
     const totalTirErrors = tir.totalTirs - tir.tirsSuccess;
     const totalPointErrors = point.totalPoints - point.pointsSuccess;
     const totalErrors = totalTirErrors + totalPointErrors;
@@ -359,7 +433,63 @@ describe('ErrorsSection data contract', () => {
     expect(point.totalPoints - point.pointsSuccess).toBe(0);
     expect(tir.missedRate).toBe(0);
   });
-});
+
+  test('useErrorStats output contains all required keys', () => {
+    const matches = [makeMatch()];
+    const perf = computePerformanceStats(matches);
+    const tir = computeTirStats(matches, [], perf.totalMenes);
+    const point = computePointStats(matches, perf.totalMenes);
+    const mockT = (section: string, key: string) => `${section}.${key}`;
+    const errorStats = computeErrorStats(matches, tir, point, mockT);
+
+    const REQUIRED_KEYS = [
+      'totalErrors', 'totalTirErrors', 'totalPointErrors',
+      'tirErrorRate', 'pointErrorRate',
+      'shortMatchErrorRate', 'mediumMatchErrorRate', 'longMatchErrorRate',
+      'shortMatchCount', 'mediumMatchCount', 'longMatchCount',
+      'errorByFormat', 'trainingErrorRate', 'tournamentErrorRate',
+      'maxConsecutiveErrors', 'totalErrorStreaks',
+      'tirErrorTypes', 'totalTirErrorTyped',
+      'tirErrorResults', 'totalTirErrorResults',
+      'tirErrorByTechnique', 'totalTirErrorByTechnique',
+      'pointErrorTypes', 'totalPointErrorTyped',
+      'mostCommonError', 'allErrors',
+    ];
+    REQUIRED_KEYS.forEach(key => {
+      expect(errorStats).toHaveProperty(key);
+    });
+  });
+
+  test('errorByFormat contains all 3 formats', () => {
+    const matches = [makeMatch({ format: 'Doublette' })];
+    const perf = computePerformanceStats(matches);
+    const tir = computeTirStats(matches, [], perf.totalMenes);
+    const point = computePointStats(matches, perf.totalMenes);
+    const mockT = (section: string, key: string) => `${section}.${key}`;
+    const errorStats = computeErrorStats(matches, tir, point, mockT);
+
+    expect(errorStats.errorByFormat).toHaveProperty('T\u00eate-\u00e0-t\u00eate');
+    expect(errorStats.errorByFormat).toHaveProperty('Doublette');
+    expect(errorStats.errorByFormat).toHaveProperty('Triplette');
+  });
+
+  test('duration-based error rates categorize correctly', () => {
+    const matches = [
+      makeMatch({ id: 'm1', duration: 20 }),  // short
+      makeMatch({ id: 'm2', duration: 45 }),  // medium
+      makeMatch({ id: 'm3', duration: 90 }),  // long
+    ];
+    const perf = computePerformanceStats(matches);
+    const tir = computeTirStats(matches, [], perf.totalMenes);
+    const point = computePointStats(matches, perf.totalMenes);
+    const mockT = (s: string, k: string) => `${s}.${k}`;
+    const errorStats = computeErrorStats(matches, tir, point, mockT);
+
+    expect(errorStats.shortMatchCount).toBe(1);
+    expect(errorStats.mediumMatchCount).toBe(1);
+    expect(errorStats.longMatchCount).toBe(1);
+  });
+});;
 
 // ============================================================
 // Hook-to-Component Integration
