@@ -29,6 +29,10 @@ import SponsorBanner from '@/components/ui/SponsorBanner';
 import { filterByTime } from '@/hooks/useFilteredStats';
 import type { TimeFilter } from '@/hooks/useFilteredStats';
 import { ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar, NAPlaceholder } from '@/components/feature/stats/StatsPrimitives';
+import { PerformanceSection } from '@/components/feature/stats/PerformanceSection';
+import { TirSection } from '@/components/feature/stats/TirSection';
+import { PointSection } from '@/components/feature/stats/PointSection';
+import { ErrorsSection } from '@/components/feature/stats/ErrorsSection';
 type ProgressionFilter = '4weeks' | '8weeks' | '3months' | '6months' | 'year' | '2years' | '5years' | '10years' | '25years';
 // TimeFilter imported from @/hooks/useFilteredStats
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
@@ -1376,96 +1380,20 @@ export default function StatsScreen() {
           <>
             {/* PERFORMANCE */}
             {category === 'performance' && (
-              <>
-                {/* Challenge-specific performance when filtering by challenge */}
-                {itemFilterType === 'challenge' && filteredChallenges.length > 0 && performanceStats.total === 0 ? (
-                  <>
-                    {filteredChallenges.map((ch, idx) => {
-                      const isPrecision = ch.type === 'precision';
-                      const successRate = isPrecision
-                        ? (ch.maxPoints && ch.maxPoints > 0 ? Math.round(((ch.totalPoints || 0) / ch.maxPoints) * 100) : 0)
-                        : (ch.successRate ? Math.round(ch.successRate) : 0);
-                      const heroLabel = isPrecision ? `${ch.totalPoints || 0}/${ch.maxPoints || 100} pts` : `${ch.successCount || 0}/${ch.totalShots || 10}`;
-                      return (
-                        <Animated.View key={ch.id} entering={FadeInDown.duration(400).delay(idx * 50)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.accent }]}>
-                          <View style={styles.heroContent}>
-                            <ProgressRing value={successRate} size={110} strokeWidth={9} color={theme.accent} label={t('stats', 'successLabel')} />
-                            <View style={styles.heroStats}>
-                              <View style={styles.heroStatItem}>
-                                <Text style={[styles.heroStatValue, { color: theme.accent }]}>{heroLabel}</Text>
-                                <Text style={styles.heroStatLabel}>{t('challengeNames', ch.type)}</Text>
-                              </View>
-                              {!isPrecision && ch.carreauCount ? (
-                                <View style={styles.heroStatItem}>
-                                  <Text style={[styles.heroStatValue, { color: theme.carreauColor }]}>{ch.carreauCount}</Text>
-                                  <Text style={styles.heroStatLabel}>{t('stats', 'carreauxLabel')}</Text>
-                                </View>
-                              ) : null}
-                              {ch.duration ? (
-                                <View style={styles.heroStatItem}>
-                                  <Text style={styles.heroStatValue}>{formatDuration(Math.round((ch.duration || 0) / 60))}</Text>
-                                  <Text style={styles.heroStatLabel}>{t('match', 'durationLabel')}</Text>
-                                </View>
-                              ) : null}
-                            </View>
-                          </View>
-                          {ch.mode === '1v1' && ch.opponentName ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-                              <MaterialIcons name="people" size={16} color={theme.textMuted} />
-                              <Text style={{ fontSize: 12, color: theme.textSecondary }}>vs {ch.opponentName}</Text>
-                              {ch.winner ? (
-                                <View style={{ marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, backgroundColor: ch.winner === 'player' ? theme.success + '20' : ch.winner === 'opponent' ? theme.error + '20' : theme.warning + '20' }}>
-                                  <Text style={{ fontSize: 11, fontWeight: '600', color: ch.winner === 'player' ? theme.success : ch.winner === 'opponent' ? theme.error : theme.warning }}>
-                                    {ch.winner === 'player' ? t('history', 'victory') : ch.winner === 'opponent' ? t('history', 'defeat') : t('history', 'draw')}
-                                  </Text>
-                                </View>
-                              ) : null}
-                            </View>
-                          ) : null}
-                          {isPrecision && ch.atelierScores ? (
-                            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-                              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 }}>{t('stats', 'challengeAtelierScores')}</Text>
-                              {Object.entries(ch.atelierScores).map(([atelier, score]) => (
-                                <StatRow key={atelier} label={t('precisionWorkshops', atelier)} value={`${score} pts`} icon="sports-score" color={theme.accent} />
-                              ))}
-                            </View>
-                          ) : null}
-                        </Animated.View>
-                      );
-                    })}
-                    {/* Tir stats summary for challenge */}
-                    {tirStats.totalTirs > 0 && (
-                      <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
-                        <SectionHeader title={t('stats', 'challengeTirSummary')} icon="gps-fixed" color={theme.tirColor} />
-                        <View style={styles.card}>
-                          <StatRow label={t('stats', 'shotsAttempted')} value={tirStats.totalTirs} icon="radio-button-unchecked" color={theme.textSecondary} />
-                          <StatRow label={t('stats', 'successPercent')} value={`${tirStats.successRate}%`} icon="percent" color={theme.tirColor} />
-                          <StatRow label={t('stats', 'carreauPercent')} value={`${tirStats.carreauRate}%`} icon="stars" color={theme.carreauColor} />
-                        </View>
-                      </Animated.View>
-                    )}
-                  </>
-                ) : (
-                <>
-                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
-                  <View style={styles.heroContent}>
-                    <ProgressRing value={performanceStats.winRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
-                    <View style={styles.heroStats}>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.success }]}>{performanceStats.wins}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'wonLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.error }]}>{performanceStats.losses}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'lostLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={styles.heroStatValue}>{performanceStats.total}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'totalLabel')}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </Animated.View>
+              <PerformanceSection
+                t={t}
+                language={language}
+                isTablet={isTablet}
+                performanceStats={performanceStats}
+                tirStats={tirStats}
+                pointStats={pointStats}
+                terrainTypeStats={terrainTypeStats}
+                boulesSetStats={boulesSetStats}
+                filteredChallenges={filteredChallenges}
+                itemFilterType={itemFilterType}
+                formatDuration={formatDuration}
+                selectBoulesSet={selectBoulesSet}
+              />
 
                 {/* Tablet 2-column row for games played + win rate by mode */}
                 {isTablet ? (
@@ -1812,33 +1740,17 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
-                </>
-                )}
-              </>
             )}
 
             {/* TIR */}
             {category === 'tir' && (
-              <>
-                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
-                  <View style={styles.heroContent}>
-                    <ProgressRing value={tirStats.successRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.tirColor} label={t('stats', 'successLabel')} />
-                    <View style={styles.heroStats}>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.success }]}>{tirStats.tirsSuccess}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'succeededLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.error }]}>{tirStats.totalTirs - tirStats.tirsSuccess}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'missedLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={styles.heroStatValue}>{tirStats.totalTirs}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'totalLabel')}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </Animated.View>
+              <TirSection
+                t={t}
+                isTablet={isTablet}
+                tirStats={tirStats}
+                terrainTypeStats={terrainTypeStats}
+                precisionWorkshopStats={precisionWorkshopStats}
+              />
 
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title={t('stats', 'volumeSuccessSection')} icon="gps-fixed" color={theme.tirColor} />
@@ -2067,74 +1979,18 @@ export default function StatsScreen() {
                   </Animated.View>
                 )}
 
-                {terrainTypeStats.hasData && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
-                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.tirColor} />
-                    <View style={styles.card}>
-                      <View style={styles.crossTableHeader}>
-                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.tirColor }]}>{t('stats', 'shotSuccessColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.carreauColor }]}>{t('stats', 'carreauShortColumn')}</Text></View>
-                      </View>
-                      {terrainTypeStats.types.map((type, idx) => {
-                        const data = terrainTypeStats.byTerrain[type];
-                        const tirRate = data.tirs > 0 ? Math.round((data.tirsSuccess / data.tirs) * 100) : 0;
-                        const carRate = data.tirs > 0 ? Math.round((data.carreaux / data.tirs) * 100) : 0;
-                        return (
-                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
-                            <View style={styles.crossTableRowLabel}>
-                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.tirs} {t('stats', 'shotsUnit')}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.tirColor }]}>{tirRate}%</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.carreauColor }]}>{carRate}%</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </Animated.View>
-                )}
-              </>
             )}
 
             {/* POINT */}
             {category === 'point' && (
-              <>
-                {itemFilterType === 'challenge' && filteredChallenges.length > 0 && pointStats.totalPoints === 0 ? (
-                  <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
-                    <View style={styles.card}>
-                      <View style={{ alignItems: 'center', paddingVertical: 24 }}>
-                        <MaterialIcons name="info-outline" size={40} color={theme.textMuted} />
-                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 12 }}>{t('stats', 'challengeNoPointData')}</Text>
-                        <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginTop: 6, maxWidth: 260 }}>{t('stats', 'challengeNoPointDataDesc')}</Text>
-                      </View>
-                    </View>
-                  </Animated.View>
-                ) : (
-                <>
-                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.heroCardTablet]}>
-                  <View style={styles.heroContent}>
-                    <ProgressRing value={pointStats.successRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.pointColor} label={t('stats', 'successLabel')} />
-                    <View style={styles.heroStats}>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.success }]}>{pointStats.pointsSuccess}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'succeededLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={[styles.heroStatValue, { color: theme.error }]}>{pointStats.totalPoints - pointStats.pointsSuccess}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'missedLabel')}</Text>
-                      </View>
-                      <View style={styles.heroStatItem}>
-                        <Text style={styles.heroStatValue}>{pointStats.totalPoints}</Text>
-                        <Text style={styles.heroStatLabel}>{t('stats', 'totalLabel')}</Text>
-                      </View>
-                    </View>
-                  </View>
-                </Animated.View>
+              <PointSection
+                t={t}
+                isTablet={isTablet}
+                pointStats={pointStats}
+                terrainTypeStats={terrainTypeStats}
+                filteredChallenges={filteredChallenges}
+                itemFilterType={itemFilterType}
+              />
 
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
                   <SectionHeader title={t('stats', 'successLabel')} icon="adjust" color={theme.pointColor} />
@@ -2255,74 +2111,17 @@ export default function StatsScreen() {
                     </View>
                   </Animated.View>
                 )}
-                {terrainTypeStats.hasData && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
-                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.pointColor} />
-                    <View style={styles.card}>
-                      <View style={styles.crossTableHeader}>
-                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.pointColor }]}>{t('stats', 'pointSuccessColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
-                      </View>
-                      {terrainTypeStats.types.map((type, idx) => {
-                        const data = terrainTypeStats.byTerrain[type];
-                        const ptRate = data.points > 0 ? Math.round((data.pointsSuccess / data.points) * 100) : 0;
-                        return (
-                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
-                            <View style={styles.crossTableRowLabel}>
-                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
-                              <Text style={styles.crossTableCellPct}>{data.points} {t('stats', 'pointsUnit')}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: theme.pointColor }]}>{ptRate}%</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </Animated.View>
-                )}
-                </>
-                )}
-              </>
             )}
 
             {/* ERRORS ANALYSIS */}
             {category === 'errors' && (
-              <>
-                {/* Hero Errors */}
-                <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.error }, isTablet && styles.heroCardTablet]}>
-                  <View style={styles.errorHeroContent}>
-                    <View style={styles.errorHeroMain}>
-                      <MaterialIcons name="error-outline" size={48} color={theme.error} />
-                      <Text style={styles.errorHeroValue}>{errorStats.totalErrors}</Text>
-                      <Text style={styles.errorHeroLabel}>{t('stats', 'totalErrorsLabel')}</Text>
-                    </View>
-                    <View style={styles.errorHeroBreakdown}>
-                      <View style={styles.errorHeroItem}>
-                        <MaterialIcons name="gps-fixed" size={20} color={theme.tirColor} />
-                        <Text style={styles.errorHeroItemValue}>{errorStats.totalTirErrors}</Text>
-                        <Text style={styles.errorHeroItemLabel}>{t('stats', 'missedShotsLabel')}</Text>
-                      </View>
-                      <View style={styles.errorHeroItem}>
-                        <MaterialIcons name="adjust" size={20} color={theme.pointColor} />
-                        <Text style={styles.errorHeroItemValue}>{errorStats.totalPointErrors}</Text>
-                        <Text style={styles.errorHeroItemLabel}>{t('stats', 'missedPointsLabel')}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  {errorStats.mostCommonError && (
-                    <View style={styles.mostCommonError}>
-                      <MaterialIcons name="warning" size={16} color={theme.warning} />
-                      <Text style={styles.mostCommonErrorText}>
-                        {t('stats', 'mostCommonErrorLabel')}: <Text style={styles.mostCommonErrorHighlight}>{errorStats.mostCommonError.type}</Text> ({errorStats.mostCommonError.count}x)
-                      </Text>
-                    </View>
-                  )}
-                </Animated.View>
+              <ErrorsSection
+                t={t}
+                isTablet={isTablet}
+                errorStats={errorStats}
+                tirStats={tirStats}
+                terrainTypeStats={terrainTypeStats}
+              />
 
                 {/* Error rates */}
                 <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
@@ -2667,38 +2466,6 @@ export default function StatsScreen() {
                   </Animated.View>
                 )}
 
-                {terrainTypeStats.hasData && (
-                  <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
-                    <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.error} />
-                    <View style={styles.card}>
-                      <View style={styles.crossTableHeader}>
-                        <View style={styles.crossTableHeaderLabel}><Text style={styles.crossTableHeaderText}>{t('stats', 'terrainColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={[styles.crossTableHeaderCellText, { color: theme.error }]}>{t('stats', 'errorRateColumn')}</Text></View>
-                        <View style={styles.crossTableHeaderCell}><Text style={styles.crossTableHeaderCellText}>{t('stats', 'matchesColumn')}</Text></View>
-                      </View>
-                      {terrainTypeStats.types.map((type, idx) => {
-                        const data = terrainTypeStats.byTerrain[type];
-                        const totalActions = data.tirs + data.points;
-                        const totalSuccess = data.tirsSuccess + data.pointsSuccess;
-                        const errRate = totalActions > 0 ? Math.round(((totalActions - totalSuccess) / totalActions) * 100) : 0;
-                        return (
-                          <View key={type} style={[styles.crossTableRow, idx % 2 === 0 && styles.crossTableRowAlt]}>
-                            <View style={styles.crossTableRowLabel}>
-                              <Text style={styles.crossTableRowLabelText} numberOfLines={1}>{t('terrainTypes', type)}</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={[styles.crossTableCellValue, { color: errRate > 40 ? theme.error : errRate > 25 ? theme.warning : theme.success }]}>{errRate}%</Text>
-                            </View>
-                            <View style={styles.crossTableCell}>
-                              <Text style={styles.crossTableCellValue}>{data.matches}</Text>
-                            </View>
-                          </View>
-                        );
-                      })}
-                    </View>
-                  </Animated.View>
-                )}
-              </>
             )}
           </>
         )}

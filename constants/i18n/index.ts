@@ -1,12 +1,11 @@
 /**
  * i18n barrel — Assembles translations from topic-specific files + original.
  *
- * Architecture: Sections are incrementally migrated from i18n.ts into
- * topic-specific files under constants/i18n/. The barrel merges them.
+ * Architecture: All sections are now migrated to dedicated topic files.
+ * The original i18n.ts serves only as a legacy fallback (lowest priority).
  *
- * Fully migrated topics:
- * - common.ts: common, tabs, roles, levels, formats, modes, offlineBanner,
- *              conflict, toast, directoryExtra, statsExtra
+ * Topic files (fully migrated):
+ * - common.ts: common, tabs, roles, levels, formats, modes, offlineBanner, conflict, toast, directoryExtra, statsExtra
  * - home.ts: home, login, onboarding
  * - profile.ts: profile
  * - stats.ts: stats
@@ -25,21 +24,24 @@
  * - share.ts: share, matchEdit
  * - meetup.ts: meetup
  * - leaderboard.ts: leaderboard
- *
- * Remaining sections still import from the original i18n.ts via fallback:
- * notifications, eventNotifications, password, syncHistory, mergeHistory,
- * modificationLogs, facilityLabels, locationPicker, creatorNote, reports,
- * trustScore, gamePreferences, preview, cadrage, historyExtra, challengeNames,
- * precisionWorkshops, tournamentStatus, tournamentTypes, tournamentPhases,
- * tournamentScopes, tournamentLevels, tournamentCategories, registrationTypes,
- * consent, tracking, privacy, privacyExtra, terms, notation, faq
+ * - notifications.ts: notifications, eventNotifications
+ * - password.ts: password
+ * - sync.ts: syncHistory, mergeHistory, modificationLogs
+ * - legal.ts: consent, tracking, privacy, privacyExtra, terms
+ * - tournamentEnums.ts: tournamentStatus, tournamentTypes, tournamentPhases, tournamentScopes, tournamentLevels, tournamentCategories, registrationTypes
+ * - trustAndReports.ts: reports, trustScore
+ * - gameAndUI.ts: gamePreferences, preview, historyExtra, facilityLabels, locationPicker, creatorNote
+ * - cadrage.ts: cadrage
+ * - notation.ts: notation
+ * - faq.ts: faq
+ * - challengeEnums.ts: challengeNames, precisionWorkshops
  */
 
-// The original monolithic file (fallback for unmigrated sections)
+// The original monolithic file (lowest priority fallback)
 import { translations as originalTranslations } from '../i18n';
 export type { Language } from '../i18n';
 
-// Topic-specific overrides (migrated sections)
+// Topic-specific overrides (migrated sections — take precedence)
 import { commonTranslations } from './common';
 import { homeTranslations } from './home';
 import { profileTranslations } from './profile';
@@ -59,11 +61,18 @@ import { mapTranslations } from './map';
 import { shareTranslations } from './share';
 import { meetupTranslations } from './meetup';
 import { leaderboardTranslations } from './leaderboard';
+import { notificationsTranslations } from './notifications';
+import { passwordTranslations } from './password';
+import { syncTranslations } from './sync';
+import { legalTranslations } from './legal';
+import { tournamentEnumsTranslations } from './tournamentEnums';
+import { trustAndReportsTranslations } from './trustAndReports';
+import { gameAndUITranslations } from './gameAndUI';
 
 // Merge: topic files take precedence over original via spread order
 export const translations = {
   ...originalTranslations,
-  // Wave 1
+  // Wave 1 — Core pages
   ...commonTranslations,
   ...homeTranslations,
   ...profileTranslations,
@@ -73,7 +82,7 @@ export const translations = {
   ...challengeTranslations,
   ...historyTranslations,
   ...tournamentTranslations,
-  // Wave 2
+  // Wave 2 — Entity pages
   ...playerTranslations,
   ...clubTranslations,
   ...terrainTranslations,
@@ -84,6 +93,14 @@ export const translations = {
   ...shareTranslations,
   ...meetupTranslations,
   ...leaderboardTranslations,
+  // Wave 3 — Remaining sections
+  ...notificationsTranslations,
+  ...passwordTranslations,
+  ...syncTranslations,
+  ...legalTranslations,
+  ...tournamentEnumsTranslations,
+  ...trustAndReportsTranslations,
+  ...gameAndUITranslations,
 } as const;
 
 // Translation helper function
