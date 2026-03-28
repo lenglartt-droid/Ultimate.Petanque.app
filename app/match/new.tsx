@@ -2055,13 +2055,14 @@ export default function NewMatchScreen() {
                 <MaterialIcons name="fullscreen" size={22} color={theme.primary} />
                 <Text style={styles.returnToMatchButtonText}>{t('match', 'returnToMatch')}</Text>
               </Pressable>
-              <Pressable style={styles.saveButton} onPress={() => handleSaveMatch()}>
+              <Pressable testID="save-match-button" style={styles.saveButton} onPress={() => handleSaveMatch()}>
                 <MaterialIcons name="check" size={22} color="#FFF" />
                 <Text style={styles.saveButtonText}>{t('match', 'saveAndClose')}</Text>
               </Pressable>
             </View>
           ) : (
             <Pressable 
+              testID="start-match-button"
               style={styles.fullscreenButton}
               onPress={() => { 
                 Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); 

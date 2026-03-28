@@ -347,7 +347,7 @@ export default function HomeScreen() {
                     <View style={st.heroBadge}><Text style={st.heroBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
                   </Pressable>
                 ) : null}
-                <Pressable style={st.heroAvatarBtn} onPress={() => router.push('/profile')}>
+                <Pressable testID="profile-avatar" style={st.heroAvatarBtn} onPress={() => router.push('/profile')}>
                   {selfPlayer?.avatar ? (
                     <Image source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
@@ -383,11 +383,11 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <View style={[st.actionsRow, isTablet && st.actionsRowTablet]}>
               {[
-                { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new') },
-                { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new') },
-                { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true) },
+                { label: t('home', 'match'), sub: t('home', 'training'), icon: 'sports' as const, gradient: ['#2563EB', '#60A5FA'] as [string, string], onPress: () => router.push('/match/new'), testID: 'action-new-match' },
+                { label: t('home', 'challenge'), sub: t('home', 'shotsPoints'), icon: 'track-changes' as const, gradient: ['#D97706', '#FBBF24'] as [string, string], onPress: () => router.push('/challenge/new'), testID: 'action-new-challenge' },
+                { label: t('home', 'tournament'), sub: t('home', 'myJourney'), icon: 'emoji-events' as const, gradient: ['#B45309', '#F59E0B'] as [string, string], onPress: () => setShowTournamentPicker(true), testID: 'action-tournament' },
               ].map((action, idx) => (
-                <Pressable key={idx} style={({ pressed }) => [st.actionCard, isTablet && st.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>
+                <Pressable key={idx} testID={(action as any).testID} style={({ pressed }) => [st.actionCard, isTablet && st.actionCardTablet, pressed && { transform: [{ scale: 0.96 }], opacity: 0.9 }]} onPress={action.onPress}>
                   <LinearGradient colors={action.gradient} style={st.actionIconBg} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}>
                     <MaterialIcons name={action.icon} size={isTablet ? 36 : 28} color="#FFF" />
                   </LinearGradient>

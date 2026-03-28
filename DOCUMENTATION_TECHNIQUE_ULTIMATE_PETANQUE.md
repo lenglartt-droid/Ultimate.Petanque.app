@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.3.7  
+**Version :** 1.3.8  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -396,10 +396,42 @@ __tests__/
     ├── iap-flow.test.ts               ← Tests E2E flux achat in-app : discovery produit/validation/defaults, happy path (achat→serveur→premium), error paths (IAP indispo/produit manquant/annulation), mapping erreurs, payload serveur iOS/Android/restore, gestion état premium, promo code bypass (40+ tests sur 8 phases)
     ├── export-flow.test.ts            ← Tests E2E flux export données : configuration colonnes 12 matchs/11 défis/FR+EN, stats période (tir/point/carreau/durée), preview 7 préréglages (match/challenge/player/tournament/season/comparative/none), CSV génération colonnes/séparateur/échappement, filtrage saison Sept-Juin, analyse comparative delta, pipeline complet 100 matchs, edge cases (60+ tests sur 8 phases)
     ├── tournament-lifecycle.test.ts    ← Tests E2E cycle tournoi : création tous formats, inscription équipes avec déduplication/max, setup phases/brackets, recording matchs tournoi, transitions statut 3 états, financial tracking net/profit/break-even, suppression avec unlinkage matchs, head-to-head tournoi, lifecycle complet 9 étapes (55+ tests sur 9 phases)
-    └── appcontext-provider.test.ts     ← Tests E2E intégration AppContext : loading initial/hydratation, transitions auth login→load→logout→reset, cache→serveur mergeRecords, CRUD propagation add/delete/preserve, computed selfPlayer/userStats(shared)/challengeStats(byType/recent), playersWithStats recalcul, clubsWithMemberCount, getters intégration 5 types, shared items inclusion/exclusion/déduplication, performance 500 matchs/100 joueurs/1000 lookups (85+ tests sur 12 phases)
+    ├── appcontext-provider.test.ts     ← Tests E2E intégration AppContext : loading initial/hydratation, transitions auth login→load→logout→reset, cache→serveur mergeRecords, CRUD propagation add/delete/preserve, computed selfPlayer/userStats(shared)/challengeStats(byType/recent), playersWithStats recalcul, clubsWithMemberCount, getters intégration 5 types, shared items inclusion/exclusion/déduplication, performance 500 matchs/100 joueurs/1000 lookups (85+ tests sur 12 phases)
 ```
 
-### 3.8 Architecture des services (50+ services)
+### 3.8 Tests E2E Maestro (5 flows)
+
+```
+.maestro/
+├── config.yaml                ← Configuration globale (appId, env vars, ordre d'exécution)
+├── README.md                  ← Guide complet (installation, CI, troubleshooting)
+└── flows/
+    ├── 01-login-flow.yaml     ← Authentification : onboarding, inscription OTP+password, session, logout, re-login (~45s)
+    ├── 02-tab-navigation.yaml ← Navigation : 4 onglets, sous-onglets annuaire, pages profondes, préservation état (~30s)
+    ├── 03-match-creation.yaml ← Match : config format/mode, équipes, scoring mène par mène, sauvegarde, vérification historique (~60s)
+    ├── 04-cross-player-sharing.yaml ← Partage : code, QR, hub de partage, invitations, notifications (~40s)
+    └── 05-iap-flow.yaml       ← IAP : affichage produit, code promo invalide, restauration, achat sandbox, donation (~35s)
+```
+
+**Commandes** :
+```bash
+# Installer Maestro
+curl -Ls "https://get.maestro.mobile.dev" | bash
+
+# Lancer tous les flows
+maestro test .maestro/
+
+# Lancer un flow spécifique
+maestro test .maestro/flows/01-login-flow.yaml
+
+# Enregistrement vidéo
+maestro record .maestro/flows/03-match-creation.yaml
+
+# CI GitHub Actions
+# uses: mobile-dev-inc/action-maestro-cloud@v1
+```
+
+### 3.9 Architecture des services (50+ services)
 
 ```
 services/
@@ -444,7 +476,7 @@ services/
 └── ... (autres services spécialisés)
 ```
 
-### 3.9 Sécurité (RLS)
+### 3.10 Sécurité (RLS)
 
 - **90+ politiques RLS** actives sur toutes les tables
 - Patterns : `authenticated_*_own_*` (CRUD propre), `admin_*` (admin), `public_select_*` (lecture publique), `participant_*_shared_*` (items partagés), `shared_select_*` (items partagés via code)
@@ -453,7 +485,7 @@ services/
 - **7 Edge Functions** : delete-account, detect-suspicious, notify-referral, record-purchase, send-push, validate-promo-code, weekly-cron
 - **30+ index** de performance
 
-### 3.10 Configuration de build
+### 3.11 Configuration de build
 
 #### babel.config.js
 ```js
@@ -503,6 +535,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
+- **Tests E2E Maestro** : 5 flows YAML automatisés (login, navigation onglets, création match, partage cross-joueurs, achat in-app) pour appareils réels via Maestro CLI, avec support CI GitHub Actions
 - **Suite de tests complète** : 100 fichiers (3580+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E, partage cross-joueurs, flux achat in-app complet, export données multi-format, cycle tournoi intégral, et intégration AppContext Provider
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
@@ -637,7 +670,7 @@ module.exports = function (api) {
 
 3. **Validation des données** : Ajouter une validation côté serveur pour les données critiques (scores, statistiques).
 
-4. **Tests E2E automatisés** : Compléter la suite de tests avec Detox ou Maestro.
+4. **Tests E2E automatisés** : Suite Maestro configurée (5 flows YAML couvrant login, navigation, match, partage, IAP). Voir `.maestro/README.md`.
 
 ### 7.2 Bonnes pratiques déjà en place
 
@@ -648,6 +681,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
+- Tests E2E Maestro : 5 flows YAML automatisés pour appareils réels (login, navigation, match, partage, IAP) avec CI GitHub Actions via Maestro Cloud
 - Suite de tests complète : 100 fichiers de tests (3580+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs, flux d'attribution badges, flux achat in-app (8 phases), export données (8 phases), cycle tournoi (9 phases), et intégration AppContext Provider (12 phases)
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
@@ -765,4 +799,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.7*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.8*
