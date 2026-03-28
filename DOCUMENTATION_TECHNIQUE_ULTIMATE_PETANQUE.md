@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.3.2  
+**Version :** 1.3.3  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Divers
 ```
 
-### 3.7 Suite de tests (61 fichiers, 2100+ tests)
+### 3.7 Suite de tests (71 fichiers, 2500+ tests)
 
 ```
 __tests__/
@@ -350,7 +350,17 @@ __tests__/
 │   ├── edgeFunctions-recordPurchase.test.ts ← Tests record-purchase (rate limit key purchase:, constants 3/60s, validatePurchaseInput missing fields, isDuplicateTransaction, buildReceiptInsert with/without transactionId, platforms, HTTP status codes 400/401/409/429) (25+ tests)
 │   ├── edgeFunctions-weeklyCron.test.ts ← Tests weekly-cron (6 default tasks, token cleanup 90d/180d thresholds, share expiry null/future/past, engagement eligibility inactive/reminder dedup, computeDigestKPIs aggregation/CTR, weekOverWeek change, A/B variant splitting 50/50, engagement messages 3 variants, batch limit 100) (40+ tests)
 │   ├── edgeFunctions-notifyReferral.test.ts ← Tests notify-referral (normalizeReferralCode, anonymizeEmail privacy/null/domain preservation, buildReferralPushBody +50XP, getAmbassadorLevelLabel 3 levels, buildPushPayload complete structure, buildAnalyticsRow with/without referred user, error scenarios missing code/ambassador/email) (30+ tests)
-│   └── edgeFunctions-deleteAccount.test.ts ← Tests delete-account (DELETION_ORDER 10 tables FK ordering, OWNER_ID_TABLES 3 fallback tables, getDeleteColumn/getFallbackColumn, 3 additional cleanups shared_with/accessor/modifier, storage path construction, success/error response structure, deletion completeness all entity tables) (30+ tests)
+│   ├── edgeFunctions-deleteAccount.test.ts ← Tests delete-account (DELETION_ORDER 10 tables FK ordering, OWNER_ID_TABLES 3 fallback tables, getDeleteColumn/getFallbackColumn, 3 additional cleanups shared_with/accessor/modifier, storage path construction, success/error response structure, deletion completeness all entity tables) (30+ tests)
+│   ├── syncConfigService.test.ts       ← Tests config sync (NORMAL_CONFIG/BATTERY_SAVER_CONFIG 6 champs, getSyncConfig, setBatterySaverMode toggle, isBatterySaverEnabled, onSyncConfigChange listeners/unsubscribe/multi, DELTA_SELECT 6 entités colonnes) (35+ tests)
+│   ├── syncHistoryService.test.ts      ← Tests historique sync (generateEntryId format/unicité, MAX_ENTRIES 50, trimHistory limite/préserve récents, addEntryToHistory prepend/auto-id/trim, SyncHistoryEntry champs, computeSuccessRate 100%/partiel/0/vide) (30+ tests)
+│   ├── publicItemsService.test.ts      ← Tests items publics (mapPublicPlayer premium/null stats, mapPublicClub location/membershipCost, mapPublicTerrain defaults, mapPublicTournament defaults, filterSelfItems exclusion, findDuplicateTerrains exact/city/case/excludeOwn, findDuplicateClubs exact/name, VALID_TABLES 4) (40+ tests)
+│   ├── reportService.test.ts           ← Tests signalements (REPORT_REASONS 5, isValidReason, VALID_STATUSES 4, buildReportPayload userId/details/null, isDuplicateReport unique/duplicate, buildUpdateData status/adminNotes, PlayerReport structure) (30+ tests)
+│   ├── imageCacheService.test.ts       ← Tests cache images (collectAvatarUrls http/null/file/non-string, collectTerrainPhotoUrls first/empty/null, collectBoulesPhotoUrls, buildPrefetchPlan priority 10/terrain 5/boules secondary/dedup, shouldPrefetch cooldown 60s, splitIntoBatches, constantes) (35+ tests)
+│   ├── useLanguage.test.ts             ← Tests hook langue (constantes default FR/2 langues/storage key, isValidLanguage fr/en/de/vide, traductions FR tabs/common, traductions EN, extra translations fallback FR→EN, context validation erreur hors provider) (25+ tests)
+│   ├── useNetworkStatus.test.ts        ← Tests état réseau (web default online, buildNetworkStatus, detectReconnection offline→online/reachable null/not connected, shouldTriggerSync reconnected/not, state transitions cycle complet/multiple cycles, edge cases) (25+ tests)
+│   ├── boulesDatabase.test.ts          ← Tests base boules (BOULES_BRANDS 9, BOULES_BRAND_COLORS couleurs/abbr, getBrandImage connu/case insensitive/inconnu, getBrandVisual configuré/fallback hsl/abbr 2 chars, getModelsByBrand OBUT/MS/ODDEKA/inconnu, findModel existant/mauvaise marque/mauvais modèle, BoulesModel structure) (35+ tests)
+│   ├── challengeConfig.test.ts         ← Tests config défis (PRECISION_ATELIERS 5/champs requis/IDs uniques, scoring options 4 par atelier/tir_but 3/ascending, getMaxPointsPerAtelier 5, getTotalMaxPoints 25, PRECISION_DISTANCES 4 [6-9]/ascending, PRECISION_POINTS_CONFIG carreau>touche>frole>rate) (30+ tests)
+│   └── geoData.test.ts                 ← Tests données géo (getContinent 6 continents/bilingue/DOM-TOM/default Europe, getContinentLabel FR 6 labels/EN 6 labels/inconnu, getCountryFlag drapeaux/inconnu vide, getContinentFlag emoji/inconnu globe, CONTINENT_MAP 6 continents/bilingue/territoires FR, COMMON_COUNTRIES 24+/France premier/dans CONTINENT_MAP/pas doublons/6 continents) (45+ tests)
 └── e2e/
     ├── auth-flow.test.ts              ← Tests flux authentification
     ├── crossPlayerSharing.test.ts     ← Tests partage cross-joueurs (10 phases, 20+ tests)
@@ -463,7 +473,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
-- **Suite de tests complète** : 61 fichiers (2100+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E et partage cross-joueurs
+- **Suite de tests complète** : 71 fichiers (2500+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), événements sponsorisés (codes, limites, classement, témoins, invitations), analytics ambassadeurs (agrégation, CTR, bannières détaillées, sparklines), flux meetup E2E et partage cross-joueurs
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -608,7 +618,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
-- Suite de tests complète : 61 fichiers de tests (2100+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
+- Suite de tests complète : 71 fichiers de tests (2500+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), événements sponsorisés (codes événements, limites par tier, classement agrégé, témoins, invitations), analytics ambassadeurs (agrégation 4 types, CTR, bannières détaillées, sparklines quotidiennes), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -725,4 +735,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.2*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.3*
