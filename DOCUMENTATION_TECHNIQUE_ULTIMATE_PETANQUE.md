@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.2.6  
+**Version :** 1.2.8  
 **Date :** 28 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
@@ -290,7 +290,7 @@ constants/i18n/
 └── misc.ts               ← Divers
 ```
 
-### 3.7 Suite de tests (26 fichiers, 380+ tests)
+### 3.7 Suite de tests (30 fichiers, 580+ tests)
 
 ```
 __tests__/
@@ -314,6 +314,10 @@ __tests__/
 │   ├── exportService.test.ts           ← Tests export CSV/PDF (sélection colonnes, filtrage période/saison/tournoi/joueur, escapeCsv, computePeriodStats, comparatifs, préréglages, gros volumes) (50+ tests)
 │   ├── streakService.test.ts           ← Tests séries consécutives (computeStreakFromDates, déduplication, bestStreak, playedToday, streakAtRisk, getStreakStatus FR/EN, getDailyActivityLast7Days, 365 jours) (40+ tests)
 │   ├── trustScoreService.test.ts       ← Tests score de confiance (computeQuickTrustScore 10 facteurs, seuils niveaux, couleurs/icônes/labels FR/EN, badges descriptions, poids validation match, stacking pénalités, cas limites) (70+ tests)
+│   ├── notificationPreferencesService.test.ts ← Tests préférences notifications (5 types, defaults, load/save/upsert, isNotificationTypeEnabled par type/user, round-trip, isolation utilisateurs, cas limites) (50+ tests)
+│   ├── leaderboardService.test.ts      ← Tests classements (getPeriodDateRange 8 périodes, LEADERBOARD_MIN_MATCHES, sortLeaderboard 5 modes tri + tiebreaker, anti-triche recomputation stats exclusion solo, shadow ban trust <25, poids validation matchs pondérés, filtres géographiques, 500 joueurs performance) (60+ tests)
+│   ├── pushQuotaService.test.ts        ← Tests quotas push (getPushLimit matrice badge×level, getDaysUntilReset, computePushQuota limité/illimité/interdit, resetLabel FR/EN, pourcentages, matrice complète 9 combinaisons, cas limites) (50+ tests)
+│   ├── ambassadorService.test.ts       ← Tests ambassadeurs (AMBASSADOR_LEVELS 3 niveaux/seuils/couleurs/icônes, XP computation, referral code generation format/initiales/charset safe, filtrage ambassadors-only/sponsors-only, isUserSponsor, getFeaturedAmbassadors fallback, promotion eligibilité decouverte→confirme→elite AND logic, progression pourcentages, mapping données, scénarios mixtes) (60+ tests)
 │   ├── modificationLogService.test.ts ← Tests logs de modification
 │   └── providerHierarchy.test.ts      ← Tests hiérarchie providers
 └── e2e/
@@ -428,7 +432,7 @@ module.exports = function (api) {
 - i18n FR/EN complet (700+ clés, 26 fichiers modulaires)
 - Design system harmonisé (en-têtes #0F172A, cartes glassmorphiques, 12 AdBanners optimisés)
 - **Architecture stats refactorisée** : hooks centralisés, composants extraits, primitives partagées
-- **Suite de tests complète** : 26 fichiers (380+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, flux meetup E2E et partage cross-joueurs
+- **Suite de tests complète** : 30 fichiers (580+ tests unitaires, intégration et E2E) couvrant hooks, services, composants, cycle de vie badges, logique meetups, export CSV/PDF, séries consécutives, score de confiance, préférences notifications, classements communautaires avec anti-triche, quotas push par tier, ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP), flux meetup E2E et partage cross-joueurs
 - Publicités AdMob (IDs de test)
 - Deep linking fonctionnel
 - Anti-fraude (fingerprinting, scores de confiance, détection multi-comptes)
@@ -573,7 +577,7 @@ module.exports = function (api) {
 - Cache local avec fallback offline
 - i18n complet (700+ clés FR/EN) modularisé en 26 fichiers thématiques sous `constants/i18n/` avec barrel export
 - Architecture stats refactorisée : hooks centralisés (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), composants extraits (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), primitives partagées (`StatsPrimitives`, `statsSharedStyles`)
-- Suite de tests complète : 26 fichiers de tests (380+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
+- Suite de tests complète : 30 fichiers de tests (580+ tests unitaires + intégration + E2E) couvrant hooks stats (11 hooks), filtrage par item, badges/XP avec cycle de vie complet, favoris, responsive, déduplication/tri meetups, export CSV/PDF (colonnes, filtres, stats, préréglages), séries consécutives (streaks, activité quotidienne FR/EN), score de confiance (10 facteurs pondérés, niveaux, poids validation match), préférences notifications (5 types, load/save/upsert, isolation utilisateurs), classements communautaires (8 périodes, 5 tris, anti-triche, shadow ban, poids pondérés), quotas push par tier partenaire (matrice badge×level, limites, reset mensuel, i18n), ambassadeurs (3 niveaux, promotion auto, codes parrainage, XP, filtrage), flux meetup E2E (9 phases), services, composants stats, types de données, schéma DB, partage cross-joueurs et flux d'attribution badges
 - Plugin Babel Reanimated configuré
 - `newArchEnabled: false` pour compatibilité maximale des librairies
 - `api.cache(true)` dans babel.config.js pour optimisation des builds
@@ -690,4 +694,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.6*
+*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.2.8*
