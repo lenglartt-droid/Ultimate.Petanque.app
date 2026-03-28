@@ -9,7 +9,6 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import theme from '@/constants/theme';
@@ -25,6 +24,7 @@ import type { TimeFilter } from '@/hooks/useFilteredStats';
 import { usePerformanceStats, useTirStats, usePointStats, useErrorStats } from '@/hooks/useStatsComputation';
 import { useBoulesSetStats, useTerrainTypeStats, usePrecisionWorkshopStats, useProgressionData, useTrends, useChallengeProgressionData, useTournamentProgressionData } from '@/hooks/useProgressionStats';
 import type { ProgressionFilter } from '@/hooks/useProgressionStats';
+import { useItemFilter } from '@/hooks/useItemFilter';
 import { ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar, NAPlaceholder } from '@/components/feature/stats/StatsPrimitives';
 import { PerformanceSection } from '@/components/feature/stats/PerformanceSection';
 import { TirSection } from '@/components/feature/stats/TirSection';
@@ -67,7 +67,6 @@ const CATEGORY_TAB_KEYS: { id: StatsCategory; key: string; icon: string; color: 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
   const { matches, challenges, tournaments, players, terrains, boulesSets, getMatchesByTournament, selfPlayer } = useApp();
-  type ItemFilterType = 'all' | 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules';
   const { t, language } = useLanguage();
   const { timeFilter: timeFilterParam } = useLocalSearchParams<{ timeFilter?: string }>();
 
@@ -88,62 +87,23 @@ export default function StatsScreen() {
   const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
   const [chartTooltip, setChartTooltip] = useState<{ chart: string; index: number } | null>(null);
 
-  const [itemFilterType, setItemFilterType] = useState<ItemFilterType>('all');
-  const [selectedMatchId, setSelectedMatchId] = useState<string | null>(null);
-  const [selectedChallengeId, setSelectedChallengeId] = useState<string | null>(null);
-  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
-  const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(null);
-  const [selectedPartnerId, setSelectedPartnerId] = useState<string | null>(null);
-  const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(null);
-  const [selectedBoulesSetId, setSelectedBoulesSetId] = useState<string | null>(null);
-  const [showItemPickerModal, setShowItemPickerModal] = useState(false);
-  const [itemPickerType, setItemPickerType] = useState<'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules'>('match');
-  const [itemPickerSearch, setItemPickerSearch] = useState('');
-
+  // ── Item filter (extracted hook) ───────────────────────
   const timeFilteredMatches = filterByTime(matches, timeFilter);
   const timeFilteredChallenges = filterByTime(challenges, timeFilter);
 
-  const filteredMatches = React.useMemo(() => {
-    if (itemFilterType === 'match' && selectedMatchId) return timeFilteredMatches.filter(m => m.id === selectedMatchId);
-    if (itemFilterType === 'tournament' && selectedTournamentId) return timeFilteredMatches.filter(m => m.tournamentId === selectedTournamentId);
-    if (itemFilterType === 'challenge') return [];
-    if (itemFilterType === 'opponent' && selectedOpponentId) return timeFilteredMatches.filter(m => m.teamB.players.includes(selectedOpponentId));
-    if (itemFilterType === 'partner' && selectedPartnerId) return timeFilteredMatches.filter(m => m.teamA.players.includes(selectedPartnerId));
-    if (itemFilterType === 'terrain' && selectedTerrainId) return timeFilteredMatches.filter(m => m.terrainId === selectedTerrainId);
-    if (itemFilterType === 'boules' && selectedBoulesSetId) return timeFilteredMatches.filter(m => m.boulesSetId === selectedBoulesSetId);
-    return timeFilteredMatches;
-  }, [timeFilteredMatches, itemFilterType, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId]);
+  const {
+    itemFilterType, filteredMatches, filteredChallenges, activeFilterLabel,
+    showItemPickerModal, setShowItemPickerModal, itemPickerType, itemPickerSearch, setItemPickerSearch,
+    selectedMatchId, selectedChallengeId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId,
+    clearItemFilter, openItemPicker,
+    selectMatch, selectChallenge, selectTournament, selectOpponent, selectPartner, selectTerrain, selectBoulesSet,
+  } = useItemFilter({
+    timeFilteredMatches, timeFilteredChallenges,
+    matches, challenges, tournaments, players, terrains, boulesSets,
+    language, t,
+  });
 
-  const filteredChallenges = React.useMemo(() => {
-    if (itemFilterType === 'challenge' && selectedChallengeId) return timeFilteredChallenges.filter(c => c.id === selectedChallengeId);
-    if (itemFilterType === 'opponent' && selectedOpponentId) return timeFilteredChallenges.filter(c => c.mode === '1v1' && c.opponentId === selectedOpponentId);
-    if (itemFilterType === 'boules' && selectedBoulesSetId) return timeFilteredChallenges.filter(c => c.boulesSetId === selectedBoulesSetId);
-    if (itemFilterType === 'match' || itemFilterType === 'tournament' || itemFilterType === 'partner' || itemFilterType === 'terrain') return [];
-    return timeFilteredChallenges;
-  }, [timeFilteredChallenges, itemFilterType, selectedChallengeId, selectedMatchId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId]);
-
-  const activeFilterLabel = React.useMemo(() => {
-    if (itemFilterType === 'match' && selectedMatchId) { const m = matches.find(m => m.id === selectedMatchId); if (m) { const dateStr = new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); return `${m.teamA.playerNames[0]?.split(' ')[0] || '?'} vs ${m.teamB.playerNames[0]?.split(' ')[0] || '?'} (${dateStr})`; } }
-    if (itemFilterType === 'challenge' && selectedChallengeId) { const c = challenges.find(c => c.id === selectedChallengeId); if (c) { const dateStr = new Date(c.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); return `${t('challengeNames', c.type)} (${dateStr})`; } }
-    if (itemFilterType === 'tournament' && selectedTournamentId) { const tour = tournaments.find(t => t.id === selectedTournamentId); if (tour) return tour.name; }
-    if (itemFilterType === 'opponent' && selectedOpponentId) { const opp = players.find(p => p.id === selectedOpponentId); if (opp) return `vs ${opp.name}`; }
-    if (itemFilterType === 'partner' && selectedPartnerId) { const partner = players.find(p => p.id === selectedPartnerId); if (partner) return `${t('statsExtra', 'withPartner')} ${partner.name}`; }
-    if (itemFilterType === 'terrain' && selectedTerrainId) { const terr = terrains.find(te => te.id === selectedTerrainId); if (terr) return terr.name; }
-    if (itemFilterType === 'boules' && selectedBoulesSetId) { const bs = boulesSets.find(b => b.id === selectedBoulesSetId); if (bs) return bs.name; }
-    return null;
-  }, [itemFilterType, selectedMatchId, selectedChallengeId, selectedTournamentId, selectedOpponentId, selectedPartnerId, selectedTerrainId, selectedBoulesSetId, matches, challenges, tournaments, players, terrains, boulesSets, language]);
-
-  const clearItemFilter = () => { setItemFilterType('all'); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setSelectedTerrainId(null); setSelectedBoulesSetId(null); };
-  const openItemPicker = (type: 'match' | 'challenge' | 'tournament' | 'opponent' | 'partner' | 'terrain' | 'boules') => { setItemPickerType(type); setItemPickerSearch(''); setShowItemPickerModal(true); };
-
-  const selectMatch = (id: string) => { setItemFilterType('match'); setSelectedMatchId(id); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectChallenge = (id: string) => { setItemFilterType('challenge'); setSelectedChallengeId(id); setSelectedMatchId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectTournament = (id: string) => { setItemFilterType('tournament'); setSelectedTournamentId(id); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectOpponent = (id: string) => { setItemFilterType('opponent'); setSelectedOpponentId(id); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedPartnerId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectPartner = (id: string) => { setItemFilterType('partner'); setSelectedPartnerId(id); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedTerrainId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectTerrain = (id: string) => { setItemFilterType('terrain'); setSelectedTerrainId(id); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setSelectedBoulesSetId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-  const selectBoulesSet = (id: string) => { setItemFilterType('boules'); setSelectedBoulesSetId(id); setSelectedMatchId(null); setSelectedChallengeId(null); setSelectedTournamentId(null); setSelectedOpponentId(null); setSelectedPartnerId(null); setSelectedTerrainId(null); setShowItemPickerModal(false); Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); };
-
+  // ── Stats hooks ────────────────────────────────────────
   const performanceStats = usePerformanceStats(filteredMatches);
   const tirStats = useTirStats(filteredMatches, filteredChallenges, performanceStats.totalMenes);
   const pointStats = usePointStats(filteredMatches, performanceStats.totalMenes);

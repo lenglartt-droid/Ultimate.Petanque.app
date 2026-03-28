@@ -1,6 +1,6 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.2.2  
+**Version:** 1.2.4  
 **Date:** March 28, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
@@ -290,17 +290,22 @@ constants/i18n/
 └── misc.ts               ← Miscellaneous
 ```
 
-### 3.7 Test Suite (14 files)
+### 3.7 Test Suite (21 files, 230+ tests)
 
 ```
 __tests__/
 ├── unit/
 │   ├── useStatsComputation.test.ts    ← Tests for usePerformanceStats, useTirStats, usePointStats (20+ tests)
 │   ├── useErrorStats.test.ts          ← Tests for useErrorStats (20 tests: errors by duration/format/mode, types, streaks)
-│   ├── useProgressionStats.test.ts    ← Tests for useProgressionData, useTrends, useTournamentProgressionData, useBoulesSetStats, useTerrainTypeStats (40+ tests)
+│   ├── useProgressionStats.test.ts    ← Tests for useProgressionData, useTrends, useTournamentProgressionData, useBoulesSetStats, useTerrainTypeStats, useChallengeProgressionData, usePrecisionWorkshopStats (60+ tests)
+│   ├── useItemFilter.test.ts          ← Tests for item filtering (filteredMatches, filteredChallenges, activeFilterLabel, edge cases) (40+ tests)
 │   ├── useFilteredStats.test.ts       ← Tests for filterByTime
 │   ├── useAppComputed.test.ts         ← Tests for useAppComputed
 │   ├── useAppGetters.test.ts          ← Tests for useAppGetters
+│   ├── useBadges.test.ts              ← Tests for XP calculation, badge context, level thresholds (25+ tests)
+│   ├── useFavorites.test.ts           ← Tests for toggle/check favorites for terrains and clubs (20+ tests)
+│   ├── useResponsiveDimensions.test.ts ← Tests for responsive breakpoints phone/tablet/desktop (15 tests)
+│   ├── useMeetups.test.ts             ← Tests for meetup deduplication, sorting, accepted count, source tagging, full pipeline (30+ tests)
 │   ├── statsSections.test.ts          ← Integration tests for stats sections
 │   ├── crudServices.test.ts           ← CRUD services tests
 │   ├── dataTypes.test.ts              ← Data types tests
@@ -310,8 +315,9 @@ __tests__/
 │   └── providerHierarchy.test.ts      ← Provider hierarchy tests
 └── e2e/
     ├── auth-flow.test.ts              ← Authentication flow tests
-    ├── crossPlayerSharing.test.ts     ← Cross-player sharing tests
-    └── selfplayer-verification.test.ts ← selfPlayer verification tests
+    ├── crossPlayerSharing.test.ts     ← Cross-player sharing tests (10 phases, 20+ tests)
+    ├── selfplayer-verification.test.ts ← selfPlayer verification tests
+    └── badge-flow.test.ts             ← Badge unlock E2E flow: context construction, condition evaluation, XP calculation, level progression, DB award lifecycle, trust/ambassador badges, duplicate prevention (50+ tests across 8 phases)
 ```
 
 ### 3.8 Service Architecture (50+ services)
@@ -418,7 +424,7 @@ module.exports = function (api) {
 - Complete FR/EN i18n (700+ keys, 26 modular files)
 - Harmonized design system (#0F172A headers, glassmorphic cards, 12 optimized AdBanners)
 - **Refactored stats architecture**: centralized hooks, extracted components, shared primitives
-- **Comprehensive test suite**: 14 files (80+ unit and integration tests)
+- **Comprehensive test suite**: 21 files (230+ unit, integration, and E2E tests) covering all hooks, services, components, badge lifecycle, meetup logic, and cross-player sharing
 - AdMob ads (test IDs)
 - Working deep linking
 - Anti-fraud (fingerprinting, trust scores, multi-account detection)
@@ -468,6 +474,7 @@ module.exports = function (api) {
 | 11 | **Device Testing** | Test on physical iOS and Android | Download APK via OnSpace, use OnSpace App QR code for iOS | — | High |
 | 12 | **Store Assets** | Complete guide in `STORE_ASSETS_GUIDE.md` | — | Capture screenshots, write descriptions following the guide | High |
 | 13 | **Hosted Legal Pages** | HTML files ready in `public/` | Host `public/privacy-policy.html` and `public/terms-of-service.html` on a public URL | Enter URLs in store listings | High |
+| 14 | **QR Codes Sharing** | "Invite your friends!" page with dynamic QR codes | Replace QR code URLs with actual download links (App Store + Google Play) in sharing QR components | Copy store links from App Store Connect and Google Play Console | Medium |
 
 ---
 
@@ -562,7 +569,7 @@ module.exports = function (api) {
 - Local cache with offline fallback
 - Complete i18n (700+ FR/EN keys) modularized into 26 topic-specific files under `constants/i18n/` with barrel export
 - Refactored stats architecture: centralized hooks (`useStatsComputation`, `useProgressionStats`, `useItemFilter`), extracted components (`PerformanceSection`, `TirSection`, `PointSection`, `ErrorsSection`, `ProgressionModal`, `ItemPickerModal`), shared primitives (`StatsPrimitives`, `statsSharedStyles`)
-- Comprehensive test suite: 14 test files (unit + integration) covering hooks, services, stats components, data types, DB schema
+- Comprehensive test suite: 21 test files (230+ unit + integration + E2E tests) covering stats hooks (11 hooks), item filtering, badges/XP with full lifecycle, favorites, responsive breakpoints, meetup deduplication/sorting, services, stats components, data types, DB schema, cross-player sharing, and badge unlock flow
 - Reanimated Babel plugin configured
 - `newArchEnabled: false` for maximum library compatibility
 - `api.cache(true)` in babel.config.js for build optimization
@@ -679,4 +686,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 28, 2026 — Ultimate Petanque v1.2.2*
+*Document updated on March 28, 2026 — Ultimate Petanque v1.2.4*
