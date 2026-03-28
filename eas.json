@@ -15,21 +15,7 @@
       "distribution": "internal",
       "installCommand": "pnpm install --no-frozen-lockfile",
       "env": {
-        "EXPO_NO_TELEMETRY": "1",
-        "EX_DEV_CLIENT_NETWORK_INSPECTOR": "false"
-      }
-    },
-    "preview-debug": {
-      "android": {
-        "buildType": "apk",
-        "image": "latest",
-        "gradleCommand": ":app:assembleDebug"
-      },
-      "distribution": "internal",
-      "installCommand": "pnpm install --no-frozen-lockfile",
-      "env": {
-        "EXPO_NO_TELEMETRY": "1",
-        "EX_DEV_CLIENT_NETWORK_INSPECTOR": "false"
+        "EXPO_NO_TELEMETRY": "1"
       }
     },
     "production": {

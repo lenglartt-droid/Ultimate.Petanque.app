@@ -15,23 +15,18 @@ export interface ScheduledNotification {
   notificationIds: string[];
 }
 
-// Configure notification behavior — deferred to avoid module-level crash
-// on emulators without Google Play Services (LDPlayer, BlueStacks, etc.)
-let _handlerConfigured = false;
-function ensureNotificationHandler() {
-  if (_handlerConfigured) return;
-  _handlerConfigured = true;
-  try {
-    Notifications.setNotificationHandler({
-      handleNotification: async () => ({
-        shouldShowAlert: true,
-        shouldPlaySound: true,
-        shouldSetBadge: true,
-      }),
-    });
-  } catch (e) {
-    console.log('[Notifications] setNotificationHandler error:', e);
-  }
+// Configure notification behavior (no-op on web via stub)
+// Wrap in try/catch to prevent module-level crash on web
+try {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+} catch (e) {
+  // Silent on web
 }
 
 // Storage for scheduled notification IDs
@@ -42,7 +37,6 @@ const scheduledNotifications: Map<string, string[]> = new Map();
  */
 export async function requestNotificationPermissions(): Promise<boolean> {
   if (Platform.OS === 'web') return false;
-  ensureNotificationHandler();
   try {
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
@@ -257,7 +251,6 @@ export async function cancelAllNotifications(): Promise<void> {
  */
 export async function sendTestNotification(): Promise<void> {
   if (Platform.OS === 'web') return;
-  ensureNotificationHandler();
   try {
     await Notifications.scheduleNotificationAsync({
       content: {
@@ -284,7 +277,6 @@ export async function sendShareRequestNotification(params: {
   requestId: string;
 }): Promise<void> {
   if (Platform.OS === 'web') return;
-  ensureNotificationHandler();
   try {
     const { senderName, itemType, permission, itemSummary, requestId } = params;
     const isMatch = itemType === 'match';
@@ -319,13 +311,7 @@ export function addNotificationResponseListener(
   callback: (response: any) => void
 ): { remove: () => void } {
   if (Platform.OS === 'web') return { remove: () => {} };
-  ensureNotificationHandler();
-  try {
-    return Notifications.addNotificationResponseReceivedListener(callback);
-  } catch (e) {
-    console.log('[Notifications] addResponseListener error:', e);
-    return { remove: () => {} };
-  }
+  return Notifications.addNotificationResponseReceivedListener(callback);
 }
 
 /**
@@ -335,11 +321,5 @@ export function addNotificationReceivedListener(
   callback: (notification: any) => void
 ): { remove: () => void } {
   if (Platform.OS === 'web') return { remove: () => {} };
-  ensureNotificationHandler();
-  try {
-    return Notifications.addNotificationReceivedListener(callback);
-  } catch (e) {
-    console.log('[Notifications] addReceivedListener error:', e);
-    return { remove: () => {} };
-  }
+  return Notifications.addNotificationReceivedListener(callback);
 }

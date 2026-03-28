@@ -44,7 +44,6 @@ export default function TabLayout() {
         name="index"
         options={{
           title: t('tabs', 'home'),
-          tabBarTestID: 'tab-home',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="home" size={size} color={color} />
           ),
@@ -54,7 +53,6 @@ export default function TabLayout() {
         name="stats"
         options={{
           title: t('tabs', 'stats'),
-          tabBarTestID: 'tab-stats',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="bar-chart" size={size} color={color} />
           ),
@@ -64,7 +62,6 @@ export default function TabLayout() {
         name="directory"
         options={{
           title: t('tabs', 'directory'),
-          tabBarTestID: 'tab-directory',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="people" size={size} color={color} />
           ),
@@ -74,7 +71,6 @@ export default function TabLayout() {
         name="map"
         options={{
           title: t('tabs', 'map'),
-          tabBarTestID: 'tab-map',
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="map" size={size} color={color} />
           ),

@@ -293,7 +293,6 @@ export default function RemoveAdsScreen() {
           </View>
 
           <Pressable
-            testID="purchase-button"
             style={[styles.purchaseBtn, (!iapReady || purchasing) && styles.purchaseBtnDisabled]}
             onPress={handlePurchase}
             disabled={!iapReady || purchasing}
@@ -314,7 +313,6 @@ export default function RemoveAdsScreen() {
 
           {/* Restore purchases */}
           <Pressable
-            testID="restore-purchases-button"
             style={styles.restoreBtn}
             onPress={handleRestore}
             disabled={!iapReady || restoring}
@@ -356,7 +354,6 @@ export default function RemoveAdsScreen() {
 
           <View style={styles.promoInputRow}>
             <TextInput
-              testID="promo-code-input"
               style={styles.promoInput}
               value={promoCode}
               onChangeText={setPromoCode}
@@ -367,7 +364,6 @@ export default function RemoveAdsScreen() {
               editable={!validating}
             />
             <Pressable
-              testID="promo-validate-button"
               style={[styles.promoValidateBtn, (!promoCode.trim() || validating) && styles.promoValidateBtnDisabled]}
               onPress={handleValidatePromo}
               disabled={!promoCode.trim() || validating}

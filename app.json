@@ -29,17 +29,13 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": false,
-      "jsEngine": "hermes",
-      "usesCleartextTraffic": true,
       "package": "com.ultimatepetanque.app",
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "CAMERA",
         "READ_MEDIA_IMAGES",
         "POST_NOTIFICATIONS",
-        "VIBRATE",
-        "INTERNET",
-        "ACCESS_NETWORK_STATE"
+        "VIBRATE"
       ],
       "intentFilters": [
         {
@@ -110,8 +106,8 @@
             "compileSdkVersion": 34,
             "targetSdkVersion": 34,
             "minSdkVersion": 24,
-            "enableProguardInReleaseBuilds": false,
-            "enableShrinkResourcesInReleaseBuilds": false,
+            "enableProguardInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
             "packagingOptions": {
               "pickFirst": ["**/libc++_shared.so", "**/libfbjni.so"],
               "exclude": ["META-INF/NOTICE", "META-INF/LICENSE", "META-INF/*.kotlin_module"]

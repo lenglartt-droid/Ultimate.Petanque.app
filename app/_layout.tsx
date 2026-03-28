@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, ScrollView, StyleSheet as RNStyleSheet, Platform, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, StyleSheet as RNStyleSheet, Platform, Pressable } from 'react-native';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -11,40 +11,14 @@ import OfflineBanner from '@/components/ui/OfflineBanner';
 import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
+import { isATTPromptNeeded } from '@/services/trackingService';
+import { initSentry } from '@/services/sentryService';
+import { addNotificationResponseListener } from '@/services/notificationService';
+import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
-
-// ============================================
-// Safe lazy imports — prevent module-level crash on emulators
-// ============================================
-let SplashScreen: any = null;
-try { SplashScreen = require('expo-splash-screen'); } catch { /* silent */ }
-
-// Prevent auto-hide so we control when splash disappears
-try { SplashScreen?.preventAutoHideAsync?.(); } catch { /* silent */ }
-
-// ============================================
-// Environment Variable Validation
-// ============================================
-function getEnvDiagnostics(): { valid: boolean; url: string; keyPrefix: string; errors: string[] } {
-  const url = process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-  const key = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '';
-  const errors: string[] = [];
-
-  if (!url) errors.push('EXPO_PUBLIC_SUPABASE_URL is missing or empty');
-  else if (!url.startsWith('http')) errors.push(`EXPO_PUBLIC_SUPABASE_URL is malformed: "${url.substring(0, 30)}..."`);
-
-  if (!key) errors.push('EXPO_PUBLIC_SUPABASE_ANON_KEY is missing or empty');
-  else if (key.length < 20) errors.push(`EXPO_PUBLIC_SUPABASE_ANON_KEY looks invalid (length: ${key.length})`);
-
-  return {
-    valid: errors.length === 0,
-    url: url ? `${url.substring(0, 40)}...` : '(empty)',
-    keyPrefix: key ? `${key.substring(0, 12)}...` : '(empty)',
-    errors,
-  };
-}
-
-const ENV_DIAGNOSTICS = getEnvDiagnostics();
+import { checkTempDataExpiry } from '@/services/retentionNotificationService';
+import * as Linking from 'expo-linking';
+import { findEventByCode } from '@/services/sponsoredEventService';
 
 // ============================================
 // Error Boundary — catches JS crashes on web
@@ -107,21 +81,6 @@ const errorStyles = RNStyleSheet.create({
 });
 
 export default function RootLayout() {
-  // If env vars are missing, show diagnostic screen immediately
-  // instead of crashing silently inside providers
-  if (!ENV_DIAGNOSTICS.valid) {
-    return (
-      <AppErrorBoundary>
-        <SafeAreaProvider>
-          <StartupDiagnosticScreen
-            reason="env"
-            envDiagnostics={ENV_DIAGNOSTICS}
-          />
-        </SafeAreaProvider>
-      </AppErrorBoundary>
-    );
-  }
-
   return (
     <AppErrorBoundary>
       <AlertProvider>
@@ -141,188 +100,39 @@ export default function RootLayout() {
   );
 }
 
-// ============================================
-// Startup Diagnostic Screen
-// Shows when splash is stuck or env vars are missing
-// ============================================
-function StartupDiagnosticScreen({ reason, envDiagnostics }: {
-  reason: 'timeout' | 'env';
-  envDiagnostics?: ReturnType<typeof getEnvDiagnostics>;
-}) {
-  // Hide splash so diagnostic screen is visible
-  React.useEffect(() => {
-    try { SplashScreen?.hideAsync?.(); } catch { /* silent */ }
-  }, []);
-
-  const diag = envDiagnostics || ENV_DIAGNOSTICS;
-
-  return (
-    <View style={diagStyles.container}>
-      <ScrollView contentContainerStyle={diagStyles.scroll}>
-        <Text style={diagStyles.icon}>{reason === 'env' ? '🔑' : '⏱️'}</Text>
-        <Text style={diagStyles.title}>
-          {reason === 'env' ? 'Configuration Error' : 'Startup Timeout'}
-        </Text>
-        <Text style={diagStyles.subtitle}>
-          {reason === 'env'
-            ? 'Backend environment variables are missing or invalid.'
-            : 'The app took too long to initialize. This may indicate a configuration issue.'}
-        </Text>
-
-        <View style={diagStyles.card}>
-          <Text style={diagStyles.cardTitle}>Environment Variables</Text>
-          <View style={diagStyles.row}>
-            <Text style={diagStyles.label}>SUPABASE_URL:</Text>
-            <Text style={[diagStyles.value, !diag.url || diag.url === '(empty)' ? diagStyles.bad : diagStyles.good]}>
-              {diag.url}
-            </Text>
-          </View>
-          <View style={diagStyles.row}>
-            <Text style={diagStyles.label}>ANON_KEY:</Text>
-            <Text style={[diagStyles.value, !diag.keyPrefix || diag.keyPrefix === '(empty)' ? diagStyles.bad : diagStyles.good]}>
-              {diag.keyPrefix}
-            </Text>
-          </View>
-        </View>
-
-        {diag.errors.length > 0 ? (
-          <View style={diagStyles.card}>
-            <Text style={diagStyles.cardTitle}>Issues Found</Text>
-            {diag.errors.map((err, i) => (
-              <Text key={i} style={diagStyles.errorItem}>• {err}</Text>
-            ))}
-          </View>
-        ) : null}
-
-        <View style={diagStyles.card}>
-          <Text style={diagStyles.cardTitle}>Platform Info</Text>
-          <Text style={diagStyles.infoItem}>OS: {Platform.OS} ({Platform.Version})</Text>
-          <Text style={diagStyles.infoItem}>DEV: {__DEV__ ? 'Yes' : 'No'}</Text>
-          <Text style={diagStyles.infoItem}>Hermes: {typeof HermesInternal !== 'undefined' ? 'Yes' : 'No'}</Text>
-        </View>
-
-        <View style={diagStyles.card}>
-          <Text style={diagStyles.cardTitle}>How to Fix</Text>
-          <Text style={diagStyles.infoItem}>
-            1. Go to OnSpace Cloud panel (right side) and verify backend is connected.
-          </Text>
-          <Text style={diagStyles.infoItem}>
-            2. Check that .env file contains EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY.
-          </Text>
-          <Text style={diagStyles.infoItem}>
-            3. Rebuild the APK — env vars are baked in at build time.
-          </Text>
-        </View>
-      </ScrollView>
-    </View>
-  );
-}
-
-const diagStyles = RNStyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0F172A' },
-  scroll: { padding: 24, paddingTop: 60, paddingBottom: 40 },
-  icon: { fontSize: 48, textAlign: 'center', marginBottom: 12 },
-  title: { fontSize: 22, fontWeight: '700', color: '#F8FAFC', textAlign: 'center', marginBottom: 8 },
-  subtitle: { fontSize: 15, color: '#94A3B8', textAlign: 'center', lineHeight: 22, marginBottom: 24 },
-  card: { backgroundColor: '#1E293B', borderRadius: 12, padding: 16, marginBottom: 16 },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#3B82F6', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 12 },
-  row: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  label: { fontSize: 13, color: '#64748B', fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
-  value: { fontSize: 13, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace', flexShrink: 1, textAlign: 'right', maxWidth: '60%' },
-  good: { color: '#22C55E' },
-  bad: { color: '#EF4444' },
-  errorItem: { fontSize: 14, color: '#F87171', lineHeight: 22, marginBottom: 4 },
-  infoItem: { fontSize: 14, color: '#CBD5E1', lineHeight: 22, marginBottom: 4 },
-});
-
 function LayoutInner() {
   const { currentConflict, conflictRemaining, resolveConflict } = useApp();
   const [showATT, setShowATT] = React.useState(false);
-  const [showDiagnostics, setShowDiagnostics] = React.useState(false);
 
-  // Hide splash screen once layout is mounted
+  // Initialize Sentry crash reporting
   React.useEffect(() => {
-    const hideSplash = async () => {
-      try {
-        await SplashScreen?.hideAsync?.();
-      } catch (e) {
-        console.log('[SplashScreen] Hide error:', e);
+    try { initSentry(); } catch (e) { console.log('[Sentry] Init error:', e); }
+  }, []);
+
+  React.useEffect(() => {
+    isATTPromptNeeded().then(needed => {
+      if (needed) setShowATT(true);
+    }).catch(() => {});
+  }, []);
+
+  // Register push token for server-side notifications
+  React.useEffect(() => {
+    registerPushToken().catch(() => {});
+  }, []);
+
+  // Check temp data expiry for non-registered users & update retention on login
+  React.useEffect(() => {
+    checkTempDataExpiry().then(({ expired }) => {
+      if (expired) {
+        console.log('[Retention] Temporary onboarding data expired and cleaned up');
       }
-    };
-    // Small delay to ensure JS bundle is fully loaded
-    const timer = setTimeout(hideSplash, 300);
-    return () => clearTimeout(timer);
+    }).catch(() => {});
   }, []);
 
-  // Startup timeout: if LayoutInner stays mounted but nothing renders
-  // for 8 seconds, show diagnostic overlay
+  // Handle deep links for event QR codes (?event=CODE)
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowDiagnostics(true);
-    }, 8000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Reset diagnostic if the app successfully loaded data
-  React.useEffect(() => {
-    if (showDiagnostics) {
-      // If we got here, the providers mounted successfully.
-      // The diagnostic screen is just a safety net — dismiss if
-      // the user interacts or the app continues normally.
-    }
-  }, [showDiagnostics]);
-
-  // Initialize Sentry crash reporting (lazy import)
-  React.useEffect(() => {
-    try {
-      const { initSentry } = require('@/services/sentryService');
-      initSentry();
-    } catch (e) { console.log('[Sentry] Init error:', e); }
-  }, []);
-
-  // ATT prompt (lazy import)
-  React.useEffect(() => {
-    try {
-      const { isATTPromptNeeded } = require('@/services/trackingService');
-      isATTPromptNeeded().then((needed: boolean) => {
-        if (needed) setShowATT(true);
-      }).catch(() => {});
-    } catch { /* silent */ }
-  }, []);
-
-  // Register push token for server-side notifications (lazy import)
-  React.useEffect(() => {
-    try {
-      const { registerPushToken } = require('@/services/pushTokenService');
-      registerPushToken().catch(() => {});
-    } catch { /* silent */ }
-  }, []);
-
-  // Check temp data expiry for non-registered users (lazy import)
-  React.useEffect(() => {
-    try {
-      const { checkTempDataExpiry } = require('@/services/retentionNotificationService');
-      checkTempDataExpiry().then(({ expired }: { expired: boolean }) => {
-        if (expired) {
-          console.log('[Retention] Temporary onboarding data expired and cleaned up');
-        }
-      }).catch(() => {});
-    } catch { /* silent */ }
-  }, []);
-
-  // Handle deep links for event QR codes (?event=CODE) — lazy import
-  React.useEffect(() => {
-    let Linking: any = null;
-    let findEventByCode: any = null;
-    try {
-      Linking = require('expo-linking');
-      findEventByCode = require('@/services/sponsoredEventService').findEventByCode;
-    } catch {
-      return; // Cannot set up deep links
-    }
-
     const handleDeepLinkUrl = async (url: string) => {
-      if (!url || !findEventByCode) return;
+      if (!url) return;
       const eventMatch = url.match(/[?&]event=([A-Z0-9-]+)/i);
       if (eventMatch) {
         const code = eventMatch[1].toUpperCase();
@@ -341,23 +151,16 @@ function LayoutInner() {
       }
     };
 
-    Linking.getInitialURL().then((url: string | null) => {
+    Linking.getInitialURL().then(url => {
       if (url) handleDeepLinkUrl(url);
     }).catch(() => {});
 
-    const sub = Linking.addEventListener('url', ({ url }: { url: string }) => handleDeepLinkUrl(url));
-    return () => sub?.remove();
+    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
+    return () => sub.remove();
   }, []);
 
-  // Navigate to match-invitations when user taps a share request notification (lazy import)
+  // Navigate to match-invitations when user taps a share request notification
   React.useEffect(() => {
-    let addNotificationResponseListener: any = null;
-    try {
-      addNotificationResponseListener = require('@/services/notificationService').addNotificationResponseListener;
-    } catch {
-      return; // Notifications not available
-    }
-
     const sub = addNotificationResponseListener((response: any) => {
       const data = response?.notification?.request?.content?.data;
       if (!data?.type) return;
@@ -365,6 +168,7 @@ function LayoutInner() {
       setTimeout(() => {
         switch (data.type) {
           case 'retention':
+            // Handle retention notification taps
             if (data.action === 'play_match') {
               router.push('/match/new' as any);
             } else if (data.action === 'register' || data.action === 'register_urgent') {
@@ -401,23 +205,8 @@ function LayoutInner() {
         }
       }, 300);
     });
-    return () => sub?.remove();
+    return () => sub.remove();
   }, []);
-  // Show diagnostic overlay if stuck
-  if (showDiagnostics) {
-    return (
-      <View style={{ flex: 1 }}>
-        <StartupDiagnosticScreen reason="timeout" />
-        <Pressable
-          style={{ position: 'absolute', bottom: 40, alignSelf: 'center', backgroundColor: '#3B82F6', paddingHorizontal: 32, paddingVertical: 14, borderRadius: 12 }}
-          onPress={() => setShowDiagnostics(false)}
-        >
-          <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '600' }}>Dismiss and Continue</Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   return (
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
