@@ -34,7 +34,7 @@ import {
   markShareRequestsSeen,
   MatchShareRequest,
 } from '@/services/matchShareService';
-import { respondToWitnessRequest } from '@/services/trustScoreService';
+import { respondToAttestation, fetchAllMyAttestations } from '@/services/witnessService';
 import {
   NotificationPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
@@ -67,15 +67,19 @@ const NOTIF_ITEMS: { key: keyof NotificationPreferences; icon: string; color: st
 interface WitnessInvitation {
   id: string;
   matchId: string;
+  itemType: string;
+  itemId: string;
   requesterUserId: string;
   requesterName: string;
   status: string;
   createdAt: string;
+  attestationType?: string;
   matchTeamA?: string;
   matchTeamB?: string;
   matchScoreA?: number;
   matchScoreB?: number;
   matchDate?: string;
+  snapshot?: Record<string, any>;
 }
 
 export default function NotificationsHubScreen() {
@@ -97,6 +101,7 @@ export default function NotificationsHubScreen() {
 
   const [witnessInvitations, setWitnessInvitations] = useState<WitnessInvitation[]>([]);
   const [respondingWitnessId, setRespondingWitnessId] = useState<string | null>(null);
+  const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
 
   const [permissionStatus, setPermissionStatus] = useState<'granted' | 'denied'>('denied');
   const [scheduledCount, setScheduledCount] = useState(0);
@@ -172,24 +177,40 @@ export default function NotificationsHubScreen() {
       const { invitations: meetups } = await getPendingInvitations();
       setMeetupInvitations(meetups);
 
-      const { data: wData } = await supabase.from('match_witness_requests').select('*').eq('witness_user_id', user.id).order('created_at', { ascending: false });
+      const allAttestations = await fetchAllMyAttestations();
       const enriched: WitnessInvitation[] = [];
-      for (const row of wData || []) {
-        let requesterName = row.witness_name || '';
+      for (const row of allAttestations) {
+        let requesterName = row.witnessName || '';
         let matchTeamA = '', matchTeamB = '', matchScoreA = 0, matchScoreB = 0, matchDate = '';
-        try { const { data: p } = await supabase.from('user_profiles').select('username').eq('id', row.requester_user_id).single(); if (p?.username) requesterName = p.username; } catch {}
-        try {
-          const { data: m } = await supabase.from('matches').select('date, team_a, team_b').eq('id', row.match_id).single();
-          if (m) {
-            matchDate = m.date;
-            const ta = typeof m.team_a === 'string' ? JSON.parse(m.team_a) : m.team_a;
-            const tb = typeof m.team_b === 'string' ? JSON.parse(m.team_b) : m.team_b;
-            matchTeamA = (ta?.playerNames || []).join(', ') || 'Team A';
-            matchTeamB = (tb?.playerNames || []).join(', ') || 'Team B';
-            matchScoreA = ta?.score || 0; matchScoreB = tb?.score || 0;
-          }
-        } catch {}
-        enriched.push({ id: row.id, matchId: row.match_id, requesterUserId: row.requester_user_id, requesterName, status: row.status, createdAt: row.created_at, matchTeamA, matchTeamB, matchScoreA, matchScoreB, matchDate });
+        const itemType = row.itemType || 'match';
+        const itemId = row.itemId || row.matchId;
+        try { const { data: p } = await supabase.from('user_profiles').select('username').eq('id', row.requesterUserId).single(); if (p?.username) requesterName = p.username; } catch {}
+        if (itemType === 'match' && itemId) {
+          try {
+            const { data: m } = await supabase.from('matches').select('date, team_a, team_b').eq('id', itemId).single();
+            if (m) {
+              matchDate = m.date;
+              const ta = typeof m.team_a === 'string' ? JSON.parse(m.team_a) : m.team_a;
+              const tb = typeof m.team_b === 'string' ? JSON.parse(m.team_b) : m.team_b;
+              matchTeamA = (ta?.playerNames || []).join(', ') || 'Team A';
+              matchTeamB = (tb?.playerNames || []).join(', ') || 'Team B';
+              matchScoreA = ta?.score || 0; matchScoreB = tb?.score || 0;
+            }
+          } catch {}
+        } else if (itemType === 'challenge' && itemId) {
+          try {
+            const { data: ch } = await supabase.from('challenges').select('date, type, mode, success_count, total_shots, total_points').eq('id', itemId).single();
+            if (ch) {
+              matchDate = ch.date;
+              const typeLabel = ch.type === 'precision' ? 'Precision' : ch.type === '10_tirs_sautee' ? '10 Tirs Sautee' : '10 Tirs';
+              matchTeamA = typeLabel;
+              matchTeamB = ch.mode === '1v1' ? '1v1' : 'Solo';
+              matchScoreA = ch.success_count || ch.total_points || 0;
+              matchScoreB = ch.total_shots || 0;
+            }
+          } catch {}
+        }
+        enriched.push({ id: row.id, matchId: row.matchId, itemType, itemId, requesterUserId: row.requesterUserId, requesterName, status: row.status, createdAt: row.createdAt, attestationType: row.attestationType || 'standard', matchTeamA, matchTeamB, matchScoreA, matchScoreB, matchDate, snapshot: row.itemSnapshot || undefined });
       }
       setWitnessInvitations(enriched);
 
@@ -238,15 +259,24 @@ export default function NotificationsHubScreen() {
   const handleRespondWitness = useCallback(async (invitationId: string, response: 'attested' | 'declined') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRespondingWitnessId(invitationId);
-    const { error } = await respondToWitnessRequest(invitationId, response);
+    const { error } = await respondToAttestation(invitationId, response);
     setRespondingWitnessId(null);
     if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
     setWitnessInvitations(prev => prev.map(inv => inv.id === invitationId ? { ...inv, status: response } : inv));
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    showAlert(fr ? 'Succes' : 'Success', response === 'attested' ? (fr ? 'Match atteste (2.0x)' : 'Match attested (2.0x)') : (fr ? 'Demande refusee' : 'Request declined'));
+    showAlert(fr ? 'Succes' : 'Success', response === 'attested' ? (fr ? 'Atteste avec succes (2.0x)' : 'Attested successfully (2.0x)') : (fr ? 'Demande refusee' : 'Request declined'));
   }, [showAlert, fr]);
 
   const getDaysUntil = (date: string) => Math.ceil((new Date(date).getTime() - Date.now()) / 86400000);
+
+  const toggleSnapshot = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setExpandedSnapshots(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
 
   const handleDisableTournamentNotif = useCallback(async (tid: string, name: string) => {
     Alert.alert(fr ? 'Desactiver ?' : 'Disable?', `"${name}"`, [
@@ -458,27 +488,116 @@ export default function NotificationsHubScreen() {
             {filteredWitnessInvitations.filter(i => i.status === 'pending').length > 0 ? (
               <View style={s.section}>
                 <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#D97706' }]} /><Text style={s.sectionLabel}>{fr ? 'En attente' : 'Pending'}</Text><Text style={s.sectionCount}>{filteredWitnessInvitations.filter(i => i.status === 'pending').length}</Text></View>
-                {filteredWitnessInvitations.filter(i => i.status === 'pending').map((inv, idx) => (
-                  <Animated.View key={inv.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
-                    <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: '#D97706' }]}>
-                      <Pressable style={s.cardRow} onPress={() => router.push(`/match/${inv.matchId}` as any)}>
-                        <View style={[s.cardIconBg, { backgroundColor: '#D9770610' }]}><MaterialIcons name="sports" size={20} color="#D97706" /></View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.cardTitle} numberOfLines={1}>{inv.matchTeamA} vs {inv.matchTeamB}</Text>
-                          <Text style={s.cardMeta}>{inv.matchScoreA} - {inv.matchScoreB} {inv.matchDate ? `\u2022 ${new Date(inv.matchDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}` : ''}</Text>
-                          <Text style={s.cardMetaSub}>{fr ? 'Demande par' : 'By'} {inv.requesterName}</Text>
-                        </View>
-                        <MaterialIcons name="open-in-new" size={16} color={theme.primary} />
-                      </Pressable>
-                      <View style={s.actionRow}>
-                        <Pressable style={s.declineBtn} onPress={() => handleRespondWitness(inv.id, 'declined')} disabled={respondingWitnessId === inv.id}><MaterialIcons name="close" size={16} color={theme.error} /><Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text></Pressable>
-                        <Pressable style={[s.acceptBtn, { backgroundColor: '#7C3AED' }]} onPress={() => handleRespondWitness(inv.id, 'attested')} disabled={respondingWitnessId === inv.id}>
-                          {respondingWitnessId === inv.id ? <ActivityIndicator size="small" color="#FFF" /> : <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Attester (2.0x)' : 'Attest (2.0x)'}</Text></>}
+                {filteredWitnessInvitations.filter(i => i.status === 'pending').map((inv, idx) => {
+                  const isChallenge = inv.itemType === 'challenge';
+                  const isOpponent = inv.attestationType === 'opponent_confirmation';
+                  const iconName = isOpponent ? 'people' : isChallenge ? 'track-changes' : 'sports';
+                  const iconColor = isOpponent ? '#3B82F6' : isChallenge ? '#7C3AED' : '#D97706';
+                  const itemRoute = isChallenge ? `/challenge/${inv.itemId}` : `/match/${inv.itemId || inv.matchId}`;
+                  return (
+                    <Animated.View key={inv.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
+                      <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: isOpponent ? '#3B82F6' : '#D97706' }]}>
+                        <Pressable style={s.cardRow} onPress={() => router.push(itemRoute as any)}>
+                          <View style={[s.cardIconBg, { backgroundColor: iconColor + '10' }]}><MaterialIcons name={iconName as any} size={20} color={iconColor} /></View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.cardTitle} numberOfLines={1}>
+                              {isChallenge
+                                ? (inv.matchTeamA || 'Challenge')
+                                : `${inv.matchTeamA || 'Team A'} vs ${inv.matchTeamB || 'Team B'}`}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              {isChallenge ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ backgroundColor: '#7C3AED15', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
+                                  </View>
+                                  <Text style={s.cardMeta}>{inv.matchScoreA}/{inv.matchScoreB}</Text>
+                                </View>
+                              ) : (
+                                <Text style={s.cardMeta}>{inv.matchScoreA} - {inv.matchScoreB}</Text>
+                              )}
+                              {inv.matchDate ? <><View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#94A3B8' }} /><Text style={s.cardMeta}>{new Date(inv.matchDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text></> : null}
+                            </View>
+                            <Text style={s.cardMetaSub}>{fr ? 'Demande par' : 'By'} {inv.requesterName}</Text>
+                          </View>
+                          <MaterialIcons name="open-in-new" size={16} color={theme.primary} />
                         </Pressable>
+                        {isOpponent ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 4, backgroundColor: '#3B82F608', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#3B82F615' }}>
+                            <MaterialIcons name="handshake" size={13} color="#3B82F6" />
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#3B82F6', flex: 1 }}>
+                              {fr ? 'Confirmation adversaire - confirmez le resultat' : 'Opponent confirmation - confirm the result'}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {/* Snapshot preview */}
+                        {inv.snapshot ? (
+                          <View style={{ marginTop: 6, marginBottom: 4 }}>
+                            <Pressable
+                              style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 5, paddingHorizontal: 8, backgroundColor: '#F1F5F9', borderRadius: 8, alignSelf: 'flex-start' }}
+                              onPress={() => toggleSnapshot(inv.id)}
+                            >
+                              <MaterialIcons name={expandedSnapshots.has(inv.id) ? 'expand-less' : 'expand-more'} size={14} color="#64748B" />
+                              <MaterialIcons name="photo-camera" size={12} color="#64748B" />
+                              <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{fr ? 'Apercu snapshot' : 'Snapshot preview'}</Text>
+                            </Pressable>
+                            {expandedSnapshots.has(inv.id) ? (
+                              <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
+                                {isChallenge ? (
+                                  <>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 10, color: '#64748B' }}>Type</Text>
+                                      <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.type} ({inv.snapshot.mode})</Text>
+                                    </View>
+                                    {inv.snapshot.successCount !== undefined ? (
+                                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 10, color: '#64748B' }}>{fr ? 'Score' : 'Score'}</Text>
+                                        <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.successCount}/{inv.snapshot.totalShots}{inv.snapshot.successRate ? ` (${inv.snapshot.successRate}%)` : ''}</Text>
+                                      </View>
+                                    ) : null}
+                                    {inv.snapshot.playerName ? (
+                                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 10, color: '#64748B' }}>{fr ? 'Joueur' : 'Player'}</Text>
+                                        <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.playerName}{inv.snapshot.opponentName ? ` vs ${inv.snapshot.opponentName}` : ''}</Text>
+                                      </View>
+                                    ) : null}
+                                  </>
+                                ) : inv.snapshot.teamA ? (
+                                  <>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 10, color: '#64748B' }}>{fr ? 'Equipes' : 'Teams'}</Text>
+                                      <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.teamA?.playerNames?.join(', ')} vs {inv.snapshot.teamB?.playerNames?.join(', ')}</Text>
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 10, color: '#64748B' }}>Score</Text>
+                                      <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.teamA?.score} - {inv.snapshot.teamB?.score}</Text>
+                                    </View>
+                                    {inv.snapshot.format ? (
+                                      <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <Text style={{ fontSize: 10, color: '#64748B' }}>Format</Text>
+                                        <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.format}{inv.snapshot.duration ? ` - ${inv.snapshot.duration} min` : ''}</Text>
+                                      </View>
+                                    ) : null}
+                                  </>
+                                ) : null}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3, paddingTop: 3, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                                  <MaterialIcons name="lock-clock" size={9} color="#CBD5E1" />
+                                  <Text style={{ fontSize: 8, color: '#CBD5E1' }}>{inv.snapshot.snapshotAt ? new Date(inv.snapshot.snapshotAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</Text>
+                                </View>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                        <View style={s.actionRow}>
+                          <Pressable style={s.declineBtn} onPress={() => handleRespondWitness(inv.id, 'declined')} disabled={respondingWitnessId === inv.id}><MaterialIcons name="close" size={16} color={theme.error} /><Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text></Pressable>
+                          <Pressable style={[s.acceptBtn, { backgroundColor: '#7C3AED' }]} onPress={() => handleRespondWitness(inv.id, 'attested')} disabled={respondingWitnessId === inv.id}>
+                            {respondingWitnessId === inv.id ? <ActivityIndicator size="small" color="#FFF" /> : <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Attester (2.0x)' : 'Attest (2.0x)'}</Text></>}
+                          </Pressable>
+                        </View>
                       </View>
-                    </View>
-                  </Animated.View>
-                ))}
+                    </Animated.View>
+                  );
+                })}
               </View>
             ) : null}
 
@@ -487,14 +606,35 @@ export default function NotificationsHubScreen() {
                 <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: theme.textMuted }]} /><Text style={s.sectionLabel}>{fr ? 'Historique' : 'History'}</Text></View>
                 {filteredWitnessInvitations.filter(i => i.status !== 'pending').map((inv, idx) => {
                   const c = inv.status === 'attested' ? '#22C55E' : '#EF4444';
+                  const isChallenge = inv.itemType === 'challenge';
+                  const isOpponent = inv.attestationType === 'opponent_confirmation';
+                  const itemRoute = isChallenge ? `/challenge/${inv.itemId}` : `/match/${inv.itemId || inv.matchId}`;
                   return (
                     <Animated.View key={inv.id} entering={FadeIn.duration(200).delay(idx * 25)}>
-                      <Pressable style={[s.card, { borderLeftWidth: 3, borderLeftColor: c, opacity: 0.75 }]} onPress={() => router.push(`/match/${inv.matchId}` as any)}>
+                      <Pressable style={[s.card, { borderLeftWidth: 3, borderLeftColor: c, opacity: 0.75 }]} onPress={() => router.push(itemRoute as any)}>
                         <View style={s.cardRow}>
                           <View style={[s.cardIconBg, { backgroundColor: c + '10' }]}><MaterialIcons name={inv.status === 'attested' ? 'check-circle' : 'cancel'} size={20} color={c} /></View>
                           <View style={{ flex: 1 }}>
-                            <Text style={s.cardTitle} numberOfLines={1}>{inv.matchTeamA} vs {inv.matchTeamB}</Text>
-                            <Text style={s.cardMeta}>{inv.matchScoreA} - {inv.matchScoreB} \u2022 {inv.requesterName}</Text>
+                            <Text style={s.cardTitle} numberOfLines={1}>
+                              {isChallenge
+                                ? (inv.matchTeamA || 'Challenge')
+                                : `${inv.matchTeamA || 'Team A'} vs ${inv.matchTeamB || 'Team B'}`}
+                            </Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                              {isChallenge ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ backgroundColor: '#7C3AED15', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}>
+                                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
+                                  </View>
+                                  <Text style={s.cardMeta}>{inv.matchScoreA}/{inv.matchScoreB}</Text>
+                                </View>
+                              ) : (
+                                <Text style={s.cardMeta}>{inv.matchScoreA} - {inv.matchScoreB}</Text>
+                              )}
+                              <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#94A3B8' }} />
+                              <Text style={s.cardMeta}>{inv.requesterName}</Text>
+                              {isOpponent ? <View style={{ backgroundColor: '#3B82F612', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 5 }}><Text style={{ fontSize: 8, fontWeight: '700', color: '#3B82F6' }}>{fr ? 'ADV.' : 'OPP.'}</Text></View> : null}
+                            </View>
                           </View>
                           <View style={[s.statusChip, { backgroundColor: c + '12' }]}><Text style={[s.statusChipText, { color: c }]}>{inv.status === 'attested' ? (fr ? 'Atteste' : 'Attested') : (fr ? 'Refuse' : 'Declined')}</Text></View>
                         </View>

@@ -414,6 +414,77 @@ Deno.serve(async (req: Request) => {
       details.totalReports = totalReports;
 
       // ================================================
+      // FACTOR 12: Witness Abuse Detection (8 pts)
+      // Detect frequent witness pairs and suspicious attestation patterns
+      // ================================================
+      const { data: witnessReqsSent } = await supabaseClient
+        .from('match_witness_requests')
+        .select('witness_user_id, created_at, status')
+        .eq('requester_user_id', player.user_id)
+        .gte('created_at', new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString());
+
+      const { data: witnessReqsReceived } = await supabaseClient
+        .from('match_witness_requests')
+        .select('requester_user_id, created_at, status')
+        .eq('witness_user_id', player.user_id)
+        .gte('created_at', new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString());
+
+      // Count attestations per pair
+      const witnessPairCounts = new Map<string, number>();
+      for (const wr of witnessReqsSent || []) {
+        const key = wr.witness_user_id;
+        witnessPairCounts.set(key, (witnessPairCounts.get(key) || 0) + 1);
+      }
+      for (const wr of witnessReqsReceived || []) {
+        const key = wr.requester_user_id;
+        witnessPairCounts.set(key, (witnessPairCounts.get(key) || 0) + 1);
+      }
+
+      const maxPairCount = Math.max(...Array.from(witnessPairCounts.values()), 0);
+      const totalWitnessActivity = (witnessReqsSent?.length || 0) + (witnessReqsReceived?.length || 0);
+      details.witnessActivity = {
+        sentThisWeek: witnessReqsSent?.length || 0,
+        receivedThisWeek: witnessReqsReceived?.length || 0,
+        maxPairCount,
+        totalActivity: totalWitnessActivity,
+      };
+
+      // Frequent pair abuse: same duo > 5 attestations/week
+      if (maxPairCount > 8) {
+        score -= 8;
+        flags.push('witness_abuse_extreme');
+      } else if (maxPairCount > 5) {
+        score -= 5;
+        flags.push('witness_abuse_frequent_pair');
+      }
+
+      // Mutual attestation ring: both users attest each other many times
+      let mutualAttestations = 0;
+      for (const [partnerId, sentCount] of witnessPairCounts) {
+        // Check if this partner also sent requests to current player
+        const reverseCount = (witnessReqsReceived || [])
+          .filter((wr: any) => wr.requester_user_id === partnerId).length;
+        if (sentCount >= 2 && reverseCount >= 2) {
+          mutualAttestations += sentCount + reverseCount;
+        }
+      }
+      if (mutualAttestations > 6) {
+        if (!flags.includes('witness_abuse_extreme')) {
+          score -= 4;
+          flags.push('witness_abuse_mutual_ring');
+        }
+      }
+      details.mutualAttestations = mutualAttestations;
+
+      // Count attested matches/challenges for trust factor
+      const { data: attestedItems } = await supabaseClient
+        .from('match_witness_requests')
+        .select('id')
+        .eq('requester_user_id', player.user_id)
+        .eq('status', 'attested');
+      details.witnessedMatchCount = attestedItems?.length || 0;
+
+      // ================================================
       // BONUS: Arranged match detection
       // ================================================
       // Same opponent pair > 5 times this week with same/similar scores
