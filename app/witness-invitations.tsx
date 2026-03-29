@@ -16,11 +16,13 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
-import { respondToWitnessRequest } from '@/services/trustScoreService';
+import { respondToAttestation, fetchAllMyAttestations } from '@/services/witnessService';
 
 interface WitnessInvitation {
   id: string;
   matchId: string;
+  itemType: string;
+  itemId: string;
   requesterUserId: string;
   requesterName: string;
   status: string;
@@ -49,64 +51,77 @@ export default function WitnessInvitationsScreen() {
     if (!user?.id) return;
     const supabase = getSupabaseClient();
     try {
-      const { data, error } = await supabase
-        .from('match_witness_requests')
-        .select('*')
-        .eq('witness_user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.log('Error loading witness invitations:', error);
-        setLoading(false);
-        return;
-      }
+      const allAttestations = await fetchAllMyAttestations();
 
       const enriched: WitnessInvitation[] = [];
-      for (const row of data || []) {
-        let requesterName = row.witness_name || '';
+      for (const row of allAttestations) {
+        let requesterName = row.witnessName || '';
         let matchSummary = '';
         let matchDate = '';
         let matchTeamA = '';
         let matchTeamB = '';
         let matchScoreA = 0;
         let matchScoreB = 0;
+        const itemType = row.itemType || 'match';
+        const itemId = row.itemId || row.matchId;
 
         // Fetch requester name
         try {
           const { data: profile } = await supabase
             .from('user_profiles')
             .select('username')
-            .eq('id', row.requester_user_id)
+            .eq('id', row.requesterUserId)
             .single();
           if (profile?.username) requesterName = profile.username;
         } catch { /* silent */ }
 
-        // Fetch match details
-        try {
-          const { data: match } = await supabase
-            .from('matches')
-            .select('date, team_a, team_b, winner, format, duration')
-            .eq('id', row.match_id)
-            .single();
-          if (match) {
-            matchDate = match.date;
-            const ta = typeof match.team_a === 'string' ? JSON.parse(match.team_a) : match.team_a;
-            const tb = typeof match.team_b === 'string' ? JSON.parse(match.team_b) : match.team_b;
-            matchTeamA = (ta?.playerNames || []).join(', ') || 'Team A';
-            matchTeamB = (tb?.playerNames || []).join(', ') || 'Team B';
-            matchScoreA = ta?.score || 0;
-            matchScoreB = tb?.score || 0;
-            matchSummary = `${matchTeamA} vs ${matchTeamB} (${matchScoreA}-${matchScoreB})`;
-          }
-        } catch { /* silent */ }
+        // Fetch item details based on type
+        if (itemType === 'match' && itemId) {
+          try {
+            const { data: match } = await supabase
+              .from('matches')
+              .select('date, team_a, team_b, winner, format, duration')
+              .eq('id', itemId)
+              .single();
+            if (match) {
+              matchDate = match.date;
+              const ta = typeof match.team_a === 'string' ? JSON.parse(match.team_a) : match.team_a;
+              const tb = typeof match.team_b === 'string' ? JSON.parse(match.team_b) : match.team_b;
+              matchTeamA = (ta?.playerNames || []).join(', ') || 'Team A';
+              matchTeamB = (tb?.playerNames || []).join(', ') || 'Team B';
+              matchScoreA = ta?.score || 0;
+              matchScoreB = tb?.score || 0;
+              matchSummary = `${matchTeamA} vs ${matchTeamB} (${matchScoreA}-${matchScoreB})`;
+            }
+          } catch { /* silent */ }
+        } else if (itemType === 'challenge' && itemId) {
+          try {
+            const { data: ch } = await supabase
+              .from('challenges')
+              .select('date, type, mode, success_count, total_shots, total_points')
+              .eq('id', itemId)
+              .single();
+            if (ch) {
+              matchDate = ch.date;
+              const typeLabel = ch.type === 'precision' ? 'Precision' : ch.type === '10_tirs_sautee' ? '10 Tirs Sautee' : '10 Tirs';
+              matchTeamA = typeLabel;
+              matchTeamB = ch.mode === '1v1' ? '1v1' : 'Solo';
+              matchScoreA = ch.success_count || ch.total_points || 0;
+              matchScoreB = ch.total_shots || 0;
+              matchSummary = `${typeLabel} (${ch.mode}) - ${matchScoreA}/${matchScoreB}`;
+            }
+          } catch { /* silent */ }
+        }
 
         enriched.push({
           id: row.id,
-          matchId: row.match_id,
-          requesterUserId: row.requester_user_id,
+          matchId: row.matchId,
+          itemType,
+          itemId,
+          requesterUserId: row.requesterUserId,
           requesterName,
           status: row.status,
-          createdAt: row.created_at,
+          createdAt: row.createdAt,
           matchSummary,
           matchDate,
           matchTeamA,
@@ -135,7 +150,7 @@ export default function WitnessInvitationsScreen() {
   const handleRespond = async (invitationId: string, response: 'attested' | 'declined') => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setRespondingId(invitationId);
-    const { error } = await respondToWitnessRequest(invitationId, response);
+    const { error } = await respondToAttestation(invitationId, response);
     setRespondingId(null);
     if (error) {
       showAlert(t('common', 'error'), error);
@@ -148,7 +163,7 @@ export default function WitnessInvitationsScreen() {
     showAlert(
       t('common', 'success'),
       response === 'attested'
-        ? (isFr ? 'Match atteste avec succes. Le poids passe a 2.0x.' : 'Match attested successfully. Weight upgraded to 2.0x.')
+        ? (isFr ? 'Atteste avec succes. Le poids passe a 2.0x.' : 'Attested successfully. Weight upgraded to 2.0x.')
         : (isFr ? 'Demande refusee.' : 'Request declined.')
     );
   };
@@ -166,6 +181,11 @@ export default function WitnessInvitationsScreen() {
     if (status === 'attested') return isFr ? 'Atteste' : 'Attested';
     if (status === 'declined') return isFr ? 'Refuse' : 'Declined';
     return isFr ? 'En attente' : 'Pending';
+  };
+
+  const getItemRoute = (inv: WitnessInvitation) => {
+    if (inv.itemType === 'challenge') return `/challenge/${inv.itemId}` as any;
+    return `/match/${inv.itemId || inv.matchId}` as any;
   };
 
   return (
@@ -201,8 +221,8 @@ export default function WitnessInvitationsScreen() {
             <MaterialIcons name="info-outline" size={16} color="#7C3AED" />
             <Text style={st.infoBannerText}>
               {isFr
-                ? 'Lorsque vous attestez un match, son poids dans le classement passe a 2.0x. Attestez uniquement les matchs auxquels vous avez assiste.'
-                : 'When you attest a match, its leaderboard weight upgrades to 2.0x. Only attest matches you witnessed in person.'}
+                ? 'Lorsque vous attestez un match ou un defi, son poids dans le classement passe a 2.0x. Attestez uniquement les elements auxquels vous avez assiste.'
+                : 'When you attest a match or challenge, its leaderboard weight upgrades to 2.0x. Only attest items you witnessed in person.'}
             </Text>
           </Animated.View>
 
@@ -215,19 +235,30 @@ export default function WitnessInvitationsScreen() {
                 .map((inv, idx) => (
                   <Animated.View key={inv.id} entering={FadeInDown.duration(300).delay(idx * 60)}>
                     <View style={[st.card, { borderLeftColor: '#D97706' }]}>
-                      {/* Match preview */}
+                      {/* Item preview */}
                       <View style={st.matchPreview}>
-                        <View style={st.matchPreviewIcon}>
-                          <MaterialIcons name="sports" size={20} color="#D97706" />
+                        <View style={[st.matchPreviewIcon, { backgroundColor: inv.itemType === 'challenge' ? '#7C3AED12' : '#D9770612' }]}>
+                          <MaterialIcons name={inv.itemType === 'challenge' ? 'track-changes' : 'sports'} size={20} color={inv.itemType === 'challenge' ? '#7C3AED' : '#D97706'} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={st.matchPreviewTitle} numberOfLines={1}>
-                            {inv.matchTeamA || 'Team A'} vs {inv.matchTeamB || 'Team B'}
+                            {inv.itemType === 'challenge'
+                              ? (inv.matchTeamA || 'Challenge')
+                              : `${inv.matchTeamA || 'Team A'} vs ${inv.matchTeamB || 'Team B'}`}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                            <Text style={st.matchPreviewScore}>
-                              {inv.matchScoreA} - {inv.matchScoreB}
-                            </Text>
+                            {inv.itemType === 'challenge' ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                <View style={{ backgroundColor: '#7C3AED15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{isFr ? 'DEFI' : 'CHALLENGE'}</Text>
+                                </View>
+                                <Text style={st.matchPreviewScore}>{inv.matchScoreA}/{inv.matchScoreB}</Text>
+                              </View>
+                            ) : (
+                              <Text style={st.matchPreviewScore}>
+                                {inv.matchScoreA} - {inv.matchScoreB}
+                              </Text>
+                            )}
                             {inv.matchDate ? (
                               <>
                                 <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted }} />
@@ -240,7 +271,7 @@ export default function WitnessInvitationsScreen() {
                         </View>
                         <Pressable
                           style={st.viewMatchBtn}
-                          onPress={() => router.push(`/match/${inv.matchId}` as any)}
+                          onPress={() => router.push(getItemRoute(inv))}
                         >
                           <MaterialIcons name="open-in-new" size={16} color={theme.primary} />
                         </Pressable>
@@ -301,7 +332,7 @@ export default function WitnessInvitationsScreen() {
                     <Animated.View key={inv.id} entering={FadeInDown.duration(300).delay(idx * 40)}>
                       <Pressable
                         style={[st.card, { borderLeftColor: sc, opacity: 0.85 }]}
-                        onPress={() => router.push(`/match/${inv.matchId}` as any)}
+                        onPress={() => router.push(getItemRoute(inv))}
                       >
                         <View style={st.matchPreview}>
                           <View style={[st.matchPreviewIcon, { backgroundColor: sc + '12' }]}>
@@ -313,12 +344,23 @@ export default function WitnessInvitationsScreen() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={st.matchPreviewTitle} numberOfLines={1}>
-                              {inv.matchTeamA || 'Team A'} vs {inv.matchTeamB || 'Team B'}
+                              {inv.itemType === 'challenge'
+                                ? (inv.matchTeamA || 'Challenge')
+                                : `${inv.matchTeamA || 'Team A'} vs ${inv.matchTeamB || 'Team B'}`}
                             </Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                              <Text style={st.matchPreviewScore}>
-                                {inv.matchScoreA} - {inv.matchScoreB}
-                              </Text>
+                              {inv.itemType === 'challenge' ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ backgroundColor: '#7C3AED15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{isFr ? 'DEFI' : 'CHALLENGE'}</Text>
+                                  </View>
+                                  <Text style={st.matchPreviewScore}>{inv.matchScoreA}/{inv.matchScoreB}</Text>
+                                </View>
+                              ) : (
+                                <Text style={st.matchPreviewScore}>
+                                  {inv.matchScoreA} - {inv.matchScoreB}
+                                </Text>
+                              )}
                               <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted }} />
                               <Text style={st.requesterDate}>{inv.requesterName}</Text>
                             </View>
@@ -343,8 +385,8 @@ export default function WitnessInvitationsScreen() {
               <Text style={st.emptyTitle}>{isFr ? 'Aucune demande' : 'No requests'}</Text>
               <Text style={st.emptyDesc}>
                 {isFr
-                  ? 'Vous recevrez des demandes lorsqu\'un joueur vous invitera a attester un match auquel vous avez assiste.'
-                  : 'You will receive requests when a player invites you to attest a match you witnessed.'}
+                  ? 'Vous recevrez des demandes lorsqu\'un joueur vous invitera a attester un match ou un defi auquel vous avez assiste.'
+                  : 'You will receive requests when a player invites you to attest a match or challenge you witnessed.'}
               </Text>
             </View>
           ) : null}

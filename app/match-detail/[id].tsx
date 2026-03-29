@@ -32,8 +32,9 @@ import {
   getValidationIcon,
   getValidationLabel,
   getMatchValidationWeight,
-  fetchMatchWitnessRequests,
 } from '@/services/trustScoreService';
+import { fetchAttestationsForItem } from '@/services/witnessService';
+import AttestationSection from '@/components/feature/AttestationSection';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -62,7 +63,7 @@ export default function MatchDetailScreen() {
 
   useEffect(() => {
     if (!id) return;
-    fetchMatchWitnessRequests(id).then(reqs => setWitnessRequests(reqs));
+    fetchAttestationsForItem('match', id).then(reqs => setWitnessRequests(reqs));
   }, [id]);
 
   const match: Match | undefined = useMemo(() => matches.find(m => m.id === id), [matches, id]);
@@ -612,28 +613,23 @@ export default function MatchDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Witness Attestations */}
-        {witnessRequests.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(280)} style={[s.card, { borderWidth: 1, borderColor: '#7C3AED30', backgroundColor: '#7C3AED04' }]}>
-            <View style={s.cardHeaderRow}>
-              <MaterialIcons name="visibility" size={16} color="#7C3AED" />
-              <Text style={[s.cardTitle, { color: '#7C3AED' }]}>{fr ? 'Attestations' : 'Attestations'}</Text>
-            </View>
-            {witnessRequests.map(wr => (
-              <View key={wr.id} style={s.witnessRow}>
-                <MaterialIcons
-                  name={wr.status === 'attested' ? 'check-circle' : wr.status === 'declined' ? 'cancel' : 'schedule'}
-                  size={16}
-                  color={wr.status === 'attested' ? '#22C55E' : wr.status === 'declined' ? '#EF4444' : '#D97706'}
-                />
-                <Text style={s.witnessId}>{wr.witnessUserId.substring(0, 8)}...</Text>
-                <Text style={[s.witnessStatus, { color: wr.status === 'attested' ? '#22C55E' : wr.status === 'declined' ? '#EF4444' : '#D97706' }]}>
-                  {wr.status === 'attested' ? (fr ? 'Atteste' : 'Attested') : wr.status === 'declined' ? (fr ? 'Refuse' : 'Declined') : (fr ? 'En attente' : 'Pending')}
-                </Text>
-              </View>
-            ))}
-          </Animated.View>
-        ) : null}
+        {/* Witness Attestation Section */}
+        <AttestationSection
+          itemType="match"
+          itemId={match.id}
+          snapshotData={{
+            teamA: { playerNames: match.teamA.playerNames, score: match.teamA.score },
+            teamB: { playerNames: match.teamB.playerNames, score: match.teamB.score },
+            winner: match.winner,
+            format: match.format,
+            date: match.date,
+            duration: match.duration,
+          }}
+          animDelay={280}
+          onAttestationChange={(attested, count) => {
+            if (attested) fetchAttestationsForItem('match', match.id).then(setWitnessRequests);
+          }}
+        />
 
         {/* Action Buttons */}
         <Animated.View entering={FadeInDown.duration(300).delay(300)} style={s.actionsColumn}>

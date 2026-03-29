@@ -34,6 +34,7 @@ import { PRECISION_ATELIERS } from '@/constants/challengeConfig';
 import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import { logModification } from '@/services/modificationLogService';
 import EditConflictModal from '@/components/ui/EditConflictModal';
+import AttestationSection from '@/components/feature/AttestationSection';
 
 const CHALLENGE_LABELS: Record<string, Record<ChallengeType, string>> = {
   fr: { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs Sautee', precision: 'Precision' },
@@ -719,8 +720,29 @@ export default function ChallengeDetailScreen() {
         )}
       </Animated.View>
 
+      {/* Witness Attestation Section */}
+      {!isEditing ? (
+        <AttestationSection
+          itemType="challenge"
+          itemId={challenge.id}
+          snapshotData={{
+            type: challenge.type,
+            mode: challenge.mode,
+            playerName: challenge.playerName,
+            opponentName: challenge.opponentName,
+            successCount: challenge.successCount,
+            totalShots: challenge.totalShots,
+            successRate: challenge.successRate,
+            totalPoints: challenge.totalPoints,
+            winner: challenge.winner,
+            date: challenge.date,
+          }}
+          animDelay={220}
+        />
+      ) : null}
+
       {/* Action Buttons */}
-      <Animated.View entering={FadeInDown.duration(300).delay(240)}>
+      <Animated.View entering={FadeInDown.duration(300).delay(260)}>
         {isEditing ? (
           <View style={s.editActionRow}>
             <Pressable style={({ pressed }) => [s.cancelBtn, pressed && { opacity: 0.85 }]} onPress={cancelEdit}>
