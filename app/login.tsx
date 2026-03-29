@@ -179,6 +179,7 @@ export default function LoginScreen() {
           {/* Mode Tabs */}
           <Animated.View entering={FadeInDown.duration(500).delay(100)} style={styles.modeTabs}>
             <Pressable
+              testID="mode-tab-login"
               style={[styles.modeTab, mode === 'login' && styles.modeTabActive]}
               onPress={() => handleModeSwitch('login')}
             >
@@ -187,6 +188,7 @@ export default function LoginScreen() {
               </Text>
             </Pressable>
             <Pressable
+              testID="mode-tab-register"
               style={[styles.modeTab, mode === 'register' && styles.modeTabActive]}
               onPress={() => handleModeSwitch('register')}
             >
@@ -202,6 +204,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="login-email-input"
                   style={styles.input}
                   placeholder={t('login', 'email')}
                   placeholderTextColor={theme.textMuted}
@@ -216,6 +219,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="login-password-input"
                   style={styles.input}
                   placeholder={t('login', 'password')}
                   placeholderTextColor={theme.textMuted}
@@ -233,6 +237,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
+                testID="login-submit-button"
                 style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleLogin}
                 disabled={operationLoading}
@@ -256,6 +261,7 @@ export default function LoginScreen() {
 
               {/* Google Sign-In */}
               <Pressable
+                testID="login-google-button"
                 style={[styles.googleButton, operationLoading && styles.googleButtonDisabled]}
                 onPress={handleGoogleLogin}
                 disabled={operationLoading}
@@ -272,6 +278,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="register-email-input"
                   style={styles.input}
                   placeholder={t('login', 'email')}
                   placeholderTextColor={theme.textMuted}
@@ -286,6 +293,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="register-password-input"
                   style={styles.input}
                   placeholder={t('login', 'passwordMin')}
                   placeholderTextColor={theme.textMuted}
@@ -305,6 +313,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="register-confirm-password-input"
                   style={styles.input}
                   placeholder={t('login', 'confirmPassword')}
                   placeholderTextColor={theme.textMuted}
@@ -343,6 +352,7 @@ export default function LoginScreen() {
               )}
 
               <Pressable
+                testID="register-send-otp-button"
                 style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleSendOTP}
                 disabled={operationLoading}
@@ -373,6 +383,7 @@ export default function LoginScreen() {
               <View style={styles.inputContainer}>
                 <MaterialIcons name="pin" size={20} color={theme.textSecondary} style={styles.inputIcon} />
                 <TextInput
+                  testID="otp-input"
                   style={[styles.input, styles.otpInput]}
                   placeholder={t('login', 'verificationCode')}
                   placeholderTextColor={theme.textMuted}
@@ -384,6 +395,7 @@ export default function LoginScreen() {
               </View>
 
               <Pressable
+                testID="verify-otp-button"
                 style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
                 onPress={handleVerifyOTP}
                 disabled={operationLoading}

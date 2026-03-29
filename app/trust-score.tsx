@@ -116,6 +116,9 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   multiple_reports: { fr: 'Signalements multiples', en: 'Multiple reports', icon: 'flag', color: '#EF4444' },
   has_reports: { fr: 'Signalement recu', en: 'Report received', icon: 'flag', color: '#D97706' },
   arranged_matches: { fr: 'Matchs arranges detectes', en: 'Arranged matches detected', icon: 'gpp-bad', color: '#EF4444' },
+  witness_abuse_frequent_pair: { fr: 'Attestations trop frequentes (meme paire)', en: 'Too frequent attestations (same pair)', icon: 'visibility', color: '#F97316' },
+  witness_abuse_extreme: { fr: 'Abus d attestations temoins', en: 'Witness attestation abuse', icon: 'visibility-off', color: '#EF4444' },
+  witness_abuse_mutual_ring: { fr: 'Attestations mutuelles suspectes', en: 'Suspicious mutual attestations', icon: 'swap-horiz', color: '#F97316' },
 };
 
 export default function TrustScoreScreen() {
@@ -364,6 +367,14 @@ export default function TrustScoreScreen() {
                 icon="calendar-today"
                 description={((et.ageDesc as any)?.[language] || 'Account created {value} days ago.').replace('{value}', String(accountAgeDays))}
               />
+              <FactorBar
+                label={isFr ? 'Attestations temoins' : 'Witness attestations'}
+                value={Math.min(8, (details.witnessedMatchCount || 0))}
+                maxValue={8}
+                color="#7C3AED"
+                icon="visibility"
+                description={isFr ? `${details.witnessedMatchCount || 0} matchs/defis attestes par des temoins. Bonus progressif jusqu'a 8 pts.` : `${details.witnessedMatchCount || 0} matches/challenges attested by witnesses. Progressive bonus up to 8 pts.`}
+              />
             </Animated.View>
 
             {/* Flags */}
@@ -525,6 +536,7 @@ export default function TrustScoreScreen() {
                 { icon: 'groups', color: '#8B5CF6', text: (et.tip2 as any)?.[language] || 'Vary your opponents' },
                 { icon: 'schedule', color: '#06B6D4', text: (et.tip3 as any)?.[language] || 'Play regularly' },
                 { icon: 'edit-off', color: '#F97316', text: (et.tip4 as any)?.[language] || 'Avoid excessive modifications' },
+                { icon: 'visibility', color: '#7C3AED', text: isFr ? 'Faites attester vos matchs et defis par des temoins pour un bonus 2.0x' : 'Get your matches and challenges attested by witnesses for a 2.0x bonus' },
               ].map((tip, idx) => (
                 <View key={idx} style={st.tipRow}>
                   <View style={[st.tipIcon, { backgroundColor: tip.color + '12' }]}>

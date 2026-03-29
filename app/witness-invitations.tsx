@@ -27,6 +27,7 @@ interface WitnessInvitation {
   requesterName: string;
   status: string;
   createdAt: string;
+  attestationType?: string;
   matchSummary?: string;
   matchDate?: string;
   matchTeamA?: string;
@@ -122,6 +123,7 @@ export default function WitnessInvitationsScreen() {
           requesterName,
           status: row.status,
           createdAt: row.createdAt,
+          attestationType: row.attestationType || 'standard',
           matchSummary,
           matchDate,
           matchTeamA,
@@ -237,8 +239,8 @@ export default function WitnessInvitationsScreen() {
                     <View style={[st.card, { borderLeftColor: '#D97706' }]}>
                       {/* Item preview */}
                       <View style={st.matchPreview}>
-                        <View style={[st.matchPreviewIcon, { backgroundColor: inv.itemType === 'challenge' ? '#7C3AED12' : '#D9770612' }]}>
-                          <MaterialIcons name={inv.itemType === 'challenge' ? 'track-changes' : 'sports'} size={20} color={inv.itemType === 'challenge' ? '#7C3AED' : '#D97706'} />
+                        <View style={[st.matchPreviewIcon, { backgroundColor: inv.attestationType === 'opponent_confirmation' ? '#3B82F612' : inv.itemType === 'challenge' ? '#7C3AED12' : '#D9770612' }]}>
+                          <MaterialIcons name={inv.attestationType === 'opponent_confirmation' ? 'people' : inv.itemType === 'challenge' ? 'track-changes' : 'sports'} size={20} color={inv.attestationType === 'opponent_confirmation' ? '#3B82F6' : inv.itemType === 'challenge' ? '#7C3AED' : '#D97706'} />
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={st.matchPreviewTitle} numberOfLines={1}>
@@ -276,6 +278,16 @@ export default function WitnessInvitationsScreen() {
                           <MaterialIcons name="open-in-new" size={16} color={theme.primary} />
                         </Pressable>
                       </View>
+
+                      {/* Opponent confirmation badge */}
+                      {inv.attestationType === 'opponent_confirmation' ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10, backgroundColor: '#3B82F608', borderRadius: 8, padding: 8, borderWidth: 1, borderColor: '#3B82F615' }}>
+                          <MaterialIcons name="handshake" size={14} color="#3B82F6" />
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: '#3B82F6' }}>
+                            {isFr ? 'Confirmation adversaire - le joueur vous demande de confirmer le resultat' : 'Opponent confirmation - the player asks you to confirm the result'}
+                          </Text>
+                        </View>
+                      ) : null}
 
                       {/* Requester info */}
                       <View style={st.requesterRow}>
