@@ -55,6 +55,7 @@ export default function AttestationSection({
   const [showPicker, setShowPicker] = useState(false);
   const [publicPlayers, setPublicPlayers] = useState<PublicPlayer[]>([]);
   const [loadingPlayers, setLoadingPlayers] = useState(false);
+  const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
 
   const loadAttestations = useCallback(async () => {
     const result = await fetchAttestationsForItem(itemType, itemId);
@@ -165,6 +166,15 @@ export default function AttestationSection({
     return 'schedule';
   };
 
+  const toggleSnapshot = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setExpandedSnapshots(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
+  }, []);
+
   if (loading) {
     return (
       <View style={[st.card, { borderColor: '#7C3AED30', backgroundColor: '#7C3AED04' }]}>
@@ -205,26 +215,93 @@ export default function AttestationSection({
             {attestations.map(a => {
               const sc = getStatusColor(a.status);
               const isOpponent = a.attestationType === 'opponent_confirmation';
+              const snap = a.itemSnapshot;
+              const isExpanded = expandedSnapshots.has(a.id);
               return (
                 <View key={a.id} style={st.attestationRow}>
-                  <MaterialIcons name={isOpponent ? 'people' : (getStatusIcon(a.status) as any)} size={16} color={isOpponent ? '#3B82F6' : sc} />
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={st.attestationName}>{a.witnessName || a.witnessUserId.substring(0, 8)}</Text>
-                      {isOpponent ? (
-                        <View style={st.opponentChip}>
-                          <Text style={st.opponentChipText}>{getAttestationTypeLabel(a.attestationType)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <MaterialIcons name={isOpponent ? 'people' : (getStatusIcon(a.status) as any)} size={16} color={isOpponent ? '#3B82F6' : sc} />
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={st.attestationName}>{a.witnessName || a.witnessUserId.substring(0, 8)}</Text>
+                          {isOpponent ? (
+                            <View style={st.opponentChip}>
+                              <Text style={st.opponentChipText}>{getAttestationTypeLabel(a.attestationType)}</Text>
+                            </View>
+                          ) : null}
                         </View>
-                      ) : null}
+                        {a.respondedAt ? (
+                          <Text style={st.attestationDate}>
+                            {new Date(a.respondedAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[st.statusPill, { backgroundColor: sc + '15', borderColor: sc + '30' }]}>
+                        <Text style={[st.statusPillText, { color: sc }]}>{getStatusLabel(a.status)}</Text>
+                      </View>
                     </View>
-                    {a.respondedAt ? (
-                      <Text style={st.attestationDate}>
-                        {new Date(a.respondedAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
-                      </Text>
+
+                    {/* Snapshot toggle */}
+                    {snap ? (
+                      <View style={{ marginTop: 8 }}>
+                        <Pressable
+                          style={st.snapshotToggle}
+                          onPress={() => toggleSnapshot(a.id)}
+                        >
+                          <MaterialIcons name={isExpanded ? 'expand-less' : 'expand-more'} size={14} color="#64748B" />
+                          <MaterialIcons name="photo-camera" size={11} color="#64748B" />
+                          <Text style={st.snapshotToggleText}>{isExpanded ? (fr ? 'Masquer' : 'Hide') : (fr ? 'Apercu snapshot' : 'Snapshot preview')}</Text>
+                        </Pressable>
+                        {isExpanded ? (
+                          <View style={st.snapshotContainer}>
+                            {itemType === 'match' && snap.teamA ? (
+                              <>
+                                <View style={st.snapshotRow}>
+                                  <Text style={st.snapshotLabel}>{fr ? 'Equipes' : 'Teams'}</Text>
+                                  <Text style={st.snapshotValueBold}>{snap.teamA?.playerNames?.join(', ')} vs {snap.teamB?.playerNames?.join(', ')}</Text>
+                                </View>
+                                <View style={st.snapshotRow}>
+                                  <Text style={st.snapshotLabel}>Score</Text>
+                                  <Text style={st.snapshotValueBold}>{snap.teamA?.score} - {snap.teamB?.score}</Text>
+                                </View>
+                                {snap.format ? (
+                                  <View style={st.snapshotRow}>
+                                    <Text style={st.snapshotLabel}>Format</Text>
+                                    <Text style={st.snapshotValue}>{snap.format}{snap.duration ? ` - ${snap.duration} min` : ''}</Text>
+                                  </View>
+                                ) : null}
+                              </>
+                            ) : itemType === 'challenge' ? (
+                              <>
+                                <View style={st.snapshotRow}>
+                                  <Text style={st.snapshotLabel}>Type</Text>
+                                  <Text style={st.snapshotValueBold}>{snap.type} ({snap.mode})</Text>
+                                </View>
+                                {snap.successCount !== undefined ? (
+                                  <View style={st.snapshotRow}>
+                                    <Text style={st.snapshotLabel}>{fr ? 'Resultat' : 'Result'}</Text>
+                                    <Text style={st.snapshotValueBold}>{snap.successCount}/{snap.totalShots}{snap.successRate ? ` (${snap.successRate}%)` : ''}</Text>
+                                  </View>
+                                ) : null}
+                                {snap.playerName ? (
+                                  <View style={st.snapshotRow}>
+                                    <Text style={st.snapshotLabel}>{fr ? 'Joueur' : 'Player'}</Text>
+                                    <Text style={st.snapshotValue}>{snap.playerName}{snap.opponentName ? ` vs ${snap.opponentName}` : ''}</Text>
+                                  </View>
+                                ) : null}
+                              </>
+                            ) : null}
+                            <View style={st.snapshotTimestamp}>
+                              <MaterialIcons name="lock-clock" size={9} color="#CBD5E1" />
+                              <Text style={st.snapshotTimestampText}>
+                                Snapshot {snap.snapshotAt ? new Date(snap.snapshotAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                              </Text>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
                     ) : null}
-                  </View>
-                  <View style={[st.statusPill, { backgroundColor: sc + '15', borderColor: sc + '30' }]}>
-                    <Text style={[st.statusPillText, { color: sc }]}>{getStatusLabel(a.status)}</Text>
                   </View>
                 </View>
               );
@@ -339,4 +416,15 @@ const st = StyleSheet.create({
 
   opponentChip: { backgroundColor: '#3B82F612', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
   opponentChipText: { fontSize: 9, fontWeight: '700', color: '#3B82F6', textTransform: 'uppercase' as const },
+
+  // Snapshot preview
+  snapshotToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingVertical: 5, paddingHorizontal: 8, backgroundColor: '#F1F5F9', borderRadius: 8, alignSelf: 'flex-start' as const },
+  snapshotToggleText: { fontSize: 10, fontWeight: '600' as const, color: '#64748B' },
+  snapshotContainer: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 },
+  snapshotRow: { flexDirection: 'row' as const, justifyContent: 'space-between' as const },
+  snapshotLabel: { fontSize: 10, color: '#64748B', fontWeight: '500' as const },
+  snapshotValue: { fontSize: 10, color: '#0F172A', fontWeight: '600' as const },
+  snapshotValueBold: { fontSize: 10, color: '#0F172A', fontWeight: '700' as const },
+  snapshotTimestamp: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#E2E8F0' },
+  snapshotTimestampText: { fontSize: 8, color: '#CBD5E1', fontWeight: '500' as const },
 });

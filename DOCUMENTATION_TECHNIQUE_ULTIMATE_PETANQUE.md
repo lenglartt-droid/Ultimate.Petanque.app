@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Document Technique de Reprise
 
-**Version :** 1.3.8  
-**Date :** 28 mars 2026  
+**Version :** 1.4.0  
+**Date :** 29 mars 2026  
 **Destinataire :** Développeur externe en charge de la finalisation et publication  
 
 ---
@@ -27,8 +27,13 @@ Fournir un outil complet aux joueurs de pétanque pour enregistrer leurs parties
 
 - Joueurs de pétanque amateur à expert (toute tranche d'âge)
 - Clubs et associations de pétanque
+- Écoles de pétanque et formateurs
 - Ambassadeurs/influenceurs du monde de la pétanque
-- Marques et sponsors (Obut, MS Pétanque, La Boule Bleue, etc.)
+- Marques de boules (Obut, MS Pétanque, La Boule Bleue, KTK, etc.)
+- Marques de textile sportif pétanque
+- Sites web spécialisés (Boulistenaute, etc.)
+
+> Des documents de présentation spécifiques par audience sont disponibles dans le dossier `docs/` : PITCH_JOUEURS.md, PITCH_INFLUENCEURS.md, PITCH_MARQUES_BOULES.md, PITCH_TEXTILE_PETANQUE.md, PITCH_SITES_SPECIALISES.md, PITCH_CLUBS.md, PITCH_ECOLES_PETANQUE.md
 
 ### 1.4 Proposition de valeur
 
@@ -105,6 +110,9 @@ L'utilisateur s'inscrit via OTP email + mot de passe, crée son profil joueur au
 | 46 | **Note du créateur enrichie** | Titre "Créé par un passionné, pour la communauté", message communautaire "12 millions de joueurs", 5 nouvelles fonctionnalités (trust score, badges, ambassadeur, partenaire, push A/B), section donation intégrée, section RDV terrain mise en valeur | Faible |
 | 47 | **Descriptions store** | Guide complet `STORE_ASSETS_GUIDE.md` v1.2.0 avec descriptions FR/EN (titre 30 chars, description 4000 chars, mots-clés), couvrant programme ambassadeur/partenaire, portail, événements, FAQ par audience | Faible |
 | 48 | **Universal Links** | Fichiers `.well-known/apple-app-site-association` (iOS) et `.well-known/assetlinks.json` (Android) avec placeholders documentés, guide d'hébergement complet `UNIVERSAL_LINKS_SETUP.md` | Faible |
+| 49 | **Système d'attestation par témoins** | Service witnessService.ts complet : demande/réponse d'attestation, snapshots figés des résultats, cooldown 1h, limite 5/semaine par paire, confirmation automatique adversaire. Composant AttestationSection.tsx réutilisable avec picker de témoins, aperçu snapshot, et badge 2.0x. Intégration dans match-detail, challenge-detail, notifications-hub (onglet Témoins), witness-invitations, et trust-score (facteur témoin). Détection anti-abus dans Edge Function detect-suspicious (3 flags : paires fréquentes, attestations mutuelles, anneaux). 95+ tests couvrant le service et le composant | Très élevée |
+| 50 | **Badge Témoin Fiable** | Badge "Temoin Fiable" (50 XP) débloqué à 10 attestations données. Barre de progression visible dans la page Badges. Intégré dans badgeService, useBadges hook et page badges.tsx avec chargement du compteur d'attestations depuis la base de données | Moyenne |
+| 51 | **Documents de présentation par audience** | 7 fichiers Markdown dans `docs/` : présentation de l'application adaptée aux joueurs, influenceurs, marques de boules, marques de textile, sites web spécialisés, clubs et écoles de pétanque. Chaque document met en avant l'utilité pratique spécifique pour son audience | Faible |
 
 ### 2.2 Fonctionnalités partiellement implémentées
 
@@ -799,4 +807,4 @@ Créer un compte via l'écran de login avec n'importe quel email valide. Le syst
 
 ---
 
-*Document mis à jour le 28 mars 2026 — Ultimate Petanque v1.3.8*
+*Document mis à jour le 29 mars 2026 — Ultimate Petanque v1.4.0*

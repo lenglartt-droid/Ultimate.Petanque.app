@@ -88,6 +88,17 @@ export function useBadges() {
       });
       context.trustScore = trustScore;
 
+      // Fetch witness attestations given count for Trusted Witness badge
+      try {
+        const supabase = (await import('@/template')).getSupabaseClient();
+        const { data: attestationsGiven } = await supabase
+          .from('match_witness_requests')
+          .select('id')
+          .eq('witness_user_id', user.id)
+          .eq('status', 'attested');
+        context.witnessAttestationsGiven = attestationsGiven?.length || 0;
+      } catch { context.witnessAttestationsGiven = 0; }
+
       const newBadgeIds = await checkAndAwardBadges(user.id, context, badges);
 
       if (newBadgeIds.length > 0) {
