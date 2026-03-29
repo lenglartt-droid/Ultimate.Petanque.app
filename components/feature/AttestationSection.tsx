@@ -15,6 +15,7 @@ import {
   WitnessAttestation,
   fetchAttestationsForItem,
   requestWitness,
+  checkAndSendOpponentConfirmations,
   buildMatchSnapshot,
   buildChallengeSnapshot,
 } from '@/services/witnessService';
@@ -65,6 +66,17 @@ export default function AttestationSection({
   }, [itemType, itemId, onAttestationChange]);
 
   useEffect(() => { loadAttestations(); }, [loadAttestations]);
+
+  // Auto-send opponent confirmations for shared items
+  useEffect(() => {
+    if (!user || !itemId) return;
+    checkAndSendOpponentConfirmations(itemType, itemId, snapshotData)
+      .then(() => {
+        // Reload attestations in case new opponent confirmations were created
+        loadAttestations();
+      })
+      .catch(() => {});
+  }, [itemType, itemId, user?.id]);
 
   const loadPublicPlayers = useCallback(async () => {
     if (!user) return;
@@ -141,6 +153,12 @@ export default function AttestationSection({
     return fr ? 'En attente' : 'Pending';
   };
 
+  const getAttestationTypeLabel = (type: string) => {
+    if (type === 'opponent_confirmation') return fr ? 'Adversaire' : 'Opponent';
+    if (type === 'confirmed') return fr ? 'Temoin' : 'Witness';
+    return fr ? 'Temoin' : 'Witness';
+  };
+
   const getStatusIcon = (status: string) => {
     if (status === 'attested') return 'check-circle';
     if (status === 'declined') return 'cancel';
@@ -186,11 +204,19 @@ export default function AttestationSection({
           <View style={st.attestationsList}>
             {attestations.map(a => {
               const sc = getStatusColor(a.status);
+              const isOpponent = a.attestationType === 'opponent_confirmation';
               return (
                 <View key={a.id} style={st.attestationRow}>
-                  <MaterialIcons name={getStatusIcon(a.status) as any} size={16} color={sc} />
+                  <MaterialIcons name={isOpponent ? 'people' : (getStatusIcon(a.status) as any)} size={16} color={isOpponent ? '#3B82F6' : sc} />
                   <View style={{ flex: 1 }}>
-                    <Text style={st.attestationName}>{a.witnessName || a.witnessUserId.substring(0, 8)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={st.attestationName}>{a.witnessName || a.witnessUserId.substring(0, 8)}</Text>
+                      {isOpponent ? (
+                        <View style={st.opponentChip}>
+                          <Text style={st.opponentChipText}>{getAttestationTypeLabel(a.attestationType)}</Text>
+                        </View>
+                      ) : null}
+                    </View>
                     {a.respondedAt ? (
                       <Text style={st.attestationDate}>
                         {new Date(a.respondedAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
@@ -310,4 +336,7 @@ const st = StyleSheet.create({
   pickerAvatar: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' },
   pickerAvatarText: { fontSize: 13, fontWeight: '700', color: '#7C3AED' },
   pickerName: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+
+  opponentChip: { backgroundColor: '#3B82F612', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  opponentChipText: { fontSize: 9, fontWeight: '700', color: '#3B82F6', textTransform: 'uppercase' as const },
 });
