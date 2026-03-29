@@ -33,6 +33,7 @@ export interface BadgeContext {
   consecutiveDaysPlayed: number;
   isAmbassador: boolean;
   trustScore: number | null;
+  witnessAttestationsGiven: number;
 }
 
 // ============================================
@@ -172,6 +173,13 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 50,
     condition: (ctx) => ctx.trustScore !== null && ctx.trustScore >= 80,
   },
+  {
+    id: 'temoin_fiable',
+    icon: 'visibility',
+    color: '#7C3AED',
+    xpReward: 50,
+    condition: (ctx) => ctx.witnessAttestationsGiven >= 10,
+  },
 ];
 
 // ============================================
@@ -191,6 +199,7 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     ambassadeur: { fr: 'Ambassadeur', en: 'Ambassador' },
     fiable: { fr: 'Fiable', en: 'Trusted' },
     verifie: { fr: 'Verifie', en: 'Verified' },
+    temoin_fiable: { fr: 'Temoin Fiable', en: 'Trusted Witness' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -209,6 +218,7 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     ambassadeur: { fr: 'Devenir ambassadeur officiel', en: 'Become official ambassador' },
     fiable: { fr: 'Score de confiance 65+ (Fiable)', en: 'Trust score 65+ (Trusted)' },
     verifie: { fr: 'Score de confiance 80+ (Verifie)', en: 'Trust score 80+ (Verified)' },
+    temoin_fiable: { fr: 'Attester 10 matchs ou defis en tant que temoin', en: 'Attest 10 matches or challenges as a witness' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -310,6 +320,7 @@ export function buildBadgeContext(params: {
     consecutiveDaysPlayed: consecutiveDays,
     isAmbassador,
     trustScore: null, // Will be set by caller if available
+    witnessAttestationsGiven: 0, // Will be set by caller from witnessService
   };
 }
 
