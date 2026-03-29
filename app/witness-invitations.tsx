@@ -34,6 +34,7 @@ interface WitnessInvitation {
   matchTeamB?: string;
   matchScoreA?: number;
   matchScoreB?: number;
+  snapshot?: Record<string, any>;
 }
 
 export default function WitnessInvitationsScreen() {
@@ -47,6 +48,7 @@ export default function WitnessInvitationsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [expandedSnapshots, setExpandedSnapshots] = useState<Set<string>>(new Set());
 
   const loadInvitations = useCallback(async () => {
     if (!user?.id) return;
@@ -130,6 +132,7 @@ export default function WitnessInvitationsScreen() {
           matchTeamB,
           matchScoreA,
           matchScoreB,
+          snapshot: row.itemSnapshot || undefined,
         });
       }
 
@@ -188,6 +191,15 @@ export default function WitnessInvitationsScreen() {
   const getItemRoute = (inv: WitnessInvitation) => {
     if (inv.itemType === 'challenge') return `/challenge/${inv.itemId}` as any;
     return `/match/${inv.itemId || inv.matchId}` as any;
+  };
+
+  const toggleSnapshot = (id: string) => {
+    Haptics.selectionAsync();
+    setExpandedSnapshots(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id); else n.add(id);
+      return n;
+    });
   };
 
   return (
@@ -289,6 +301,75 @@ export default function WitnessInvitationsScreen() {
                         </View>
                       ) : null}
 
+                      {/* Snapshot preview */}
+                      {inv.snapshot ? (
+                        <View style={{ marginBottom: 10 }}>
+                          <Pressable
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 8, backgroundColor: '#F1F5F9', borderRadius: 8, alignSelf: 'flex-start' }}
+                            onPress={() => toggleSnapshot(inv.id)}
+                          >
+                            <MaterialIcons name={expandedSnapshots.has(inv.id) ? 'expand-less' : 'expand-more'} size={16} color="#64748B" />
+                            <MaterialIcons name="photo-camera" size={13} color="#64748B" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>{isFr ? 'Apercu du snapshot' : 'Snapshot preview'}</Text>
+                          </Pressable>
+                          {expandedSnapshots.has(inv.id) ? (
+                            <View style={{ backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', gap: 4 }}>
+                              {inv.itemType === 'match' && inv.snapshot.teamA ? (
+                                <>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{isFr ? 'Equipe A' : 'Team A'}</Text>
+                                    <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.teamA?.playerNames?.join(', ') || '-'} ({inv.snapshot.teamA?.score})</Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{isFr ? 'Equipe B' : 'Team B'}</Text>
+                                    <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.teamB?.playerNames?.join(', ') || '-'} ({inv.snapshot.teamB?.score})</Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Format</Text>
+                                    <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.format || '-'}</Text>
+                                  </View>
+                                  {inv.snapshot.duration ? (
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{isFr ? 'Duree' : 'Duration'}</Text>
+                                      <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.duration} min</Text>
+                                    </View>
+                                  ) : null}
+                                </>
+                              ) : inv.itemType === 'challenge' ? (
+                                <>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Type</Text>
+                                    <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.type || '-'}</Text>
+                                  </View>
+                                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                    <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>Mode</Text>
+                                    <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.mode || '-'}</Text>
+                                  </View>
+                                  {inv.snapshot.successCount !== undefined ? (
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{isFr ? 'Resultat' : 'Result'}</Text>
+                                      <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '700' }}>{inv.snapshot.successCount}/{inv.snapshot.totalShots}{inv.snapshot.successRate ? ` (${inv.snapshot.successRate}%)` : ''}</Text>
+                                    </View>
+                                  ) : null}
+                                  {inv.snapshot.playerName ? (
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                      <Text style={{ fontSize: 11, color: '#64748B', fontWeight: '500' }}>{isFr ? 'Joueur' : 'Player'}</Text>
+                                      <Text style={{ fontSize: 11, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.playerName}{inv.snapshot.opponentName ? ` vs ${inv.snapshot.opponentName}` : ''}</Text>
+                                    </View>
+                                  ) : null}
+                                </>
+                              ) : null}
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, paddingTop: 4, borderTopWidth: 1, borderTopColor: '#E2E8F0' }}>
+                                <MaterialIcons name="lock-clock" size={10} color="#94A3B8" />
+                                <Text style={{ fontSize: 9, color: '#94A3B8', fontWeight: '500' }}>
+                                  Snapshot {inv.snapshot.snapshotAt ? new Date(inv.snapshot.snapshotAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                                </Text>
+                              </View>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+
                       {/* Requester info */}
                       <View style={st.requesterRow}>
                         <View style={st.requesterAvatar}>
@@ -381,6 +462,35 @@ export default function WitnessInvitationsScreen() {
                             <Text style={[st.statusBadgeText, { color: sc }]}>{getStatusLabel(inv.status)}</Text>
                           </View>
                         </View>
+                        {/* Snapshot preview for history */}
+                        {inv.snapshot ? (
+                          <Pressable
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 8, paddingVertical: 4, paddingHorizontal: 6, backgroundColor: '#F1F5F9', borderRadius: 6, alignSelf: 'flex-start' }}
+                            onPress={(e) => { e.stopPropagation?.(); toggleSnapshot(inv.id); }}
+                          >
+                            <MaterialIcons name="photo-camera" size={11} color="#94A3B8" />
+                            <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{expandedSnapshots.has(inv.id) ? (isFr ? 'Masquer' : 'Hide') : 'Snapshot'}</Text>
+                          </Pressable>
+                        ) : null}
+                        {inv.snapshot && expandedSnapshots.has(inv.id) ? (
+                          <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', gap: 3 }}>
+                            {inv.itemType === 'match' && inv.snapshot.teamA ? (
+                              <>
+                                <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.teamA?.playerNames?.join(', ')} ({inv.snapshot.teamA?.score}) vs {inv.snapshot.teamB?.playerNames?.join(', ')} ({inv.snapshot.teamB?.score})</Text>
+                                <Text style={{ fontSize: 9, color: '#64748B' }}>{inv.snapshot.format}{inv.snapshot.duration ? ` - ${inv.snapshot.duration} min` : ''}</Text>
+                              </>
+                            ) : inv.itemType === 'challenge' ? (
+                              <>
+                                <Text style={{ fontSize: 10, color: '#0F172A', fontWeight: '600' }}>{inv.snapshot.type} ({inv.snapshot.mode}){inv.snapshot.successCount !== undefined ? ` - ${inv.snapshot.successCount}/${inv.snapshot.totalShots}` : ''}</Text>
+                                {inv.snapshot.playerName ? <Text style={{ fontSize: 9, color: '#64748B' }}>{inv.snapshot.playerName}{inv.snapshot.opponentName ? ` vs ${inv.snapshot.opponentName}` : ''}</Text> : null}
+                              </>
+                            ) : null}
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                              <MaterialIcons name="lock-clock" size={8} color="#CBD5E1" />
+                              <Text style={{ fontSize: 8, color: '#CBD5E1' }}>{inv.snapshot.snapshotAt ? new Date(inv.snapshot.snapshotAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}</Text>
+                            </View>
+                          </View>
+                        ) : null}
                       </Pressable>
                     </Animated.View>
                   );
