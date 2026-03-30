@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -160,7 +160,7 @@ export default function MatchDetailScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
         {/* Hero Card */}
-        <Animated.View entering={FadeInDown.duration(400)} style={s.heroCard}>
+        <View style={s.heroCard}>
           <View style={[s.heroAccent, { backgroundColor: isWin ? theme.success : theme.error }]} />
           <View style={s.heroContent}>
             <View style={s.heroTopRow}>
@@ -259,10 +259,10 @@ export default function MatchDetailScreen() {
               </Pressable>
             ) : null}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Score Card */}
-        <Animated.View entering={FadeInDown.duration(300).delay(60)} style={[s.card, { borderLeftWidth: 4, borderLeftColor: isWin ? theme.success : theme.error }]}>
+        <View style={[s.card, { borderLeftWidth: 4, borderLeftColor: isWin ? theme.success : theme.error }]}>
           <View style={s.scoreRow}>
             <View style={s.teamCol}>
               <Text style={s.teamLabel}>{fr ? 'MON EQUIPE' : 'MY TEAM'}</Text>
@@ -302,11 +302,11 @@ export default function MatchDetailScreen() {
               })}
             </View>
           ) : null}
-        </Animated.View>
+        </View>
 
         {/* Validation Badge */}
         {validation ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(100)} style={[s.card, { borderWidth: 1, borderColor: validation.color + '30', backgroundColor: validation.color + '04' }]}>
+          <View style={[s.card, { borderWidth: 1, borderColor: validation.color + '30', backgroundColor: validation.color + '04' }]}>
             <View style={s.validationRow}>
               <View style={[s.validationIconBg, { backgroundColor: validation.color + '15' }]}>
                 <MaterialIcons name={validation.icon as any} size={20} color={validation.color} />
@@ -321,12 +321,12 @@ export default function MatchDetailScreen() {
                 <Text style={[s.validationCircleText, { color: validation.color }]}>{validation.weight}x</Text>
               </View>
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Series Info */}
         {seriesMatches.length > 1 && seriesStats ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(140)} style={[s.card, { borderWidth: 1, borderColor: theme.accent + '30' }]}>
+          <View style={[s.card, { borderWidth: 1, borderColor: theme.accent + '30' }]}>
             <View style={s.seriesHeader}>
               <MaterialIcons name="replay" size={16} color={theme.accent} />
               <Text style={s.seriesTitle}>Best of {seriesMatches.length >= 3 ? '3' : seriesMatches.length}</Text>
@@ -358,12 +358,30 @@ export default function MatchDetailScreen() {
                 );
               })}
             </View>
-          </Animated.View>
+          </View>
         ) : null}
+
+        {/* Witness Attestation Section */}
+        <AttestationSection
+          itemType="match"
+          itemId={match.id}
+          snapshotData={{
+            teamA: { playerNames: match.teamA.playerNames, score: match.teamA.score },
+            teamB: { playerNames: match.teamB.playerNames, score: match.teamB.score },
+            winner: match.winner,
+            format: match.format,
+            date: match.date,
+            duration: match.duration,
+          }}
+          animDelay={0}
+          onAttestationChange={(attested, count) => {
+            if (attested) fetchAttestationsForItem('match', match.id).then(setWitnessRequests);
+          }}
+        />
 
         {/* Menes */}
         {match.menes && match.menes.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(180)} style={s.card}>
+          <View style={s.card}>
             <View style={s.cardHeaderRow}>
               <MaterialIcons name="format-list-numbered" size={16} color={theme.primary} />
               <Text style={s.cardTitle}>{t('match', 'menesCount')} ({match.menes.length})</Text>
@@ -413,7 +431,7 @@ export default function MatchDetailScreen() {
                 <Text style={[s.meneTotalVal, { color: theme.error }]}>{meneTotalB}</Text>
               </View>
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Radar Chart - Team Performance Comparison */}
@@ -484,7 +502,7 @@ export default function MatchDetailScreen() {
           if (!hasData) return null;
 
           return (
-            <Animated.View entering={FadeInDown.duration(300).delay(215)} style={s.card}>
+            <View style={s.card}>
               <View style={s.cardHeaderRow}>
                 <MaterialIcons name="radar" size={16} color={theme.primary} />
                 <Text style={s.cardTitle}>{fr ? 'Comparaison des equipes' : 'Team comparison'}</Text>
@@ -543,13 +561,13 @@ export default function MatchDetailScreen() {
                   );
                 })}
               </View>
-            </Animated.View>
+            </View>
           );
         })() : null}
 
         {/* Player Actions */}
         {match.playerActions && match.playerActions.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(220)} style={s.card}>
+          <View style={s.card}>
             <View style={s.cardHeaderRow}>
               <MaterialIcons name="sports" size={16} color={theme.tirColor} />
               <Text style={s.cardTitle}>{t('match', 'playerActions')}</Text>
@@ -599,40 +617,22 @@ export default function MatchDetailScreen() {
                 </View>
               );
             })}
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Notes */}
         {match.notes ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(260)} style={s.card}>
+          <View style={s.card}>
             <View style={s.cardHeaderRow}>
               <MaterialIcons name="notes" size={16} color={theme.textSecondary} />
               <Text style={s.cardTitle}>Notes</Text>
             </View>
             <Text style={s.notesText}>{match.notes}</Text>
-          </Animated.View>
+          </View>
         ) : null}
 
-        {/* Witness Attestation Section */}
-        <AttestationSection
-          itemType="match"
-          itemId={match.id}
-          snapshotData={{
-            teamA: { playerNames: match.teamA.playerNames, score: match.teamA.score },
-            teamB: { playerNames: match.teamB.playerNames, score: match.teamB.score },
-            winner: match.winner,
-            format: match.format,
-            date: match.date,
-            duration: match.duration,
-          }}
-          animDelay={280}
-          onAttestationChange={(attested, count) => {
-            if (attested) fetchAttestationsForItem('match', match.id).then(setWitnessRequests);
-          }}
-        />
-
         {/* Action Buttons */}
-        <Animated.View entering={FadeInDown.duration(300).delay(300)} style={s.actionsColumn}>
+        <View style={s.actionsColumn}>
           <Pressable
             style={({ pressed }) => [s.editCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
             onPress={() => { Haptics.selectionAsync(); router.push(`/match/${match.id}` as any); }}
@@ -648,7 +648,7 @@ export default function MatchDetailScreen() {
             <MaterialIcons name="share" size={20} color="#FFF" />
             <Text style={s.shareCtaText}>{fr ? 'Partager ce match' : 'Share this match'}</Text>
           </Pressable>
-        </Animated.View>
+        </View>
       </ScrollView>
 
       <ShareModal

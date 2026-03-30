@@ -61,10 +61,10 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
     <Animated.View entering={FadeIn.duration(500)} style={[styles.container, style]}>
       <Pressable style={({ pressed }) => [styles.banner, pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }]} onPress={handlePress}>
         <LinearGradient
-          colors={[brandColor + '12', brandColor + '20']}
+          colors={[brandColor + '35', brandColor + '50']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={styles.gradient}
+          style={[styles.gradient, { borderWidth: 1.5, borderColor: brandColor + '60' }]}
         >
           {/* Gold border accent */}
           <View style={[styles.goldAccent, { backgroundColor: brandColor }]} />
@@ -114,22 +114,19 @@ const styles = StyleSheet.create({
   banner: {
     borderRadius: 16,
     overflow: 'hidden',
-    borderWidth: 1.5,
-    borderColor: '#F59E0B', // fallback, overridden dynamically
     ...Platform.select({
       ios: { shadowColor: '#B45309', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 10 },
       android: { elevation: 4 },
       default: {},
     }),
   },
-  gradient: { borderRadius: 14, position: 'relative' as const },
+  gradient: { borderRadius: 16, position: 'relative' as const },
   goldAccent: {
     position: 'absolute',
     top: 0, left: 0, right: 0,
     height: 3,
-    backgroundColor: '#F59E0B',
-    borderTopLeftRadius: 14,
-    borderTopRightRadius: 14,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
   },
   content: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   photoWrap: { position: 'relative' as const },
