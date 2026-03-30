@@ -86,7 +86,7 @@ export const BOULES_DATABASE: BoulesModel[] = [
 export const BOULES_BRAND_IMAGES: Record<string, { uri: string }> = {
   'OBUT': { uri: 'https://cdn-ai.onspace.ai/onspace/files/n7FrcpYxZXS6cHa9kERGE7/obut.png' },
   'MS PÉTANQUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/93XrD3jYsFy38KJyLNrrGm/ms_ptanque_logo.jpg' },
-  'LA BOULE BLEUE': { uri: 'https://cdn-ai.onspace.ai/onspace/files/SybtmPZRrYjFntuDiMnNRj/la-boule-bleue.png' },
+  'LA BOULE BLEUE': require('@/assets/images/brands/la-boule-bleue.jpg'),
   'BOULENCIEL': { uri: 'https://cdn-ai.onspace.ai/onspace/files/gxspgkgoUNfZvPdYvKHcJk/boulenciel.jpg' },
   'KTK': { uri: 'https://cdn-ai.onspace.ai/onspace/files/kXRRhZXcyEjTBu4dvkcWnP/ktk-logo-300x161.png' },
   'ODDEKA': { uri: 'https://cdn-ai.onspace.ai/onspace/files/g9wEhCzjRnnr7rKVGMVUof/oddeka-logo-16381810113.jpg' },

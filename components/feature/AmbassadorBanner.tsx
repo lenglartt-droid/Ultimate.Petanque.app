@@ -234,10 +234,10 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
                     <Image source={{ uri: amb.photo }} style={s.avatar} contentFit="cover" transition={300} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <View style={[s.avatar, { backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }]}>
-                      <Text style={{ fontSize: 26, fontWeight: '800', color: '#FFF' }}>{amb.displayName.charAt(0)}</Text>
+                      <Text style={{ fontSize: 36, fontWeight: '800', color: '#FFF' }}>{amb.displayName.charAt(0)}</Text>
                     </View>
                   )}
-                  <View style={[s.verifiedIcon, { backgroundColor: cs.verifiedBg, borderColor: cs.verifiedBorder }]}><MaterialIcons name="verified" size={14} color="#FFF" /></View>
+                  <View style={[s.verifiedIcon, { backgroundColor: cs.verifiedBg, borderColor: cs.verifiedBorder }]}><MaterialIcons name="verified" size={16} color="#FFF" /></View>
                 </View>
                 <View style={s.info}>
                   <Text style={s.name} numberOfLines={1}>{amb.displayName}</Text>
@@ -350,8 +350,8 @@ const s = StyleSheet.create({
   sponsorText: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase', letterSpacing: 0.5 },
   bannerContent: { flexDirection: 'row', gap: 12, marginBottom: 10 },
   avatarWrap: { position: 'relative' },
-  avatar: { width: 64, height: 64, borderRadius: 20, overflow: 'hidden', borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)' },
-  verifiedIcon: { position: 'absolute', bottom: -3, right: -3, width: 24, height: 24, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#9333EA' },
+  avatar: { width: 96, height: 96, borderRadius: 26, overflow: 'hidden', borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.3)' },
+  verifiedIcon: { position: 'absolute', bottom: -3, right: -3, width: 28, height: 28, borderRadius: 14, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#9333EA' },
   info: { flex: 1, justifyContent: 'center' },
   name: { fontSize: 17, fontWeight: '800', color: '#FFF', marginBottom: 3 },
   bio: { fontSize: 11, color: 'rgba(255,255,255,0.75)', lineHeight: 16, marginBottom: 8 },

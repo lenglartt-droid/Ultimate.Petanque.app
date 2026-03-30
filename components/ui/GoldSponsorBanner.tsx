@@ -76,11 +76,11 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
                 <Image source={{ uri: sponsor.photo }} style={styles.photo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
               ) : (
                 <LinearGradient colors={[brandColorDark, brandColor]} style={styles.photoFallback}>
-                  <MaterialIcons name="workspace-premium" size={22} color="#FFF" />
+                  <MaterialIcons name="workspace-premium" size={36} color="#FFF" />
                 </LinearGradient>
               )}
               <View style={[styles.goldBadge, { backgroundColor: brandColor, borderColor: brandColor + '12' }]}>
-                <MaterialIcons name="star" size={10} color="#FFF" />
+                <MaterialIcons name="star" size={12} color="#FFF" />
               </View>
             </View>
 
@@ -130,20 +130,20 @@ const styles = StyleSheet.create({
   },
   content: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
   photoWrap: { position: 'relative' as const },
-  photo: { width: 48, height: 48, borderRadius: 14, overflow: 'hidden' as const },
-  photoFallback: { width: 48, height: 48, borderRadius: 14, alignItems: 'center' as const, justifyContent: 'center' as const },
+  photo: { width: 96, height: 96, borderRadius: 22, overflow: 'hidden' as const },
+  photoFallback: { width: 96, height: 96, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
   goldBadge: {
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
     backgroundColor: '#F59E0B',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFFBEB',
+    borderWidth: 2.5,
+    borderColor: 'rgba(255,255,255,0.3)',
   },
   info: { flex: 1 },
   labelRow: { flexDirection: 'row', marginBottom: 4 },
@@ -156,8 +156,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   goldLabelText: { fontSize: 8, fontWeight: '900', color: '#FFF', letterSpacing: 0.8 },
-  name: { fontSize: 15, fontWeight: '800', color: '#78350F' },
-  bio: { fontSize: 11, color: '#92400E', marginTop: 2 },
+  name: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+  bio: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 2 },
   ctaWrap: {},
   ctaBtn: {
     width: 34,

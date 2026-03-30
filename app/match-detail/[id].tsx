@@ -244,7 +244,7 @@ export default function MatchDetailScreen() {
                       <Image source={{ uri: goldSponsor.photo }} style={s.sponsorLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                     ) : (
                       <LinearGradient colors={['#B45309', '#F59E0B']} style={s.sponsorLogoFallback}>
-                        <MaterialIcons name="workspace-premium" size={12} color="#FFF" />
+                        <MaterialIcons name="workspace-premium" size={24} color="#FFF" />
                       </LinearGradient>
                     )}
                     <View style={{ flex: 1 }}>
@@ -252,7 +252,7 @@ export default function MatchDetailScreen() {
                       <Text style={s.sponsorName} numberOfLines={1}>{goldSponsor.displayName}</Text>
                     </View>
                     <LinearGradient colors={['#B45309', '#D97706']} style={s.sponsorTierIcon}>
-                      <MaterialIcons name="star" size={8} color="#FFF" />
+                      <MaterialIcons name="star" size={10} color="#FFF" />
                     </LinearGradient>
                   </View>
                 </LinearGradient>
@@ -692,8 +692,8 @@ const s = StyleSheet.create({
   sponsorGradient: { borderRadius: 12, position: 'relative' },
   sponsorAccentLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, backgroundColor: '#F59E0B', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
   sponsorContent: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 10 },
-  sponsorLogo: { width: 32, height: 32, borderRadius: 10, overflow: 'hidden' },
-  sponsorLogoFallback: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sponsorLogo: { width: 64, height: 64, borderRadius: 18, overflow: 'hidden' },
+  sponsorLogoFallback: { width: 64, height: 64, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sponsorLabel: { fontSize: 9, fontWeight: '600', color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5 },
   sponsorName: { fontSize: 14, fontWeight: '700', color: '#78350F', marginTop: 1 },
   sponsorTierIcon: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
