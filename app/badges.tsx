@@ -58,6 +58,7 @@ function getBadgeProgress(
     isAmbassador: boolean;
     trustScore: number | null;
     witnessAttestationsGiven: number;
+    profileCompleteness: number;
   },
   lang: 'fr' | 'en'
 ): BadgeProgress {
@@ -175,6 +176,15 @@ function getBadgeProgress(
         label: `${Math.min(wa, 10)}/10 ${lang === 'fr' ? 'attestations donnees' : 'attestations given'}`,
       };
     }
+    case 'profil_complet': {
+      const pc = ctx.profileCompleteness ?? 0;
+      return {
+        current: pc,
+        target: 100,
+        percent: pc,
+        label: `${pc}% ${lang === 'fr' ? 'complete' : 'complete'}`,
+      };
+    }
     default:
       return { current: 0, target: 1, percent: 0, label: '' };
   }
@@ -185,7 +195,7 @@ function getBadgeProgress(
 // ============================================
 export default function BadgesScreen() {
   const { user } = useAuth();
-  const { matches, challenges, userStats, sharedMatchIds } = useApp();
+  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useApp();
   const { language } = useLanguage();
   const { badges: userBadges, xp, loading, totalBadges } = useBadges();
 
@@ -240,12 +250,14 @@ export default function BadgesScreen() {
       isAmbassador: false,
       trustScore: null as number | null,
       witnessAttestationsGiven: 0,
+      profileCompleteness: 0,
     };
   }, [matches, userStats, sharedMatchIds, user?.id]);
 
   // Load trust score and witness attestation count for badge progress
   const [trustScoreValue, setTrustScoreValue] = React.useState<number | null>(null);
   const [witnessCount, setWitnessCount] = React.useState(0);
+  const [profileCompleteness, setProfileCompleteness] = React.useState(0);
   React.useEffect(() => {
     if (!user?.id) return;
     const loadExtras = async () => {
@@ -272,9 +284,27 @@ export default function BadgesScreen() {
           .eq('status', 'attested');
         setWitnessCount(attestations?.length || 0);
       } catch { /* silent */ }
+      // Compute profile completeness
+      try {
+        const supabase = (await import('@/template')).getSupabaseClient();
+        const { data: profData } = await supabase
+          .from('user_profiles')
+          .select('avatar, club, federation_card_url')
+          .eq('id', user.id)
+          .single();
+        let filled = 0;
+        const total = 6;
+        if (profData?.avatar) filled++;
+        if (profData?.club || selfPlayer?.club) filled++;
+        if (selfPlayer?.terrainId) filled++;
+        if (selfPlayer?.location && (selfPlayer.location.latitude || selfPlayer.location.longitude)) filled++;
+        if (boulesSets.length > 0 || (selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight))) filled++;
+        if (profData?.federation_card_url) filled++;
+        setProfileCompleteness(Math.round((filled / total) * 100));
+      } catch { /* silent */ }
     };
     loadExtras();
-  }, [user?.id]);
+  }, [user?.id, selfPlayer?.id, boulesSets.length]);
 
   // XP breakdown
   const xpBreakdown = useMemo(() => {
@@ -441,7 +471,7 @@ export default function BadgesScreen() {
 
           {BADGES.map((badge, index) => {
             const unlocked = userBadges.find(b => b.badgeId === badge.id);
-            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount } : null;
+            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount, profileCompleteness } : null;
             const prog = ctxWithTrust
               ? getBadgeProgress(badge.id, ctxWithTrust, language)
               : { current: 0, target: 1, percent: 0, label: '' };

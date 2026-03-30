@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   ActivityIndicator,
   Dimensions,
   Linking,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,16 +31,15 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 // ============================================
 // TYPES
 // ============================================
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
 // PROGRESS DOTS
@@ -84,6 +84,10 @@ export default function OnboardingScreen() {
   const [eliteAmbassador, setEliteAmbassador] = useState<Ambassador | null>(null);
   const [sponsorLoaded, setSponsorLoaded] = useState(false);
 
+  // Referral state
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [referralLoading, setReferralLoading] = useState(false);
+
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
       const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
@@ -119,6 +123,64 @@ export default function OnboardingScreen() {
     }
   }, [user]);
 
+  // Load referral code when reaching step 8
+  useEffect(() => {
+    if (step === 8 && user?.id && !referralCode) {
+      loadOrCreateReferralCode();
+    }
+  }, [step, user?.id]);
+
+  const loadOrCreateReferralCode = useCallback(async () => {
+    if (!user?.id) return;
+    setReferralLoading(true);
+    try {
+      // Check if user has an ambassador entry with a referral code
+      const { data: amb } = await supabase
+        .from('ambassadors')
+        .select('id, referral_code')
+        .eq('user_id', user.id)
+        .maybeSingle();
+
+      if (amb?.referral_code) {
+        setReferralCode(amb.referral_code);
+      } else {
+        // Generate a simple personal referral code from username
+        const initials = (username || 'UP').replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'UP';
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let suffix = '';
+        for (let i = 0; i < 4; i++) suffix += chars.charAt(Math.floor(Math.random() * chars.length));
+        const code = `${initials}-${suffix}`;
+        setReferralCode(code);
+
+        // If user is an ambassador, save to DB
+        if (amb?.id) {
+          await generateReferralCode(amb.id, username || 'User');
+        }
+      }
+    } catch {
+      // Generate a fallback code
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let code = 'UP-';
+      for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
+      setReferralCode(code);
+    } finally {
+      setReferralLoading(false);
+    }
+  }, [user?.id, username]);
+
+  const handleShareReferral = useCallback(async () => {
+    const code = referralCode || 'UP-APP';
+    const shareUrl = `https://ultimatepetanque.app/?ref=${code}`;
+    const message = language === 'fr'
+      ? `Rejoins-moi sur Ultimate Petanque ! Suis tes matchs, progresse et trouve des joueurs. Utilise mon code : ${code}\n${shareUrl}`
+      : `Join me on Ultimate Petanque! Track your matches, improve and find players. Use my code: ${code}\n${shareUrl}`;
+
+    try {
+      await Share.share({ message, url: shareUrl });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch { /* cancelled */ }
+  }, [referralCode, language]);
+
   // ============================================
   // NAVIGATION
   // ============================================
@@ -129,7 +191,7 @@ export default function OnboardingScreen() {
       setStep(4 as Step);
       return;
     }
-    setStep(prev => Math.min(7, prev + 1) as Step);
+    setStep(prev => Math.min(8, prev + 1) as Step);
   };
 
   const goBack = () => {
@@ -182,13 +244,19 @@ export default function OnboardingScreen() {
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
-      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-      router.replace('/consent');
+      // Go to referral step instead of finishing
+      setStep(8 as Step);
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || 'Unable to save profile');
     } finally {
       setSaving(false);
     }
+  };
+
+  // Final completion (after referral step)
+  const handleFinalComplete = async () => {
+    await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+    router.replace('/consent');
   };
 
   // Determine the featured entity for step 3
@@ -205,7 +273,7 @@ export default function OnboardingScreen() {
           <View style={s.splashContainer}>
             <Animated.View entering={FadeIn.duration(800)}>
               <Image
-                source={require('@/assets/images/onboarding-splash.png')}
+                source={require('@/assets/images/app-logo.png')}
                 style={s.splashImage}
                 contentFit="contain"
                 transition={300}
@@ -224,7 +292,7 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 1: LANGUAGE SELECTION (NEW)
+  // STEP 1: LANGUAGE SELECTION
   // ============================================
   if (step === 1) {
     return (
@@ -232,7 +300,7 @@ export default function OnboardingScreen() {
         <SafeAreaView style={s.fullScreen}>
           <ScrollView contentContainerStyle={s.langContent} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.duration(500)} style={s.langHeader}>
-              <MaterialIcons name="translate" size={48} color="#60A5FA" />
+              <MaterialIcons name="translate" size={44} color="#60A5FA" />
               <Text style={s.langTitle}>Choose your language</Text>
               <Text style={s.langSubtitle}>Choisissez votre langue</Text>
             </Animated.View>
@@ -253,7 +321,7 @@ export default function OnboardingScreen() {
                 </View>
                 {language === 'fr' ? (
                   <View style={s.langCheck}>
-                    <MaterialIcons name="check" size={18} color="#FFF" />
+                    <MaterialIcons name="check" size={16} color="#FFF" />
                   </View>
                 ) : null}
               </Pressable>
@@ -273,13 +341,13 @@ export default function OnboardingScreen() {
                 </View>
                 {language === 'en' ? (
                   <View style={s.langCheck}>
-                    <MaterialIcons name="check" size={18} color="#FFF" />
+                    <MaterialIcons name="check" size={16} color="#FFF" />
                   </View>
                 ) : null}
               </Pressable>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%', paddingHorizontal: 24 }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={goNext}
@@ -322,13 +390,13 @@ export default function OnboardingScreen() {
                   : 'Track your matches. Measure your progress. Find players.'}
               </Text>
             </Animated.View>
-            <Animated.View entering={FadeInUp.duration(500).delay(400)} style={{ width: '100%', paddingHorizontal: 24 }}>
+            <Animated.View entering={FadeInUp.duration(500).delay(400)} style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={goNext}
               >
                 <Text style={s.ctaPrimaryText}>
-                  {language === 'fr' ? 'Decouvrir l\'application' : 'Discover the app'}
+                  {language === 'fr' ? "Decouvrir l'application" : 'Discover the app'}
                 </Text>
                 <MaterialIcons name="arrow-forward" size={22} color="#0F172A" />
               </Pressable>
@@ -383,11 +451,10 @@ export default function OnboardingScreen() {
             <Pressable onPress={goBack} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={1} total={5} />
+            <ProgressDots current={1} total={6} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
-            {/* Label */}
             <Animated.View entering={FadeInDown.duration(400)} style={s.sponsorLabelRow}>
               <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
               <View style={[s.sponsorLabelBadge, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
@@ -397,20 +464,18 @@ export default function OnboardingScreen() {
               <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
             </Animated.View>
 
-            {/* Card */}
             <Animated.View entering={FadeInUp.duration(500).delay(150)} style={[s.sponsorCard, { borderColor: accentColor + '30' }]}>
-              {/* Top area with photo + name */}
               <View style={s.sponsorCardTop}>
                 <View style={[s.sponsorPhotoWrap, { borderColor: accentColor }]}>
                   {entity.photo ? (
                     <Image source={{ uri: entity.photo }} style={s.sponsorPhoto} contentFit="cover" transition={300} />
                   ) : (
                     <LinearGradient colors={isSponsor ? ['#B45309', '#F59E0B'] : ['#7C3AED', '#9333EA']} style={s.sponsorPhotoFallback}>
-                      <MaterialIcons name={badgeIcon as any} size={36} color="#FFF" />
+                      <MaterialIcons name={badgeIcon as any} size={32} color="#FFF" />
                     </LinearGradient>
                   )}
                   <View style={[s.sponsorPhotoBadge, { backgroundColor: accentColor }]}>
-                    <MaterialIcons name={isSponsor ? 'star' : 'military-tech'} size={12} color="#FFF" />
+                    <MaterialIcons name={isSponsor ? 'star' : 'military-tech'} size={10} color="#FFF" />
                   </View>
                 </View>
                 <View style={s.sponsorCardNameCol}>
@@ -421,18 +486,16 @@ export default function OnboardingScreen() {
                 </View>
               </View>
 
-              {/* Message box */}
               <LinearGradient
                 colors={gradientColors as [string, string]}
                 start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                 style={s.sponsorMsgBox}
               >
                 <View style={[s.sponsorMsgAccent, { backgroundColor: accentColor }]} />
-                <MaterialIcons name="format-quote" size={20} color={accentColor} style={{ opacity: 0.4 }} />
+                <MaterialIcons name="format-quote" size={18} color={accentColor} style={{ opacity: 0.4 }} />
                 <Text style={[s.sponsorMsgText, { color: darkAccent }]}>{messageText}</Text>
               </LinearGradient>
 
-              {/* Social links */}
               {socials.length > 0 ? (
                 <View style={s.sponsorSocialsRow}>
                   {socials.map((sc, i) => (
@@ -452,8 +515,7 @@ export default function OnboardingScreen() {
               ) : null}
             </Animated.View>
 
-            {/* CTAs */}
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%', paddingHorizontal: 24 }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => {
@@ -475,19 +537,17 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 4: APP FEATURES EXPLANATION (replaces match)
+  // STEP 4: APP FEATURES EXPLANATION
   // ============================================
   if (step === 3 || step === 4) {
-    // If step === 3 and no sponsor, we arrive here due to flow skip
-    // But we handle that via goNext. If somehow step===3 falls through, treat as step 4.
     const features = [
       {
         icon: 'sports',
         color: '#60A5FA',
         title: language === 'fr' ? 'Enregistre tes matchs' : 'Record your matches',
         desc: language === 'fr'
-          ? 'Mene par mene, avec score, tirs, carreaux et statistiques detaillees.'
-          : 'End by end, with score, shots, carreaux and detailed statistics.',
+          ? 'Score, tirs, carreaux et stats detaillees.'
+          : 'Score, shots, carreaux and detailed stats.',
       },
       {
         icon: 'bar-chart',
@@ -502,16 +562,16 @@ export default function OnboardingScreen() {
         color: '#EC4899',
         title: language === 'fr' ? 'Partage avec tes equipiers' : 'Share with teammates',
         desc: language === 'fr'
-          ? 'Tes partenaires acceptent en 1 tap, vos stats se mettent a jour.'
-          : 'Your partners accept in 1 tap, stats update automatically.',
+          ? 'Tes partenaires acceptent en 1 tap.'
+          : 'Your partners accept in 1 tap.',
       },
       {
         icon: 'emoji-events',
         color: '#F59E0B',
         title: language === 'fr' ? 'Gagne des badges & XP' : 'Earn badges & XP',
         desc: language === 'fr'
-          ? 'Debloque des badges, monte en niveau et entre dans le classement.'
-          : 'Unlock badges, level up and enter the leaderboard.',
+          ? 'Debloque des badges et entre dans le classement.'
+          : 'Unlock badges and enter the leaderboard.',
       },
     ];
 
@@ -522,16 +582,16 @@ export default function OnboardingScreen() {
             <Pressable onPress={goBack} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={2} total={5} />
+            <ProgressDots current={2} total={6} />
             <View style={{ width: 24 }} />
           </View>
 
-          <ScrollView contentContainerStyle={s.featuresContent} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.duration(500)}>
-              <Text style={s.featuresTitle}>
+              <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Tout pour ta petanque' : 'Everything for your game'}
               </Text>
-              <Text style={s.featuresSubtitle}>
+              <Text style={s.pageSubtitle}>
                 {language === 'fr'
                   ? 'Une app complete pour suivre, progresser et partager.'
                   : 'A complete app to track, improve and share.'}
@@ -542,11 +602,11 @@ export default function OnboardingScreen() {
               {features.map((f, i) => (
                 <Animated.View
                   key={i}
-                  entering={FadeInUp.duration(400).delay(300 + i * 100)}
+                  entering={FadeInUp.duration(400).delay(300 + i * 80)}
                   style={s.featureRow}
                 >
                   <View style={[s.featureIconWrap, { backgroundColor: f.color + '18' }]}>
-                    <MaterialIcons name={f.icon as any} size={26} color={f.color} />
+                    <MaterialIcons name={f.icon as any} size={22} color={f.color} />
                   </View>
                   <View style={s.featureInfo}>
                     <Text style={s.featureTitle}>{f.title}</Text>
@@ -556,17 +616,16 @@ export default function OnboardingScreen() {
               ))}
             </Animated.View>
 
-            {/* Teaser */}
             <Animated.View entering={FadeInUp.duration(400).delay(700)} style={s.featureTeaser}>
-              <MaterialIcons name="auto-awesome" size={18} color="#FCD34D" />
+              <MaterialIcons name="auto-awesome" size={16} color="#FCD34D" />
               <Text style={s.featureTeaserText}>
                 {language === 'fr'
-                  ? 'Et bien plus : tournois, defis solo, score de confiance, carte federation...'
-                  : 'And much more: tournaments, solo challenges, trust score, federation card...'}
+                  ? 'Et bien plus : tournois, defis solo, score de confiance...'
+                  : 'And much more: tournaments, solo challenges, trust score...'}
               </Text>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(800)} style={{ width: '100%' }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(800)} style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => setStep(5 as Step)}
@@ -582,7 +641,7 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 5: MAP DISCOVERY (enhanced)
+  // STEP 5: MAP DISCOVERY
   // ============================================
   if (step === 5) {
     const mapFeatures = [
@@ -599,54 +658,52 @@ export default function OnboardingScreen() {
             <Pressable onPress={() => setStep(4 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={3} total={5} />
+            <ProgressDots current={3} total={6} />
             <View style={{ width: 24 }} />
           </View>
-          <ScrollView contentContainerStyle={s.mapContent} showsVerticalScrollIndicator={false}>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.duration(500)}>
-              <Text style={s.mapTitle}>
+              <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Des joueurs pres de chez toi' : 'Players near you'}
               </Text>
-              <Text style={s.mapSubtitle}>
+              <Text style={s.pageSubtitle}>
                 {language === 'fr'
                   ? 'Explore la carte interactive pour trouver tout ce qu\'il te faut.'
                   : 'Explore the interactive map to find everything you need.'}
               </Text>
             </Animated.View>
 
-            {/* Map card with features */}
             <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.mapCard}>
               <View style={s.mapCardInner}>
                 <View style={s.mapIconRow}>
                   <View style={s.mapMainIcon}>
-                    <MaterialIcons name="map" size={56} color="#1E3A8A" />
+                    <MaterialIcons name="map" size={48} color="#1E3A8A" />
                   </View>
                   <View style={s.mapPinFloat1}>
-                    <MaterialIcons name="place" size={22} color="#10B981" />
+                    <MaterialIcons name="place" size={18} color="#10B981" />
                   </View>
                   <View style={s.mapPinFloat2}>
-                    <MaterialIcons name="person-pin" size={20} color="#3B82F6" />
+                    <MaterialIcons name="person-pin" size={16} color="#3B82F6" />
                   </View>
                   <View style={s.mapPinFloat3}>
-                    <MaterialIcons name="flag" size={18} color="#F59E0B" />
+                    <MaterialIcons name="flag" size={14} color="#F59E0B" />
                   </View>
                 </View>
               </View>
             </Animated.View>
 
-            {/* Feature bullets */}
             <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.mapFeaturesList}>
               {mapFeatures.map((f, i) => (
-                <Animated.View key={i} entering={FadeInUp.duration(300).delay(450 + i * 80)} style={s.mapFeatureItem}>
+                <Animated.View key={i} entering={FadeInUp.duration(300).delay(450 + i * 60)} style={s.mapFeatureItem}>
                   <View style={[s.mapFeatureIcon, { backgroundColor: f.color + '18' }]}>
-                    <MaterialIcons name={f.icon as any} size={20} color={f.color} />
+                    <MaterialIcons name={f.icon as any} size={18} color={f.color} />
                   </View>
                   <Text style={s.mapFeatureLabel}>{f.label}</Text>
                 </Animated.View>
               ))}
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={{ width: '100%' }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => setStep(6 as Step)}
@@ -672,23 +729,22 @@ export default function OnboardingScreen() {
             <Pressable onPress={() => setStep(5 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={4} total={5} />
+            <ProgressDots current={4} total={6} />
             <View style={{ width: 24 }} />
           </View>
-          <ScrollView contentContainerStyle={s.loginContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)}>
-              <MaterialIcons name="rocket-launch" size={48} color="#60A5FA" style={{ alignSelf: 'center', marginBottom: 16 }} />
-              <Text style={s.loginTitle}>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeInDown.duration(500)} style={{ alignItems: 'center' }}>
+              <MaterialIcons name="rocket-launch" size={40} color="#60A5FA" style={{ marginBottom: 12 }} />
+              <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Pret a jouer ?' : 'Ready to play?'}
               </Text>
-              <Text style={s.loginSubtitle}>
+              <Text style={s.pageSubtitle}>
                 {language === 'fr'
                   ? 'Cree ton compte gratuit pour sauvegarder tes stats et rejoindre la communaute.'
                   : 'Create your free account to save your stats and join the community.'}
               </Text>
             </Animated.View>
 
-            {/* Benefits */}
             <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.benefitsList}>
               {[
                 { icon: 'save', text: language === 'fr' ? 'Garder ton historique de matchs' : 'Keep your match history' },
@@ -697,16 +753,16 @@ export default function OnboardingScreen() {
                 { icon: 'map', text: language === 'fr' ? 'Trouver des joueurs pres de toi' : 'Find players near you' },
                 { icon: 'military-tech', text: language === 'fr' ? 'Debloquer des badges et XP' : 'Unlock badges and XP' },
               ].map((b, i) => (
-                <Animated.View key={i} entering={FadeInUp.duration(300).delay(250 + i * 60)} style={s.benefitItem}>
+                <Animated.View key={i} entering={FadeInUp.duration(300).delay(250 + i * 50)} style={s.benefitItem}>
                   <View style={s.benefitIconWrap}>
-                    <MaterialIcons name={b.icon as any} size={18} color="#10B981" />
+                    <MaterialIcons name={b.icon as any} size={16} color="#10B981" />
                   </View>
                   <Text style={s.benefitText}>{b.text}</Text>
                 </Animated.View>
               ))}
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%' }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={s.ctaContainer}>
               {user ? (
                 <Pressable
                   style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
@@ -775,15 +831,15 @@ export default function OnboardingScreen() {
               <Pressable onPress={() => setStep(6 as Step)} hitSlop={12}>
                 <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
               </Pressable>
-              <ProgressDots current={4} total={5} />
+              <ProgressDots current={5} total={6} />
               <View style={{ width: 24 }} />
             </View>
-            <ScrollView contentContainerStyle={s.expressContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Animated.View entering={FadeInDown.duration(500)}>
-                <Text style={s.expressTitle}>
+                <Text style={s.pageTitle}>
                   {language === 'fr' ? 'Derniere touche' : 'Final touch'}
                 </Text>
-                <Text style={s.expressSubtitle}>
+                <Text style={s.pageSubtitle}>
                   {language === 'fr'
                     ? 'Ton nom et ton poste de jeu. Tu pourras completer ton profil plus tard.'
                     : 'Your name and play position. You can complete your profile later.'}
@@ -814,14 +870,14 @@ export default function OnboardingScreen() {
                       style={[s.roleBtn, role === r.id && s.roleBtnActive]}
                       onPress={() => { Haptics.selectionAsync(); setRole(r.id); }}
                     >
-                      <MaterialIcons name={r.icon as any} size={28} color={role === r.id ? '#FFF' : '#94A3B8'} />
+                      <MaterialIcons name={r.icon as any} size={26} color={role === r.id ? '#FFF' : '#94A3B8'} />
                       <Text style={[s.roleBtnText, role === r.id && s.roleBtnTextActive]}>{r.label}</Text>
                     </Pressable>
                   ))}
                 </View>
               </Animated.View>
 
-              <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%' }}>
+              <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
                 <Pressable
                   style={[
                     s.ctaPrimary,
@@ -834,9 +890,9 @@ export default function OnboardingScreen() {
                     <ActivityIndicator color="#0F172A" />
                   ) : (
                     <>
-                      <MaterialIcons name="rocket-launch" size={20} color="#0F172A" />
+                      <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
                       <Text style={s.ctaPrimaryText}>
-                        {language === 'fr' ? "C'est parti !" : "Let's go!"}
+                        {language === 'fr' ? 'Continuer' : 'Continue'}
                       </Text>
                     </>
                   )}
@@ -844,6 +900,95 @@ export default function OnboardingScreen() {
               </Animated.View>
             </ScrollView>
           </KeyboardAvoidingView>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // ============================================
+  // STEP 8: INVITE FRIENDS (REFERRAL)
+  // ============================================
+  if (step === 8) {
+    return (
+      <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
+        <SafeAreaView style={s.fullScreen}>
+          <View style={s.screenHeader}>
+            <Pressable onPress={() => setStep(7 as Step)} hitSlop={12}>
+              <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
+            </Pressable>
+            <ProgressDots current={5} total={6} />
+            <View style={{ width: 24 }} />
+          </View>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeInDown.duration(500)} style={{ alignItems: 'center' }}>
+              <View style={s.referralIconWrap}>
+                <MaterialIcons name="group-add" size={40} color="#EC4899" />
+              </View>
+              <Text style={s.pageTitle}>
+                {language === 'fr' ? 'Invite tes amis !' : 'Invite your friends!'}
+              </Text>
+              <Text style={s.pageSubtitle}>
+                {language === 'fr'
+                  ? 'Partage ton code de parrainage et gagne des XP pour chaque ami qui rejoint la communaute.'
+                  : 'Share your referral code and earn XP for every friend who joins the community.'}
+              </Text>
+            </Animated.View>
+
+            {/* Referral code card */}
+            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={s.referralCard}>
+              <Text style={s.referralCardLabel}>
+                {language === 'fr' ? 'TON CODE DE PARRAINAGE' : 'YOUR REFERRAL CODE'}
+              </Text>
+              {referralLoading ? (
+                <ActivityIndicator color="#EC4899" style={{ marginVertical: 16 }} />
+              ) : (
+                <View style={s.referralCodeBox}>
+                  <Text style={s.referralCodeText}>{referralCode || '...'}</Text>
+                </View>
+              )}
+              <View style={s.referralRewards}>
+                {[
+                  { icon: 'star', color: '#F59E0B', text: language === 'fr' ? '+50 XP par ami invite' : '+50 XP per invited friend' },
+                  { icon: 'emoji-events', color: '#7C3AED', text: language === 'fr' ? 'Debloquer le badge Parrain' : 'Unlock the Referrer badge' },
+                  { icon: 'trending-up', color: '#10B981', text: language === 'fr' ? 'Monter dans le classement' : 'Climb the leaderboard' },
+                ].map((r, i) => (
+                  <Animated.View key={i} entering={FadeInUp.duration(300).delay(350 + i * 60)} style={s.referralRewardItem}>
+                    <MaterialIcons name={r.icon as any} size={16} color={r.color} />
+                    <Text style={s.referralRewardText}>{r.text}</Text>
+                  </Animated.View>
+                ))}
+              </View>
+            </Animated.View>
+
+            {/* Share button */}
+            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={s.ctaContainer}>
+              <Pressable
+                style={({ pressed }) => [s.referralShareBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                onPress={handleShareReferral}
+              >
+                <MaterialIcons name="share" size={20} color="#FFF" />
+                <Text style={s.referralShareBtnText}>
+                  {language === 'fr' ? 'Partager mon code' : 'Share my code'}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [s.ctaPrimary, { marginTop: 8 }, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                onPress={handleFinalComplete}
+              >
+                <MaterialIcons name="rocket-launch" size={20} color="#0F172A" />
+                <Text style={s.ctaPrimaryText}>
+                  {language === 'fr' ? "C'est parti !" : "Let's go!"}
+                </Text>
+              </Pressable>
+
+              <Pressable style={s.ctaSecondary} onPress={handleFinalComplete}>
+                <Text style={s.ctaSecondaryText}>
+                  {language === 'fr' ? 'Plus tard' : 'Later'}
+                </Text>
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
         </SafeAreaView>
       </LinearGradient>
     );
@@ -868,31 +1013,31 @@ const s = StyleSheet.create({
     paddingHorizontal: 32,
   },
   splashImage: {
-    width: 200,
-    height: 200,
+    width: 180,
+    height: 180,
   },
   splashTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '700',
     color: '#FFF',
-    marginTop: 24,
+    marginTop: 20,
     letterSpacing: 1,
   },
 
   // --- Progress dots ---
   progressDots: {
     flexDirection: 'row',
-    gap: 8,
+    gap: 6,
   },
   progressDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
     backgroundColor: '#334155',
   },
   progressDotActive: {
     backgroundColor: '#F59E0B',
-    width: 24,
+    width: 20,
   },
   progressDotDone: {
     backgroundColor: '#60A5FA',
@@ -904,7 +1049,38 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 12,
+    paddingVertical: 10,
+  },
+
+  // --- Shared scrollable content (no centering — allows proper scroll on small screens) ---
+  scrollContent: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+    paddingTop: 8,
+  },
+
+  // --- Shared page title ---
+  pageTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#FFF',
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  pageSubtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+
+  // --- Shared CTA container ---
+  ctaContainer: {
+    width: '100%',
+    marginTop: 'auto' as any,
+    paddingTop: 16,
   },
 
   // --- Language picker ---
@@ -913,37 +1089,37 @@ const s = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 40,
+    paddingBottom: 32,
+    paddingTop: 32,
   },
   langHeader: {
     alignItems: 'center',
-    marginBottom: 40,
-    gap: 12,
+    marginBottom: 32,
+    gap: 10,
   },
   langTitle: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '700',
     color: '#FFF',
     textAlign: 'center',
   },
   langSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#94A3B8',
     textAlign: 'center',
   },
   langOptions: {
     width: '100%',
-    gap: 14,
-    marginBottom: 40,
+    gap: 12,
+    marginBottom: 32,
   },
   langOption: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 18,
-    gap: 16,
+    borderRadius: 16,
+    padding: 16,
+    gap: 14,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -952,13 +1128,13 @@ const s = StyleSheet.create({
     backgroundColor: '#60A5FA10',
   },
   langFlag: {
-    fontSize: 36,
+    fontSize: 32,
   },
   langOptionInfo: {
     flex: 1,
   },
   langOptionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
     color: '#CBD5E1',
     marginBottom: 2,
@@ -967,13 +1143,13 @@ const s = StyleSheet.create({
     color: '#FFF',
   },
   langOptionDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#64748B',
   },
   langCheck: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#60A5FA',
     alignItems: 'center',
     justifyContent: 'center',
@@ -984,33 +1160,33 @@ const s = StyleSheet.create({
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingBottom: 40,
-    paddingTop: 24,
+    paddingBottom: 32,
+    paddingTop: 20,
+    paddingHorizontal: 24,
   },
   promiseImageWrap: {
-    width: Math.min(SCREEN_WIDTH * 0.45, 200),
-    height: Math.min(SCREEN_WIDTH * 0.45, 200),
-    marginBottom: 20,
+    width: 150,
+    height: 150,
+    marginBottom: 16,
   },
   promiseImage: {
     width: '100%',
     height: '100%',
   },
   promiseTitle: {
-    fontSize: 28,
+    fontSize: 26,
     fontWeight: '800',
     color: '#FFF',
     textAlign: 'center',
-    marginBottom: 10,
-    paddingHorizontal: 24,
+    marginBottom: 8,
   },
   promiseSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#94A3B8',
     textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-    paddingHorizontal: 32,
+    lineHeight: 20,
+    marginBottom: 24,
+    paddingHorizontal: 8,
   },
 
   // --- CTAs ---
@@ -1020,78 +1196,76 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     gap: 10,
     backgroundColor: '#F59E0B',
-    paddingVertical: 18,
-    borderRadius: 16,
-    marginBottom: 12,
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginBottom: 8,
   },
   ctaPrimaryText: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
   },
   ctaSecondary: {
-    paddingVertical: 14,
+    paddingVertical: 12,
     alignItems: 'center',
   },
   ctaSecondaryText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#64748B',
     fontWeight: '500',
   },
 
-  // --- Sponsor / Ambassador (improved) ---
+  // --- Sponsor / Ambassador ---
   sponsorContent: {
     flexGrow: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 32,
   },
   sponsorLabelRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 16,
   },
   sponsorLabelLine: {
-    width: 32,
+    width: 28,
     height: 1,
   },
   sponsorLabelBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
+    gap: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 16,
     borderWidth: 1,
   },
   sponsorLabelText: {
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '700',
-    letterSpacing: 1.5,
+    letterSpacing: 1.2,
   },
   sponsorCard: {
     width: '100%',
     backgroundColor: '#1E293B',
-    borderRadius: 24,
-    padding: 24,
+    borderRadius: 20,
+    padding: 20,
     borderWidth: 1,
-    marginBottom: 24,
-    gap: 20,
+    marginBottom: 20,
+    gap: 16,
   },
   sponsorCardTop: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 14,
   },
   sponsorPhotoWrap: {
     position: 'relative',
-    width: 80,
-    height: 80,
-    borderRadius: 24,
-    borderWidth: 2.5,
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    borderWidth: 2,
     overflow: 'hidden',
   },
   sponsorPhoto: {
@@ -1108,9 +1282,9 @@ const s = StyleSheet.create({
     position: 'absolute',
     bottom: -2,
     right: -2,
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
@@ -1120,20 +1294,20 @@ const s = StyleSheet.create({
     flex: 1,
   },
   sponsorCardName: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
     color: '#FFF',
-    marginBottom: 4,
+    marginBottom: 3,
   },
   sponsorCardBio: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#94A3B8',
-    lineHeight: 18,
+    lineHeight: 17,
   },
   sponsorMsgBox: {
-    borderRadius: 16,
-    padding: 18,
-    gap: 8,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6,
     position: 'relative',
     overflow: 'hidden',
   },
@@ -1145,71 +1319,50 @@ const s = StyleSheet.create({
     height: 3,
   },
   sponsorMsgText: {
-    fontSize: 14,
-    lineHeight: 21,
+    fontSize: 13,
+    lineHeight: 19,
     fontStyle: 'italic',
   },
   sponsorSocialsRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 10,
+    gap: 8,
   },
   sponsorSocialBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     backgroundColor: '#0F172A',
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
     borderWidth: 1,
     borderColor: '#334155',
   },
   sponsorSocialLabel: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#CBD5E1',
   },
 
   // --- Features explanation ---
-  featuresContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 8,
-  },
-  featuresTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  featuresSubtitle: {
-    fontSize: 15,
-    color: '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
   featuresList: {
     width: '100%',
-    gap: 16,
-    marginBottom: 24,
+    gap: 10,
+    marginBottom: 16,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     backgroundColor: '#1E293B',
-    borderRadius: 18,
-    padding: 18,
-    gap: 16,
+    borderRadius: 14,
+    padding: 14,
+    gap: 12,
   },
   featureIconWrap: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1217,81 +1370,60 @@ const s = StyleSheet.create({
     flex: 1,
   },
   featureTitle: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFF',
-    marginBottom: 4,
+    marginBottom: 2,
   },
   featureDesc: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#94A3B8',
-    lineHeight: 19,
+    lineHeight: 17,
   },
   featureTeaser: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F59E0B10',
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginBottom: 32,
-    gap: 10,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 16,
+    gap: 8,
     width: '100%',
   },
   featureTeaserText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#FCD34D',
     flex: 1,
-    lineHeight: 19,
+    lineHeight: 17,
   },
 
   // --- Map ---
-  mapContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 8,
-  },
-  mapTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  mapSubtitle: {
-    fontSize: 15,
-    color: '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 32,
-  },
   mapCard: {
     width: '100%',
     backgroundColor: '#1E293B',
-    borderRadius: 24,
+    borderRadius: 20,
     padding: 2,
-    marginBottom: 28,
+    marginBottom: 16,
     overflow: 'hidden',
   },
   mapCardInner: {
     backgroundColor: '#0F172A20',
-    borderRadius: 22,
-    paddingVertical: 28,
+    borderRadius: 18,
+    paddingVertical: 24,
     alignItems: 'center',
   },
   mapIconRow: {
-    width: 120,
-    height: 100,
+    width: 100,
+    height: 80,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
   },
   mapMainIcon: {
-    width: 72,
-    height: 72,
-    borderRadius: 20,
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: '#60A5FA15',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1300,168 +1432,126 @@ const s = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    width: 36,
-    height: 36,
-    borderRadius: 12,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
     backgroundColor: '#10B98118',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapPinFloat2: {
     position: 'absolute',
-    bottom: 4,
+    bottom: 2,
     left: 0,
-    width: 34,
-    height: 34,
-    borderRadius: 12,
+    width: 28,
+    height: 28,
+    borderRadius: 10,
     backgroundColor: '#3B82F618',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapPinFloat3: {
     position: 'absolute',
-    top: 8,
-    left: 10,
-    width: 30,
-    height: 30,
-    borderRadius: 10,
+    top: 6,
+    left: 8,
+    width: 26,
+    height: 26,
+    borderRadius: 8,
     backgroundColor: '#F59E0B18',
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapFeaturesList: {
     width: '100%',
-    gap: 12,
-    marginBottom: 32,
+    gap: 8,
+    marginBottom: 16,
   },
   mapFeatureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 14,
+    gap: 12,
     backgroundColor: '#1E293B',
-    borderRadius: 14,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
   },
   mapFeatureIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   mapFeatureLabel: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '600',
     color: '#E2E8F0',
     flex: 1,
   },
 
-  // --- Login ---
-  loginContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 16,
-  },
-  loginTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  loginSubtitle: {
-    fontSize: 15,
-    color: '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 28,
-  },
+  // --- Benefits (login step) ---
   benefitsList: {
     width: '100%',
-    marginBottom: 32,
-    gap: 12,
+    marginBottom: 16,
+    gap: 8,
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
     backgroundColor: '#1E293B',
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
   },
   benefitIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
     backgroundColor: '#10B98118',
     alignItems: 'center',
     justifyContent: 'center',
   },
   benefitText: {
-    fontSize: 15,
+    fontSize: 14,
     color: '#E2E8F0',
     fontWeight: '500',
     flex: 1,
   },
 
   // --- Express profile ---
-  expressContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-    paddingTop: 16,
-  },
-  expressTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  expressSubtitle: {
-    fontSize: 14,
-    color: '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 20,
-    marginBottom: 32,
-  },
   expressSection: {
     width: '100%',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   expressLabel: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '700',
     color: '#64748B',
     letterSpacing: 1,
-    marginBottom: 10,
+    marginBottom: 8,
   },
   expressInput: {
     width: '100%',
     backgroundColor: '#1E293B',
-    borderRadius: 14,
-    paddingVertical: 16,
-    paddingHorizontal: 18,
-    fontSize: 18,
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    fontSize: 17,
     fontWeight: '500',
     color: '#E2E8F0',
   },
   roleRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   roleBtn: {
     flex: 1,
-    paddingVertical: 18,
-    borderRadius: 14,
+    paddingVertical: 16,
+    borderRadius: 12,
     backgroundColor: '#1E293B',
     alignItems: 'center',
-    gap: 6,
+    gap: 4,
     borderWidth: 2,
     borderColor: 'transparent',
   },
@@ -1470,11 +1560,86 @@ const s = StyleSheet.create({
     backgroundColor: '#60A5FA15',
   },
   roleBtnText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '600',
     color: '#94A3B8',
   },
   roleBtnTextActive: {
     color: '#60A5FA',
+  },
+
+  // --- Referral step ---
+  referralIconWrap: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: '#EC489918',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  referralCard: {
+    width: '100%',
+    backgroundColor: '#1E293B',
+    borderRadius: 18,
+    padding: 20,
+    alignItems: 'center',
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#EC489930',
+  },
+  referralCardLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#94A3B8',
+    letterSpacing: 1.2,
+    marginBottom: 12,
+  },
+  referralCodeBox: {
+    backgroundColor: '#0F172A',
+    borderRadius: 12,
+    paddingVertical: 14,
+    paddingHorizontal: 28,
+    borderWidth: 1.5,
+    borderColor: '#EC489940',
+    borderStyle: 'dashed' as any,
+    marginBottom: 16,
+  },
+  referralCodeText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: '#EC4899',
+    letterSpacing: 2,
+  },
+  referralRewards: {
+    width: '100%',
+    gap: 8,
+  },
+  referralRewardItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 4,
+  },
+  referralRewardText: {
+    fontSize: 13,
+    color: '#CBD5E1',
+    fontWeight: '500',
+    flex: 1,
+  },
+  referralShareBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: '#EC4899',
+    paddingVertical: 16,
+    borderRadius: 14,
+    marginBottom: 4,
+  },
+  referralShareBtnText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFF',
   },
 });
