@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -345,7 +345,7 @@ export default function ChallengeDetailScreen() {
       refreshControl={!isEditing ? <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} /> : undefined}
     >
       {/* Hero Card */}
-      <Animated.View entering={FadeInDown.duration(400)} style={s.heroCard}>
+      <View style={s.heroCard}>
         <View style={[s.heroAccent, { backgroundColor: cfg.color }]} />
         <View style={s.heroContent}>
           <View style={s.heroTopRow}>
@@ -455,10 +455,10 @@ export default function ChallengeDetailScreen() {
             </Pressable>
           ) : null}
         </View>
-      </Animated.View>
+      </View>
 
       {/* Player Info */}
-      <Animated.View entering={FadeInDown.duration(300).delay(60)} style={s.card}>
+      <View style={s.card}>
         <Text style={s.cardLabel}>{fr ? 'JOUEUR' : 'PLAYER'}</Text>
         <View style={s.playerRow}>
           <View style={[s.playerDot, { backgroundColor: '#3B82F6' }]} />
@@ -473,10 +473,31 @@ export default function ChallengeDetailScreen() {
             </View>
           </>
         ) : null}
-      </Animated.View>
+      </View>
+
+      {/* Witness Attestation Section */}
+      {!isEditing ? (
+        <AttestationSection
+          itemType="challenge"
+          itemId={challenge.id}
+          snapshotData={{
+            type: challenge.type,
+            mode: challenge.mode,
+            playerName: challenge.playerName,
+            opponentName: challenge.opponentName,
+            successCount: challenge.successCount,
+            totalShots: challenge.totalShots,
+            successRate: challenge.successRate,
+            totalPoints: challenge.totalPoints,
+            winner: challenge.winner,
+            date: challenge.date,
+          }}
+          animDelay={0}
+        />
+      ) : null}
 
       {/* Main Stats */}
-      <Animated.View entering={FadeInDown.duration(300).delay(120)}>
+      <View>
         {isPrecision ? (
           <View style={s.card}>
             <Text style={s.cardLabel}>{fr ? 'RESULTATS PRECISION' : 'PRECISION RESULTS'}</Text>
@@ -694,10 +715,10 @@ export default function ChallengeDetailScreen() {
             ) : null}
           </View>
         )}
-      </Animated.View>
+      </View>
 
       {/* Notes */}
-      <Animated.View entering={FadeInDown.duration(300).delay(180)} style={s.card}>
+      <View style={s.card}>
         <Text style={s.cardLabel}>NOTES</Text>
         {isEditing ? (
           <TextInput
@@ -718,31 +739,10 @@ export default function ChallengeDetailScreen() {
         ) : (
           <Text style={s.emptyNotes}>{fr ? 'Aucune note' : 'No notes'}</Text>
         )}
-      </Animated.View>
-
-      {/* Witness Attestation Section */}
-      {!isEditing ? (
-        <AttestationSection
-          itemType="challenge"
-          itemId={challenge.id}
-          snapshotData={{
-            type: challenge.type,
-            mode: challenge.mode,
-            playerName: challenge.playerName,
-            opponentName: challenge.opponentName,
-            successCount: challenge.successCount,
-            totalShots: challenge.totalShots,
-            successRate: challenge.successRate,
-            totalPoints: challenge.totalPoints,
-            winner: challenge.winner,
-            date: challenge.date,
-          }}
-          animDelay={220}
-        />
-      ) : null}
+      </View>
 
       {/* Action Buttons */}
-      <Animated.View entering={FadeInDown.duration(300).delay(260)}>
+      <View>
         {isEditing ? (
           <View style={s.editActionRow}>
             <Pressable style={({ pressed }) => [s.cancelBtn, pressed && { opacity: 0.85 }]} onPress={cancelEdit}>
@@ -779,7 +779,7 @@ export default function ChallengeDetailScreen() {
             ) : null}
           </View>
         )}
-      </Animated.View>
+      </View>
     </ScrollView>
   );
 

@@ -5,7 +5,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, Pressable, StyleSheet, ActivityIndicator, FlatList } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -184,7 +183,7 @@ export default function AttestationSection({
   }
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay(animDelay)}>
+    <View>
       <View style={[st.card, { borderWidth: 1, borderColor: '#7C3AED30', backgroundColor: '#7C3AED04' }]}>
         {/* Header */}
         <View style={st.headerRow}>
@@ -374,7 +373,7 @@ export default function AttestationSection({
           </View>
         ) : null}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 

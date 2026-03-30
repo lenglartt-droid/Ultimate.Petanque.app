@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, memo } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
   RefreshControl, Platform, Dimensions, Linking, TextInput,
@@ -13,6 +13,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import { SponsorPortalSkeleton } from '@/components/ui/SkeletonLoader';
 import { invalidateAmbassadorCache, AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
@@ -443,6 +444,49 @@ export default function SponsorPortalScreen() {
     }));
     setBestSendTime({ day: bestDay, slot: bestSlot, score: bestScore });
   }, [pushAnalytics.totalSent, fr]);
+
+  // === COMPUTED VALUES (must be before all useEffects that reference them and before early returns) ===
+  const isGold = sponsor?.badge_type === 'gold_sponsor';
+  const isSilverPlus = isGold || sponsor?.badge_type === 'sponsor';
+
+  const TIER_ACCESS: Record<string, Set<string>> = useMemo(() => ({
+    partner: new Set(['roi', 'placement', 'branding', 'events']),
+    sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events']),
+    gold_sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events', 'crm']),
+  }), []);
+  const allowedSections = TIER_ACCESS[sponsor?.badge_type || 'partner'] || TIER_ACCESS.partner;
+
+  const tierColor = isGold ? '#D4A017' : sponsor?.badge_type === 'sponsor' ? '#78909C' : '#A1887F';
+  const tierLabel = isGold ? (fr ? 'Partenaire Or' : 'Gold Partner') : sponsor?.badge_type === 'sponsor' ? (fr ? 'Partenaire Argent' : 'Silver Partner') : (fr ? 'Partenaire Bronze' : 'Bronze Partner');
+  const tierGradient: [string, string] = isGold ? ['#B45309', '#F59E0B'] : sponsor?.badge_type === 'sponsor' ? ['#475569', '#94A3B8'] : ['#78350F', '#D97706'];
+
+  const { dailyImp, dailyClk, dailyDates, totalImp, totalClk, ctr } = useMemo(() => {
+    const dImp = bannerData ? bannerData.dailyImpressions.slice(-period) : [];
+    const dClk = bannerData ? bannerData.dailyClicks.slice(-period) : [];
+    const dDates = bannerData ? bannerData.dailyDates.slice(-period) : [];
+    const tImp = dImp.reduce((s, v) => s + v, 0);
+    const tClk = dClk.reduce((s, v) => s + v, 0);
+    const c = tImp > 0 ? Math.round((tClk / tImp) * 1000) / 10 : 0;
+    return { dailyImp: dImp, dailyClk: dClk, dailyDates: dDates, totalImp: tImp, totalClk: tClk, ctr: c };
+  }, [bannerData, period]);
+
+  const sections = useMemo(() => [
+    { id: 'roi' as const, icon: 'insights', label: 'ROI' },
+    { id: 'placement' as const, icon: 'place', label: fr ? 'Placement' : 'Placement' },
+    { id: 'branding' as const, icon: 'palette', label: 'Branding' },
+    { id: 'push' as const, icon: 'notifications', label: 'Push' },
+    { id: 'events' as const, icon: 'event', label: fr ? 'Events' : 'Events' },
+    { id: 'crm' as const, icon: 'people', label: 'CRM' },
+  ], [fr]);
+
+  const BRAND_COLORS = useMemo(() => [
+    { id: 'amber', color: '#F59E0B', label: fr ? 'Ambre' : 'Amber' },
+    { id: 'blue', color: '#3B82F6', label: fr ? 'Bleu' : 'Blue' },
+    { id: 'purple', color: '#7C3AED', label: fr ? 'Violet' : 'Purple' },
+    { id: 'green', color: '#10B981', label: fr ? 'Vert' : 'Green' },
+    { id: 'rose', color: '#EC4899', label: 'Rose' },
+    { id: 'slate', color: '#64748B', label: fr ? 'Ardoise' : 'Slate' },
+  ], [fr]);
 
   // Compute benchmark data by comparing with tier peers
   useEffect(() => {
@@ -1230,7 +1274,16 @@ export default function SponsorPortalScreen() {
   if (loading) {
     return (
       <SafeAreaView style={st.container}>
-        <View style={st.loadingWrap}><ActivityIndicator size="large" color="#D4A017" /></View>
+        <View style={st.headerRow}>
+          <Pressable style={st.backBtn} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={st.headerTitle}>{fr ? 'Portail Partenaires' : 'Partner Portal'}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <SponsorPortalSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
@@ -1262,46 +1315,6 @@ export default function SponsorPortalScreen() {
       </SafeAreaView>
     );
   }
-
-  const isGold = sponsor.badge_type === 'gold_sponsor';
-  const isSilverPlus = isGold || sponsor.badge_type === 'sponsor';
-
-  // Tier-based section access
-  const TIER_ACCESS: Record<string, Set<string>> = {
-    partner: new Set(['roi', 'placement', 'branding', 'events']),
-    sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events']),
-    gold_sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events', 'crm']),
-  };
-  const allowedSections = TIER_ACCESS[sponsor.badge_type] || TIER_ACCESS.partner;
-
-  const tierColor = isGold ? '#D4A017' : sponsor.badge_type === 'sponsor' ? '#78909C' : '#A1887F';
-  const tierLabel = isGold ? (fr ? 'Partenaire Or' : 'Gold Partner') : sponsor.badge_type === 'sponsor' ? (fr ? 'Partenaire Argent' : 'Silver Partner') : (fr ? 'Partenaire Bronze' : 'Bronze Partner');
-  const tierGradient: [string, string] = isGold ? ['#B45309', '#F59E0B'] : sponsor.badge_type === 'sponsor' ? ['#475569', '#94A3B8'] : ['#78350F', '#D97706'];
-
-  const dailyImp = bannerData ? bannerData.dailyImpressions.slice(-period) : [];
-  const dailyClk = bannerData ? bannerData.dailyClicks.slice(-period) : [];
-  const dailyDates = bannerData ? bannerData.dailyDates.slice(-period) : [];
-  const totalImp = dailyImp.reduce((s, v) => s + v, 0);
-  const totalClk = dailyClk.reduce((s, v) => s + v, 0);
-  const ctr = totalImp > 0 ? Math.round((totalClk / totalImp) * 1000) / 10 : 0;
-
-  const sections = [
-    { id: 'roi' as const, icon: 'insights', label: 'ROI' },
-    { id: 'placement' as const, icon: 'place', label: fr ? 'Placement' : 'Placement' },
-    { id: 'branding' as const, icon: 'palette', label: 'Branding' },
-    { id: 'push' as const, icon: 'notifications', label: 'Push' },
-    { id: 'events' as const, icon: 'event', label: fr ? 'Events' : 'Events' },
-    { id: 'crm' as const, icon: 'people', label: 'CRM' },
-  ];
-
-  const BRAND_COLORS = [
-    { id: 'amber', color: '#F59E0B', label: fr ? 'Ambre' : 'Amber' },
-    { id: 'blue', color: '#3B82F6', label: fr ? 'Bleu' : 'Blue' },
-    { id: 'purple', color: '#7C3AED', label: fr ? 'Violet' : 'Purple' },
-    { id: 'green', color: '#10B981', label: fr ? 'Vert' : 'Green' },
-    { id: 'rose', color: '#EC4899', label: 'Rose' },
-    { id: 'slate', color: '#64748B', label: fr ? 'Ardoise' : 'Slate' },
-  ];
 
   return (
     <SafeAreaView edges={['top']} style={st.container}>
@@ -1362,9 +1375,7 @@ export default function SponsorPortalScreen() {
               <View style={{ position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFF' }} />
             ) : null}
           </Pressable>
-          <Pressable style={st.headerAction} onPress={() => router.push('/sponsor-preview' as any)}>
-            <MaterialIcons name="swap-horiz" size={20} color={tierColor} />
-          </Pressable>
+
         </View>
       </View>
 
@@ -1404,14 +1415,36 @@ export default function SponsorPortalScreen() {
         </View>
       </LinearGradient>
 
-      {/* Period Toggle */}
-      <View style={st.periodRow}>
-        {([7, 30] as const).map(p => (
-          <Pressable key={p} style={[st.periodChip, period === p && { backgroundColor: tierColor, borderColor: tierColor }]} onPress={() => { Haptics.selectionAsync(); setPeriod(p); }}>
-            <Text style={[st.periodText, period === p && { color: '#FFF' }]}>{p}{fr ? 'j' : 'd'}</Text>
-          </Pressable>
-        ))}
+      {/* Period + Section Tabs */}
+      <View style={st.filterArea}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
+          {([7, 30] as const).map(p => (
+            <Pressable key={p} style={({ pressed }) => [st.periodChip, period === p && { backgroundColor: tierColor, borderColor: tierColor }, pressed && { opacity: 0.8, transform: [{ scale: 0.96 }] }]} onPress={() => { Haptics.selectionAsync(); setPeriod(p); }}>
+              <MaterialIcons name="schedule" size={11} color={period === p ? '#FFF' : '#94A3B8'} />
+              <Text style={[st.periodText, period === p && { color: '#FFF' }]}>{p}{fr ? 'j' : 'd'}</Text>
+            </Pressable>
+          ))}
+          <View style={st.filterDivider} />
+          {sections.map(sec => {
+            const locked = !allowedSections.has(sec.id);
+            const isActive = activeSection === sec.id && !locked;
+            return (
+              <Pressable key={sec.id} style={({ pressed }) => [st.sectionChip, isActive && { backgroundColor: tierColor, borderColor: tierColor }, locked && { opacity: 0.4 }, pressed && !locked && { opacity: 0.8, transform: [{ scale: 0.96 }] }]} onPress={() => { if (locked) { showAlert(fr ? 'Acces reserve' : 'Reserved access', fr ? `Cette section est reservee aux partenaires ${sec.id === 'crm' ? 'Or' : 'Argent et Or'}. Passez au tier superieur.` : `This section is reserved for ${sec.id === 'crm' ? 'Gold' : 'Silver and Gold'} partners. Upgrade your tier.`); return; } Haptics.selectionAsync(); setActiveSection(sec.id); }}>
+                <MaterialIcons name={locked ? 'lock' : sec.icon as any} size={13} color={isActive ? '#FFF' : locked ? '#94A3B8' : '#64748B'} />
+                <Text style={[st.sectionChipText, isActive && { color: '#FFF' }]}>{sec.label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+        {/* Active section indicator */}
+        <View style={st.sectionIndicator}>
+          <View style={[st.sectionIndicatorDot, { backgroundColor: tierColor }]} />
+          <MaterialIcons name={(sections.find(s => s.id === activeSection)?.icon || 'insights') as any} size={14} color={tierColor} />
+          <Text style={[st.sectionIndicatorText, { color: tierColor }]}>{sections.find(s => s.id === activeSection)?.label || 'ROI'}</Text>
+          <View style={{ flex: 1 }} />
+          <Text style={st.sectionIndicatorPeriod}>{period}{fr ? ' jours' : ' days'}</Text>
         </View>
+      </View>
 
       {/* Notification Center */}
       {showNotifCenter && sponsorNotifs.length > 0 ? (
@@ -1438,18 +1471,7 @@ export default function SponsorPortalScreen() {
         </View>
       ) : null}
 
-      {/* Section Tabs */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.sectionTabsRow}>
-        {sections.map(sec => {
-          const locked = !allowedSections.has(sec.id);
-          return (
-            <Pressable key={sec.id} style={[st.sectionTab, activeSection === sec.id && !locked && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }, locked && { opacity: 0.55 }]} onPress={() => { if (locked) { showAlert(fr ? 'Acces reserve' : 'Reserved access', fr ? `Cette section est reservee aux partenaires ${sec.id === 'crm' ? 'Or' : 'Argent et Or'}. Passez au tier superieur.` : `This section is reserved for ${sec.id === 'crm' ? 'Gold' : 'Silver and Gold'} partners. Upgrade your tier.`); return; } Haptics.selectionAsync(); setActiveSection(sec.id); }}>
-              <MaterialIcons name={locked ? 'lock' as any : sec.icon as any} size={13} color={activeSection === sec.id && !locked ? tierColor : theme.textMuted} />
-              <Text style={[st.sectionTabText, activeSection === sec.id && !locked && { color: tierColor }]}>{sec.label}</Text>
-            </Pressable>
-          );
-        })}
-      </ScrollView>
+
 
       <ScrollView
         style={{ flex: 1 }}
@@ -3553,12 +3575,17 @@ const st = StyleSheet.create({
   heroKpiValue: { fontSize: 18, fontWeight: '900', color: '#FFF' },
   heroKpiLabel: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginTop: 2, textTransform: 'uppercase' },
   // Period
-  periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
-  sectionTabsRow: { paddingHorizontal: 16, paddingBottom: 6, paddingTop: 2, gap: 4 },
-  periodChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
-  periodText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
-  sectionTab: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
-  sectionTabText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
+  filterRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 8 },
+  filterDivider: { width: 1, height: 22, backgroundColor: '#CBD5E1', marginHorizontal: 2 },
+  filterArea: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
+  periodChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  periodText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  sectionChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  sectionChipText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
+  sectionIndicator: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 10 },
+  sectionIndicatorDot: { width: 6, height: 6, borderRadius: 3 },
+  sectionIndicatorText: { fontSize: 13, fontWeight: '700' },
+  sectionIndicatorPeriod: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, maxWidth: 640, alignSelf: 'center' as const, width: '100%' },
   // KPI Grid
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
