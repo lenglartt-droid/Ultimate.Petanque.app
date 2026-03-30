@@ -552,6 +552,8 @@ export default function ProfileScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(t('common', 'success'), t('profile', 'profileUpdated'));
       setIsEditing(false);
+      // Refresh app data so home screen picks up the new name
+      refreshData();
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || t('profile', 'errorUpdateProfile'));
     } finally {

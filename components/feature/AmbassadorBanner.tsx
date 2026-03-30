@@ -214,7 +214,16 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
           <Pressable
             key={amb.id}
             style={[s.slide, { width: cardWidth }]}
-            onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any)}
+            onPress={() => {
+              const isPartner = amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner';
+              if (isPartner) {
+                router.push(`/partner/${amb.id}` as any);
+              } else if (amb.playerId) {
+                router.push(`/player/${amb.playerId}` as any);
+              } else {
+                router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any);
+              }
+            }}
           >
             <LinearGradient colors={cs.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.gradient}>
               {cs.isEliteAmbassador ? <View style={s.eliteAccentBarCarousel} /> : null}

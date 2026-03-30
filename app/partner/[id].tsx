@@ -15,6 +15,7 @@ import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
+import { useAuth } from '@/template';
 import { trackAmbassadorEvent, fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { SponsoredEvent } from '@/services/sponsoredEventService';
 
@@ -67,6 +68,7 @@ export default function PartnerDetailScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
   const fr = language === 'fr';
+  const { user } = useAuth();
   const supabase = getSupabaseClient();
 
   const [loading, setLoading] = useState(true);
@@ -221,6 +223,7 @@ export default function PartnerDetailScreen() {
     socialLinks.push({ platform: 'website', url, label: fr ? 'Site web' : 'Website' });
   }
 
+  const isOwner = user?.id === partner.user_id;
   const memberSince = partner.created_at ? new Date(partner.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' }) : null;
 
   return (
@@ -307,8 +310,8 @@ export default function PartnerDetailScreen() {
         </Animated.View>
 
         <View style={st.contentWrap}>
-          {/* ====== ANIMATED STATS COUNTERS ====== */}
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.statsCard}>
+          {/* ====== ANIMATED STATS COUNTERS (owner only) ====== */}
+          {isOwner ? <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.statsCard}>
             <View style={st.statsCardHeader}>
               <MaterialIcons name="insights" size={18} color={tierColor} />
               <Text style={st.statsCardTitle}>{fr ? 'Visibilite (30j)' : 'Visibility (30d)'}</Text>
@@ -344,7 +347,7 @@ export default function PartnerDetailScreen() {
                 <Text style={st.statLabel}>{fr ? 'Portee' : 'Reach'}</Text>
               </View>
             </View>
-          </Animated.View>
+          </Animated.View> : null}
 
           {/* ====== BIO ====== */}
           {partner.bio ? (
@@ -480,8 +483,8 @@ export default function PartnerDetailScreen() {
             </Animated.View>
           ) : null}
 
-          {/* ====== REFERRAL CODE CTA ====== */}
-          {partner.referral_code ? (
+          {/* ====== REFERRAL CODE CTA (owner only) ====== */}
+          {isOwner && partner.referral_code ? (
             <Animated.View entering={FadeInDown.duration(400).delay(350)}>
               <LinearGradient
                 colors={[tierColor + '08', tierColor + '15']}
@@ -526,8 +529,8 @@ export default function PartnerDetailScreen() {
             </Animated.View>
           ) : null}
 
-          {/* ====== QR CODE CARD ====== */}
-          <Animated.View entering={FadeInDown.duration(400).delay(375)} style={st.card}>
+          {/* ====== QR CODE CARD (owner only) ====== */}
+          {isOwner ? <Animated.View entering={FadeInDown.duration(400).delay(375)} style={st.card}>
             <View style={st.cardHeader}>
               <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
                 <MaterialIcons name="qr-code-2" size={18} color={tierColor} />
@@ -592,7 +595,7 @@ export default function PartnerDetailScreen() {
                   : 'Ideal for your marketing materials, flyers and social media'}
               </Text>
             </View>
-          </Animated.View>
+          </Animated.View> : null}
 
           {/* ====== WEBSITE CTA ====== */}
           {partner.website_url ? (
