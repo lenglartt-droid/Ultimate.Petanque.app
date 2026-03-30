@@ -16,11 +16,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, {
-  FadeIn,
-  FadeInDown,
-  FadeInUp,
-} from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
@@ -134,7 +129,6 @@ export default function OnboardingScreen() {
     if (!user?.id) return;
     setReferralLoading(true);
     try {
-      // Check if user has an ambassador entry with a referral code
       const { data: amb } = await supabase
         .from('ambassadors')
         .select('id, referral_code')
@@ -144,7 +138,6 @@ export default function OnboardingScreen() {
       if (amb?.referral_code) {
         setReferralCode(amb.referral_code);
       } else {
-        // Generate a simple personal referral code from username
         const initials = (username || 'UP').replace(/[^a-zA-Z]/g, '').substring(0, 3).toUpperCase() || 'UP';
         const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let suffix = '';
@@ -152,13 +145,11 @@ export default function OnboardingScreen() {
         const code = `${initials}-${suffix}`;
         setReferralCode(code);
 
-        // If user is an ambassador, save to DB
         if (amb?.id) {
           await generateReferralCode(amb.id, username || 'User');
         }
       }
     } catch {
-      // Generate a fallback code
       const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
       let code = 'UP-';
       for (let i = 0; i < 4; i++) code += chars.charAt(Math.floor(Math.random() * chars.length));
@@ -187,7 +178,6 @@ export default function OnboardingScreen() {
   const goNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
     if (step === 2 && !goldSponsor && !eliteAmbassador) {
-      // Skip sponsor/ambassador step
       setStep(4 as Step);
       return;
     }
@@ -243,8 +233,6 @@ export default function OnboardingScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Go to referral step instead of finishing
       setStep(8 as Step);
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || 'Unable to save profile');
@@ -271,20 +259,20 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.splashContainer}>
-            <Animated.View entering={FadeIn.duration(800)}>
+            <View>
               <Image
                 source={require('@/assets/images/app-logo.png')}
                 style={s.splashImage}
                 contentFit="contain"
                 transition={300}
               />
-            </Animated.View>
-            <Animated.View entering={FadeInUp.duration(600).delay(1200)}>
+            </View>
+            <View>
               <Text style={s.splashTitle}>Ultimate Petanque</Text>
-            </Animated.View>
-            <Animated.View entering={FadeInUp.duration(600).delay(1800)}>
+            </View>
+            <View>
               <ActivityIndicator color="#60A5FA" size="small" style={{ marginTop: 24 }} />
-            </Animated.View>
+            </View>
           </View>
         </SafeAreaView>
       </LinearGradient>
@@ -299,13 +287,13 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <ScrollView contentContainerStyle={s.langContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={s.langHeader}>
+            <View style={s.langHeader}>
               <MaterialIcons name="translate" size={44} color="#60A5FA" />
               <Text style={s.langTitle}>Choose your language</Text>
               <Text style={s.langSubtitle}>Choisissez votre langue</Text>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.langOptions}>
+            <View style={s.langOptions}>
               <Pressable
                 style={({ pressed }) => [
                   s.langOption,
@@ -345,9 +333,9 @@ export default function OnboardingScreen() {
                   </View>
                 ) : null}
               </Pressable>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={goNext}
@@ -357,7 +345,7 @@ export default function OnboardingScreen() {
                 </Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -372,15 +360,15 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <ScrollView contentContainerStyle={s.promiseContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={s.promiseImageWrap}>
+            <View style={s.promiseImageWrap}>
               <Image
                 source={require('@/assets/images/app-logo.png')}
                 style={s.promiseImage}
                 contentFit="contain"
                 transition={200}
               />
-            </Animated.View>
-            <Animated.View entering={FadeInUp.duration(500).delay(200)}>
+            </View>
+            <View>
               <Text style={s.promiseTitle}>
                 {language === 'fr' ? 'Chaque tir compte.' : 'Every shot counts.'}
               </Text>
@@ -389,8 +377,8 @@ export default function OnboardingScreen() {
                   ? 'Suis tes matchs. Mesure ta progression. Trouve des joueurs.'
                   : 'Track your matches. Measure your progress. Find players.'}
               </Text>
-            </Animated.View>
-            <Animated.View entering={FadeInUp.duration(500).delay(400)} style={s.ctaContainer}>
+            </View>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={goNext}
@@ -410,7 +398,7 @@ export default function OnboardingScreen() {
                   </Text>
                 </Pressable>
               )}
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -455,16 +443,16 @@ export default function OnboardingScreen() {
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(400)} style={s.sponsorLabelRow}>
+            <View style={s.sponsorLabelRow}>
               <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
               <View style={[s.sponsorLabelBadge, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
                 <MaterialIcons name={badgeIcon as any} size={14} color={accentColor} />
                 <Text style={[s.sponsorLabelText, { color: accentColor }]}>{labelText}</Text>
               </View>
               <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(500).delay(150)} style={[s.sponsorCard, { borderColor: accentColor + '30' }]}>
+            <View style={[s.sponsorCard, { borderColor: accentColor + '30' }]}>
               <View style={s.sponsorCardTop}>
                 <View style={[s.sponsorPhotoWrap, { borderColor: accentColor }]}>
                   {entity.photo ? (
@@ -513,9 +501,9 @@ export default function OnboardingScreen() {
                   ))}
                 </View>
               ) : null}
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => {
@@ -529,7 +517,7 @@ export default function OnboardingScreen() {
               <Pressable style={s.ctaSecondary} onPress={goNext}>
                 <Text style={s.ctaSecondaryText}>{language === 'fr' ? 'Passer' : 'Skip'}</Text>
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -587,7 +575,7 @@ export default function OnboardingScreen() {
           </View>
 
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)}>
+            <View>
               <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Tout pour ta petanque' : 'Everything for your game'}
               </Text>
@@ -596,15 +584,11 @@ export default function OnboardingScreen() {
                   ? 'Une app complete pour suivre, progresser et partager.'
                   : 'A complete app to track, improve and share.'}
               </Text>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={s.featuresList}>
+            <View style={s.featuresList}>
               {features.map((f, i) => (
-                <Animated.View
-                  key={i}
-                  entering={FadeInUp.duration(400).delay(300 + i * 80)}
-                  style={s.featureRow}
-                >
+                <View key={i} style={s.featureRow}>
                   <View style={[s.featureIconWrap, { backgroundColor: f.color + '18' }]}>
                     <MaterialIcons name={f.icon as any} size={22} color={f.color} />
                   </View>
@@ -612,20 +596,20 @@ export default function OnboardingScreen() {
                     <Text style={s.featureTitle}>{f.title}</Text>
                     <Text style={s.featureDesc}>{f.desc}</Text>
                   </View>
-                </Animated.View>
+                </View>
               ))}
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={s.featureTeaser}>
+            <View style={s.featureTeaser}>
               <MaterialIcons name="auto-awesome" size={16} color="#FCD34D" />
               <Text style={s.featureTeaserText}>
                 {language === 'fr'
                   ? 'Et bien plus : tournois, defis solo, score de confiance...'
                   : 'And much more: tournaments, solo challenges, trust score...'}
               </Text>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(800)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => setStep(5 as Step)}
@@ -633,7 +617,7 @@ export default function OnboardingScreen() {
                 <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -662,7 +646,7 @@ export default function OnboardingScreen() {
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)}>
+            <View>
               <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Des joueurs pres de chez toi' : 'Players near you'}
               </Text>
@@ -671,9 +655,9 @@ export default function OnboardingScreen() {
                   ? 'Explore la carte interactive pour trouver tout ce qu\'il te faut.'
                   : 'Explore the interactive map to find everything you need.'}
               </Text>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.mapCard}>
+            <View style={s.mapCard}>
               <View style={s.mapCardInner}>
                 <View style={s.mapIconRow}>
                   <View style={s.mapMainIcon}>
@@ -690,20 +674,20 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
               </View>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.mapFeaturesList}>
+            <View style={s.mapFeaturesList}>
               {mapFeatures.map((f, i) => (
-                <Animated.View key={i} entering={FadeInUp.duration(300).delay(450 + i * 60)} style={s.mapFeatureItem}>
+                <View key={i} style={s.mapFeatureItem}>
                   <View style={[s.mapFeatureIcon, { backgroundColor: f.color + '18' }]}>
                     <MaterialIcons name={f.icon as any} size={18} color={f.color} />
                   </View>
                   <Text style={s.mapFeatureLabel}>{f.label}</Text>
-                </Animated.View>
+                </View>
               ))}
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => setStep(6 as Step)}
@@ -711,7 +695,7 @@ export default function OnboardingScreen() {
                 <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -733,7 +717,7 @@ export default function OnboardingScreen() {
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={{ alignItems: 'center' }}>
+            <View style={{ alignItems: 'center' }}>
               <MaterialIcons name="rocket-launch" size={40} color="#60A5FA" style={{ marginBottom: 12 }} />
               <Text style={s.pageTitle}>
                 {language === 'fr' ? 'Pret a jouer ?' : 'Ready to play?'}
@@ -743,9 +727,9 @@ export default function OnboardingScreen() {
                   ? 'Cree ton compte gratuit pour sauvegarder tes stats et rejoindre la communaute.'
                   : 'Create your free account to save your stats and join the community.'}
               </Text>
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.benefitsList}>
+            <View style={s.benefitsList}>
               {[
                 { icon: 'save', text: language === 'fr' ? 'Garder ton historique de matchs' : 'Keep your match history' },
                 { icon: 'leaderboard', text: language === 'fr' ? 'Apparaitre dans le classement' : 'Appear in the leaderboard' },
@@ -753,16 +737,16 @@ export default function OnboardingScreen() {
                 { icon: 'map', text: language === 'fr' ? 'Trouver des joueurs pres de toi' : 'Find players near you' },
                 { icon: 'military-tech', text: language === 'fr' ? 'Debloquer des badges et XP' : 'Unlock badges and XP' },
               ].map((b, i) => (
-                <Animated.View key={i} entering={FadeInUp.duration(300).delay(250 + i * 50)} style={s.benefitItem}>
+                <View key={i} style={s.benefitItem}>
                   <View style={s.benefitIconWrap}>
                     <MaterialIcons name={b.icon as any} size={16} color="#10B981" />
                   </View>
                   <Text style={s.benefitText}>{b.text}</Text>
-                </Animated.View>
+                </View>
               ))}
-            </Animated.View>
+            </View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               {user ? (
                 <Pressable
                   style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
@@ -801,7 +785,7 @@ export default function OnboardingScreen() {
                   {language === 'fr' ? 'Pas maintenant' : 'Not now'}
                 </Text>
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -835,7 +819,7 @@ export default function OnboardingScreen() {
               <View style={{ width: 24 }} />
             </View>
             <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Animated.View entering={FadeInDown.duration(500)}>
+              <View>
                 <Text style={s.pageTitle}>
                   {language === 'fr' ? 'Derniere touche' : 'Final touch'}
                 </Text>
@@ -844,9 +828,9 @@ export default function OnboardingScreen() {
                     ? 'Ton nom et ton poste de jeu. Tu pourras completer ton profil plus tard.'
                     : 'Your name and play position. You can complete your profile later.'}
                 </Text>
-              </Animated.View>
+              </View>
 
-              <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.expressSection}>
+              <View style={s.expressSection}>
                 <Text style={s.expressLabel}>{language === 'fr' ? 'TON NOM' : 'YOUR NAME'}</Text>
                 <TextInput
                   style={s.expressInput}
@@ -859,9 +843,9 @@ export default function OnboardingScreen() {
                   autoCorrect={false}
                   maxLength={30}
                 />
-              </Animated.View>
+              </View>
 
-              <Animated.View entering={FadeInUp.duration(400).delay(300)} style={s.expressSection}>
+              <View style={s.expressSection}>
                 <Text style={s.expressLabel}>{language === 'fr' ? 'TU ES PLUTOT' : 'YOU ARE'}</Text>
                 <View style={s.roleRow}>
                   {roles.map(r => (
@@ -875,9 +859,9 @@ export default function OnboardingScreen() {
                     </Pressable>
                   ))}
                 </View>
-              </Animated.View>
+              </View>
 
-              <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.ctaContainer}>
+              <View style={s.ctaContainer}>
                 <Pressable
                   style={[
                     s.ctaPrimary,
@@ -897,7 +881,7 @@ export default function OnboardingScreen() {
                     </>
                   )}
                 </Pressable>
-              </Animated.View>
+              </View>
             </ScrollView>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -920,7 +904,7 @@ export default function OnboardingScreen() {
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={{ alignItems: 'center' }}>
+            <View style={{ alignItems: 'center' }}>
               <View style={s.referralIconWrap}>
                 <MaterialIcons name="group-add" size={40} color="#EC4899" />
               </View>
@@ -932,10 +916,10 @@ export default function OnboardingScreen() {
                   ? 'Partage ton code de parrainage et gagne des XP pour chaque ami qui rejoint la communaute.'
                   : 'Share your referral code and earn XP for every friend who joins the community.'}
               </Text>
-            </Animated.View>
+            </View>
 
             {/* Referral code card */}
-            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={s.referralCard}>
+            <View style={s.referralCard}>
               <Text style={s.referralCardLabel}>
                 {language === 'fr' ? 'TON CODE DE PARRAINAGE' : 'YOUR REFERRAL CODE'}
               </Text>
@@ -952,16 +936,16 @@ export default function OnboardingScreen() {
                   { icon: 'emoji-events', color: '#7C3AED', text: language === 'fr' ? 'Debloquer le badge Parrain' : 'Unlock the Referrer badge' },
                   { icon: 'trending-up', color: '#10B981', text: language === 'fr' ? 'Monter dans le classement' : 'Climb the leaderboard' },
                 ].map((r, i) => (
-                  <Animated.View key={i} entering={FadeInUp.duration(300).delay(350 + i * 60)} style={s.referralRewardItem}>
+                  <View key={i} style={s.referralRewardItem}>
                     <MaterialIcons name={r.icon as any} size={16} color={r.color} />
                     <Text style={s.referralRewardText}>{r.text}</Text>
-                  </Animated.View>
+                  </View>
                 ))}
               </View>
-            </Animated.View>
+            </View>
 
             {/* Share button */}
-            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={s.ctaContainer}>
+            <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.referralShareBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={handleShareReferral}
@@ -987,7 +971,7 @@ export default function OnboardingScreen() {
                   {language === 'fr' ? 'Plus tard' : 'Later'}
                 </Text>
               </Pressable>
-            </Animated.View>
+            </View>
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -1052,7 +1036,7 @@ const s = StyleSheet.create({
     paddingVertical: 10,
   },
 
-  // --- Shared scrollable content (no centering — allows proper scroll on small screens) ---
+  // --- Shared scrollable content ---
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
