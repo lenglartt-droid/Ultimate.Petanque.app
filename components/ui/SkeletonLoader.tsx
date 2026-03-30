@@ -127,6 +127,81 @@ export function SponsorSkeleton({ style }: { style?: any }) {
   );
 }
 
+export function SponsorPortalSkeleton({ tierColor = '#D4A017', style }: { tierColor?: string; style?: any }) {
+  return (
+    <View style={[spSk.root, style]}>
+      {/* Hero skeleton */}
+      <View style={[spSk.hero, { backgroundColor: tierColor + '20' }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 16 }}>
+          <Skeleton width={56} height={56} borderRadius={18} style={{ backgroundColor: tierColor + '15' }} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton width={140} height={18} borderRadius={8} style={{ backgroundColor: tierColor + '15' }} />
+            <Skeleton width={90} height={12} borderRadius={6} style={{ backgroundColor: tierColor + '10' }} />
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          {[1, 2, 3, 4].map(i => (
+            <View key={i} style={{ flex: 1 }}>
+              <Skeleton height={52} borderRadius={14} style={{ backgroundColor: tierColor + '10' }} />
+            </View>
+          ))}
+        </View>
+      </View>
+      {/* Filters skeleton */}
+      <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingTop: 12, paddingBottom: 8 }}>
+        <Skeleton width={44} height={32} borderRadius={16} />
+        <Skeleton width={44} height={32} borderRadius={16} />
+        <View style={{ width: 1, backgroundColor: '#E2E8F0', marginHorizontal: 4 }} />
+        {[1, 2, 3, 4].map(i => (
+          <Skeleton key={i} width={60} height={32} borderRadius={16} />
+        ))}
+      </View>
+      {/* Checklist skeleton */}
+      <View style={spSk.card}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+          <Skeleton width={40} height={40} borderRadius={12} />
+          <View style={{ flex: 1, gap: 6 }}>
+            <Skeleton width={120} height={14} />
+            <Skeleton width={80} height={10} />
+          </View>
+          <Skeleton width={48} height={28} borderRadius={10} />
+        </View>
+        <Skeleton width="100%" height={6} borderRadius={3} style={{ marginBottom: 14 }} />
+        {[1, 2, 3].map(i => (
+          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11 }}>
+            <Skeleton width={24} height={24} borderRadius={12} />
+            <Skeleton width={16} height={16} borderRadius={4} />
+            <Skeleton width={`${50 + i * 10}%` as any} height={12} borderRadius={6} />
+          </View>
+        ))}
+      </View>
+      {/* KPI skeleton */}
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, paddingHorizontal: 16, marginBottom: 14 }}>
+        {[1, 2, 3, 4].map(i => (
+          <View key={i} style={spSk.kpiCard}>
+            <Skeleton width={40} height={40} borderRadius={12} style={{ marginBottom: 8 }} />
+            <Skeleton width={50} height={22} borderRadius={6} />
+            <Skeleton width={60} height={10} borderRadius={4} style={{ marginTop: 4 }} />
+          </View>
+        ))}
+      </View>
+      {/* Chart skeleton */}
+      <View style={spSk.card}>
+        <Skeleton width={120} height={14} borderRadius={6} style={{ marginBottom: 16 }} />
+        <Skeleton width="100%" height={52} borderRadius={8} style={{ marginBottom: 12 }} />
+        <Skeleton width="100%" height={52} borderRadius={8} />
+      </View>
+    </View>
+  );
+}
+
+const spSk = StyleSheet.create({
+  root: { flex: 1 },
+  hero: { paddingTop: 20, paddingBottom: 18, paddingHorizontal: 20, borderRadius: 0 },
+  card: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginHorizontal: 16, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
+  kpiCard: { width: '47%' as any, flexGrow: 1, backgroundColor: '#FFF', borderRadius: 16, padding: 16, alignItems: 'center' as const, borderWidth: 1, borderColor: '#E2E8F0' },
+});
+
 const sk = StyleSheet.create({
   banner: {
     backgroundColor: '#FFF',
