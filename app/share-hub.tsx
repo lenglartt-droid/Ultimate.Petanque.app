@@ -31,6 +31,8 @@ import {
   redeemShareCode as redeemCode,
 } from '@/services/shareService';
 import { findMeetupByCode } from '@/services/meetupService';
+import { trackReferral } from '@/services/ambassadorService';
+import { getSupabaseClient } from '@/template';
 
 type TabKey = 'redeem' | 'activity' | 'manage';
 
@@ -75,6 +77,12 @@ export default function ShareHubScreen() {
   const [code, setCode] = useState('');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [redeemResult, setRedeemResult] = useState<{ itemType: ShareItemType; itemId: string; autoSavedItems: { type: ShareItemType; id: string; newItemId: string | null }[] } | null>(null);
+
+  // Referral code
+  const [referralCode, setReferralCode] = useState('');
+  const [isRedeemingReferral, setIsRedeemingReferral] = useState(false);
+  const [referralResult, setReferralResult] = useState<'success' | 'error' | null>(null);
+  const [referralError, setReferralError] = useState('');
 
   // Activity
   const [notifications, setNotifications] = useState<ShareNotification[]>([]);
@@ -222,6 +230,157 @@ export default function ShareHubScreen() {
                 <Pressable style={st.resetBtn} onPress={() => { setRedeemResult(null); setCode(''); }}><Text style={st.resetBtnText}>{fr ? 'Entrer un autre code' : 'Enter another code'}</Text></Pressable>
               </Animated.View>
             )}
+
+            {/* ======= REFERRAL CODE SECTION ======= */}
+            <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.referralSection}>
+              <View style={st.referralDivider}>
+                <View style={st.referralDividerLine} />
+                <Text style={st.referralDividerText}>{fr ? 'OU' : 'OR'}</Text>
+                <View style={st.referralDividerLine} />
+              </View>
+
+              <View style={st.referralCard}>
+                <View style={st.referralHeader}>
+                  <View style={st.referralIconBg}>
+                    <MaterialIcons name="card-giftcard" size={22} color="#EC4899" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.referralTitle}>
+                      {fr ? 'Code de parrainage' : 'Referral code'}
+                    </Text>
+                    <Text style={st.referralDesc}>
+                      {fr
+                        ? 'Un ami vous a donne un code ? Entrez-le pour gagner des XP !'
+                        : 'A friend gave you a code? Enter it to earn XP!'}
+                    </Text>
+                  </View>
+                </View>
+
+                {referralResult === 'success' ? (
+                  <View style={st.referralSuccessBox}>
+                    <MaterialIcons name="check-circle" size={28} color="#10B981" />
+                    <Text style={st.referralSuccessTitle}>
+                      {fr ? 'Parrainage valide !' : 'Referral validated!'}
+                    </Text>
+                    <Text style={st.referralSuccessDesc}>
+                      {fr
+                        ? 'Merci ! Votre parrain recevra ses XP de recompense.'
+                        : 'Thanks! Your referrer will receive their XP reward.'}
+                    </Text>
+                    <Pressable
+                      style={st.referralResetBtn}
+                      onPress={() => { setReferralResult(null); setReferralCode(''); setReferralError(''); }}
+                    >
+                      <Text style={st.referralResetBtnText}>{fr ? 'Entrer un autre code' : 'Enter another code'}</Text>
+                    </Pressable>
+                  </View>
+                ) : (
+                  <>
+                    <View style={st.referralInputRow}>
+                      <TextInput
+                        style={[st.referralInput, referralResult === 'error' && st.referralInputError]}
+                        value={referralCode}
+                        onChangeText={(text) => {
+                          setReferralCode(text.toUpperCase());
+                          if (referralResult === 'error') { setReferralResult(null); setReferralError(''); }
+                        }}
+                        placeholder={fr ? 'Ex: ABC-XY12Z' : 'Ex: ABC-XY12Z'}
+                        placeholderTextColor="#94A3B8"
+                        autoCapitalize="characters"
+                        autoCorrect={false}
+                        maxLength={20}
+                      />
+                      <Pressable
+                        style={[st.referralSubmitBtn, (!referralCode.trim() || isRedeemingReferral) && { opacity: 0.5 }]}
+                        onPress={async () => {
+                          if (!referralCode.trim() || isRedeemingReferral) return;
+                          if (!user?.id) {
+                            showAlert(fr ? 'Erreur' : 'Error', fr ? 'Connectez-vous pour utiliser un code' : 'Log in to use a code');
+                            return;
+                          }
+                          setIsRedeemingReferral(true);
+                          setReferralResult(null);
+                          setReferralError('');
+                          try {
+                            const supabase = getSupabaseClient();
+                            // Check if code exists
+                            const { data: amb } = await supabase
+                              .from('ambassadors')
+                              .select('id, user_id, referral_code, is_active')
+                              .eq('referral_code', referralCode.trim().toUpperCase())
+                              .maybeSingle();
+                            if (!amb) {
+                              setReferralResult('error');
+                              setReferralError(fr ? 'Code invalide ou introuvable' : 'Invalid or not found code');
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                              setIsRedeemingReferral(false);
+                              return;
+                            }
+                            if (!amb.is_active) {
+                              setReferralResult('error');
+                              setReferralError(fr ? 'Ce code n est plus actif' : 'This code is no longer active');
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                              setIsRedeemingReferral(false);
+                              return;
+                            }
+                            if (amb.user_id === user.id) {
+                              setReferralResult('error');
+                              setReferralError(fr ? 'Vous ne pouvez pas utiliser votre propre code' : 'You cannot use your own code');
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                              setIsRedeemingReferral(false);
+                              return;
+                            }
+                            // Check if user already redeemed this code
+                            const { data: existing } = await supabase
+                              .from('ambassador_analytics')
+                              .select('id')
+                              .eq('ambassador_id', amb.id)
+                              .eq('event_type', 'referral')
+                              .eq('viewer_id', user.id)
+                              .limit(1);
+                            if (existing && existing.length > 0) {
+                              setReferralResult('error');
+                              setReferralError(fr ? 'Vous avez deja utilise ce code' : 'You have already used this code');
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                              setIsRedeemingReferral(false);
+                              return;
+                            }
+                            // Track the referral
+                            const { success, error: trackErr } = await trackReferral(referralCode.trim().toUpperCase(), user.id);
+                            if (!success) {
+                              setReferralResult('error');
+                              setReferralError(trackErr || (fr ? 'Erreur lors de la validation' : 'Validation error'));
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                            } else {
+                              setReferralResult('success');
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            }
+                          } catch (e: any) {
+                            setReferralResult('error');
+                            setReferralError(e.message || (fr ? 'Erreur inattendue' : 'Unexpected error'));
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+                          }
+                          setIsRedeemingReferral(false);
+                        }}
+                        disabled={!referralCode.trim() || isRedeemingReferral}
+                      >
+                        {isRedeemingReferral ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <MaterialIcons name="check" size={20} color="#FFF" />
+                        )}
+                      </Pressable>
+                    </View>
+                    {referralResult === 'error' && referralError ? (
+                      <View style={st.referralErrorBox}>
+                        <MaterialIcons name="error-outline" size={14} color="#EF4444" />
+                        <Text style={st.referralErrorText}>{referralError}</Text>
+                      </View>
+                    ) : null}
+                  </>
+                )}
+              </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       ) : null}
@@ -373,4 +532,26 @@ const st = StyleSheet.create({
   // Footnote
   footnote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#FFF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#F1F5F9' },
   footnoteText: { flex: 1, fontSize: 11, color: '#94A3B8', lineHeight: 16 },
+
+  // Referral
+  referralSection: { marginTop: 24, width: '100%' },
+  referralDivider: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 20 },
+  referralDividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
+  referralDividerText: { fontSize: 12, fontWeight: '700', color: '#94A3B8', letterSpacing: 1 },
+  referralCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, borderWidth: 1.5, borderColor: '#EC489920' },
+  referralHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 16 },
+  referralIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#EC489912', alignItems: 'center', justifyContent: 'center' },
+  referralTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 2 },
+  referralDesc: { fontSize: 12, color: '#94A3B8', lineHeight: 17 },
+  referralInputRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  referralInput: { flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 16, paddingVertical: 14, fontSize: 17, fontWeight: '700', color: '#0F172A', letterSpacing: 2, borderWidth: 1.5, borderColor: '#E2E8F0' },
+  referralInputError: { borderColor: '#EF4444', backgroundColor: '#FEF2F2' },
+  referralSubmitBtn: { width: 52, height: 52, borderRadius: 16, backgroundColor: '#EC4899', alignItems: 'center', justifyContent: 'center' },
+  referralErrorBox: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#FEF2F2', borderRadius: 10, borderWidth: 1, borderColor: '#FECACA' },
+  referralErrorText: { flex: 1, fontSize: 12, color: '#EF4444', fontWeight: '500' },
+  referralSuccessBox: { alignItems: 'center', paddingVertical: 16, gap: 8 },
+  referralSuccessTitle: { fontSize: 16, fontWeight: '700', color: '#10B981' },
+  referralSuccessDesc: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 19 },
+  referralResetBtn: { paddingVertical: 10, marginTop: 4 },
+  referralResetBtnText: { fontSize: 13, fontWeight: '600', color: '#EC4899' },
 });
