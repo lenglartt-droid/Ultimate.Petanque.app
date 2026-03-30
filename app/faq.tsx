@@ -164,7 +164,7 @@ function getAmbassadorFaq(fr: boolean): FAQCategory[] {
       description: fr ? 'Niveaux, criteres et avantages' : 'Levels, criteria and benefits',
       questions: [
         { id: 'ap1', q: fr ? 'Comment devenir ambassadeur ?' : 'How do I become an ambassador?', a: fr ? 'Contactez notre equipe via la page ambassadeurs ou par email. Le programme comporte 3 niveaux progressifs : Decouverte, Confirme et Elite. Chaque niveau debloquer de nouveaux avantages et une visibilite accrue.' : 'Contact our team via the ambassadors page or email. The program has 3 progressive levels: Discovery, Confirmed and Elite. Each level unlocks new benefits and increased visibility.' },
-        { id: 'ap2', q: fr ? 'Quels sont les 3 niveaux ambassadeur ?' : 'What are the 3 ambassador levels?', a: fr ? 'Decouverte : profil public, code parrainage, badge ambassadeur, 2 defis sponsorises/mois. Confirme (5+ parrainages, 3+ defis, 500+ impressions) : banniere rotative accueil, dashboard analytics complet, defis illimites, badge violet. Elite (20+ parrainages, 10+ defis, 2000+ impressions) : banniere permanente, section onboarding, push illimites, analytics avances avec export, badge dore, priorite classements, acces anticipe nouvelles fonctionnalites.' : 'Discovery: public profile, referral code, badge, 2 sponsored challenges/month. Confirmed (5+ referrals, 3+ challenges, 500+ impressions): rotating home banner, full analytics dashboard, unlimited challenges, purple badge. Elite (20+ referrals, 10+ challenges, 2000+ impressions): permanent banner, onboarding section, unlimited push, advanced analytics with export, gold badge, ranking priority, early feature access.' },
+        { id: 'ap2', q: fr ? 'Quels sont les 3 niveaux ambassadeur ?' : 'What are the 3 ambassador levels?', a: fr ? 'Decouverte : profil public, code parrainage, badge ambassadeur, 2 defis sponsorises/mois. Confirme (50+ parrainages, 3+ defis, 500+ impressions) : banniere rotative accueil, dashboard analytics complet, defis illimites, badge violet. Elite (100+ parrainages, 10+ defis, 2000+ impressions) : banniere rotative avec accent dore, section onboarding, push illimites, analytics avances avec export, badge dore, priorite classements, acces anticipe nouvelles fonctionnalites.' : 'Discovery: public profile, referral code, badge, 2 sponsored challenges/month. Confirmed (50+ referrals, 3+ challenges, 500+ impressions): rotating home banner, full analytics dashboard, unlimited challenges, purple badge. Elite (100+ referrals, 10+ challenges, 2000+ impressions): rotating banner with gold accent, onboarding section, unlimited push, advanced analytics with export, gold badge, ranking priority, early feature access.' },
         { id: 'ap3', q: fr ? 'La promotion est-elle automatique ?' : 'Is promotion automatic?', a: fr ? 'Oui ! Des que vous atteignez les criteres du niveau superieur, votre badge est automatiquement mis a jour et vous debloquez les nouveaux avantages sans interruption.' : 'Yes! As soon as you meet the criteria for the next level, your badge auto-updates and new benefits unlock seamlessly.' },
         { id: 'ap4', q: fr ? 'Quelle est la difference avec les partenaires/sponsors ?' : 'What is the difference with partners/sponsors?', a: fr ? 'Les ambassadeurs sont des joueurs passionnes qui representent benevolement la communaute. Les partenaires sont des marques ou structures beneficiant d\'une visibilite business avec des outils de communication avances (push notifications, A/B testing, heatmap, CRM).' : 'Ambassadors are passionate players voluntarily representing the community. Partners are brands or organizations with business visibility and advanced communication tools (push notifications, A/B testing, heatmap, CRM).' },
       ],
@@ -176,7 +176,7 @@ function getAmbassadorFaq(fr: boolean): FAQCategory[] {
       color: '#10B981',
       description: fr ? 'Gagnez des XP et progressez' : 'Earn XP and level up',
       questions: [
-        { id: 'ar1', q: fr ? 'Comment fonctionne le parrainage ?' : 'How does referral work?', a: fr ? 'Partagez votre code unique (visible dans le portail). Quand un nouveau joueur s\'inscrit avec votre code, vous gagnez 50 XP et votre compteur augmente. Atteignez 5 parrainages pour Confirme, 20 pour Elite.' : 'Share your unique code (visible in portal). When a new player signs up with your code, you earn 50 XP and your counter increases. Reach 5 referrals for Confirmed, 20 for Elite.' },
+        { id: 'ar1', q: fr ? 'Comment fonctionne le parrainage ?' : 'How does referral work?', a: fr ? 'Partagez votre code unique (visible dans le portail). Quand un nouveau joueur s\'inscrit avec votre code, vous gagnez 50 XP et votre compteur augmente. Atteignez 50 parrainages pour Confirme, 100 pour Elite.' : 'Share your unique code (visible in portal). When a new player signs up with your code, you earn 50 XP and your counter increases. Reach 50 referrals for Confirmed, 100 for Elite.' },
         { id: 'ar2', q: fr ? 'Comment gagner des XP ?' : 'How do I earn XP?', a: fr ? 'Parrainage valide : +50 XP. Defi sponsorise cree : +25 XP. 100 impressions cumulees : +10 XP. Les XP contribuent a votre progression globale et au deblocage de badges.' : 'Valid referral: +50 XP. Sponsored challenge created: +25 XP. 100 cumulative impressions: +10 XP. XP contributes to your overall progression and badge unlocks.' },
       ],
     },
@@ -199,8 +199,8 @@ function getAmbassadorFaq(fr: boolean): FAQCategory[] {
       color: '#F59E0B',
       description: fr ? 'Ou et comment vous apparaissez' : 'Where and how you appear',
       questions: [
-        { id: 'av1', q: fr ? 'Comment fonctionne la banniere ambassadeur sur l\'accueil ?' : 'How does the home ambassador banner work?', a: fr ? 'Confirme : apparition dans le carrousel rotatif de l\'accueil (rotation toutes les 5 secondes). Elite : banniere permanente et prioritaire, toujours visible en premier. Votre profil, stats et reseaux sociaux sont affiches. Chaque affichage est comptabilise comme une impression.' : 'Confirmed: appears in the rotating home carousel (5s rotation). Elite: permanent priority banner, always visible first. Your profile, stats and social media are displayed. Each display counts as an impression.' },
-        { id: 'av2', q: fr ? 'Ou suis-je visible dans l\'app ?' : 'Where am I visible in the app?', a: fr ? 'Page "Nos Ambassadeurs" (profil complet avec reseaux sociaux), banniere accueil (Confirme/Elite), page de parrainage, QR code du profil, liste des evenements sponsorises. Les Elite apparaissent aussi dans la section onboarding des nouveaux joueurs.' : 'Our Ambassadors page (full profile with social media), home banner (Confirmed/Elite), referral page, profile QR code, sponsored events list. Elite also appear in new player onboarding section.' },
+        { id: 'av1', q: fr ? 'Comment fonctionne la banniere ambassadeur sur l\'accueil ?' : 'How does the home ambassador banner work?', a: fr ? 'Confirme : apparition dans le carrousel rotatif de l\'accueil (rotation toutes les 5 secondes) avec badge violet. Elite : apparition dans le carrousel rotatif avec accent dore et gradient premium, toujours mis en avant. Votre profil, stats et reseaux sociaux sont affiches. Chaque affichage est comptabilise comme une impression.' : 'Confirmed: appears in the rotating home carousel (5s rotation) with purple badge. Elite: appears in the rotating carousel with gold accent and premium gradient, always highlighted. Your profile, stats and social media are displayed. Each display counts as an impression.' },
+        { id: 'av2', q: fr ? 'Ou suis-je visible dans l\'app ?' : 'Where am I visible in the app?', a: fr ? 'Page "Nos Ambassadeurs" (profil complet avec reseaux sociaux), banniere rotative accueil (Confirme/Elite), page de parrainage, QR code du profil, liste des evenements sponsorises. Les Elite apparaissent aussi dans la section onboarding des nouveaux joueurs.' : 'Our Ambassadors page (full profile with social media), rotating home banner (Confirmed/Elite), referral page, profile QR code, sponsored events list. Elite also appear in new player onboarding section.' },
       ],
     },
   ];
@@ -488,23 +488,40 @@ export default function FAQScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Ambassador quick link */}
+        {/* Ambassador quick links */}
         {activeTab === 'ambassadeur' && !isSearching ? (
-          <Pressable
-            style={[st.quickLink, { borderColor: '#7C3AED30' }]}
-            onPress={() => router.push('/ambassador-program' as any)}
-          >
-            <LinearGradient colors={['#7C3AED10', '#7C3AED05']} style={st.quickLinkInner}>
-              <View style={[st.quickLinkIcon, { backgroundColor: '#7C3AED15' }]}>
-                <MaterialIcons name="stars" size={20} color="#7C3AED" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.quickLinkTitle}>{fr ? 'Programme Ambassadeur' : 'Ambassador Program'}</Text>
-                <Text style={st.quickLinkSub}>{fr ? 'Voir les niveaux et avantages complets' : 'See full levels and benefits'}</Text>
-              </View>
-              <MaterialIcons name="arrow-forward-ios" size={14} color="#7C3AED" />
-            </LinearGradient>
-          </Pressable>
+          <View style={{ gap: 8, marginBottom: 16 }}>
+            <Pressable
+              style={[st.quickLink, { borderColor: '#7C3AED30' }]}
+              onPress={() => router.push('/ambassador-program' as any)}
+            >
+              <LinearGradient colors={['#7C3AED10', '#7C3AED05']} style={st.quickLinkInner}>
+                <View style={[st.quickLinkIcon, { backgroundColor: '#7C3AED15' }]}>
+                  <MaterialIcons name="stars" size={20} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.quickLinkTitle}>{fr ? 'Programme Ambassadeur' : 'Ambassador Program'}</Text>
+                  <Text style={st.quickLinkSub}>{fr ? 'Voir les niveaux et avantages complets' : 'See full levels and benefits'}</Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#7C3AED" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable
+              style={[st.quickLink, { borderColor: '#7C3AED30' }]}
+              onPress={() => router.push('/ambassador-dashboard' as any)}
+            >
+              <LinearGradient colors={['#7C3AED10', '#7C3AED05']} style={st.quickLinkInner}>
+                <View style={[st.quickLinkIcon, { backgroundColor: '#7C3AED15' }]}>
+                  <MaterialIcons name="dashboard" size={20} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.quickLinkTitle}>{fr ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
+                  <Text style={st.quickLinkSub}>{fr ? 'Dashboard, stats, defis et parrainages' : 'Dashboard, stats, challenges and referrals'}</Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#7C3AED" />
+              </LinearGradient>
+            </Pressable>
+          </View>
         ) : null}
 
         {/* Partner quick links */}
