@@ -34,6 +34,7 @@ export interface BadgeContext {
   isAmbassador: boolean;
   trustScore: number | null;
   witnessAttestationsGiven: number;
+  profileCompleteness: number; // 0-100 percent
 }
 
 // ============================================
@@ -180,6 +181,13 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 50,
     condition: (ctx) => ctx.witnessAttestationsGiven >= 10,
   },
+  {
+    id: 'profil_complet',
+    icon: 'account-circle',
+    color: '#0EA5E9',
+    xpReward: 30,
+    condition: (ctx) => ctx.profileCompleteness >= 100,
+  },
 ];
 
 // ============================================
@@ -200,6 +208,7 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     fiable: { fr: 'Fiable', en: 'Trusted' },
     verifie: { fr: 'Verifie', en: 'Verified' },
     temoin_fiable: { fr: 'Temoin Fiable', en: 'Trusted Witness' },
+    profil_complet: { fr: 'Profil Complet', en: 'Complete Profile' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -219,6 +228,7 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     fiable: { fr: 'Score de confiance 65+ (Fiable)', en: 'Trust score 65+ (Trusted)' },
     verifie: { fr: 'Score de confiance 80+ (Verifie)', en: 'Trust score 80+ (Verified)' },
     temoin_fiable: { fr: 'Attester 10 matchs ou defis en tant que temoin', en: 'Attest 10 matches or challenges as a witness' },
+    profil_complet: { fr: 'Completer 100% du profil (photo, club, terrain, localisation, boules, carte federation)', en: 'Complete 100% of profile (photo, club, court, location, boules, federation card)' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -321,6 +331,7 @@ export function buildBadgeContext(params: {
     isAmbassador,
     trustScore: null, // Will be set by caller if available
     witnessAttestationsGiven: 0, // Will be set by caller from witnessService
+    profileCompleteness: 0, // Will be set by caller
   };
 }
 

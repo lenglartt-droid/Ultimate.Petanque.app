@@ -968,7 +968,7 @@ export default function EditMatchScreen() {
           {(() => {
             const pIds: string[] = (match as any)?.participantUserIds || [];
             const isWitnessed = witnessRequests.some(r => r.status === 'attested');
-            const canRequestWitness = Array.isArray(pIds) && pIds.length >= 3 && !isWitnessed && !isReadOnly;
+            const canRequestWitness = Array.isArray(pIds) && pIds.length >= 2 && !isWitnessed && !isReadOnly;
             const isFr2 = language === 'fr';
             if (!canRequestWitness && witnessRequests.length === 0) return null;
             return (

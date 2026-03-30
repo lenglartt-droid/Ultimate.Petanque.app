@@ -1249,9 +1249,13 @@ export default function SponsorPortalScreen() {
           <Text style={st.emptyText}>
             {fr ? "Vous n'etes pas enregistre comme partenaire." : 'You are not registered as a partner.'}
           </Text>
-          <Pressable style={st.emptyBtn} onPress={() => router.push('/partnerships' as any)}>
+          <Pressable style={[st.emptyBtn, { backgroundColor: '#3B82F6' }]} onPress={() => router.push('/partnerships' as any)}>
             <MaterialIcons name="handshake" size={18} color="#FFF" />
             <Text style={st.emptyBtnText}>{fr ? 'Devenir partenaire' : 'Become a partner'}</Text>
+          </Pressable>
+          <Pressable style={[st.emptyBtn, { backgroundColor: '#7C3AED', marginTop: 10 }]} onPress={() => router.push('/sponsor-preview' as any)}>
+            <MaterialIcons name="preview" size={18} color="#FFF" />
+            <Text style={st.emptyBtnText}>{fr ? 'Mode apercu (test)' : 'Preview mode (test)'}</Text>
           </Pressable>
         </View>
       </SafeAreaView>
@@ -1349,6 +1353,9 @@ export default function SponsorPortalScreen() {
           </Pressable>
           <Pressable style={st.headerAction} onPress={() => router.push('/ambassador-dashboard' as any)}>
             <MaterialIcons name="dashboard" size={20} color={tierColor} />
+          </Pressable>
+          <Pressable style={st.headerAction} onPress={() => router.push('/sponsor-preview' as any)}>
+            <MaterialIcons name="swap-horiz" size={20} color={tierColor} />
           </Pressable>
         </View>
       </View>
