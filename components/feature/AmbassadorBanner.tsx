@@ -292,10 +292,7 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
         <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
         <Text style={s.headerTitle} numberOfLines={1} adjustsFontSizeToFit>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
         <View style={{ flex: 1 }} />
-        <Pressable style={s.seeAllBtn} onPress={() => router.push('/ambassadors' as any)}>
-          <Text style={[s.seeAllText, { color: '#7C3AED' }]}>{t('common', 'seeAll')}</Text>
-          <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-        </Pressable>
+
       </View>
 
       {/* Elite permanent cards — always visible, no rotation */}

@@ -282,7 +282,7 @@ export default function HomeScreen() {
     return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).slice(0, 3);
   }, [matches, challenges, t]);
 
-  const displayName = user?.username || selfPlayer?.name || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
+  const displayName = selfPlayer?.name || user?.username || user?.email?.split('@')[0] || (language === 'en' ? 'Player' : 'Joueur');
   const totalMatches = userStats?.matchesPlayed || matches.length;
   const totalWins = userStats?.wins || 0;
   const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
