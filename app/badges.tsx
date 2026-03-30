@@ -56,6 +56,8 @@ function getBadgeProgress(
     leaderboardRank: number | null;
     consecutiveDaysPlayed: number;
     isAmbassador: boolean;
+    trustScore: number | null;
+    witnessAttestationsGiven: number;
   },
   lang: 'fr' | 'en'
 ): BadgeProgress {
@@ -164,6 +166,15 @@ function getBadgeProgress(
         label: `${ts2}/80 ${lang === 'fr' ? 'score de confiance' : 'trust score'}`,
       };
     }
+    case 'temoin_fiable': {
+      const wa = ctx.witnessAttestationsGiven ?? 0;
+      return {
+        current: Math.min(wa, 10),
+        target: 10,
+        percent: Math.min(100, Math.round((wa / 10) * 100)),
+        label: `${Math.min(wa, 10)}/10 ${lang === 'fr' ? 'attestations donnees' : 'attestations given'}`,
+      };
+    }
     default:
       return { current: 0, target: 1, percent: 0, label: '' };
   }
@@ -228,14 +239,16 @@ export default function BadgesScreen() {
       consecutiveDaysPlayed: consecutiveDays,
       isAmbassador: false,
       trustScore: null as number | null,
+      witnessAttestationsGiven: 0,
     };
   }, [matches, userStats, sharedMatchIds, user?.id]);
 
-  // Load trust score for trust badges progress
+  // Load trust score and witness attestation count for badge progress
   const [trustScoreValue, setTrustScoreValue] = React.useState<number | null>(null);
+  const [witnessCount, setWitnessCount] = React.useState(0);
   React.useEffect(() => {
     if (!user?.id) return;
-    const loadTs = async () => {
+    const loadExtras = async () => {
       try {
         const supabase = (await import('@/template')).getSupabaseClient();
         const { data: playerData } = await supabase
@@ -250,8 +263,17 @@ export default function BadgesScreen() {
           if (ts) setTrustScoreValue(ts.score);
         }
       } catch { /* silent */ }
+      try {
+        const supabase = (await import('@/template')).getSupabaseClient();
+        const { data: attestations } = await supabase
+          .from('match_witness_requests')
+          .select('id')
+          .eq('witness_user_id', user.id)
+          .eq('status', 'attested');
+        setWitnessCount(attestations?.length || 0);
+      } catch { /* silent */ }
     };
-    loadTs();
+    loadExtras();
   }, [user?.id]);
 
   // XP breakdown
@@ -419,7 +441,7 @@ export default function BadgesScreen() {
 
           {BADGES.map((badge, index) => {
             const unlocked = userBadges.find(b => b.badgeId === badge.id);
-            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue } : null;
+            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount } : null;
             const prog = ctxWithTrust
               ? getBadgeProgress(badge.id, ctxWithTrust, language)
               : { current: 0, target: 1, percent: 0, label: '' };
@@ -482,11 +504,16 @@ export default function BadgesScreen() {
                           <View
                             style={[
                               s.badgeProgressBarInner,
-                              { width: `${Math.max(2, prog.percent)}%`, backgroundColor: badge.color },
+                              { width: `${Math.max(2, prog.percent)}%`, backgroundColor: prog.percent > 0 ? badge.color : badge.color + '40' },
                             ]}
                           />
                         </View>
-                        <Text style={s.badgeProgressLabel}>{prog.label}</Text>
+                        <View style={s.badgeProgressRow}>
+                          <Text style={s.badgeProgressLabel}>{prog.label}</Text>
+                          <Text style={[s.badgeProgressPercent, { color: prog.percent >= 75 ? badge.color : theme.textMuted }]}>
+                            {prog.percent}%
+                          </Text>
+                        </View>
                       </View>
                     )}
                   </View>
@@ -790,10 +817,21 @@ const s = StyleSheet.create({
     borderRadius: 3,
     minWidth: 4,
   },
+  badgeProgressRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
   badgeProgressLabel: {
     fontSize: 11,
     fontWeight: '500',
     color: theme.textMuted,
+    flex: 1,
+  },
+  badgeProgressPercent: {
+    fontSize: 11,
+    fontWeight: '700',
+    marginLeft: 8,
   },
 
   // Tips

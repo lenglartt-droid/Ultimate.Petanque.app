@@ -72,6 +72,7 @@ interface OnboardingMatch {
 }
 
 const STORAGE_KEY = 'onboarding_temp_data';
+const ONBOARDING_KEY = 'hasSeenOnboarding';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 // ============================================
@@ -382,6 +383,7 @@ export default function OnboardingScreen() {
         }
       } catch { /* proceed normally */ }
 
+      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
       router.replace('/consent');
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || t('onboarding', 'unableToCreateProfile'));
@@ -502,7 +504,10 @@ export default function OnboardingScreen() {
                 <MaterialIcons name="sports" size={22} color="#0F172A" />
               </Pressable>
               {user ? null : (
-                <Pressable style={s.ctaSecondary} onPress={() => router.replace('/login')}>
+                <Pressable style={s.ctaSecondary} onPress={async () => {
+                  await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+                  router.replace('/login');
+                }}>
                   <Text style={s.ctaSecondaryText}>
                     {language === 'fr' ? "J'ai deja un compte" : 'I already have an account'}
                   </Text>
@@ -1234,7 +1239,10 @@ export default function OnboardingScreen() {
                 <>
                   <Pressable
                     style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                    onPress={() => router.push('/login')}
+                    onPress={async () => {
+                      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+                      router.replace('/login');
+                    }}
                   >
                     <MaterialIcons name="email" size={20} color="#0F172A" />
                     <Text style={s.ctaPrimaryText}>
@@ -1244,7 +1252,10 @@ export default function OnboardingScreen() {
                 </>
               )}
 
-              <Pressable style={s.ctaSecondary} onPress={handleSkipLogin}>
+              <Pressable style={s.ctaSecondary} onPress={async () => {
+                await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
+                handleSkipLogin();
+              }}>
                 <Text style={s.ctaSecondaryText}>
                   {language === 'fr' ? 'Pas maintenant' : 'Not now'}
                 </Text>

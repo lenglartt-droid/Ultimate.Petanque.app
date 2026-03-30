@@ -4,7 +4,10 @@ import { AuthRouter, useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { Redirect, router } from 'expo-router';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
+
+const ONBOARDING_KEY = 'hasSeenOnboarding';
 
 // ============================================
 // Deep Link Parser
@@ -158,6 +161,28 @@ function ProfileChecker() {
 }
 
 export default function RootScreen() {
+  const [checkingOnboarding, setCheckingOnboarding] = useState(true);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then(val => setHasSeenOnboarding(val === 'true'))
+      .catch(() => setHasSeenOnboarding(false))
+      .finally(() => setCheckingOnboarding(false));
+  }, []);
+
+  if (checkingOnboarding) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={theme.primary} />
+      </View>
+    );
+  }
+
+  if (!hasSeenOnboarding) {
+    return <Redirect href="/onboarding" />;
+  }
+
   return (
     <AuthRouter loginRoute="/login">
       <ProfileChecker />

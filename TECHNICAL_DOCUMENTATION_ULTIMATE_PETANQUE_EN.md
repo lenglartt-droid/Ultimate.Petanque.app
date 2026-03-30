@@ -1,7 +1,7 @@
 # ULTIMATE PETANQUE — Technical Handover Document
 
-**Version:** 1.3.8  
-**Date:** March 28, 2026  
+**Version:** 1.4.0  
+**Date:** March 29, 2026  
 **Recipient:** External developer in charge of finalization and publication  
 
 ---
@@ -27,8 +27,13 @@ Provide a comprehensive tool for petanque players to record their games, track d
 
 - Amateur to expert petanque players (all age groups)
 - Petanque clubs and associations
+- Petanque schools and coaches
 - Ambassadors/influencers in the petanque world
-- Brands and sponsors (Obut, MS Petanque, La Boule Bleue, etc.)
+- Boules brands (Obut, MS Petanque, La Boule Bleue, KTK, etc.)
+- Petanque sportswear/textile brands
+- Specialized petanque websites (Boulistenaute, etc.)
+
+> Audience-specific presentation documents are available in the `docs/` folder: PITCH_JOUEURS.md, PITCH_INFLUENCEURS.md, PITCH_MARQUES_BOULES.md, PITCH_TEXTILE_PETANQUE.md, PITCH_SITES_SPECIALISES.md, PITCH_CLUBS.md, PITCH_ECOLES_PETANQUE.md
 
 ### 1.4 Value Proposition
 
@@ -105,6 +110,9 @@ The user registers via email OTP + password, their player profile is created aut
 | 46 | **Enriched Creator Note** | Title "Created by a player, for the community", community message "12 million players", 5 new features (trust score, badges, ambassador, partner, push A/B), integrated donation section, terrain meetup highlight section | Low |
 | 47 | **Store Descriptions** | Complete guide `STORE_ASSETS_GUIDE.md` v1.2.0 with FR/EN descriptions (30-char title, 4000-char description, keywords), covering ambassador/partner program, portal, events, audience-based FAQ | Low |
 | 48 | **Universal Links** | `.well-known/apple-app-site-association` (iOS) and `.well-known/assetlinks.json` (Android) files with documented placeholders, complete hosting guide `UNIVERSAL_LINKS_SETUP.md` | Low |
+| 49 | **Witness Attestation System** | Complete witnessService.ts: request/respond attestation, frozen result snapshots, 1h cooldown, 5/week limit per pair, automatic opponent confirmation. Reusable AttestationSection.tsx component with witness picker, snapshot preview, and 2.0x badge. Integrated in match-detail, challenge-detail, notifications-hub (Witnesses tab), witness-invitations, and trust-score (witness factor). Anti-abuse detection in detect-suspicious Edge Function (3 flags: frequent pairs, mutual attestations, rings). 95+ tests covering service and component | Very High |
+| 50 | **Trusted Witness Badge** | "Trusted Witness" badge (50 XP) unlocked at 10 attestations given. Progress bar visible in Badges page. Integrated in badgeService, useBadges hook and badges.tsx page with attestation count loaded from database | Medium |
+| 51 | **Audience-Specific Presentation Documents** | 7 Markdown files in `docs/`: app presentation adapted for players, influencers, boules brands, textile brands, specialized websites, clubs and petanque schools. Each document highlights the specific practical value for its audience | Low |
 
 ### 2.2 Partially Implemented Features
 
@@ -799,4 +807,4 @@ Create an account via the login screen with any valid email. The OTP system will
 
 ---
 
-*Document updated on March 28, 2026 — Ultimate Petanque v1.3.8*
+*Document updated on March 29, 2026 — Ultimate Petanque v1.4.0*
