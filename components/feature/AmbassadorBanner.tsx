@@ -86,6 +86,54 @@ const EliteCard = memo(({ amb, language, t, screenWidth, userId }: { amb: Ambass
   );
 });
 
+// ===== Helper: get card gradient & tag for ambassador or partner =====
+function getCardStyle(amb: Ambassador) {
+  const isPartner = amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner';
+  if (isPartner && amb.brandColor) {
+    // Use partner's brand color for gradient
+    const bc = amb.brandColor;
+    return {
+      gradient: [bc + 'DD', bc, bc + 'AA'] as [string, string, string],
+      tagBg: 'rgba(255,255,255,0.15)',
+      tagIcon: 'handshake' as const,
+      tagLabel: (lang: string) => {
+        if (amb.badgeType === 'gold_sponsor') return lang === 'fr' ? 'PARTENAIRE OR' : 'GOLD PARTNER';
+        if (amb.badgeType === 'sponsor') return lang === 'fr' ? 'PARTENAIRE ARGENT' : 'SILVER PARTNER';
+        return lang === 'fr' ? 'PARTENAIRE BRONZE' : 'BRONZE PARTNER';
+      },
+      dotColor: bc,
+      verifiedBg: bc,
+      verifiedBorder: bc + 'CC',
+    };
+  }
+  if (isPartner) {
+    const tierColor = amb.badgeType === 'gold_sponsor' ? '#D4A017' : amb.badgeType === 'sponsor' ? '#78909C' : '#A1887F';
+    return {
+      gradient: [tierColor + 'DD', tierColor, tierColor + 'AA'] as [string, string, string],
+      tagBg: 'rgba(255,255,255,0.15)',
+      tagIcon: 'handshake' as const,
+      tagLabel: (lang: string) => {
+        if (amb.badgeType === 'gold_sponsor') return lang === 'fr' ? 'PARTENAIRE OR' : 'GOLD PARTNER';
+        if (amb.badgeType === 'sponsor') return lang === 'fr' ? 'PARTENAIRE ARGENT' : 'SILVER PARTNER';
+        return lang === 'fr' ? 'PARTENAIRE BRONZE' : 'BRONZE PARTNER';
+      },
+      dotColor: tierColor,
+      verifiedBg: tierColor,
+      verifiedBorder: tierColor + 'CC',
+    };
+  }
+  // Ambassador
+  return {
+    gradient: ['#7C3AED', '#9333EA', '#A855F7'] as [string, string, string],
+    tagBg: 'rgba(255,255,255,0.12)',
+    tagIcon: 'campaign' as const,
+    tagLabel: (lang: string) => lang === 'fr' ? 'AMBASSADEUR' : 'AMBASSADOR',
+    dotColor: '#7C3AED',
+    verifiedBg: '#7C3AED',
+    verifiedBorder: '#9333EA',
+  };
+}
+
 // ===== ROTATING CAROUSEL (Confirmé + sponsors/partners) =====
 function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { ambassadors: Ambassador[]; language: string; t: (ns: string, key: string) => string; screenWidth: number; userId?: string }) {
   const [bannerIndex, setBannerIndex] = useState(0);
@@ -151,14 +199,16 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
         snapToInterval={cardWidth}
         snapToAlignment="start"
       >
-        {ambassadors.map((amb) => (
+        {ambassadors.map((amb) => {
+          const cs = getCardStyle(amb);
+          return (
           <Pressable
             key={amb.id}
             style={[s.slide, { width: cardWidth }]}
             onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any)}
           >
-            <LinearGradient colors={['#7C3AED', '#9333EA', '#A855F7']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.gradient}>
-              <View style={s.sponsorTag}><MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" /><Text style={s.sponsorText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text></View>
+            <LinearGradient colors={cs.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.gradient}>
+              <View style={s.sponsorTag}><MaterialIcons name={cs.tagIcon} size={10} color="rgba(255,255,255,0.7)" /><Text style={s.sponsorText}>{cs.tagLabel(language)}</Text></View>
               <View style={s.bannerContent}>
                 <View style={s.avatarWrap}>
                   {amb.photo ? (
@@ -168,7 +218,7 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
                       <Text style={{ fontSize: 26, fontWeight: '800', color: '#FFF' }}>{amb.displayName.charAt(0)}</Text>
                     </View>
                   )}
-                  <View style={s.verifiedIcon}><MaterialIcons name="verified" size={14} color="#FFF" /></View>
+                  <View style={[s.verifiedIcon, { backgroundColor: cs.verifiedBg, borderColor: cs.verifiedBorder }]}><MaterialIcons name="verified" size={14} color="#FFF" /></View>
                 </View>
                 <View style={s.info}>
                   <Text style={s.name} numberOfLines={1}>{amb.displayName}</Text>
@@ -191,13 +241,17 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
               <View style={s.cta}><Text style={s.ctaText}>{language === 'fr' ? 'Voir le profil' : 'View profile'}</Text><MaterialIcons name="arrow-forward" size={14} color="rgba(255,255,255,0.8)" /></View>
             </LinearGradient>
           </Pressable>
-        ))}
+          );
+        })}
       </ScrollView>
       {ambassadors.length > 1 ? (
         <View style={s.dots}>
-          {ambassadors.map((_, i) => (
-            <Pressable key={i} style={[s.dot, i === bannerIndex && s.dotActive]} onPress={() => goToIndex(i)} hitSlop={8} />
-          ))}
+          {ambassadors.map((amb, i) => {
+            const dc = getCardStyle(amb).dotColor;
+            return (
+              <Pressable key={i} style={[s.dot, { backgroundColor: dc + '25' }, i === bannerIndex && { width: 24, backgroundColor: dc, borderRadius: 4 }]} onPress={() => goToIndex(i)} hitSlop={8} />
+            );
+          })}
         </View>
       ) : null}
     </View>
@@ -236,7 +290,7 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
     <View>
       <View style={s.headerRow}>
         <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
-        <Text style={s.headerTitle}>{language === 'fr' ? 'Ambassadeurs' : 'Ambassadors'}</Text>
+        <Text style={s.headerTitle} numberOfLines={1} adjustsFontSizeToFit>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
         <View style={{ flex: 1 }} />
         <Pressable style={s.seeAllBtn} onPress={() => router.push('/ambassadors' as any)}>
           <Text style={[s.seeAllText, { color: '#7C3AED' }]}>{t('common', 'seeAll')}</Text>
@@ -320,5 +374,5 @@ const s = StyleSheet.create({
   ctaText: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
   dots: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingTop: 12 },
   dot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED25' },
-  dotActive: { width: 24, backgroundColor: '#7C3AED', borderRadius: 4 },
+  dotActive: { width: 24, borderRadius: 4 },
 });
