@@ -155,6 +155,7 @@ export default function CreatorNoteScreen() {
             { icon: 'notifications-active', color: '#6366F1', label: t('creatorNote', 'featurePush') },
             { icon: 'share', color: theme.primary, label: t('creatorNote', 'featureSharing') },
             { icon: 'qr-code-scanner', color: '#0EA5E9', label: t('creatorNote', 'featureDeepLinking') },
+            { icon: 'visibility', color: '#7C3AED', label: t('creatorNote', 'featureWitness') },
             { icon: 'cached', color: theme.tirColor, label: t('creatorNote', 'featureCaching') },
           ].map((f, i) => (
             <View key={i} style={styles.featureRow}>
@@ -164,6 +165,17 @@ export default function CreatorNoteScreen() {
               <Text style={styles.featureText}>{f.label}</Text>
             </View>
           ))}
+        </Animated.View>
+
+        {/* Community Message */}
+        <Animated.View entering={FadeInDown.duration(400).delay(325)} style={styles.card}>
+          <View style={styles.cardHeader}>
+            <View style={[styles.cardIcon, { backgroundColor: '#7C3AED15' }]}>
+              <MaterialIcons name="public" size={22} color="#7C3AED" />
+            </View>
+            <Text style={styles.cardTitle}>{language === 'fr' ? 'Pour toute la communaute' : 'For the entire community'}</Text>
+          </View>
+          <Text style={styles.cardText}>{t('creatorNote', 'communityMessage')}</Text>
         </Animated.View>
 
         {/* Contact */}

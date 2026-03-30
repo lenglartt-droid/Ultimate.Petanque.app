@@ -23,6 +23,7 @@ import * as Linking from 'expo-linking';
 import { decode } from '@/services/base64';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { uploadPlayerAvatar } from '@/services/storageService';
@@ -1802,6 +1803,19 @@ export default function ProfileScreen() {
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/faq'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="help-outline" size={16} color={theme.carreauColor} /></View>
                 <Text style={styles.compactMenuText}>{t('profile', 'help')}</Text>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={async () => {
+                Haptics.selectionAsync();
+                await AsyncStorage.removeItem('hasSeenOnboarding');
+                router.replace('/onboarding');
+              }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#8B5CF6' + '15' }]}><MaterialIcons name="replay" size={16} color="#8B5CF6" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Revoir l\'onboarding' : 'Replay Onboarding'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Redecouvrir l\'experience de bienvenue' : 'Rediscover the welcome experience'}</Text>
+                </View>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
