@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -19,19 +19,6 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
-  FadeOut,
-  SlideInRight,
-  SlideOutLeft,
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withRepeat,
-  withSequence,
-  withDelay,
-  withSpring,
-  interpolate,
-  Easing,
-  runOnJS,
 } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -43,67 +30,16 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { Language } from '@/constants/i18n';
-import { requestNotificationPermissions } from '@/services/notificationService';
-import { scheduleRetentionNotifications } from '@/services/retentionNotificationService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 // ============================================
 // TYPES
 // ============================================
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
 
-interface OnboardingMatch {
-  format: 'Tete-a-tete' | 'Doublette' | 'Triplette';
-  teamA: string[];
-  teamB: string[];
-  menes: Array<{ teamAScore: number; teamBScore: number; action?: string; player?: string }>;
-  scoreA: number;
-  scoreB: number;
-  finished: boolean;
-  duration: number;
-  stats: {
-    totalShots: number;
-    successfulShots: number;
-    carreaux: number;
-    successRate: number;
-  };
-}
-
-const STORAGE_KEY = 'onboarding_temp_data';
 const ONBOARDING_KEY = 'hasSeenOnboarding';
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-// ============================================
-// ANIMATED COUNTER
-// ============================================
-function AnimatedCounter({ value, suffix, duration = 1500 }: { value: number; suffix?: string; duration?: number }) {
-  const [display, setDisplay] = useState(0);
-  const animValue = useSharedValue(0);
-
-  useEffect(() => {
-    animValue.value = 0;
-    const step = Math.max(1, Math.floor(duration / 60));
-    let current = 0;
-    const increment = value / (duration / 16);
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        current = value;
-        clearInterval(timer);
-      }
-      setDisplay(Math.round(current));
-    }, 16);
-    return () => clearInterval(timer);
-  }, [value]);
-
-  return (
-    <Text style={s.counterValue}>
-      {display}{suffix || ''}
-    </Text>
-  );
-}
 
 // ============================================
 // PROGRESS DOTS
@@ -131,31 +67,13 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { updatePlayer, refreshData } = useApp();
+  const { updatePlayer } = useApp();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
 
   const [step, setStep] = useState<Step>(0);
   const [saving, setSaving] = useState(false);
   const [splashDone, setSplashDone] = useState(false);
-
-  // Match state
-  const [match, setMatch] = useState<OnboardingMatch>({
-    format: 'Doublette',
-    teamA: [language === 'fr' ? 'Moi' : 'Me', language === 'fr' ? 'Equipier' : 'Teammate'],
-    teamB: [language === 'fr' ? 'Adversaire 1' : 'Opponent 1', language === 'fr' ? 'Adversaire 2' : 'Opponent 2'],
-    menes: [],
-    scoreA: 0,
-    scoreB: 0,
-    finished: false,
-    duration: 0,
-    stats: { totalShots: 0, successfulShots: 0, carreaux: 0, successRate: 0 },
-  });
-
-  // Mene recording state
-  const [currentMeneTeam, setCurrentMeneTeam] = useState<'A' | 'B' | null>(null);
-  const [currentMenePoints, setCurrentMenePoints] = useState(1);
-  const [currentAction, setCurrentAction] = useState<'point' | 'tir' | 'carreau'>('point');
 
   // Profile state (post-login)
   const [username, setUsername] = useState('');
@@ -169,12 +87,11 @@ export default function OnboardingScreen() {
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
       const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
-      if (gold) { setGoldSponsor(gold); }
+      if (gold) setGoldSponsor(gold);
       else {
         const sp = ambassadors.find(a => a.badgeType === 'sponsor' && a.isFeatured);
         if (sp) setGoldSponsor(sp);
       }
-      // Find Elite ambassador for onboarding section
       const elite = ambassadors.find(a => a.badgeType === 'ambassador' && a.ambassadorLevel === 'elite' && a.isFeatured);
       if (elite) setEliteAmbassador(elite);
       setSponsorLoaded(true);
@@ -187,143 +104,41 @@ export default function OnboardingScreen() {
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-advance from splash
+  // Auto-advance from splash to language picker
   useEffect(() => {
     if (splashDone && step === 0) {
       setStep(1);
     }
   }, [splashDone]);
 
-  // ============================================
-  // SAVE TEMP DATA
-  // ============================================
-  const saveTempData = async () => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify({
-        match,
-        timestamp: Date.now(),
-      }));
-    } catch (e) {
-      console.log('Error saving temp onboarding data:', e);
+  // If user is already logged in (returned from /login after account creation),
+  // skip directly to Express Profile (step 7)
+  useEffect(() => {
+    if (user && step >= 1 && step < 7) {
+      setStep(7 as Step);
     }
-  };
+  }, [user]);
 
   // ============================================
   // NAVIGATION
   // ============================================
   const goNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    // If step 1 (promise) and no gold sponsor, skip sponsor screen (step 2)
-    if (step === 1 && !goldSponsor) {
-      // Check if there's an elite ambassador for step 2.5 equivalent
-      if (eliteAmbassador) {
-        setStep(2 as Step); // Will show elite ambassador screen instead
-      } else {
-        setStep(3 as Step);
-      }
+    if (step === 2 && !goldSponsor && !eliteAmbassador) {
+      // Skip sponsor/ambassador step
+      setStep(4 as Step);
       return;
     }
-    setStep(prev => Math.min(9, prev + 1) as Step);
+    setStep(prev => Math.min(7, prev + 1) as Step);
   };
 
   const goBack = () => {
     Haptics.selectionAsync();
+    if (step === 4 && !goldSponsor && !eliteAmbassador) {
+      setStep(2 as Step);
+      return;
+    }
     setStep(prev => Math.max(1, prev - 1) as Step);
-  };
-
-  // ============================================
-  // MENE ACTIONS
-  // ============================================
-  const addMene = () => {
-    if (!currentMeneTeam) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-
-    const newMene = {
-      teamAScore: currentMeneTeam === 'A' ? currentMenePoints : 0,
-      teamBScore: currentMeneTeam === 'B' ? currentMenePoints : 0,
-      action: currentAction,
-      player: match.teamA[0],
-    };
-
-    const newScoreA = match.scoreA + newMene.teamAScore;
-    const newScoreB = match.scoreB + newMene.teamBScore;
-    const isCarreau = currentAction === 'carreau';
-    const isSuccess = currentAction === 'tir' || currentAction === 'carreau';
-
-    const newStats = {
-      totalShots: match.stats.totalShots + 1,
-      successfulShots: match.stats.successfulShots + (isSuccess ? 1 : 0),
-      carreaux: match.stats.carreaux + (isCarreau ? 1 : 0),
-      successRate: 0,
-    };
-    newStats.successRate = newStats.totalShots > 0
-      ? Math.round((newStats.successfulShots / newStats.totalShots) * 100)
-      : 0;
-
-    const finished = newScoreA >= 13 || newScoreB >= 13;
-
-    setMatch(prev => ({
-      ...prev,
-      menes: [...prev.menes, newMene],
-      scoreA: newScoreA,
-      scoreB: newScoreB,
-      finished,
-      duration: prev.menes.length * 3 + 5,
-      stats: newStats,
-    }));
-
-    setCurrentMeneTeam(null);
-    setCurrentMenePoints(1);
-    setCurrentAction('point');
-
-    if (finished) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      saveTempData();
-      // Schedule retention notifications after first match
-      scheduleRetentionAfterMatch(newStats, newScoreA >= 13);
-      setTimeout(() => setStep(5), 800);
-    }
-  };
-
-  const simulateFinish = () => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const fakeMenes: OnboardingMatch['menes'] = [];
-    let sA = match.scoreA;
-    let sB = match.scoreB;
-    let shots = match.stats.totalShots;
-    let success = match.stats.successfulShots;
-    let carreaux = match.stats.carreaux;
-
-    while (sA < 13 && sB < 13) {
-      const team = Math.random() > 0.45 ? 'A' : 'B';
-      const pts = Math.floor(Math.random() * 3) + 1;
-      const action = Math.random() > 0.7 ? (Math.random() > 0.5 ? 'carreau' : 'tir') : 'point';
-      fakeMenes.push({
-        teamAScore: team === 'A' ? pts : 0,
-        teamBScore: team === 'B' ? pts : 0,
-        action,
-      });
-      if (team === 'A') sA += pts; else sB += pts;
-      shots++;
-      if (action === 'tir' || action === 'carreau') success++;
-      if (action === 'carreau') carreaux++;
-    }
-
-    const rate = shots > 0 ? Math.round((success / shots) * 100) : 0;
-    const finalStats = { totalShots: shots, successfulShots: success, carreaux, successRate: rate };
-    setMatch(prev => ({
-      ...prev,
-      menes: [...prev.menes, ...fakeMenes],
-      scoreA: Math.min(sA, 13),
-      scoreB: Math.min(sB, 13),
-      finished: true,
-      duration: (prev.menes.length + fakeMenes.length) * 3 + 5,
-      stats: finalStats,
-    }));
-    saveTempData();
-    // Schedule retention notifications after simulated match
-    scheduleRetentionAfterMatch(finalStats, sA >= 13);
-    setTimeout(() => setStep(5), 600);
   };
 
   // ============================================
@@ -331,7 +146,7 @@ export default function OnboardingScreen() {
   // ============================================
   const handleComplete = async () => {
     if (!username.trim()) {
-      showAlert(t('common', 'error'), t('onboarding', 'nameRequired'));
+      showAlert(t('common', 'error'), language === 'fr' ? 'Le nom est requis' : 'Name is required');
       return;
     }
     setSaving(true);
@@ -365,85 +180,24 @@ export default function OnboardingScreen() {
         });
       }
 
-      await AsyncStorage.removeItem(STORAGE_KEY);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-
-      // Check if user is a sponsor/partner — redirect to sponsor portal
-      try {
-        const { data: sponsorCheck } = await supabase
-          .from('ambassadors')
-          .select('id, badge_type')
-          .eq('user_id', user?.id)
-          .eq('is_active', true)
-          .in('badge_type', ['gold_sponsor', 'sponsor', 'partner'])
-          .maybeSingle();
-        if (sponsorCheck) {
-          router.replace('/sponsor-portal' as any);
-          return;
-        }
-      } catch { /* proceed normally */ }
 
       await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
       router.replace('/consent');
     } catch (error: any) {
-      showAlert(t('common', 'error'), error.message || t('onboarding', 'unableToCreateProfile'));
+      showAlert(t('common', 'error'), error.message || 'Unable to save profile');
     } finally {
       setSaving(false);
     }
   };
 
-  // ============================================
-  // HANDLE SKIP LOGIN
-  // ============================================
-  const handleSkipLogin = async () => {
-    Haptics.selectionAsync();
-    // Data stays in AsyncStorage for 7 days
-    showAlert(
-      language === 'fr' ? 'Données temporaires' : 'Temporary data',
-      language === 'fr'
-        ? 'Vos données resteront sur cet appareil pendant 7 jours.'
-        : 'Your data will remain on this device for 7 days.'
-    );
-    // If user is authenticated, go to profile express
-    if (user?.id) {
-      setStep(9 as Step);
-    }
-    // Otherwise they need to log in first - go to login
-  };
+  // Determine the featured entity for step 3
+  const featuredEntity = goldSponsor || eliteAmbassador;
+  const entityType: 'sponsor' | 'ambassador' = goldSponsor ? 'sponsor' : 'ambassador';
 
   // ============================================
-  // SCHEDULE RETENTION NOTIFICATIONS
+  // STEP 0: ANIMATED SPLASH
   // ============================================
-  const scheduleRetentionAfterMatch = async (
-    stats: { totalShots: number; successfulShots: number; carreaux: number; successRate: number },
-    won: boolean
-  ) => {
-    try {
-      const granted = await requestNotificationPermissions();
-      if (!granted) return;
-      await scheduleRetentionNotifications({
-        language,
-        isRegistered: !!user?.id,
-        matchStats: {
-          successRate: stats.successRate,
-          carreaux: stats.carreaux,
-          matchCount: 1,
-          wins: won ? 1 : 0,
-          tirRate: stats.totalShots > 0 ? Math.round((stats.successfulShots / stats.totalShots) * 100) : 0,
-        },
-      });
-    } catch (e) {
-      console.log('Error scheduling retention notifications:', e);
-    }
-  };
-
-  const isMatchWon = match.scoreA >= 13;
-
-  // ============================================
-  // RENDER SCREENS
-  // ============================================
-
-  // --- SCREEN 0: ANIMATED SPLASH ---
   if (step === 0) {
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
@@ -469,15 +223,90 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 1: PROMISE ---
+  // ============================================
+  // STEP 1: LANGUAGE SELECTION (NEW)
+  // ============================================
   if (step === 1) {
+    return (
+      <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
+        <SafeAreaView style={s.fullScreen}>
+          <ScrollView contentContainerStyle={s.langContent} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeInDown.duration(500)} style={s.langHeader}>
+              <MaterialIcons name="translate" size={48} color="#60A5FA" />
+              <Text style={s.langTitle}>Choose your language</Text>
+              <Text style={s.langSubtitle}>Choisissez votre langue</Text>
+            </Animated.View>
+
+            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.langOptions}>
+              <Pressable
+                style={({ pressed }) => [
+                  s.langOption,
+                  language === 'fr' && s.langOptionActive,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                onPress={() => { Haptics.selectionAsync(); setLanguage('fr'); }}
+              >
+                <Text style={s.langFlag}>🇫🇷</Text>
+                <View style={s.langOptionInfo}>
+                  <Text style={[s.langOptionTitle, language === 'fr' && s.langOptionTitleActive]}>Français</Text>
+                  <Text style={s.langOptionDesc}>Langue de Moliere et de la petanque</Text>
+                </View>
+                {language === 'fr' ? (
+                  <View style={s.langCheck}>
+                    <MaterialIcons name="check" size={18} color="#FFF" />
+                  </View>
+                ) : null}
+              </Pressable>
+
+              <Pressable
+                style={({ pressed }) => [
+                  s.langOption,
+                  language === 'en' && s.langOptionActive,
+                  pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] },
+                ]}
+                onPress={() => { Haptics.selectionAsync(); setLanguage('en'); }}
+              >
+                <Text style={s.langFlag}>🇬🇧</Text>
+                <View style={s.langOptionInfo}>
+                  <Text style={[s.langOptionTitle, language === 'en' && s.langOptionTitleActive]}>English</Text>
+                  <Text style={s.langOptionDesc}>For the international community</Text>
+                </View>
+                {language === 'en' ? (
+                  <View style={s.langCheck}>
+                    <MaterialIcons name="check" size={18} color="#FFF" />
+                  </View>
+                ) : null}
+              </Pressable>
+            </Animated.View>
+
+            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%', paddingHorizontal: 24 }}>
+              <Pressable
+                style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                onPress={goNext}
+              >
+                <Text style={s.ctaPrimaryText}>
+                  {language === 'fr' ? 'Continuer' : 'Continue'}
+                </Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
+              </Pressable>
+            </Animated.View>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // ============================================
+  // STEP 2: PROMISE
+  // ============================================
+  if (step === 2) {
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <ScrollView contentContainerStyle={s.promiseContent} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.duration(500)} style={s.promiseImageWrap}>
               <Image
-                source={require('@/assets/images/onboarding-promise.png')}
+                source={require('@/assets/images/app-logo.png')}
                 style={s.promiseImage}
                 contentFit="contain"
                 transition={200}
@@ -499,9 +328,9 @@ export default function OnboardingScreen() {
                 onPress={goNext}
               >
                 <Text style={s.ctaPrimaryText}>
-                  {language === 'fr' ? 'Jouer mon premier match' : 'Play my first match'}
+                  {language === 'fr' ? 'Decouvrir l\'application' : 'Discover the app'}
                 </Text>
-                <MaterialIcons name="sports" size={22} color="#0F172A" />
+                <MaterialIcons name="arrow-forward" size={22} color="#0F172A" />
               </Pressable>
               {user ? null : (
                 <Pressable style={s.ctaSecondary} onPress={async () => {
@@ -520,200 +349,123 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 2: GOLD SPONSOR WELCOME / ELITE AMBASSADOR ---
-  if (step === 2 && (goldSponsor || eliteAmbassador)) {
-    // If no gold sponsor but elite ambassador exists, show elite screen
-    if (!goldSponsor && eliteAmbassador) {
-      return (
-        <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
-          <SafeAreaView style={s.fullScreen}>
-            <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
-              <Animated.View entering={FadeInDown.duration(500)} style={s.sponsorLogoWrap}>
-                {eliteAmbassador.photo ? (
-                  <Image source={{ uri: eliteAmbassador.photo }} style={[s.sponsorLogo, { borderColor: '#F59E0B' }]} contentFit="cover" transition={300} />
-                ) : (
-                  <LinearGradient colors={['#7C3AED', '#9333EA']} style={s.sponsorLogoFallback}>
-                    <MaterialIcons name="military-tech" size={48} color="#FFF" />
-                  </LinearGradient>
-                )}
-                <View style={[s.sponsorGoldBadge, { backgroundColor: '#F59E0B' }]}>
-                  <MaterialIcons name="military-tech" size={14} color="#FFF" />
-                </View>
-              </Animated.View>
+  // ============================================
+  // STEP 3: SPONSOR / AMBASSADOR (IMPROVED UI)
+  // ============================================
+  if (step === 3 && featuredEntity) {
+    const entity = featuredEntity;
+    const isSponsor = entityType === 'sponsor';
+    const accentColor = isSponsor ? '#F59E0B' : '#A78BFA';
+    const gradientColors = isSponsor ? ['#FFFBEB', '#FEF3C7'] : ['#EDE9FE', '#DDD6FE'];
+    const darkAccent = isSponsor ? '#78350F' : '#4C1D95';
+    const labelText = isSponsor
+      ? (language === 'fr' ? 'PARTENAIRE OFFICIEL' : 'OFFICIAL PARTNER')
+      : (language === 'fr' ? 'AMBASSADEUR ELITE' : 'ELITE AMBASSADOR');
+    const badgeIcon = isSponsor ? 'workspace-premium' : 'military-tech';
+    const messageText = isSponsor
+      ? (language === 'fr'
+        ? `${entity.displayName} soutient la communaute des joueurs de petanque et rend cette application possible. Merci !`
+        : `${entity.displayName} supports the petanque community and makes this app possible. Thank you!`)
+      : (language === 'fr'
+        ? `${entity.displayName} est un ambassadeur Elite de la communaute. Suivez-le pour des defis, conseils et contenus exclusifs !`
+        : `${entity.displayName} is an Elite ambassador of the community. Follow for challenges, tips and exclusive content!`);
 
-              <Animated.View entering={FadeInUp.duration(500).delay(200)}>
-                <View style={s.sponsorPresentedRow}>
-                  <View style={[s.sponsorPresentedLine, { backgroundColor: '#7C3AED40' }]} />
-                  <Text style={[s.sponsorPresentedText, { color: '#A78BFA' }]}>
-                    {language === 'fr' ? 'AMBASSADEUR ELITE' : 'ELITE AMBASSADOR'}
-                  </Text>
-                  <View style={[s.sponsorPresentedLine, { backgroundColor: '#7C3AED40' }]} />
-                </View>
-                <Text style={s.sponsorName}>{eliteAmbassador.displayName}</Text>
-                {eliteAmbassador.bio ? <Text style={s.sponsorBio}>{eliteAmbassador.bio}</Text> : null}
-              </Animated.View>
+    const socials: { icon: string; color: string; label: string; url: string; platform: string }[] = [];
+    if (entity.websiteUrl) socials.push({ icon: 'language', color: '#60A5FA', label: language === 'fr' ? 'Site web' : 'Website', url: entity.websiteUrl, platform: 'website' });
+    if (entity.youtubeUrl) socials.push({ icon: 'play-circle-filled', color: '#FF0000', label: 'YouTube', url: entity.youtubeUrl, platform: 'youtube' });
+    if (entity.instagramHandle) socials.push({ icon: 'camera-alt', color: '#E4405F', label: 'Instagram', url: `https://instagram.com/${entity.instagramHandle}`, platform: 'instagram' });
+    if (entity.tiktokUrl) socials.push({ icon: 'music-note', color: '#000', label: 'TikTok', url: entity.tiktokUrl, platform: 'tiktok' });
 
-              <Animated.View entering={FadeInUp.duration(500).delay(400)} style={s.sponsorMessageCard}>
-                <LinearGradient colors={['#EDE9FE', '#DDD6FE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.sponsorMessageGradient}>
-                  <View style={[s.sponsorMessageAccent, { backgroundColor: '#7C3AED' }]} />
-                  <MaterialIcons name="format-quote" size={24} color="#7C3AED" style={{ opacity: 0.4 }} />
-                  <Text style={[s.sponsorMessageText, { color: '#4C1D95' }]}>
-                    {language === 'fr'
-                      ? `${eliteAmbassador.displayName} est un ambassadeur Elite de la communaute petanque. Suivez-le pour des defis, conseils et contenus exclusifs !`
-                      : `${eliteAmbassador.displayName} is an Elite ambassador of the petanque community. Follow for challenges, tips and exclusive content!`}
-                  </Text>
-                </LinearGradient>
-              </Animated.View>
-
-              {(eliteAmbassador.websiteUrl || eliteAmbassador.instagramHandle || eliteAmbassador.youtubeUrl || eliteAmbassador.tiktokUrl) ? (
-                <Animated.View entering={FadeInUp.duration(400).delay(500)} style={s.sponsorSocialRow}>
-                  {eliteAmbassador.youtubeUrl ? (
-                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'youtube', { sourcePage: 'onboarding' }); Linking.openURL(eliteAmbassador.youtubeUrl!); }}>
-                      <MaterialIcons name="play-circle-filled" size={16} color="#FF0000" />
-                      <Text style={s.sponsorSocialText}>YouTube</Text>
-                    </Pressable>
-                  ) : null}
-                  {eliteAmbassador.instagramHandle ? (
-                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'instagram', { sourcePage: 'onboarding' }); Linking.openURL(`https://instagram.com/${eliteAmbassador.instagramHandle}`); }}>
-                      <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
-                      <Text style={s.sponsorSocialText}>Instagram</Text>
-                    </Pressable>
-                  ) : null}
-                  {eliteAmbassador.tiktokUrl ? (
-                    <Pressable style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'social_click', 'tiktok', { sourcePage: 'onboarding' }); Linking.openURL(eliteAmbassador.tiktokUrl!); }}>
-                      <MaterialIcons name="music-note" size={16} color="#000" />
-                      <Text style={s.sponsorSocialText}>TikTok</Text>
-                    </Pressable>
-                  ) : null}
-                </Animated.View>
-              ) : null}
-
-              <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%', paddingHorizontal: 24 }}>
-                <Pressable style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]} onPress={() => { trackAmbassadorEvent(eliteAmbassador.id, 'banner_impression', undefined, { sourcePage: 'onboarding' }); goNext(); }}>
-                  <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Commencer' : 'Get started'}</Text>
-                  <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
-                </Pressable>
-                <Pressable style={s.ctaSecondary} onPress={goNext}>
-                  <Text style={s.ctaSecondaryText}>{language === 'fr' ? 'Passer' : 'Skip'}</Text>
-                </Pressable>
-              </Animated.View>
-            </ScrollView>
-          </SafeAreaView>
-        </LinearGradient>
-      );
-    }
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
+          <View style={s.screenHeader}>
+            <Pressable onPress={goBack} hitSlop={12}>
+              <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
+            </Pressable>
+            <ProgressDots current={1} total={5} />
+            <View style={{ width: 24 }} />
+          </View>
           <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={s.sponsorLogoWrap}>
-              {goldSponsor.photo ? (
-                <Image
-                  source={{ uri: goldSponsor.photo }}
-                  style={s.sponsorLogo}
-                  contentFit="cover"
-                  transition={300}
-                />
-              ) : (
-                <LinearGradient colors={['#B45309', '#F59E0B']} style={s.sponsorLogoFallback}>
-                  <MaterialIcons name="workspace-premium" size={48} color="#FFF" />
-                </LinearGradient>
-              )}
-              <View style={s.sponsorGoldBadge}>
-                <MaterialIcons name="star" size={14} color="#FFF" />
+            {/* Label */}
+            <Animated.View entering={FadeInDown.duration(400)} style={s.sponsorLabelRow}>
+              <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
+              <View style={[s.sponsorLabelBadge, { backgroundColor: accentColor + '20', borderColor: accentColor + '40' }]}>
+                <MaterialIcons name={badgeIcon as any} size={14} color={accentColor} />
+                <Text style={[s.sponsorLabelText, { color: accentColor }]}>{labelText}</Text>
               </View>
+              <View style={[s.sponsorLabelLine, { backgroundColor: accentColor + '40' }]} />
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(500).delay(200)}>
-              <View style={s.sponsorPresentedRow}>
-                <View style={s.sponsorPresentedLine} />
-                <Text style={s.sponsorPresentedText}>
-                  {language === 'fr' ? 'PRESENTE PAR' : 'PRESENTED BY'}
-                </Text>
-                <View style={s.sponsorPresentedLine} />
+            {/* Card */}
+            <Animated.View entering={FadeInUp.duration(500).delay(150)} style={[s.sponsorCard, { borderColor: accentColor + '30' }]}>
+              {/* Top area with photo + name */}
+              <View style={s.sponsorCardTop}>
+                <View style={[s.sponsorPhotoWrap, { borderColor: accentColor }]}>
+                  {entity.photo ? (
+                    <Image source={{ uri: entity.photo }} style={s.sponsorPhoto} contentFit="cover" transition={300} />
+                  ) : (
+                    <LinearGradient colors={isSponsor ? ['#B45309', '#F59E0B'] : ['#7C3AED', '#9333EA']} style={s.sponsorPhotoFallback}>
+                      <MaterialIcons name={badgeIcon as any} size={36} color="#FFF" />
+                    </LinearGradient>
+                  )}
+                  <View style={[s.sponsorPhotoBadge, { backgroundColor: accentColor }]}>
+                    <MaterialIcons name={isSponsor ? 'star' : 'military-tech'} size={12} color="#FFF" />
+                  </View>
+                </View>
+                <View style={s.sponsorCardNameCol}>
+                  <Text style={s.sponsorCardName}>{entity.displayName}</Text>
+                  {entity.bio ? (
+                    <Text style={s.sponsorCardBio} numberOfLines={2}>{entity.bio}</Text>
+                  ) : null}
+                </View>
               </View>
-              <Text style={s.sponsorName}>{goldSponsor.displayName}</Text>
-              {goldSponsor.bio ? (
-                <Text style={s.sponsorBio}>{goldSponsor.bio}</Text>
+
+              {/* Message box */}
+              <LinearGradient
+                colors={gradientColors as [string, string]}
+                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                style={s.sponsorMsgBox}
+              >
+                <View style={[s.sponsorMsgAccent, { backgroundColor: accentColor }]} />
+                <MaterialIcons name="format-quote" size={20} color={accentColor} style={{ opacity: 0.4 }} />
+                <Text style={[s.sponsorMsgText, { color: darkAccent }]}>{messageText}</Text>
+              </LinearGradient>
+
+              {/* Social links */}
+              {socials.length > 0 ? (
+                <View style={s.sponsorSocialsRow}>
+                  {socials.map((sc, i) => (
+                    <Pressable
+                      key={i}
+                      style={({ pressed }) => [s.sponsorSocialBtn, pressed && { opacity: 0.8 }]}
+                      onPress={() => {
+                        trackAmbassadorEvent(entity.id, 'social_click', sc.platform, { sourcePage: 'onboarding' });
+                        Linking.openURL(sc.url);
+                      }}
+                    >
+                      <MaterialIcons name={sc.icon as any} size={16} color={sc.color} />
+                      <Text style={s.sponsorSocialLabel}>{sc.label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
               ) : null}
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(500).delay(400)} style={s.sponsorMessageCard}>
-              <LinearGradient
-                colors={['#FFFBEB', '#FEF3C7']}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={s.sponsorMessageGradient}
-              >
-                <View style={s.sponsorMessageAccent} />
-                <MaterialIcons name="format-quote" size={24} color="#B45309" style={{ opacity: 0.4 }} />
-                <Text style={s.sponsorMessageText}>
-                  {language === 'fr'
-                    ? `${goldSponsor.displayName} soutient la communaute des joueurs de petanque et rend cette application possible.`
-                    : `${goldSponsor.displayName} supports the petanque player community and makes this app possible.`}
-                </Text>
-              </LinearGradient>
-            </Animated.View>
-
-            {/* Social links */}
-            {(goldSponsor.websiteUrl || goldSponsor.instagramHandle || goldSponsor.youtubeUrl) ? (
-              <Animated.View entering={FadeInUp.duration(400).delay(500)} style={s.sponsorSocialRow}>
-                {goldSponsor.websiteUrl ? (
-                  <Pressable
-                    style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]}
-                    onPress={() => {
-                      trackAmbassadorEvent(goldSponsor.id, 'social_click', 'website', { sourcePage: 'onboarding' });
-                      Linking.openURL(goldSponsor.websiteUrl!);
-                    }}
-                  >
-                    <MaterialIcons name="language" size={16} color="#60A5FA" />
-                    <Text style={s.sponsorSocialText}>{language === 'fr' ? 'Site web' : 'Website'}</Text>
-                  </Pressable>
-                ) : null}
-                {goldSponsor.instagramHandle ? (
-                  <Pressable
-                    style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]}
-                    onPress={() => {
-                      trackAmbassadorEvent(goldSponsor.id, 'social_click', 'instagram', { sourcePage: 'onboarding' });
-                      Linking.openURL(`https://instagram.com/${goldSponsor.instagramHandle}`);
-                    }}
-                  >
-                    <MaterialIcons name="camera-alt" size={16} color="#E4405F" />
-                    <Text style={s.sponsorSocialText}>Instagram</Text>
-                  </Pressable>
-                ) : null}
-                {goldSponsor.youtubeUrl ? (
-                  <Pressable
-                    style={({ pressed }) => [s.sponsorSocialChip, pressed && { opacity: 0.8 }]}
-                    onPress={() => {
-                      trackAmbassadorEvent(goldSponsor.id, 'social_click', 'youtube', { sourcePage: 'onboarding' });
-                      Linking.openURL(goldSponsor.youtubeUrl!);
-                    }}
-                  >
-                    <MaterialIcons name="play-circle-filled" size={16} color="#FF0000" />
-                    <Text style={s.sponsorSocialText}>YouTube</Text>
-                  </Pressable>
-                ) : null}
-              </Animated.View>
-            ) : null}
-
-            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%', paddingHorizontal: 24 }}>
+            {/* CTAs */}
+            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%', paddingHorizontal: 24 }}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
                 onPress={() => {
-                  trackAmbassadorEvent(goldSponsor.id, 'banner_impression', undefined, { sourcePage: 'onboarding' });
+                  trackAmbassadorEvent(entity.id, 'banner_impression', undefined, { sourcePage: 'onboarding' });
                   goNext();
                 }}
               >
-                <Text style={s.ctaPrimaryText}>
-                  {language === 'fr' ? 'Commencer' : 'Get started'}
-                </Text>
+                <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
               </Pressable>
               <Pressable style={s.ctaSecondary} onPress={goNext}>
-                <Text style={s.ctaSecondaryText}>
-                  {language === 'fr' ? 'Passer' : 'Skip'}
-                </Text>
+                <Text style={s.ctaSecondaryText}>{language === 'fr' ? 'Passer' : 'Skip'}</Text>
               </Pressable>
             </Animated.View>
           </ScrollView>
@@ -722,381 +474,102 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 3: EXPRESS MATCH SETUP ---
-  if (step === 3) {
-    const formats = [
-      { id: 'Tete-a-tete' as const, label: language === 'fr' ? 'Tete-a-tete' : 'Singles', players: 1 },
-      { id: 'Doublette' as const, label: language === 'fr' ? 'Doublette' : 'Doubles', players: 2 },
-      { id: 'Triplette' as const, label: language === 'fr' ? 'Triplette' : 'Triples', players: 3 },
+  // ============================================
+  // STEP 4: APP FEATURES EXPLANATION (replaces match)
+  // ============================================
+  if (step === 3 || step === 4) {
+    // If step === 3 and no sponsor, we arrive here due to flow skip
+    // But we handle that via goNext. If somehow step===3 falls through, treat as step 4.
+    const features = [
+      {
+        icon: 'sports',
+        color: '#60A5FA',
+        title: language === 'fr' ? 'Enregistre tes matchs' : 'Record your matches',
+        desc: language === 'fr'
+          ? 'Mene par mene, avec score, tirs, carreaux et statistiques detaillees.'
+          : 'End by end, with score, shots, carreaux and detailed statistics.',
+      },
+      {
+        icon: 'bar-chart',
+        color: '#10B981',
+        title: language === 'fr' ? 'Analyse ta progression' : 'Track your progress',
+        desc: language === 'fr'
+          ? 'Taux de tir, win rate, evolution semaine par semaine.'
+          : 'Shot rate, win rate, weekly evolution.',
+      },
+      {
+        icon: 'share',
+        color: '#EC4899',
+        title: language === 'fr' ? 'Partage avec tes equipiers' : 'Share with teammates',
+        desc: language === 'fr'
+          ? 'Tes partenaires acceptent en 1 tap, vos stats se mettent a jour.'
+          : 'Your partners accept in 1 tap, stats update automatically.',
+      },
+      {
+        icon: 'emoji-events',
+        color: '#F59E0B',
+        title: language === 'fr' ? 'Gagne des badges & XP' : 'Earn badges & XP',
+        desc: language === 'fr'
+          ? 'Debloque des badges, monte en niveau et entre dans le classement.'
+          : 'Unlock badges, level up and enter the leaderboard.',
+      },
     ];
 
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-            <View style={s.screenHeader}>
-              <Pressable onPress={() => { Haptics.selectionAsync(); setStep(goldSponsor ? 2 as Step : 1 as Step); }} hitSlop={12}>
-                <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
-              </Pressable>
-              <ProgressDots current={0} total={3} />
-              <View style={{ width: 24 }} />
-            </View>
-
-            <ScrollView contentContainerStyle={s.setupContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-              <Animated.View entering={FadeInDown.duration(400)}>
-                <Text style={s.setupTitle}>
-                  {language === 'fr' ? 'Ton match en 3 taps' : 'Your match in 3 taps'}
-                </Text>
-                <Text style={s.setupSubtitle}>
-                  {language === 'fr' ? 'Tout est pre-rempli. Modifie si tu veux.' : 'Everything is pre-filled. Edit if you want.'}
-                </Text>
-              </Animated.View>
-
-              {/* Format selector */}
-              <Animated.View entering={FadeInUp.duration(300).delay(100)} style={s.setupSection}>
-                <Text style={s.setupLabel}>{language === 'fr' ? 'FORMAT' : 'FORMAT'}</Text>
-                <View style={s.formatRow}>
-                  {formats.map(f => (
-                    <Pressable
-                      key={f.id}
-                      style={[s.formatChip, match.format === f.id && s.formatChipActive]}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        const pCount = f.players;
-                        const moi = language === 'fr' ? 'Moi' : 'Me';
-                        const eq = language === 'fr' ? 'Equipier' : 'Teammate';
-                        const eq2 = language === 'fr' ? 'Equipier 2' : 'Teammate 2';
-                        const a1 = language === 'fr' ? 'Adversaire 1' : 'Opponent 1';
-                        const a2 = language === 'fr' ? 'Adversaire 2' : 'Opponent 2';
-                        const a3 = language === 'fr' ? 'Adversaire 3' : 'Opponent 3';
-                        setMatch(prev => ({
-                          ...prev,
-                          format: f.id,
-                          teamA: pCount === 1 ? [moi] : pCount === 2 ? [moi, eq] : [moi, eq, eq2],
-                          teamB: pCount === 1 ? [a1] : pCount === 2 ? [a1, a2] : [a1, a2, a3],
-                        }));
-                      }}
-                    >
-                      <Text style={[s.formatChipText, match.format === f.id && s.formatChipTextActive]}>
-                        {f.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </Animated.View>
-
-              {/* Team A */}
-              <Animated.View entering={FadeInUp.duration(300).delay(200)} style={s.setupSection}>
-                <Text style={s.setupLabel}>{language === 'fr' ? 'MON EQUIPE' : 'MY TEAM'}</Text>
-                {match.teamA.map((p, i) => (
-                  <View key={`a-${i}`} style={s.playerInputRow}>
-                    <View style={[s.playerDot, { backgroundColor: '#60A5FA' }]} />
-                    <TextInput
-                      style={s.playerInput}
-                      value={p}
-                      onChangeText={text => {
-                        const updated = [...match.teamA];
-                        updated[i] = text;
-                        setMatch(prev => ({ ...prev, teamA: updated }));
-                      }}
-                      placeholderTextColor="#475569"
-                    />
-                  </View>
-                ))}
-              </Animated.View>
-
-              {/* Team B */}
-              <Animated.View entering={FadeInUp.duration(300).delay(300)} style={s.setupSection}>
-                <Text style={s.setupLabel}>{language === 'fr' ? 'ADVERSAIRE' : 'OPPONENT'}</Text>
-                {match.teamB.map((p, i) => (
-                  <View key={`b-${i}`} style={s.playerInputRow}>
-                    <View style={[s.playerDot, { backgroundColor: '#F59E0B' }]} />
-                    <TextInput
-                      style={s.playerInput}
-                      value={p}
-                      onChangeText={text => {
-                        const updated = [...match.teamB];
-                        updated[i] = text;
-                        setMatch(prev => ({ ...prev, teamB: updated }));
-                      }}
-                      placeholderTextColor="#475569"
-                    />
-                  </View>
-                ))}
-              </Animated.View>
-            </ScrollView>
-
-            <View style={s.setupFooter}>
-              <Pressable
-                style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                onPress={goNext}
-              >
-                <Text style={s.ctaPrimaryText}>
-                  {language === 'fr' ? "C'est parti !" : "Let's go!"}
-                </Text>
-                <MaterialIcons name="play-arrow" size={22} color="#0F172A" />
-              </Pressable>
-            </View>
-          </KeyboardAvoidingView>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
-  // --- SCREEN 4: LIVE MENE SCORING ---
-  if (step === 4) {
-    return (
-      <LinearGradient colors={['#0F172A', '#1E293B']} style={s.fullScreen}>
-        <SafeAreaView style={s.fullScreen}>
           <View style={s.screenHeader}>
-            <Pressable onPress={() => { Haptics.selectionAsync(); setStep(3 as Step); }} hitSlop={12}>
+            <Pressable onPress={goBack} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={1} total={3} />
+            <ProgressDots current={2} total={5} />
             <View style={{ width: 24 }} />
           </View>
 
-          {/* Score header */}
-          <Animated.View entering={FadeIn.duration(300)} style={s.scoreHeader}>
-            <View style={s.scoreTeam}>
-              <Text style={s.scoreTeamName} numberOfLines={1}>{match.teamA[0]}</Text>
-              <Text style={[s.scoreValue, { color: '#60A5FA' }]}>{match.scoreA}</Text>
-            </View>
-            <View style={s.scoreSeparator}>
-              <Text style={s.scoreSepText}>-</Text>
-              <Text style={s.meneCountText}>
-                {language === 'fr' ? 'Mene' : 'End'} {match.menes.length + 1}
+          <ScrollView contentContainerStyle={s.featuresContent} showsVerticalScrollIndicator={false}>
+            <Animated.View entering={FadeInDown.duration(500)}>
+              <Text style={s.featuresTitle}>
+                {language === 'fr' ? 'Tout pour ta petanque' : 'Everything for your game'}
               </Text>
-            </View>
-            <View style={s.scoreTeam}>
-              <Text style={s.scoreTeamName} numberOfLines={1}>{match.teamB[0]}</Text>
-              <Text style={[s.scoreValue, { color: '#F59E0B' }]}>{match.scoreB}</Text>
-            </View>
-          </Animated.View>
-
-          {/* First mene tooltip */}
-          {match.menes.length === 0 ? (
-            <Animated.View entering={FadeInDown.duration(400)} style={s.tooltip}>
-              <MaterialIcons name="info-outline" size={16} color="#60A5FA" />
-              <Text style={s.tooltipText}>
+              <Text style={s.featuresSubtitle}>
                 {language === 'fr'
-                  ? 'Choisis qui marque, le nombre de points et l\'action.'
-                  : 'Pick who scores, the points and the action.'}
+                  ? 'Une app complete pour suivre, progresser et partager.'
+                  : 'A complete app to track, improve and share.'}
               </Text>
             </Animated.View>
-          ) : null}
 
-          <ScrollView contentContainerStyle={s.meneContent} showsVerticalScrollIndicator={false}>
-            {/* Team selector */}
-            <View style={s.teamSelectorRow}>
-              <Pressable
-                style={[s.teamSelectBtn, currentMeneTeam === 'A' && s.teamSelectBtnActiveA]}
-                onPress={() => { Haptics.selectionAsync(); setCurrentMeneTeam('A'); }}
-              >
-                <Text style={[s.teamSelectText, currentMeneTeam === 'A' && s.teamSelectTextActive]}>
-                  {match.teamA[0]}
-                </Text>
-              </Pressable>
-              <Pressable
-                style={[s.teamSelectBtn, currentMeneTeam === 'B' && s.teamSelectBtnActiveB]}
-                onPress={() => { Haptics.selectionAsync(); setCurrentMeneTeam('B'); }}
-              >
-                <Text style={[s.teamSelectText, currentMeneTeam === 'B' && s.teamSelectTextActive]}>
-                  {match.teamB[0]}
-                </Text>
-              </Pressable>
-            </View>
-
-            {/* Points selector */}
-            <View style={s.pointsRow}>
-              {[1, 2, 3, 4, 5].map(p => (
-                <Pressable
-                  key={p}
-                  style={[s.pointBtn, currentMenePoints === p && s.pointBtnActive]}
-                  onPress={() => { Haptics.selectionAsync(); setCurrentMenePoints(p); }}
+            <Animated.View entering={FadeInUp.duration(500).delay(200)} style={s.featuresList}>
+              {features.map((f, i) => (
+                <Animated.View
+                  key={i}
+                  entering={FadeInUp.duration(400).delay(300 + i * 100)}
+                  style={s.featureRow}
                 >
-                  <Text style={[s.pointBtnText, currentMenePoints === p && s.pointBtnTextActive]}>{p}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Action selector */}
-            <View style={s.actionRow}>
-              {[
-                { id: 'point' as const, icon: 'adjust', label: 'Point', color: '#10B981' },
-                { id: 'tir' as const, icon: 'gps-fixed', label: language === 'fr' ? 'Tir' : 'Shot', color: '#3B82F6' },
-                { id: 'carreau' as const, icon: 'star', label: 'Carreau', color: '#F59E0B' },
-              ].map(a => (
-                <Pressable
-                  key={a.id}
-                  style={[s.actionBtn, currentAction === a.id && { borderColor: a.color, backgroundColor: a.color + '20' }]}
-                  onPress={() => { Haptics.selectionAsync(); setCurrentAction(a.id); }}
-                >
-                  <MaterialIcons name={a.icon as any} size={24} color={currentAction === a.id ? a.color : '#64748B'} />
-                  <Text style={[s.actionBtnText, currentAction === a.id && { color: a.color }]}>{a.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-
-            {/* Validate mene */}
-            <Pressable
-              style={[s.validateBtn, !currentMeneTeam && { opacity: 0.4 }]}
-              onPress={addMene}
-              disabled={!currentMeneTeam}
-            >
-              <MaterialIcons name="check" size={22} color="#FFF" />
-              <Text style={s.validateBtnText}>
-                {language === 'fr' ? 'Valider la mene' : 'Validate end'}
-              </Text>
-            </Pressable>
-
-            {/* Mene history mini */}
-            {match.menes.length > 0 ? (
-              <View style={s.meneHistory}>
-                {match.menes.slice(-5).map((m, i) => (
-                  <View key={i} style={s.meneHistoryItem}>
-                    <Text style={s.meneHistoryText}>
-                      {m.teamAScore > 0 ? `${match.teamA[0]} +${m.teamAScore}` : `${match.teamB[0]} +${m.teamBScore}`}
-                    </Text>
+                  <View style={[s.featureIconWrap, { backgroundColor: f.color + '18' }]}>
+                    <MaterialIcons name={f.icon as any} size={26} color={f.color} />
                   </View>
-                ))}
-              </View>
-            ) : null}
-          </ScrollView>
-
-          {/* Simulate finish */}
-          {match.menes.length >= 2 && !match.finished ? (
-            <View style={s.simFooter}>
-              <Pressable style={s.simBtn} onPress={simulateFinish}>
-                <MaterialIcons name="fast-forward" size={18} color="#94A3B8" />
-                <Text style={s.simBtnText}>
-                  {language === 'fr' ? 'Simuler la fin' : 'Simulate finish'}
-                </Text>
-              </Pressable>
-            </View>
-          ) : null}
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
-  // --- SCREEN 5: WOW STATS ---
-  if (step === 5) {
-    return (
-      <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
-        <SafeAreaView style={s.fullScreen}>
-          <ScrollView contentContainerStyle={s.statsContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(600)}>
-              <Text style={s.statsEmoji}>{isMatchWon ? '🏆' : '💪'}</Text>
-              <Text style={s.statsTitle}>
-                {isMatchWon
-                  ? (language === 'fr' ? 'MATCH GAGNE !' : 'MATCH WON!')
-                  : (language === 'fr' ? 'MATCH TERMINE !' : 'MATCH FINISHED!')}
-              </Text>
-              <Text style={s.statsScore}>{match.scoreA} - {match.scoreB}</Text>
+                  <View style={s.featureInfo}>
+                    <Text style={s.featureTitle}>{f.title}</Text>
+                    <Text style={s.featureDesc}>{f.desc}</Text>
+                  </View>
+                </Animated.View>
+              ))}
             </Animated.View>
 
-            {/* Stats cards */}
-            <Animated.View entering={FadeInUp.duration(500).delay(300)} style={s.statsCardsRow}>
-              <View style={s.statsCard}>
-                <AnimatedCounter value={match.stats.successRate} suffix="%" />
-                <Text style={s.statsCardLabel}>{language === 'fr' ? 'Reussite' : 'Success'}</Text>
-              </View>
-              <View style={s.statsCard}>
-                <AnimatedCounter value={match.stats.successfulShots} suffix={`/${match.stats.totalShots}`} />
-                <Text style={s.statsCardLabel}>{language === 'fr' ? 'Tirs' : 'Shots'}</Text>
-              </View>
-              <View style={s.statsCard}>
-                <AnimatedCounter value={match.stats.carreaux} />
-                <Text style={s.statsCardLabel}>{match.stats.carreaux === 1 ? 'Carreau' : 'Carreaux'}</Text>
-              </View>
-            </Animated.View>
-
-            {/* Teaser message */}
-            <Animated.View entering={FadeInUp.duration(500).delay(600)} style={s.teaserBox}>
-              <MaterialIcons name="emoji-events" size={20} color="#F59E0B" />
-              <Text style={s.teaserText}>
+            {/* Teaser */}
+            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={s.featureTeaser}>
+              <MaterialIcons name="auto-awesome" size={18} color="#FCD34D" />
+              <Text style={s.featureTeaserText}>
                 {language === 'fr'
-                  ? '4 matchs de plus et tu debloqueras ton classement communautaire 🏅'
-                  : '4 more matches and you will unlock the community leaderboard 🏅'}
+                  ? 'Et bien plus : tournois, defis solo, score de confiance, carte federation...'
+                  : 'And much more: tournaments, solo challenges, trust score, federation card...'}
               </Text>
             </Animated.View>
 
-            {/* CTAs */}
-            <Animated.View entering={FadeInUp.duration(500).delay(800)} style={{ width: '100%' }}>
+            <Animated.View entering={FadeInUp.duration(400).delay(800)} style={{ width: '100%' }}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                onPress={goNext}
-              >
-                <MaterialIcons name="share" size={20} color="#0F172A" />
-                <Text style={s.ctaPrimaryText}>
-                  {language === 'fr' ? 'Partager ce match' : 'Share this match'}
-                </Text>
-              </Pressable>
-              <Pressable style={s.ctaOutline} onPress={() => setStep(7)}>
-                <Text style={s.ctaOutlineText}>
-                  {language === 'fr' ? 'Voir le detail' : 'See details'}
-                </Text>
-              </Pressable>
-            </Animated.View>
-          </ScrollView>
-        </SafeAreaView>
-      </LinearGradient>
-    );
-  }
-
-  // --- SCREEN 6: CROSS-PLAYER SHARING ---
-  if (step === 6) {
-    return (
-      <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
-        <SafeAreaView style={s.fullScreen}>
-          <View style={s.screenHeader}>
-            <Pressable onPress={() => { Haptics.selectionAsync(); setStep(5 as Step); }} hitSlop={12}>
-              <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
-            </Pressable>
-            <ProgressDots current={2} total={3} />
-            <View style={{ width: 24 }} />
-          </View>
-          <ScrollView contentContainerStyle={s.shareContent} showsVerticalScrollIndicator={false}>
-            <Animated.View entering={FadeInDown.duration(500)} style={s.shareImageWrap}>
-              <Image
-                source={require('@/assets/images/onboarding-share.png')}
-                style={s.shareImage}
-                contentFit="contain"
-                transition={200}
-              />
-            </Animated.View>
-
-            <Animated.View entering={FadeInUp.duration(500).delay(200)}>
-              <Text style={s.shareTitle}>
-                {language === 'fr' ? 'Tes equipiers utilisent l\'app ?' : 'Your teammates use the app?'}
-              </Text>
-              <Text style={s.shareSubtitle}>
-                {language === 'fr'
-                  ? 'Partage ce match — il apparaitra automatiquement dans leurs stats.'
-                  : 'Share this match — it will automatically appear in their stats.'}
-              </Text>
-            </Animated.View>
-
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.howItWorks}>
-              {[
-                { num: '1', text: language === 'fr' ? 'Tu partages le match' : 'You share the match' },
-                { num: '2', text: language === 'fr' ? 'Ils acceptent en 1 tap' : 'They accept in 1 tap' },
-                { num: '3', text: language === 'fr' ? 'Vos stats se mettent a jour' : 'Your stats update automatically' },
-              ].map((s2, i) => (
-                <View key={i} style={s.howItWorksItem}>
-                  <View style={s.howItWorksNum}>
-                    <Text style={s.howItWorksNumText}>{s2.num}</Text>
-                  </View>
-                  <Text style={s.howItWorksText}>{s2.text}</Text>
-                </View>
-              ))}
-            </Animated.View>
-
-            <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%' }}>
-              <Pressable
-                style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                onPress={goNext}
+                onPress={() => setStep(5 as Step)}
               >
                 <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
@@ -1108,16 +581,25 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 7: MAP DISCOVERY ---
-  if (step === 7) {
+  // ============================================
+  // STEP 5: MAP DISCOVERY (enhanced)
+  // ============================================
+  if (step === 5) {
+    const mapFeatures = [
+      { icon: 'place', color: '#10B981', label: language === 'fr' ? 'Terrains pres de toi' : 'Courts near you' },
+      { icon: 'people', color: '#3B82F6', label: language === 'fr' ? 'Joueurs a proximite' : 'Nearby players' },
+      { icon: 'location-city', color: '#F59E0B', label: language === 'fr' ? 'Clubs de ta region' : 'Local clubs' },
+      { icon: 'event', color: '#EC4899', label: language === 'fr' ? 'Rencontres & meetups' : 'Meetups & events' },
+    ];
+
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.screenHeader}>
-            <Pressable onPress={() => { Haptics.selectionAsync(); setStep(6 as Step); }} hitSlop={12}>
+            <Pressable onPress={() => setStep(4 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <View style={{ width: 24 }} />
+            <ProgressDots current={3} total={5} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.mapContent} showsVerticalScrollIndicator={false}>
@@ -1127,42 +609,47 @@ export default function OnboardingScreen() {
               </Text>
               <Text style={s.mapSubtitle}>
                 {language === 'fr'
-                  ? 'Trouve des terrains, des clubs et des partenaires de jeu.'
-                  : 'Find courts, clubs and playing partners.'}
+                  ? 'Explore la carte interactive pour trouver tout ce qu\'il te faut.'
+                  : 'Explore the interactive map to find everything you need.'}
               </Text>
             </Animated.View>
 
-            {/* Mock map card */}
+            {/* Map card with features */}
             <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.mapCard}>
               <View style={s.mapCardInner}>
-                <MaterialIcons name="map" size={64} color="#1E3A8A" />
-                <View style={s.mapStatsRow}>
-                  <View style={s.mapStatItem}>
-                    <MaterialIcons name="place" size={20} color="#10B981" />
-                    <Text style={s.mapStatText}>
-                      {language === 'fr' ? '3 terrains' : '3 courts'}
-                    </Text>
+                <View style={s.mapIconRow}>
+                  <View style={s.mapMainIcon}>
+                    <MaterialIcons name="map" size={56} color="#1E3A8A" />
                   </View>
-                  <View style={s.mapStatItem}>
-                    <MaterialIcons name="people" size={20} color="#3B82F6" />
-                    <Text style={s.mapStatText}>
-                      {language === 'fr' ? '12 joueurs' : '12 players'}
-                    </Text>
+                  <View style={s.mapPinFloat1}>
+                    <MaterialIcons name="place" size={22} color="#10B981" />
                   </View>
-                  <View style={s.mapStatItem}>
-                    <MaterialIcons name="location-city" size={20} color="#F59E0B" />
-                    <Text style={s.mapStatText}>
-                      {language === 'fr' ? '2 clubs' : '2 clubs'}
-                    </Text>
+                  <View style={s.mapPinFloat2}>
+                    <MaterialIcons name="person-pin" size={20} color="#3B82F6" />
+                  </View>
+                  <View style={s.mapPinFloat3}>
+                    <MaterialIcons name="flag" size={18} color="#F59E0B" />
                   </View>
                 </View>
               </View>
             </Animated.View>
 
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={{ width: '100%' }}>
+            {/* Feature bullets */}
+            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.mapFeaturesList}>
+              {mapFeatures.map((f, i) => (
+                <Animated.View key={i} entering={FadeInUp.duration(300).delay(450 + i * 80)} style={s.mapFeatureItem}>
+                  <View style={[s.mapFeatureIcon, { backgroundColor: f.color + '18' }]}>
+                    <MaterialIcons name={f.icon as any} size={20} color={f.color} />
+                  </View>
+                  <Text style={s.mapFeatureLabel}>{f.label}</Text>
+                </Animated.View>
+              ))}
+            </Animated.View>
+
+            <Animated.View entering={FadeInUp.duration(400).delay(700)} style={{ width: '100%' }}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                onPress={() => setStep(8 as Step)}
+                onPress={() => setStep(6 as Step)}
               >
                 <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
@@ -1174,61 +661,56 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 8: DEFERRED LOGIN ---
-  if (step === 8) {
+  // ============================================
+  // STEP 6: DEFERRED LOGIN
+  // ============================================
+  if (step === 6) {
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
+          <View style={s.screenHeader}>
+            <Pressable onPress={() => setStep(5 as Step)} hitSlop={12}>
+              <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
+            </Pressable>
+            <ProgressDots current={4} total={5} />
+            <View style={{ width: 24 }} />
+          </View>
           <ScrollView contentContainerStyle={s.loginContent} showsVerticalScrollIndicator={false}>
             <Animated.View entering={FadeInDown.duration(500)}>
-              <MaterialIcons name="save" size={48} color="#60A5FA" style={{ alignSelf: 'center', marginBottom: 16 }} />
+              <MaterialIcons name="rocket-launch" size={48} color="#60A5FA" style={{ alignSelf: 'center', marginBottom: 16 }} />
               <Text style={s.loginTitle}>
-                {language === 'fr' ? 'Sauvegarde ta progression' : 'Save your progress'}
+                {language === 'fr' ? 'Pret a jouer ?' : 'Ready to play?'}
               </Text>
               <Text style={s.loginSubtitle}>
                 {language === 'fr'
-                  ? 'Sans compte, tes stats seront perdues.'
-                  : 'Without an account, your stats will be lost.'}
+                  ? 'Cree ton compte gratuit pour sauvegarder tes stats et rejoindre la communaute.'
+                  : 'Create your free account to save your stats and join the community.'}
               </Text>
             </Animated.View>
 
-            {/* Show user stats */}
-            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.loginStatsBox}>
-              <View style={s.loginStatRow}>
-                <MaterialIcons name="bar-chart" size={18} color="#60A5FA" />
-                <Text style={s.loginStatText}>1 {language === 'fr' ? 'match enregistre' : 'match recorded'}</Text>
-              </View>
-              <View style={s.loginStatRow}>
-                <MaterialIcons name="gps-fixed" size={18} color="#10B981" />
-                <Text style={s.loginStatText}>{match.stats.successRate}% {language === 'fr' ? 'de reussite au tir' : 'shot success'}</Text>
-              </View>
-              <View style={s.loginStatRow}>
-                <MaterialIcons name="star" size={18} color="#F59E0B" />
-                <Text style={s.loginStatText}>{match.stats.carreaux} {match.stats.carreaux === 1 ? 'carreau' : 'carreaux'}</Text>
-              </View>
-            </Animated.View>
-
             {/* Benefits */}
-            <Animated.View entering={FadeInUp.duration(400).delay(400)} style={s.benefitsList}>
+            <Animated.View entering={FadeInUp.duration(400).delay(200)} style={s.benefitsList}>
               {[
-                language === 'fr' ? 'Garder ton historique' : 'Keep your history',
-                language === 'fr' ? 'Apparaitre dans le classement' : 'Appear in the leaderboard',
-                language === 'fr' ? 'Recevoir les matchs partages' : 'Receive shared matches',
-                language === 'fr' ? 'Trouver des joueurs pres de toi' : 'Find players near you',
+                { icon: 'save', text: language === 'fr' ? 'Garder ton historique de matchs' : 'Keep your match history' },
+                { icon: 'leaderboard', text: language === 'fr' ? 'Apparaitre dans le classement' : 'Appear in the leaderboard' },
+                { icon: 'group-add', text: language === 'fr' ? 'Recevoir les matchs partages' : 'Receive shared matches' },
+                { icon: 'map', text: language === 'fr' ? 'Trouver des joueurs pres de toi' : 'Find players near you' },
+                { icon: 'military-tech', text: language === 'fr' ? 'Debloquer des badges et XP' : 'Unlock badges and XP' },
               ].map((b, i) => (
-                <View key={i} style={s.benefitItem}>
-                  <MaterialIcons name="check-circle" size={18} color="#10B981" />
-                  <Text style={s.benefitText}>{b}</Text>
-                </View>
+                <Animated.View key={i} entering={FadeInUp.duration(300).delay(250 + i * 60)} style={s.benefitItem}>
+                  <View style={s.benefitIconWrap}>
+                    <MaterialIcons name={b.icon as any} size={18} color="#10B981" />
+                  </View>
+                  <Text style={s.benefitText}>{b.text}</Text>
+                </Animated.View>
               ))}
             </Animated.View>
 
             <Animated.View entering={FadeInUp.duration(400).delay(600)} style={{ width: '100%' }}>
               {user ? (
-                // User already logged in -> go to profile express
                 <Pressable
                   style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                  onPress={() => setStep(9 as Step)}
+                  onPress={() => setStep(7 as Step)}
                 >
                   <MaterialIcons name="person" size={20} color="#0F172A" />
                   <Text style={s.ctaPrimaryText}>
@@ -1236,35 +718,33 @@ export default function OnboardingScreen() {
                   </Text>
                 </Pressable>
               ) : (
-                <>
-                  <Pressable
-                    style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                    onPress={async () => {
-                      await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-                      router.replace('/login');
-                    }}
-                  >
-                    <MaterialIcons name="email" size={20} color="#0F172A" />
-                    <Text style={s.ctaPrimaryText}>
-                      {language === 'fr' ? 'Continuer avec email' : 'Continue with email'}
-                    </Text>
-                  </Pressable>
-                </>
+                <Pressable
+                  style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                  onPress={() => {
+                    router.replace('/login');
+                  }}
+                >
+                  <MaterialIcons name="email" size={20} color="#0F172A" />
+                  <Text style={s.ctaPrimaryText}>
+                    {language === 'fr' ? 'Creer mon compte' : 'Create my account'}
+                  </Text>
+                </Pressable>
               )}
 
               <Pressable style={s.ctaSecondary} onPress={async () => {
                 await AsyncStorage.setItem(ONBOARDING_KEY, 'true');
-                handleSkipLogin();
+                showAlert(
+                  language === 'fr' ? 'Bienvenue !' : 'Welcome!',
+                  language === 'fr'
+                    ? 'Vous pouvez creer un compte plus tard depuis votre profil.'
+                    : 'You can create an account later from your profile.'
+                );
+                router.replace('/(tabs)');
               }}>
                 <Text style={s.ctaSecondaryText}>
                   {language === 'fr' ? 'Pas maintenant' : 'Not now'}
                 </Text>
               </Pressable>
-              <Text style={s.skipNote}>
-                {language === 'fr'
-                  ? 'Tes donnees restent sur cet appareil pendant 7 jours'
-                  : 'Your data stays on this device for 7 days'}
-              </Text>
             </Animated.View>
           </ScrollView>
         </SafeAreaView>
@@ -1272,16 +752,17 @@ export default function OnboardingScreen() {
     );
   }
 
-  // --- SCREEN 9: EXPRESS PROFILE (POST-LOGIN) ---
-  if (step === 9) {
+  // ============================================
+  // STEP 7: EXPRESS PROFILE ("Dernière Touche")
+  // ============================================
+  if (step === 7) {
     const roles = [
       { id: 'Tireur' as PlayerRole, icon: 'gps-fixed', label: language === 'fr' ? 'Tireur' : 'Shooter' },
       { id: 'Pointeur' as PlayerRole, icon: 'adjust', label: language === 'fr' ? 'Pointeur' : 'Pointer' },
       { id: 'Milieu' as PlayerRole, icon: 'swap-horiz', label: language === 'fr' ? 'Milieu' : 'Middle' },
     ];
 
-    // Pre-fill name from email
-    const emailName = user?.email ? user.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()) : '';
+    const emailName = user?.email ? user.email.split('@')[0].replace(/[._-]/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : '';
     if (!username && emailName) {
       setUsername(emailName);
     }
@@ -1290,10 +771,22 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+            <View style={s.screenHeader}>
+              <Pressable onPress={() => setStep(6 as Step)} hitSlop={12}>
+                <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
+              </Pressable>
+              <ProgressDots current={4} total={5} />
+              <View style={{ width: 24 }} />
+            </View>
             <ScrollView contentContainerStyle={s.expressContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Animated.View entering={FadeInDown.duration(500)}>
                 <Text style={s.expressTitle}>
-                  {language === 'fr' ? 'Derniere touche ✨' : 'Final touch ✨'}
+                  {language === 'fr' ? 'Derniere touche' : 'Final touch'}
+                </Text>
+                <Text style={s.expressSubtitle}>
+                  {language === 'fr'
+                    ? 'Ton nom et ton poste de jeu. Tu pourras completer ton profil plus tard.'
+                    : 'Your name and play position. You can complete your profile later.'}
                 </Text>
               </Animated.View>
 
@@ -1414,36 +907,109 @@ const s = StyleSheet.create({
     paddingVertical: 12,
   },
 
+  // --- Language picker ---
+  langContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+    paddingBottom: 40,
+    paddingTop: 40,
+  },
+  langHeader: {
+    alignItems: 'center',
+    marginBottom: 40,
+    gap: 12,
+  },
+  langTitle: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#FFF',
+    textAlign: 'center',
+  },
+  langSubtitle: {
+    fontSize: 16,
+    color: '#94A3B8',
+    textAlign: 'center',
+  },
+  langOptions: {
+    width: '100%',
+    gap: 14,
+    marginBottom: 40,
+  },
+  langOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1E293B',
+    borderRadius: 18,
+    padding: 18,
+    gap: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  langOptionActive: {
+    borderColor: '#60A5FA',
+    backgroundColor: '#60A5FA10',
+  },
+  langFlag: {
+    fontSize: 36,
+  },
+  langOptionInfo: {
+    flex: 1,
+  },
+  langOptionTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#CBD5E1',
+    marginBottom: 2,
+  },
+  langOptionTitleActive: {
+    color: '#FFF',
+  },
+  langOptionDesc: {
+    fontSize: 13,
+    color: '#64748B',
+  },
+  langCheck: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#60A5FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
   // --- Promise ---
   promiseContent: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingBottom: 40,
+    paddingTop: 24,
   },
   promiseImageWrap: {
-    width: SCREEN_WIDTH * 0.6,
-    height: SCREEN_WIDTH * 0.7,
-    marginBottom: 24,
+    width: Math.min(SCREEN_WIDTH * 0.45, 200),
+    height: Math.min(SCREEN_WIDTH * 0.45, 200),
+    marginBottom: 20,
   },
   promiseImage: {
     width: '100%',
     height: '100%',
   },
   promiseTitle: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
     color: '#FFF',
     textAlign: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
     paddingHorizontal: 24,
   },
   promiseSubtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#94A3B8',
     textAlign: 'center',
-    lineHeight: 24,
-    marginBottom: 40,
+    lineHeight: 22,
+    marginBottom: 28,
     paddingHorizontal: 32,
   },
 
@@ -1472,458 +1038,196 @@ const s = StyleSheet.create({
     color: '#64748B',
     fontWeight: '500',
   },
-  ctaOutline: {
-    paddingVertical: 16,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#334155',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  ctaOutlineText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
 
-  // --- Setup ---
-  setupContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  setupTitle: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: '#FFF',
-    marginBottom: 6,
-  },
-  setupSubtitle: {
-    fontSize: 14,
-    color: '#64748B',
-    marginBottom: 24,
-  },
-  setupSection: {
-    marginBottom: 20,
-  },
-  setupLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#64748B',
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
-  formatRow: {
-    flexDirection: 'row',
-    gap: 10,
-  },
-  formatChip: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  formatChipActive: {
-    borderColor: '#60A5FA',
-    backgroundColor: '#60A5FA15',
-  },
-  formatChipText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  formatChipTextActive: {
-    color: '#60A5FA',
-  },
-  playerInputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1E293B',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    gap: 10,
-  },
-  playerDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-  },
-  playerInput: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#E2E8F0',
-    fontWeight: '500',
-  },
-  setupFooter: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-
-  // --- Mene scoring ---
-  scoreHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-  },
-  scoreTeam: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  scoreTeamName: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#94A3B8',
-    marginBottom: 4,
-  },
-  scoreValue: {
-    fontSize: 48,
-    fontWeight: '800',
-  },
-  scoreSeparator: {
-    alignItems: 'center',
-    paddingHorizontal: 16,
-  },
-  scoreSepText: {
-    fontSize: 32,
-    fontWeight: '300',
-    color: '#475569',
-  },
-  meneCountText: {
-    fontSize: 12,
-    color: '#64748B',
-    marginTop: 4,
-  },
-  tooltip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#60A5FA10',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    gap: 8,
-  },
-  tooltipText: {
-    fontSize: 13,
-    color: '#60A5FA',
-    flex: 1,
-  },
-  meneContent: {
-    paddingHorizontal: 20,
-    paddingBottom: 24,
-  },
-  teamSelectorRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  teamSelectBtn: {
-    flex: 1,
-    paddingVertical: 16,
-    borderRadius: 14,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  teamSelectBtnActiveA: {
-    borderColor: '#60A5FA',
-    backgroundColor: '#60A5FA15',
-  },
-  teamSelectBtnActiveB: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#F59E0B15',
-  },
-  teamSelectText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#94A3B8',
-  },
-  teamSelectTextActive: {
-    color: '#FFF',
-  },
-  pointsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 20,
-  },
-  pointBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 12,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  pointBtnActive: {
-    borderColor: '#F59E0B',
-    backgroundColor: '#F59E0B20',
-  },
-  pointBtnText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#64748B',
-  },
-  pointBtnTextActive: {
-    color: '#F59E0B',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 24,
-  },
-  actionBtn: {
-    flex: 1,
-    paddingVertical: 14,
-    borderRadius: 14,
-    backgroundColor: '#1E293B',
-    alignItems: 'center',
-    gap: 4,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  actionBtnText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-  },
-  validateBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: '#10B981',
-    paddingVertical: 16,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  validateBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  meneHistory: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  meneHistoryItem: {
-    backgroundColor: '#1E293B',
-    borderRadius: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  meneHistoryText: {
-    fontSize: 12,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-  simFooter: {
-    paddingHorizontal: 20,
-    paddingBottom: 16,
-    alignItems: 'center',
-  },
-  simBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-  },
-  simBtnText: {
-    fontSize: 14,
-    color: '#94A3B8',
-    fontWeight: '500',
-  },
-
-  // --- Sponsor ---
+  // --- Sponsor / Ambassador (improved) ---
   sponsorContent: {
     flexGrow: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingBottom: 40,
   },
-  sponsorLogoWrap: {
-    position: 'relative' as const,
-    marginBottom: 24,
-  },
-  sponsorLogo: {
-    width: 120,
-    height: 120,
-    borderRadius: 32,
-    borderWidth: 3,
-    borderColor: '#F59E0B',
-  },
-  sponsorLogoFallback: {
-    width: 120,
-    height: 120,
-    borderRadius: 32,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    borderWidth: 3,
-    borderColor: '#F59E0B',
-  },
-  sponsorGoldBadge: {
-    position: 'absolute' as const,
-    bottom: -4,
-    right: -4,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#F59E0B',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    borderWidth: 3,
-    borderColor: '#0F172A',
-  },
-  sponsorPresentedRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
+  sponsorLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
-    marginBottom: 8,
+    marginBottom: 20,
   },
-  sponsorPresentedLine: {
-    width: 40,
+  sponsorLabelLine: {
+    width: 32,
     height: 1,
-    backgroundColor: '#F59E0B40',
   },
-  sponsorPresentedText: {
+  sponsorLabelBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  sponsorLabelText: {
     fontSize: 11,
-    fontWeight: '700' as const,
-    color: '#F59E0B',
-    letterSpacing: 2,
+    fontWeight: '700',
+    letterSpacing: 1.5,
   },
-  sponsorName: {
-    fontSize: 28,
-    fontWeight: '800' as const,
+  sponsorCard: {
+    width: '100%',
+    backgroundColor: '#1E293B',
+    borderRadius: 24,
+    padding: 24,
+    borderWidth: 1,
+    marginBottom: 24,
+    gap: 20,
+  },
+  sponsorCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  sponsorPhotoWrap: {
+    position: 'relative',
+    width: 80,
+    height: 80,
+    borderRadius: 24,
+    borderWidth: 2.5,
+    overflow: 'hidden',
+  },
+  sponsorPhoto: {
+    width: '100%',
+    height: '100%',
+  },
+  sponsorPhotoFallback: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sponsorPhotoBadge: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 2,
+    borderColor: '#1E293B',
+  },
+  sponsorCardNameCol: {
+    flex: 1,
+  },
+  sponsorCardName: {
+    fontSize: 22,
+    fontWeight: '800',
     color: '#FFF',
-    textAlign: 'center' as const,
-    marginBottom: 8,
+    marginBottom: 4,
   },
-  sponsorBio: {
-    fontSize: 15,
+  sponsorCardBio: {
+    fontSize: 13,
     color: '#94A3B8',
-    textAlign: 'center' as const,
-    lineHeight: 22,
-    marginBottom: 24,
-    paddingHorizontal: 16,
+    lineHeight: 18,
   },
-  sponsorMessageCard: {
-    width: '100%' as const,
-    borderRadius: 18,
-    overflow: 'hidden' as const,
-    marginBottom: 24,
-    borderWidth: 1.5,
-    borderColor: '#F59E0B',
+  sponsorMsgBox: {
+    borderRadius: 16,
+    padding: 18,
+    gap: 8,
+    position: 'relative',
+    overflow: 'hidden',
   },
-  sponsorMessageGradient: {
-    padding: 20,
-    gap: 10,
-    position: 'relative' as const,
-  },
-  sponsorMessageAccent: {
-    position: 'absolute' as const,
+  sponsorMsgAccent: {
+    position: 'absolute',
     top: 0,
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: '#F59E0B',
   },
-  sponsorMessageText: {
-    fontSize: 15,
-    color: '#78350F',
-    lineHeight: 22,
-    fontStyle: 'italic' as const,
+  sponsorMsgText: {
+    fontSize: 14,
+    lineHeight: 21,
+    fontStyle: 'italic',
   },
-  sponsorSocialRow: {
-    flexDirection: 'row' as const,
-    flexWrap: 'wrap' as const,
-    justifyContent: 'center' as const,
+  sponsorSocialsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
-    marginBottom: 32,
   },
-  sponsorSocialChip: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
+  sponsorSocialBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 6,
-    backgroundColor: '#1E293B',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 14,
+    backgroundColor: '#0F172A',
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: '#334155',
   },
-  sponsorSocialText: {
+  sponsorSocialLabel: {
     fontSize: 13,
-    fontWeight: '600' as const,
+    fontWeight: '600',
     color: '#CBD5E1',
   },
 
-  // --- Stats wow ---
-  statsContent: {
+  // --- Features explanation ---
+  featuresContent: {
     flexGrow: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingBottom: 40,
+    paddingTop: 8,
   },
-  statsEmoji: {
-    fontSize: 64,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  statsTitle: {
-    fontSize: 28,
-    fontWeight: '800',
+  featuresTitle: {
+    fontSize: 26,
+    fontWeight: '700',
     color: '#FFF',
     textAlign: 'center',
     marginBottom: 8,
   },
-  statsScore: {
-    fontSize: 48,
-    fontWeight: '800',
-    color: '#F59E0B',
+  featuresSubtitle: {
+    fontSize: 15,
+    color: '#94A3B8',
     textAlign: 'center',
+    lineHeight: 22,
     marginBottom: 32,
-    letterSpacing: 2,
   },
-  statsCardsRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 24,
+  featuresList: {
     width: '100%',
+    gap: 16,
+    marginBottom: 24,
   },
-  statsCard: {
-    flex: 1,
+  featureRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#1E293B',
+    borderRadius: 18,
+    padding: 18,
+    gap: 16,
+  },
+  featureIconWrap: {
+    width: 52,
+    height: 52,
     borderRadius: 16,
-    paddingVertical: 20,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  counterValue: {
-    fontSize: 28,
-    fontWeight: '800',
+  featureInfo: {
+    flex: 1,
+  },
+  featureTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: '#FFF',
+    marginBottom: 4,
   },
-  statsCardLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#64748B',
-    marginTop: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  featureDesc: {
+    fontSize: 13,
+    color: '#94A3B8',
+    lineHeight: 19,
   },
-  teaserBox: {
+  featureTeaser: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#F59E0B10',
@@ -1934,73 +1238,11 @@ const s = StyleSheet.create({
     gap: 10,
     width: '100%',
   },
-  teaserText: {
-    fontSize: 14,
+  featureTeaserText: {
+    fontSize: 13,
     color: '#FCD34D',
     flex: 1,
-    lineHeight: 20,
-  },
-
-  // --- Share ---
-  shareContent: {
-    flexGrow: 1,
-    alignItems: 'center',
-    paddingHorizontal: 24,
-    paddingBottom: 40,
-  },
-  shareImageWrap: {
-    width: SCREEN_WIDTH * 0.5,
-    height: SCREEN_WIDTH * 0.5,
-    marginBottom: 20,
-  },
-  shareImage: {
-    width: '100%',
-    height: '100%',
-  },
-  shareTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFF',
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  shareSubtitle: {
-    fontSize: 15,
-    color: '#94A3B8',
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 24,
-  },
-  howItWorks: {
-    width: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 20,
-    gap: 16,
-    marginBottom: 32,
-  },
-  howItWorksItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 14,
-  },
-  howItWorksNum: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#60A5FA20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  howItWorksNumText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#60A5FA',
-  },
-  howItWorksText: {
-    fontSize: 15,
-    color: '#E2E8F0',
-    flex: 1,
+    lineHeight: 19,
   },
 
   // --- Map ---
@@ -2009,6 +1251,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 24,
     paddingBottom: 40,
+    paddingTop: 8,
   },
   mapTitle: {
     fontSize: 26,
@@ -2027,40 +1270,100 @@ const s = StyleSheet.create({
   mapCard: {
     width: '100%',
     backgroundColor: '#1E293B',
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 2,
-    marginBottom: 32,
+    marginBottom: 28,
     overflow: 'hidden',
   },
   mapCardInner: {
     backgroundColor: '#0F172A20',
-    borderRadius: 18,
-    paddingVertical: 40,
+    borderRadius: 22,
+    paddingVertical: 28,
     alignItems: 'center',
   },
-  mapStatsRow: {
-    flexDirection: 'row',
-    gap: 20,
-    marginTop: 20,
+  mapIconRow: {
+    width: 120,
+    height: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
   },
-  mapStatItem: {
+  mapMainIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 20,
+    backgroundColor: '#60A5FA15',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinFloat1: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: '#10B98118',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinFloat2: {
+    position: 'absolute',
+    bottom: 4,
+    left: 0,
+    width: 34,
+    height: 34,
+    borderRadius: 12,
+    backgroundColor: '#3B82F618',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPinFloat3: {
+    position: 'absolute',
+    top: 8,
+    left: 10,
+    width: 30,
+    height: 30,
+    borderRadius: 10,
+    backgroundColor: '#F59E0B18',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapFeaturesList: {
+    width: '100%',
+    gap: 12,
+    marginBottom: 32,
+  },
+  mapFeatureItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 14,
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
   },
-  mapStatText: {
-    fontSize: 13,
-    color: '#94A3B8',
-    fontWeight: '500',
+  mapFeatureIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapFeatureLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#E2E8F0',
+    flex: 1,
   },
 
   // --- Login ---
   loginContent: {
     flexGrow: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingBottom: 40,
+    paddingTop: 16,
   },
   loginTitle: {
     fontSize: 26,
@@ -2074,60 +1377,57 @@ const s = StyleSheet.create({
     color: '#94A3B8',
     textAlign: 'center',
     lineHeight: 22,
-    marginBottom: 24,
-  },
-  loginStatsBox: {
-    width: '100%',
-    backgroundColor: '#1E293B',
-    borderRadius: 16,
-    padding: 16,
-    gap: 12,
-    marginBottom: 24,
-  },
-  loginStatRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  loginStatText: {
-    fontSize: 15,
-    color: '#E2E8F0',
-    fontWeight: '500',
+    marginBottom: 28,
   },
   benefitsList: {
     width: '100%',
     marginBottom: 32,
-    gap: 10,
+    gap: 12,
   },
   benefitItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
+    gap: 12,
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  benefitIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: '#10B98118',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   benefitText: {
     fontSize: 15,
-    color: '#CBD5E1',
-  },
-  skipNote: {
-    fontSize: 12,
-    color: '#475569',
-    textAlign: 'center',
-    marginTop: 4,
+    color: '#E2E8F0',
+    fontWeight: '500',
+    flex: 1,
   },
 
   // --- Express profile ---
   expressContent: {
     flexGrow: 1,
     alignItems: 'center',
-    justifyContent: 'center',
     paddingHorizontal: 24,
     paddingBottom: 40,
+    paddingTop: 16,
   },
   expressTitle: {
     fontSize: 28,
     fontWeight: '700',
     color: '#FFF',
     textAlign: 'center',
+    marginBottom: 8,
+  },
+  expressSubtitle: {
+    fontSize: 14,
+    color: '#94A3B8',
+    textAlign: 'center',
+    lineHeight: 20,
     marginBottom: 32,
   },
   expressSection: {

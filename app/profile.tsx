@@ -271,6 +271,21 @@ export default function ProfileScreen() {
     { id: 'Milieu', icon: 'swap-horiz' },
   ];
 
+  // Profile completeness
+  const profileCompleteness = useMemo(() => {
+    const fields = [
+      { id: 'avatar', label: language === 'fr' ? 'Photo de profil' : 'Profile photo', filled: !!avatarUrl, icon: 'camera-alt', color: theme.primary, tip: language === 'fr' ? 'Ajoutez une photo pour etre reconnu' : 'Add a photo to be recognized', action: showPhotoOptions },
+      { id: 'club', label: 'Club', filled: !!club, icon: 'location-city', color: theme.success, tip: language === 'fr' ? 'Rejoignez un club pour le classement' : 'Join a club for rankings', action: () => setIsEditing(true) },
+      { id: 'terrain', label: language === 'fr' ? 'Terrain favori' : 'Favorite court', filled: !!terrainId, icon: 'sports-soccer', color: theme.carreauColor, tip: language === 'fr' ? 'Selectionnez votre terrain habituel' : 'Select your usual court', action: () => setIsEditing(true) },
+      { id: 'location', label: language === 'fr' ? 'Localisation' : 'Location', filled: !!(location.latitude && location.longitude), icon: 'place', color: '#8B5CF6', tip: language === 'fr' ? 'Apparaissez sur la carte' : 'Appear on the map', action: () => setIsEditing(true) },
+      { id: 'boules', label: language === 'fr' ? 'Boules' : 'Boules set', filled: boulesSets.length > 0 || !!(selfPlayer?.boules?.name), icon: 'sports-baseball', color: theme.accent, tip: language === 'fr' ? 'Comparez par equipement' : 'Compare by equipment', action: () => router.push('/equipment') },
+      { id: 'federation', label: language === 'fr' ? 'Carte federation' : 'Federation card', filled: !!federationCardUrl, icon: 'badge', color: '#0EA5E9', tip: language === 'fr' ? 'Boostez votre confiance' : 'Boost trust score', action: showFederationUploadOptions },
+    ];
+    const filledCount = fields.filter(f => f.filled).length;
+    const percent = Math.round((filledCount / fields.length) * 100);
+    return { fields, filledCount, total: fields.length, percent };
+  }, [avatarUrl, club, terrainId, location.latitude, location.longitude, boulesSets, selfPlayer?.boules?.name, federationCardUrl, language]);
+
   // Load profile data - only when NOT editing to avoid resetting form during edit
   useEffect(() => {
     if (isEditing) return; // Don't reset form values while user is editing
@@ -1011,6 +1026,62 @@ export default function ProfileScreen() {
               <Text style={styles.quickStatLabel}>{t('profile', 'challenges')}</Text>
             </View>
           </View>
+
+          {/* Profile Completeness */}
+          {!isEditing && profileCompleteness.percent < 100 ? (
+            <View style={styles.completenessContainer}>
+              <View style={styles.completenessHeader}>
+                <View style={styles.completenessLabelRow}>
+                  <MaterialIcons name="verified-user" size={14} color={profileCompleteness.percent >= 80 ? theme.success : profileCompleteness.percent >= 50 ? theme.accent : theme.primary} />
+                  <Text style={styles.completenessLabel}>
+                    {language === 'fr' ? 'Profil' : 'Profile'}
+                  </Text>
+                </View>
+                <Text style={[
+                  styles.completenessPercent,
+                  { color: profileCompleteness.percent >= 80 ? theme.success : profileCompleteness.percent >= 50 ? theme.accent : theme.primary }
+                ]}>
+                  {profileCompleteness.percent}%
+                </Text>
+              </View>
+              <View style={styles.completenessBarBg}>
+                <View style={[
+                  styles.completenessBarFill,
+                  {
+                    width: `${Math.max(4, profileCompleteness.percent)}%`,
+                    backgroundColor: profileCompleteness.percent >= 80 ? theme.success : profileCompleteness.percent >= 50 ? theme.accent : theme.primary,
+                  },
+                ]} />
+              </View>
+              <View style={styles.completenessDotsRow}>
+                {profileCompleteness.fields.map(f => (
+                  <Pressable
+                    key={f.id}
+                    style={[styles.completenessDot, f.filled && styles.completenessDotFilled, f.filled && { backgroundColor: f.color + '15', borderColor: f.color + '40' }]}
+                    onPress={f.filled ? undefined : f.action}
+                  >
+                    <MaterialIcons name={f.icon as any} size={13} color={f.filled ? f.color : theme.textMuted} />
+                  </Pressable>
+                ))}
+              </View>
+              {/* First missing field tip */}
+              {(() => {
+                const missing = profileCompleteness.fields.find(f => !f.filled);
+                if (!missing) return null;
+                return (
+                  <Pressable style={styles.completenessTip} onPress={missing.action}>
+                    <View style={[styles.completenessTipIcon, { backgroundColor: missing.color + '12' }]}>
+                      <MaterialIcons name={missing.icon as any} size={14} color={missing.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.completenessTipText} numberOfLines={1}>{missing.tip}</Text>
+                    </View>
+                    <MaterialIcons name="add-circle-outline" size={16} color={missing.color} />
+                  </Pressable>
+                );
+              })()}
+            </View>
+          ) : null}
         </Animated.View>
 
         {/* Progression Section: XP + Streak + Badges (compact unified card) */}
@@ -3660,6 +3731,87 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary + '15',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  // Profile completeness
+  completenessContainer: {
+    width: '100%',
+    marginTop: 16,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.lg,
+    padding: 14,
+  },
+  completenessHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  completenessLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  completenessLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
+    letterSpacing: 0.3,
+  },
+  completenessPercent: {
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  completenessBarBg: {
+    width: '100%',
+    height: 6,
+    backgroundColor: theme.border,
+    borderRadius: 3,
+    overflow: 'hidden',
+    marginBottom: 10,
+  },
+  completenessBarFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  completenessDotsRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  completenessDot: {
+    width: 30,
+    height: 30,
+    borderRadius: 8,
+    backgroundColor: theme.surface,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completenessDotFilled: {
+    borderStyle: 'solid',
+  },
+  completenessTip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+  },
+  completenessTipIcon: {
+    width: 26,
+    height: 26,
+    borderRadius: 7,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  completenessTipText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: theme.textSecondary,
   },
 });
 

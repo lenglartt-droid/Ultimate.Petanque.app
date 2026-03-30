@@ -18,7 +18,7 @@ import {
 
 export function useBadges() {
   const { user } = useAuth();
-  const { matches, challenges, userStats, sharedMatchIds } = useApp();
+  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useApp();
 
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [xp, setXp] = useState(0);
@@ -98,6 +98,25 @@ export function useBadges() {
           .eq('status', 'attested');
         context.witnessAttestationsGiven = attestationsGiven?.length || 0;
       } catch { context.witnessAttestationsGiven = 0; }
+
+      // Compute profile completeness for Complete Profile badge
+      try {
+        const supabasePC = (await import('@/template')).getSupabaseClient();
+        const { data: profileData } = await supabasePC
+          .from('user_profiles')
+          .select('avatar, club, federation_card_url')
+          .eq('id', user.id)
+          .single();
+        let filledCount = 0;
+        const totalFields = 6;
+        if (profileData?.avatar) filledCount++;
+        if (profileData?.club || selfPlayer?.club) filledCount++;
+        if (selfPlayer?.terrainId) filledCount++;
+        if (selfPlayer?.location && (selfPlayer.location.latitude || selfPlayer.location.longitude)) filledCount++;
+        if (boulesSets.length > 0 || (selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight))) filledCount++;
+        if (profileData?.federation_card_url) filledCount++;
+        context.profileCompleteness = Math.round((filledCount / totalFields) * 100);
+      } catch { context.profileCompleteness = 0; }
 
       const newBadgeIds = await checkAndAwardBadges(user.id, context, badges);
 
