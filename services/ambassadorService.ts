@@ -234,7 +234,7 @@ export async function trackReferral(referralCode: string, referredUserId: string
     if (findErr || !amb) return { success: false, error: 'Code invalide' };
 
     // Increment referral count and XP
-    const xpPerReferral = 50;
+    const xpPerReferral = 10;
     const { error: upErr } = await supabase
       .from('ambassadors')
       .update({
@@ -433,21 +433,21 @@ export const AMBASSADOR_LEVELS = {
   decouverte: {
     color: '#3B82F6',
     icon: 'explore' as const,
-    minReferrals: 0,
+    minReferrals: 25,
     minEvents: 0,
     minImpressions: 0,
   },
   confirme: {
     color: '#7C3AED',
     icon: 'trending-up' as const,
-    minReferrals: 5,
+    minReferrals: 50,
     minEvents: 3,
     minImpressions: 500,
   },
   elite: {
     color: '#F59E0B',
     icon: 'military-tech' as const,
-    minReferrals: 20,
+    minReferrals: 100,
     minEvents: 10,
     minImpressions: 2000,
   },
