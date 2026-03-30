@@ -522,7 +522,7 @@ export default function TrustScoreScreen() {
               </Animated.View>
             ) : null}
 
-            {/* Tips */}
+            {/* Actionable Tips — personalized based on factor scores */}
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
                 <View style={[st.sectionIconBg, { backgroundColor: theme.success + '15' }]}>
@@ -531,20 +531,145 @@ export default function TrustScoreScreen() {
                 <Text style={st.sectionTitle}>{(et.tipsTitle as any)?.[language] || 'Tips to Improve'}</Text>
               </View>
 
-              {[
-                { icon: 'people', color: '#3B82F6', text: (et.tip1 as any)?.[language] || 'Play with other app users' },
-                { icon: 'groups', color: '#8B5CF6', text: (et.tip2 as any)?.[language] || 'Vary your opponents' },
-                { icon: 'schedule', color: '#06B6D4', text: (et.tip3 as any)?.[language] || 'Play regularly' },
-                { icon: 'edit-off', color: '#F97316', text: (et.tip4 as any)?.[language] || 'Avoid excessive modifications' },
-                { icon: 'visibility', color: '#7C3AED', text: isFr ? 'Faites attester vos matchs et defis par des temoins pour un bonus 2.0x' : 'Get your matches and challenges attested by witnesses for a 2.0x bonus' },
-              ].map((tip, idx) => (
-                <View key={idx} style={st.tipRow}>
-                  <View style={[st.tipIcon, { backgroundColor: tip.color + '12' }]}>
-                    <MaterialIcons name={tip.icon as any} size={16} color={tip.color} />
+              {(() => {
+                // Build personalized tips based on factors that are below max
+                const tips: { icon: string; color: string; text: string; route?: string; actionLabel?: string; priority: number }[] = [];
+
+                // Multi-player matches (max 30)
+                if (Math.round(mpScore * 100) < 20) {
+                  tips.push({
+                    icon: 'people',
+                    color: '#3B82F6',
+                    text: isFr
+                      ? `Seulement ${multiPlayerRatio}% de matchs multi-joueurs. Partagez vos matchs avec les autres joueurs de l'app pour augmenter ce ratio.`
+                      : `Only ${multiPlayerRatio}% multi-player matches. Share your matches with other app users to increase this ratio.`,
+                    route: '/share-hub',
+                    actionLabel: isFr ? 'Partager un match' : 'Share a match',
+                    priority: 1,
+                  });
+                }
+
+                // Opponent diversity (max 20)
+                if (diversityScore < 14) {
+                  tips.push({
+                    icon: 'groups',
+                    color: '#8B5CF6',
+                    text: isFr
+                      ? `${uniqueOpponents} adversaires uniques sur ${totalMatches} matchs. Jouez contre de nouveaux adversaires pour diversifier vos donnees.`
+                      : `${uniqueOpponents} unique opponents across ${totalMatches} matches. Play against new opponents to diversify your data.`,
+                    route: '/(tabs)/directory',
+                    actionLabel: isFr ? 'Trouver des joueurs' : 'Find players',
+                    priority: 2,
+                  });
+                }
+
+                // Performance consistency (max 20)
+                if (consistencyScore < 14) {
+                  tips.push({
+                    icon: 'show-chart',
+                    color: '#10B981',
+                    text: isFr
+                      ? `Consistance a ${performanceConsistency}%. Jouez regulierement pour stabiliser vos performances et augmenter ce facteur.`
+                      : `Consistency at ${performanceConsistency}%. Play regularly to stabilize your performance and increase this factor.`,
+                    route: '/match/new',
+                    actionLabel: isFr ? 'Jouer un match' : 'Play a match',
+                    priority: 3,
+                  });
+                }
+
+                // Play frequency (max 10)
+                if (frequencyScore < 7) {
+                  tips.push({
+                    icon: 'schedule',
+                    color: '#06B6D4',
+                    text: isFr
+                      ? `${matchesPerWeek} matchs/semaine en moyenne. Jouez ${Math.max(1, 3 - matchesPerWeek)} match(s) de plus cette semaine pour ameliorer votre frequence.`
+                      : `${matchesPerWeek} matches/week average. Play ${Math.max(1, 3 - matchesPerWeek)} more match(es) this week to improve your frequency.`,
+                    route: '/match/new',
+                    actionLabel: isFr ? 'Nouveau match' : 'New match',
+                    priority: 4,
+                  });
+                }
+
+                // Witness attestations (max 8)
+                if ((details.witnessedMatchCount || 0) < 8) {
+                  const witnessed = details.witnessedMatchCount || 0;
+                  const remaining = 8 - witnessed;
+                  tips.push({
+                    icon: 'visibility',
+                    color: '#7C3AED',
+                    text: isFr
+                      ? `${witnessed}/8 matchs attestes. Invitez des temoins pour ${remaining} match(s) supplementaire(s) pour maximiser ce bonus (poids 2.0x).`
+                      : `${witnessed}/8 matches attested. Invite witnesses for ${remaining} more match(es) to maximize this bonus (2.0x weight).`,
+                    route: '/notifications-hub',
+                    actionLabel: isFr ? 'Voir attestations' : 'View attestations',
+                    priority: 5,
+                  });
+                }
+
+                // Modification history (max 15)
+                if (historyScore < 12 && modExternal > 0) {
+                  tips.push({
+                    icon: 'edit-off',
+                    color: '#F97316',
+                    text: isFr
+                      ? `${modExternal} modification(s) externe(s) detectee(s). Evitez de modifier vos matchs apres les avoir enregistres pour garder un historique propre.`
+                      : `${modExternal} external modification(s) detected. Avoid editing matches after recording to keep a clean history.`,
+                    priority: 6,
+                  });
+                }
+
+                // Account age (max 5)
+                if (accountAgeDays < 60) {
+                  tips.push({
+                    icon: 'calendar-today',
+                    color: '#14B8A6',
+                    text: isFr
+                      ? `Compte cree il y a ${accountAgeDays} jours. Ce facteur augmente naturellement avec le temps. Continuez a jouer !`
+                      : `Account created ${accountAgeDays} days ago. This factor increases naturally over time. Keep playing!`,
+                    priority: 7,
+                  });
+                }
+
+                // Sort by priority and show top 5
+                tips.sort((a, b) => a.priority - b.priority);
+                const displayTips = tips.slice(0, 5);
+
+                // If no tips (perfect score), show congratulations
+                if (displayTips.length === 0) {
+                  return (
+                    <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
+                      <MaterialIcons name="emoji-events" size={36} color={theme.success} />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: theme.success }}>
+                        {isFr ? 'Score excellent !' : 'Excellent score!'}
+                      </Text>
+                      <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 19 }}>
+                        {isFr ? 'Continuez a jouer regulierement pour maintenir votre score.' : 'Keep playing regularly to maintain your score.'}
+                      </Text>
+                    </View>
+                  );
+                }
+
+                return displayTips.map((tip, idx) => (
+                  <View key={idx} style={st.tipRow}>
+                    <View style={[st.tipIcon, { backgroundColor: tip.color + '12' }]}>
+                      <MaterialIcons name={tip.icon as any} size={16} color={tip.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.tipText}>{tip.text}</Text>
+                      {tip.route ? (
+                        <Pressable
+                          style={[st.tipActionBtn, { backgroundColor: tip.color + '10', borderColor: tip.color + '25' }]}
+                          onPress={() => router.push(tip.route as any)}
+                        >
+                          <MaterialIcons name="arrow-forward" size={14} color={tip.color} />
+                          <Text style={[st.tipActionText, { color: tip.color }]}>{tip.actionLabel}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
                   </View>
-                  <Text style={st.tipText}>{tip.text}</Text>
-                </View>
-              ))}
+                ));
+              })()}
             </Animated.View>
           </>
         )}
@@ -618,7 +743,9 @@ const st = StyleSheet.create({
   // Tips
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '30' },
   tipIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  tipText: { flex: 1, fontSize: 13, color: theme.textPrimary, fontWeight: '500', lineHeight: 18 },
+  tipText: { fontSize: 13, color: theme.textPrimary, fontWeight: '500', lineHeight: 18 },
+  tipActionBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start' as const, borderWidth: 1 },
+  tipActionText: { fontSize: 12, fontWeight: '700' },
 });
 
 const histSt = StyleSheet.create({
