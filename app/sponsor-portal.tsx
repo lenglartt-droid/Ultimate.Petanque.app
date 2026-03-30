@@ -8,7 +8,6 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
@@ -201,12 +200,14 @@ export default function SponsorPortalScreen() {
 
   const loadSponsor = useCallback(async () => {
     if (!user?.id) return null;
-    const { data } = await supabase
+    const { data: rows } = await supabase
       .from('ambassadors')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
-      .maybeSingle();
+      .order('badge_type', { ascending: false })
+      .limit(1);
+    const data = rows && rows.length > 0 ? rows[0] : null;
     setSponsor(data);
     if (data?.brand_color && !brandColorDirty) setBrandColor(data.brand_color);
     return data;
@@ -1263,6 +1264,16 @@ export default function SponsorPortalScreen() {
   }
 
   const isGold = sponsor.badge_type === 'gold_sponsor';
+  const isSilverPlus = isGold || sponsor.badge_type === 'sponsor';
+
+  // Tier-based section access
+  const TIER_ACCESS: Record<string, Set<string>> = {
+    partner: new Set(['roi', 'placement', 'branding', 'events']),
+    sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events']),
+    gold_sponsor: new Set(['roi', 'placement', 'branding', 'push', 'events', 'crm']),
+  };
+  const allowedSections = TIER_ACCESS[sponsor.badge_type] || TIER_ACCESS.partner;
+
   const tierColor = isGold ? '#D4A017' : sponsor.badge_type === 'sponsor' ? '#78909C' : '#A1887F';
   const tierLabel = isGold ? (fr ? 'Partenaire Or' : 'Gold Partner') : sponsor.badge_type === 'sponsor' ? (fr ? 'Partenaire Argent' : 'Silver Partner') : (fr ? 'Partenaire Bronze' : 'Bronze Partner');
   const tierGradient: [string, string] = isGold ? ['#B45309', '#F59E0B'] : sponsor.badge_type === 'sponsor' ? ['#475569', '#94A3B8'] : ['#78350F', '#D97706'];
@@ -1307,7 +1318,7 @@ export default function SponsorPortalScreen() {
         const isLast = onboardingStep === steps.length - 1;
         return (
           <View style={st.onboardingOverlay}>
-            <Animated.View entering={FadeIn.duration(300)} style={st.onboardingCard}>
+            <View style={st.onboardingCard}>
               <View style={[st.onboardingIcon, { backgroundColor: step.bg }]}>
                 <MaterialIcons name={step.icon as any} size={32} color={step.color} />
               </View>
@@ -1330,7 +1341,7 @@ export default function SponsorPortalScreen() {
                   <Text style={st.onboardingSkipText}>{fr ? 'Passer' : 'Skip'}</Text>
                 </Pressable>
               ) : null}
-            </Animated.View>
+            </View>
           </View>
         );
       })() : null}
@@ -1350,9 +1361,6 @@ export default function SponsorPortalScreen() {
             {sponsorNotifs.filter(n => n.unread).length > 0 ? (
               <View style={{ position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', borderWidth: 1.5, borderColor: '#FFF' }} />
             ) : null}
-          </Pressable>
-          <Pressable style={st.headerAction} onPress={() => router.push('/ambassador-dashboard' as any)}>
-            <MaterialIcons name="dashboard" size={20} color={tierColor} />
           </Pressable>
           <Pressable style={st.headerAction} onPress={() => router.push('/sponsor-preview' as any)}>
             <MaterialIcons name="swap-horiz" size={20} color={tierColor} />
@@ -1407,7 +1415,7 @@ export default function SponsorPortalScreen() {
 
       {/* Notification Center */}
       {showNotifCenter && sponsorNotifs.length > 0 ? (
-        <Animated.View entering={FadeInDown.duration(200)} style={st.notifCenterPanel}>
+        <View style={st.notifCenterPanel}>
           <View style={st.notifCenterHeader}>
             <MaterialIcons name="notifications" size={18} color={tierColor} />
             <Text style={st.notifCenterTitle}>{fr ? 'Centre de notifications' : 'Notification Center'}</Text>
@@ -1427,17 +1435,20 @@ export default function SponsorPortalScreen() {
               {n.unread ? <View style={[st.notifUnreadDot, { backgroundColor: n.color }]} /> : null}
             </View>
           ))}
-        </Animated.View>
+        </View>
       ) : null}
 
       {/* Section Tabs */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.sectionTabsRow}>
-        {sections.map(sec => (
-          <Pressable key={sec.id} style={[st.sectionTab, activeSection === sec.id && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); setActiveSection(sec.id); }}>
-            <MaterialIcons name={sec.icon as any} size={15} color={activeSection === sec.id ? tierColor : theme.textMuted} />
-            <Text style={[st.sectionTabText, activeSection === sec.id && { color: tierColor }]}>{sec.label}</Text>
-          </Pressable>
-        ))}
+        {sections.map(sec => {
+          const locked = !allowedSections.has(sec.id);
+          return (
+            <Pressable key={sec.id} style={[st.sectionTab, activeSection === sec.id && !locked && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }, locked && { opacity: 0.55 }]} onPress={() => { if (locked) { showAlert(fr ? 'Acces reserve' : 'Reserved access', fr ? `Cette section est reservee aux partenaires ${sec.id === 'crm' ? 'Or' : 'Argent et Or'}. Passez au tier superieur.` : `This section is reserved for ${sec.id === 'crm' ? 'Gold' : 'Silver and Gold'} partners. Upgrade your tier.`); return; } Haptics.selectionAsync(); setActiveSection(sec.id); }}>
+              <MaterialIcons name={locked ? 'lock' as any : sec.icon as any} size={13} color={activeSection === sec.id && !locked ? tierColor : theme.textMuted} />
+              <Text style={[st.sectionTabText, activeSection === sec.id && !locked && { color: tierColor }]}>{sec.label}</Text>
+            </Pressable>
+          );
+        })}
       </ScrollView>
 
       <ScrollView
@@ -1446,11 +1457,68 @@ export default function SponsorPortalScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tierColor} />}
       >
+        {/* Onboarding Checklist */}
+        {!checklistComplete || !checklistXpClaimed ? (
+          <View style={st.checklistCard}>
+            <View style={st.checklistHeader}>
+              <View style={[st.checklistIconBg, { backgroundColor: tierColor + '12' }]}>
+                <MaterialIcons name="checklist" size={20} color={tierColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.checklistTitle}>{fr ? 'Demarrage rapide' : 'Quick Start'}</Text>
+                <Text style={st.checklistSub}>{checklistDoneCount}/{checklistTotal} {fr ? 'etapes' : 'steps'}</Text>
+              </View>
+              {checklistComplete && !checklistXpClaimed ? (
+                <Pressable style={[st.checklistClaimBtn, { backgroundColor: tierColor }]} onPress={handleClaimChecklistXp}>
+                  <MaterialIcons name="star" size={14} color="#FFF" />
+                  <Text style={st.checklistClaimText}>+200 XP</Text>
+                </Pressable>
+              ) : (
+                <View style={[st.checklistProgressBadge, { borderColor: tierColor + '30' }]}>
+                  <Text style={[st.checklistProgressText, { color: tierColor }]}>{Math.round((checklistDoneCount / checklistTotal) * 100)}%</Text>
+                </View>
+              )}
+            </View>
+            <View style={st.checklistBarTrack}>
+              <View style={[st.checklistBarFill, { width: `${(checklistDoneCount / checklistTotal) * 100}%`, backgroundColor: tierColor }]} />
+            </View>
+            {checklistItems.map((item, i) => (
+              <Pressable key={item.key} style={({ pressed }) => [st.checklistItem, pressed && !item.done && { backgroundColor: tierColor + '06' }]} onPress={() => { if (!item.done) { Haptics.selectionAsync(); item.action(); } }} disabled={item.done}>
+                <View style={[st.checklistCheck, item.done ? { backgroundColor: '#10B981' } : { borderColor: '#CBD5E1' }]}>
+                  {item.done ? <MaterialIcons name="check" size={12} color="#FFF" /> : <Text style={{ fontSize: 10, fontWeight: '700', color: '#CBD5E1' }}>{i + 1}</Text>}
+                </View>
+                <MaterialIcons name={item.icon} size={16} color={item.done ? '#94A3B8' : tierColor} />
+                <Text style={[st.checklistItemText, item.done && { color: '#94A3B8', textDecorationLine: 'line-through' }]}>{item.label}</Text>
+                {!item.done ? <MaterialIcons name="chevron-right" size={16} color={tierColor + '60'} /> : null}
+              </Pressable>
+            ))}
+          </View>
+        ) : null}
+
+        {/* Quick Actions */}
+        <View style={st.actionsCard}>
+          <Text style={st.actionsTitle}>{fr ? 'Actions rapides' : 'Quick actions'}</Text>
+          <View style={st.actionsGrid}>
+            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/sponsored-event/new' as any)}>
+              <View style={[st.actionIcon, { backgroundColor: '#10B98112' }]}><MaterialIcons name="add-circle" size={22} color="#10B981" /></View>
+              <Text style={st.actionLabel}>{fr ? 'Defi sponsor' : 'Sponsor challenge'}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/partners' as any)}>
+              <View style={[st.actionIcon, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="storefront" size={22} color="#3B82F6" /></View>
+              <Text style={st.actionLabel}>{fr ? 'Page partenaires' : 'Partners page'}</Text>
+            </Pressable>
+            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => { if (sponsor.website_url) Linking.openURL(sponsor.website_url); }}>
+              <View style={[st.actionIcon, { backgroundColor: tierColor + '12' }]}><MaterialIcons name="language" size={22} color={tierColor} /></View>
+              <Text style={st.actionLabel}>{fr ? 'Mon site' : 'My site'}</Text>
+            </Pressable>
+          </View>
+        </View>
+
         {/* ====== ROI SECTION ====== */}
         {activeSection === 'roi' ? (
           <>
             {/* KPI Cards */}
-            <Animated.View entering={FadeInDown.duration(300)} style={st.kpiGrid}>
+            <View style={st.kpiGrid}>
               {[
                 { value: totalImp, label: fr ? 'Impressions' : 'Impressions', icon: 'visibility', color: '#3B82F6' },
                 { value: totalClk, label: fr ? 'Clics' : 'Clicks', icon: 'touch-app', color: '#10B981' },
@@ -1465,10 +1533,10 @@ export default function SponsorPortalScreen() {
                   <Text style={st.kpiLabel}>{kpi.label}</Text>
                 </View>
               ))}
-            </Animated.View>
+            </View>
 
             {/* Sparkline Charts */}
-            <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.chartCard}>
+            <View style={st.chartCard}>
               <Text style={st.chartTitle}>{fr ? `Tendance ${period}j` : `${period}d Trend`}</Text>
               {/* Impressions */}
               <View style={st.chartBlock}>
@@ -1497,10 +1565,10 @@ export default function SponsorPortalScreen() {
                 <Text style={st.chartDateText}>{dailyDates[0]?.slice(5) || ''}</Text>
                 <Text style={st.chartDateText}>{dailyDates[dailyDates.length - 1]?.slice(5) || ''}</Text>
               </View>
-            </Animated.View>
+            </View>
 
             {/* CTR Card */}
-            <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.ctrCard}>
+            <View style={st.ctrCard}>
               <View style={st.ctrHeader}>
                 <MaterialIcons name="trending-up" size={20} color="#F59E0B" />
                 <Text style={st.ctrTitle}>{fr ? 'Taux de conversion' : 'Conversion rate'}</Text>
@@ -1511,11 +1579,11 @@ export default function SponsorPortalScreen() {
                   ? `${totalClk} clic(s) pour ${totalImp} impression(s) sur ${period} jours`
                   : `${totalClk} click(s) from ${totalImp} impression(s) over ${period} days`}
               </Text>
-            </Animated.View>
+            </View>
 
             {/* Weekly Digest Preview */}
             {lastDigest ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(190)} style={st.ctrCard}>
+              <View style={st.ctrCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                   <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#6366F112', alignItems: 'center', justifyContent: 'center' }}>
                     <MaterialIcons name="email" size={18} color="#6366F1" />
@@ -1548,12 +1616,12 @@ export default function SponsorPortalScreen() {
                 <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 10, fontStyle: 'italic' }}>
                   {fr ? 'Envoye automatiquement chaque lundi via notification push' : 'Sent automatically every Monday via push notification'}
                 </Text>
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Digest Email Preview */}
             {digestHtmlData ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(192)} style={st.ctrCard}>
+              <View style={st.ctrCard}>
                 <Pressable
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: digestPreviewOpen ? 14 : 0 }}
                   onPress={() => { Haptics.selectionAsync(); setDigestPreviewOpen(!digestPreviewOpen); }}
@@ -1570,7 +1638,7 @@ export default function SponsorPortalScreen() {
                   <MaterialIcons name={digestPreviewOpen ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
                 </Pressable>
                 {digestPreviewOpen ? (
-                  <Animated.View entering={FadeInDown.duration(200)}>
+                  <View>
                     {/* Rendered email preview */}
                     <View style={{ borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#E2E8F0' }}>
                       {/* Email header */}
@@ -1620,14 +1688,14 @@ export default function SponsorPortalScreen() {
                       <MaterialIcons name="history" size={14} color="#4338CA" />
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#4338CA' }}>{fr ? 'Voir tous les digests' : 'View all digests'}</Text>
                     </Pressable>
-                  </Animated.View>
+                  </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
 
-            {/* Competitor Benchmark */}
-            {benchmarkData && benchmarkData.tierCount > 1 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(195)} style={st.benchmarkCard}>
+            {/* Competitor Benchmark (Gold only) */}
+            {isGold && benchmarkData && benchmarkData.tierCount > 1 ? (
+              <View style={st.benchmarkCard}>
                 <View style={st.benchmarkHeader}>
                   <View style={[st.benchmarkIcon, { backgroundColor: tierColor + '12' }]}>
                     <MaterialIcons name="leaderboard" size={20} color={tierColor} />
@@ -1678,11 +1746,11 @@ export default function SponsorPortalScreen() {
                     </View>
                   );
                 })}
-              </Animated.View>
+              </View>
             ) : null}
 
-            {/* Revenue Tracker */}
-            <Animated.View entering={FadeInDown.duration(300).delay(198)} style={st.ctrCard}>
+            {/* Revenue Tracker (Silver+) */}
+            {isSilverPlus ? <View style={st.ctrCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#10B98112', alignItems: 'center', justifyContent: 'center' }}>
                   <MaterialIcons name="account-balance-wallet" size={18} color="#10B981" />
@@ -1693,7 +1761,7 @@ export default function SponsorPortalScreen() {
                 </View>
               </View>
               <View style={st.pushField}>
-                <Text style={st.pushFieldLabel}>{fr ? 'Budget mensuel (\u20AC)' : 'Monthly budget (\u20AC)'}</Text>
+                <Text style={st.pushFieldLabel}>{fr ? 'Budget mensuel (€)' : 'Monthly budget (€)'}</Text>
                 <TextInput style={st.pushInput} value={revBudget} onChangeText={setRevBudget} keyboardType="numeric" placeholder="500" placeholderTextColor="#94A3B8" />
               </View>
               {revBudget && parseFloat(revBudget) > 0 ? (() => {
@@ -1703,24 +1771,24 @@ export default function SponsorPortalScreen() {
                 return (
                   <View style={{ flexDirection: 'row', gap: 8 }}>
                     <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <Text style={{ fontSize: 18, fontWeight: '900', color: tierColor }}>\u20AC{cpmVal}</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: tierColor }}>€{cpmVal}</Text>
                       <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>CPM</Text>
                     </View>
                     <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#10B981' }}>\u20AC{cpcVal}</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#10B981' }}>€{cpcVal}</Text>
                       <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>CPC</Text>
                     </View>
                     <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#3B82F6' }}>\u20AC{Math.round(budget * 3)}</Text>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#3B82F6' }}>€{Math.round(budget * 3)}</Text>
                       <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2 }}>{fr ? '3 mois' : '3 months'}</Text>
                     </View>
                   </View>
                 );
               })() : null}
-            </Animated.View>
+            </View> : null}
 
-            {/* Monthly Goals */}
-            <Animated.View entering={FadeInDown.duration(300).delay(199)} style={st.ctrCard}>
+            {/* Monthly Goals (Silver+) */}
+            {isSilverPlus ? <View style={st.ctrCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                 <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' }}>
                   <MaterialIcons name="flag" size={18} color="#7C3AED" />
@@ -1786,7 +1854,7 @@ export default function SponsorPortalScreen() {
               })() : null}
               {/* Goal Achievement Banner */}
               {Object.values(goalAchievements).some(v => v) ? (
-                <Animated.View entering={FadeInDown.duration(300)} style={{ backgroundColor: celebratingGoal ? '#10B98112' : '#10B98108', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#10B98125' }}>
+                <View style={{ backgroundColor: celebratingGoal ? '#10B98112' : '#10B98108', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#10B98125' }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <View style={{ width: 40, height: 40, borderRadius: 14, backgroundColor: '#10B98118', alignItems: 'center', justifyContent: 'center' }}>
                       <MaterialIcons name={celebratingGoal ? 'celebration' : 'emoji-events'} size={20} color="#10B981" />
@@ -1816,7 +1884,7 @@ export default function SponsorPortalScreen() {
                       </View>
                     )}
                   </View>
-                </Animated.View>
+                </View>
               ) : null}
               <Pressable
                 style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#7C3AED', paddingVertical: 12, borderRadius: 12 }, savingGoals && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
@@ -1830,10 +1898,10 @@ export default function SponsorPortalScreen() {
                   </>
                 )}
               </Pressable>
-            </Animated.View>
+            </View> : null}
 
-            {/* ROI Calculator */}
-            <Animated.View entering={FadeInDown.duration(300).delay(199)} style={st.ctrCard}>
+            {/* ROI Calculator (Silver+) */}
+            {isSilverPlus ? <View style={st.ctrCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                 <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#3B82F612', alignItems: 'center', justifyContent: 'center' }}>
                   <MaterialIcons name="calculate" size={18} color="#3B82F6" />
@@ -1876,7 +1944,7 @@ export default function SponsorPortalScreen() {
                     <View style={{ backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' }}>
                       <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 8, textTransform: 'uppercase' }}>{fr ? 'Valeur estimee de la visibilite' : 'Estimated visibility value'}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, marginBottom: 8 }}>
-                        <Text style={{ fontSize: 28, fontWeight: '900', color: '#0F172A' }}>\u20AC{Math.round(estTotalValue * 10) / 10}</Text>
+                        <Text style={{ fontSize: 28, fontWeight: '900', color: '#0F172A' }}>€{Math.round(estTotalValue * 10) / 10}</Text>
                         <Text style={{ fontSize: 12, fontWeight: '600', color: '#94A3B8' }}>/ {period}{fr ? 'j' : 'd'}</Text>
                       </View>
                       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -1885,14 +1953,14 @@ export default function SponsorPortalScreen() {
                           <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
                             <View style={{ height: '100%', width: `${estTotalValue > 0 ? Math.round(((totalImp * estValuePerImp) / estTotalValue) * 100) : 50}%`, backgroundColor: '#3B82F6', borderRadius: 3 }} />
                           </View>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6', marginTop: 2 }}>\u20AC{Math.round(totalImp * estValuePerImp * 10) / 10}</Text>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6', marginTop: 2 }}>€{Math.round(totalImp * estValuePerImp * 10) / 10}</Text>
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Valeur clics' : 'Click value'}</Text>
                           <View style={{ height: 6, backgroundColor: '#E2E8F0', borderRadius: 3, marginTop: 4, overflow: 'hidden' }}>
                             <View style={{ height: '100%', width: `${estTotalValue > 0 ? Math.round(((totalClk * estValuePerClick) / estTotalValue) * 100) : 50}%`, backgroundColor: '#10B981', borderRadius: 3 }} />
                           </View>
-                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', marginTop: 2 }}>\u20AC{Math.round(totalClk * estValuePerClick * 10) / 10}</Text>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981', marginTop: 2 }}>€{Math.round(totalClk * estValuePerClick * 10) / 10}</Text>
                         </View>
                       </View>
                     </View>
@@ -1908,11 +1976,11 @@ export default function SponsorPortalScreen() {
                         </View>
                         <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
                           <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>CPM</Text>
-                          <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor }}>\u20AC{cpmVal}</Text>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor }}>€{cpmVal}</Text>
                         </View>
                         <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 14, padding: 14, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
                           <Text style={{ fontSize: 9, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 4, textTransform: 'uppercase' }}>CPC</Text>
-                          <Text style={{ fontSize: 22, fontWeight: '900', color: '#10B981' }}>\u20AC{cpcVal}</Text>
+                          <Text style={{ fontSize: 22, fontWeight: '900', color: '#10B981' }}>€{cpcVal}</Text>
                         </View>
                       </View>
                     ) : (
@@ -1930,8 +1998,8 @@ export default function SponsorPortalScreen() {
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', letterSpacing: 0.5, textTransform: 'uppercase' }}>{fr ? 'Ref. marche sport' : 'Sports market ref.'}</Text>
                       </View>
                       {[
-                        { label: 'CPM', yours: cpmVal, market: 6.5, unit: '\u20AC', better: cpmVal > 0 && cpmVal < 6.5 },
-                        { label: 'CPC', yours: cpcVal, market: 0.55, unit: '\u20AC', better: cpcVal > 0 && cpcVal < 0.55 },
+                        { label: 'CPM', yours: cpmVal, market: 6.5, unit: '€', better: cpmVal > 0 && cpmVal < 6.5 },
+                        { label: 'CPC', yours: cpcVal, market: 0.55, unit: '€', better: cpcVal > 0 && cpcVal < 0.55 },
                         { label: 'CTR', yours: ctr, market: 2.1, unit: '%', better: ctr > 2.1 },
                       ].map((ref, ri) => (
                         <View key={ri} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
@@ -1947,10 +2015,23 @@ export default function SponsorPortalScreen() {
                   </>
                 );
               })()}
-            </Animated.View>
+            </View> : null}
+
+            {/* Tier upgrade hint for Bronze */}
+            {!isSilverPlus ? (
+              <View style={{ backgroundColor: '#FFFBEB', borderRadius: 14, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: '#FDE68A', alignItems: 'center' as const, gap: 8 }}>
+                <MaterialIcons name="lock" size={24} color="#F59E0B" />
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E', textAlign: 'center' }}>{fr ? 'Fonctionnalites avancees' : 'Advanced features'}</Text>
+                <Text style={{ fontSize: 12, color: '#92400E', textAlign: 'center', lineHeight: 18 }}>{fr ? 'Budget tracker, objectifs mensuels, calculateur ROI et benchmark sont disponibles pour les partenaires Argent et Or.' : 'Budget tracker, monthly goals, ROI calculator and benchmark are available for Silver and Gold partners.'}</Text>
+                <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F59E0B', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, marginTop: 4 }} onPress={() => router.push('/partnerships' as any)}>
+                  <MaterialIcons name="upgrade" size={16} color="#FFF" />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#FFF' }}>{fr ? 'Voir les offres' : 'View plans'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
 
             {/* Export Buttons */}
-            <Animated.View entering={FadeInDown.duration(300).delay(200)} style={{ gap: 10 }}>
+            <View style={{ gap: 10 }}>
               <Pressable
                 style={({ pressed }) => [st.exportBtn, exporting && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={handleExportCSV}
@@ -1967,7 +2048,7 @@ export default function SponsorPortalScreen() {
                   </>
                 )}
               </Pressable>
-              <Pressable
+              {isSilverPlus ? <Pressable
                 style={({ pressed }) => [st.exportBtn, st.exportBtnPdf, exportingPdf && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={handleExportPDF}
                 disabled={exportingPdf}
@@ -1982,8 +2063,8 @@ export default function SponsorPortalScreen() {
                     <MaterialIcons name="chevron-right" size={18} color="#EF4444" />
                   </>
                 )}
-              </Pressable>
-            </Animated.View>
+              </Pressable> : null}
+            </View>
           </>
         ) : null}
 
@@ -1991,7 +2072,7 @@ export default function SponsorPortalScreen() {
         {activeSection === 'placement' ? (
           <>
             {/* Impressions by Page */}
-            <Animated.View entering={FadeInDown.duration(300)} style={st.placementCard}>
+            <View style={st.placementCard}>
               <Text style={st.placementTitle}>{fr ? 'Vos emplacements' : 'Your placements'}</Text>
               <Text style={st.placementDesc}>
                 {fr
@@ -2034,10 +2115,10 @@ export default function SponsorPortalScreen() {
                   <Text style={st.emptyText}>{fr ? 'Aucune impression enregistree' : 'No impressions recorded'}</Text>
                 </View>
               )}
-            </Animated.View>
+            </View>
 
             {/* Visibility Perks */}
-            <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.perksCard}>
+            <View style={st.perksCard}>
               <Text style={st.perksTitle}>{fr ? 'Vos avantages visibilite' : 'Your visibility perks'}</Text>
               {[
                 isGold && { icon: 'star', text: fr ? 'Banniere dediee sur l\'accueil' : 'Dedicated home banner', active: true },
@@ -2055,7 +2136,7 @@ export default function SponsorPortalScreen() {
                   <MaterialIcons name={perk.active ? 'check-circle' : 'radio-button-unchecked'} size={18} color={perk.active ? '#10B981' : theme.textMuted} />
                 </View>
               ))}
-            </Animated.View>
+            </View>
           </>
         ) : null}
 
@@ -2063,7 +2144,7 @@ export default function SponsorPortalScreen() {
         {activeSection === 'branding' ? (
           <>
             {/* Photo Upload */}
-            <Animated.View entering={FadeInDown.duration(300)} style={st.brandCard}>
+            <View style={st.brandCard}>
               <Text style={st.brandCardTitle}>{fr ? 'Logo / Photo' : 'Logo / Photo'}</Text>
               <View style={st.brandPhotoRow}>
                 <Pressable onPress={handlePickPhoto} disabled={uploadingPhoto} style={st.brandPhotoWrap}>
@@ -2091,10 +2172,10 @@ export default function SponsorPortalScreen() {
                   </Pressable>
                 </View>
               </View>
-            </Animated.View>
+            </View>
 
             {/* Brand Color Selector */}
-            <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.brandCard}>
+            <View style={st.brandCard}>
               <Text style={st.brandCardTitle}>{fr ? 'Couleur de marque' : 'Brand color'}</Text>
               <Text style={st.brandCardDesc}>
                 {fr ? 'Choisissez la couleur dominante de vos bannieres et badges dans l\'application.' : 'Choose the dominant color for your banners and badges in the app.'}
@@ -2113,10 +2194,10 @@ export default function SponsorPortalScreen() {
                   </Pressable>
                 ))}
               </View>
-            </Animated.View>
+            </View>
 
             {/* Map Marker Preview */}
-            <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.brandCard}>
+            <View style={st.brandCard}>
               <Text style={st.brandCardTitle}>{fr ? 'Apercu marqueur carte' : 'Map marker preview'}</Text>
               <Text style={st.brandCardDesc}>
                 {fr ? 'Voici comment votre marqueur apparait sur la carte interactive.' : 'Here is how your marker appears on the interactive map.'}
@@ -2162,10 +2243,10 @@ export default function SponsorPortalScreen() {
               <Text style={st.bannerPreviewNote}>
                 {fr ? 'Les partenaires Or ont un marqueur plus grand et un badge etoile.' : 'Gold partners have a larger marker and a star badge.'}
               </Text>
-            </Animated.View>
+            </View>
 
             {/* Banner Preview */}
-            <Animated.View entering={FadeInDown.duration(300).delay(200)} style={st.brandCard}>
+            <View style={st.brandCard}>
               <Text style={st.brandCardTitle}>{fr ? 'Apercu banniere' : 'Banner preview'}</Text>
               <Text style={st.brandCardDesc}>
                 {fr ? 'Voici comment votre banniere apparait sur la page d\'accueil.' : 'Here is how your banner appears on the home page.'}
@@ -2196,10 +2277,10 @@ export default function SponsorPortalScreen() {
               <Text style={st.bannerPreviewNote}>
                 {fr ? 'La banniere utilise votre photo et couleur de marque.' : 'The banner uses your photo and brand color.'}
               </Text>
-            </Animated.View>
+            </View>
 
             {/* Save Branding + Brand Kit Export */}
-            <Animated.View entering={FadeInDown.duration(300).delay(300)} style={{ gap: 10 }}>
+            <View style={{ gap: 10 }}>
               <Pressable
                 style={({ pressed }) => [st.brandSaveBtn, { backgroundColor: tierColor }, savingBrand && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={async () => {
@@ -2225,7 +2306,7 @@ export default function SponsorPortalScreen() {
                   </>
                 )}
               </Pressable>
-              <Pressable
+              {isGold ? <Pressable
                 style={({ pressed }) => [st.exportBtn, { borderColor: brandColor + '40' }, exportingBrandKit && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                 onPress={handleExportBrandKit}
                 disabled={exportingBrandKit}
@@ -2240,8 +2321,8 @@ export default function SponsorPortalScreen() {
                     <MaterialIcons name="chevron-right" size={18} color={brandColor} />
                   </>
                 )}
-              </Pressable>
-            </Animated.View>
+              </Pressable> : null}
+            </View>
           </>
         ) : null}
 
@@ -2250,7 +2331,7 @@ export default function SponsorPortalScreen() {
           <>
             {/* Quota Display */}
             {pushQuota ? (
-              <Animated.View entering={FadeInDown.duration(300)} style={st.pushQuotaCard}>
+              <View style={st.pushQuotaCard}>
                 <View style={st.pushQuotaHeader}>
                   <View style={[st.pushQuotaIcon, { backgroundColor: pushQuota.canSend ? '#10B98112' : '#EF444412' }]}>
                     <MaterialIcons name={pushQuota.isUnlimited ? 'all-inclusive' : 'notifications-active'} size={22} color={pushQuota.canSend ? '#10B981' : '#EF4444'} />
@@ -2287,12 +2368,12 @@ export default function SponsorPortalScreen() {
                     <View style={[st.pushQuotaBarFill, { width: `${pushQuota.percentage}%`, backgroundColor: pushQuota.canSend ? '#10B981' : '#EF4444' }]} />
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Composer */}
             {pushQuota?.canSend ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.pushComposerCard}>
+              <View style={st.pushComposerCard}>
                 <Text style={st.pushComposerTitle}>{fr ? 'Composer une notification' : 'Compose notification'}</Text>
                 <View style={st.pushField}>
                   <Text style={st.pushFieldLabel}>{fr ? 'Titre' : 'Title'}</Text>
@@ -2392,11 +2473,11 @@ export default function SponsorPortalScreen() {
                 {/* A/B Test Toggle */}
                 <Pressable
                   style={[st.abToggle, abTestEnabled && { backgroundColor: tierColor + '12', borderColor: tierColor + '30' }]}
-                  onPress={() => { Haptics.selectionAsync(); setAbTestEnabled(!abTestEnabled); }}
+                  onPress={() => { if (!isGold) { showAlert(fr ? 'Reservee au tier Or' : 'Gold tier only', fr ? 'Le test A/B est reserve aux partenaires Or.' : 'A/B testing is reserved for Gold partners.'); return; } Haptics.selectionAsync(); setAbTestEnabled(!abTestEnabled); }}
                 >
-                  <MaterialIcons name={abTestEnabled ? 'toggle-on' : 'toggle-off'} size={24} color={abTestEnabled ? tierColor : '#94A3B8'} />
+                  <MaterialIcons name={abTestEnabled ? 'toggle-on' : 'toggle-off'} size={24} color={abTestEnabled && isGold ? tierColor : '#94A3B8'} />
                   <View style={{ flex: 1 }}>
-                    <Text style={[st.abToggleTitle, abTestEnabled && { color: tierColor }]}>A/B Testing</Text>
+                    <Text style={[st.abToggleTitle, abTestEnabled && isGold && { color: tierColor }]}>A/B Testing {!isGold ? (fr ? '(Or)' : '(Gold)') : ''}</Text>
                     <Text style={st.abToggleDesc}>{fr ? 'Testez 2 variantes pour optimiser' : 'Test 2 variants to optimize'}</Text>
                   </View>
                   {abTestEnabled ? <View style={[st.abBadge, { backgroundColor: tierColor }]}><Text style={st.abBadgeText}>ON</Text></View> : null}
@@ -2404,7 +2485,7 @@ export default function SponsorPortalScreen() {
 
                 {/* Variant B fields (when A/B enabled) */}
                 {abTestEnabled ? (
-                  <Animated.View entering={FadeInDown.duration(200)} style={st.abVariantBlock}>
+                  <View style={st.abVariantBlock}>
                     <View style={[st.abVariantHeader, { backgroundColor: '#7C3AED12' }]}>
                       <View style={[st.abVariantDot, { backgroundColor: '#7C3AED' }]} />
                       <Text style={[st.abVariantLabel, { color: '#7C3AED' }]}>{fr ? 'VARIANTE B' : 'VARIANT B'}</Text>
@@ -2444,7 +2525,7 @@ export default function SponsorPortalScreen() {
                         <Text style={st.abSplitLabel}>B: 50%</Text>
                       </View>
                     </View>
-                  </Animated.View>
+                  </View>
                 ) : null}
 
                 {/* Preview */}
@@ -2578,7 +2659,7 @@ export default function SponsorPortalScreen() {
                 </Pressable>
 
                 {scheduleEnabled ? (
-                  <Animated.View entering={FadeInDown.duration(200)} style={{ marginBottom: 16 }}>
+                  <View style={{ marginBottom: 16 }}>
                     {/* Quick date buttons */}
                     <Text style={[st.pushFieldLabel, { marginBottom: 8 }]}>{fr ? 'Date rapide' : 'Quick date'}</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 12 }}>
@@ -2671,7 +2752,7 @@ export default function SponsorPortalScreen() {
                         </Text>
                       </View>
                     ) : null}
-                  </Animated.View>
+                  </View>
                 ) : null}
 
                 {/* Send / Schedule Button */}
@@ -2687,17 +2768,17 @@ export default function SponsorPortalScreen() {
                     </>
                   )}
                 </Pressable>
-              </Animated.View>
+              </View>
             ) : pushQuota && pushQuota.limit > 0 && !pushQuota.canSend ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.pushBlockedCard}>
+              <View style={st.pushBlockedCard}>
                 <MaterialIcons name="block" size={32} color="#EF4444" />
                 <Text style={st.pushBlockedTitle}>{fr ? 'Quota atteint' : 'Quota reached'}</Text>
                 <Text style={st.pushBlockedDesc}>
                   {fr ? `Votre limite mensuelle est atteinte. Reset le ${pushQuota.resetLabel}.` : `Your monthly limit is reached. Resets ${pushQuota.resetLabel}.`}
                 </Text>
-              </Animated.View>
+              </View>
             ) : pushQuota && pushQuota.limit === 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.pushBlockedCard}>
+              <View style={st.pushBlockedCard}>
                 <MaterialIcons name="lock" size={32} color={theme.textMuted} />
                 <Text style={st.pushBlockedTitle}>{fr ? 'Fonctionnalite reservee' : 'Reserved feature'}</Text>
                 <Text style={st.pushBlockedDesc}>
@@ -2707,12 +2788,12 @@ export default function SponsorPortalScreen() {
                   <MaterialIcons name="upgrade" size={16} color={tierColor} />
                   <Text style={[st.pushUpgradeBtnText, { color: tierColor }]}>{fr ? 'Voir les offres' : 'View plans'}</Text>
                 </Pressable>
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Push Templates Library */}
             {pushQuota?.canSend ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(95)} style={st.pushAnalyticsCard}>
+              <View style={st.pushAnalyticsCard}>
                 <Pressable
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: showTemplates ? 14 : 0 }}
                   onPress={() => { Haptics.selectionAsync(); setShowTemplates(!showTemplates); }}
@@ -2727,7 +2808,7 @@ export default function SponsorPortalScreen() {
                   <MaterialIcons name={showTemplates ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
                 </Pressable>
                 {showTemplates ? (
-                  <Animated.View entering={FadeInDown.duration(200)}>
+                  <View>
                     {/* Template Usage Analytics */}
                     {templateUsage.size > 0 ? (
                       <View style={{ backgroundColor: '#EC489908', borderRadius: 12, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#EC489915' }}>
@@ -2815,9 +2896,9 @@ export default function SponsorPortalScreen() {
                         ))}
                       </View>
                     ))}
-                  </Animated.View>
+                  </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Push Calendar View */}
@@ -2836,7 +2917,7 @@ export default function SponsorPortalScreen() {
               for (let d = 1; d <= daysInMonth; d++) cells.push(d);
               while (cells.length % 7 !== 0) cells.push(null);
               return (
-                <Animated.View entering={FadeInDown.duration(300).delay(110)} style={st.pushAnalyticsCard}>
+                <View style={st.pushAnalyticsCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
                     <Pressable onPress={() => { Haptics.selectionAsync(); setCalendarMonth(prev => { const d = new Date(prev.year, prev.month - 1); return { year: d.getFullYear(), month: d.getMonth() }; }); }} hitSlop={8}>
                       <MaterialIcons name="chevron-left" size={22} color={tierColor} />
@@ -2909,7 +2990,7 @@ export default function SponsorPortalScreen() {
                       <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Programme' : 'Scheduled'}</Text>
                     </View>
                   </View>
-                </Animated.View>
+                </View>
               );
             })() : null}
 
@@ -2924,7 +3005,7 @@ export default function SponsorPortalScreen() {
                 return { bg: '#EF444415', text: '#EF4444' };
               };
               return (
-                <Animated.View entering={FadeInDown.duration(300).delay(115)} style={st.pushAnalyticsCard}>
+                <View style={st.pushAnalyticsCard}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <MaterialIcons name="grid-on" size={18} color={tierColor} />
                     <Text style={st.pushAnalyticsTitle}>{fr ? 'Heatmap performance' : 'Performance Heatmap'}</Text>
@@ -2978,13 +3059,13 @@ export default function SponsorPortalScreen() {
                       </Text>
                     </View>
                   ) : null}
-                </Animated.View>
+                </View>
               );
             })() : null}
 
             {/* Scheduled Pushes */}
             {scheduledPushes.filter(sp => sp.status === 'pending').length > 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(120)} style={st.pushHistoryCard}>
+              <View style={st.pushHistoryCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <MaterialIcons name="schedule" size={16} color="#3B82F6" />
                   <Text style={[st.pushHistoryTitle, { marginBottom: 0, color: '#3B82F6' }]}>{fr ? 'Envois programmes' : 'Scheduled sends'}</Text>
@@ -3006,12 +3087,12 @@ export default function SponsorPortalScreen() {
                     </View>
                   </View>
                 ))}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* A/B Test Results */}
             {abResults ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(130)} style={st.abResultsCard}>
+              <View style={st.abResultsCard}>
                 <View style={st.abResultsHeader}>
                   <MaterialIcons name="science" size={18} color={tierColor} />
                   <Text style={st.abResultsTitle}>{fr ? 'Resultats A/B' : 'A/B Results'}</Text>
@@ -3056,12 +3137,12 @@ export default function SponsorPortalScreen() {
                     </Text>
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* A/B Test History */}
             {abHistory.length > 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(140)} style={st.pushAnalyticsCard}>
+              <View style={st.pushAnalyticsCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <MaterialIcons name="history" size={18} color={tierColor} />
                   <Text style={[st.pushAnalyticsTitle, { marginBottom: 0 }]}>{fr ? 'Historique A/B' : 'A/B History'}</Text>
@@ -3103,12 +3184,12 @@ export default function SponsorPortalScreen() {
                     </View>
                   );
                 })}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* A/B Insights Dashboard */}
             {abHistory.length >= 2 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(145)} style={st.pushAnalyticsCard}>
+              <View style={st.pushAnalyticsCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
                   <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' }}>
                     <MaterialIcons name="insights" size={18} color="#7C3AED" />
@@ -3206,12 +3287,12 @@ export default function SponsorPortalScreen() {
                     </>
                   );
                 })()}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Push Analytics Dashboard */}
             {pushAnalytics.totalSent > 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(150)} style={st.pushAnalyticsCard}>
+              <View style={st.pushAnalyticsCard}>
                 <Text style={st.pushAnalyticsTitle}>{fr ? 'Statistiques Push' : 'Push Statistics'}</Text>
                 {/* KPI Row */}
                 <View style={st.pushAnalyticsKpiRow}>
@@ -3258,12 +3339,12 @@ export default function SponsorPortalScreen() {
                     ))}
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Recent Pushes */}
             {recentPushes.length > 0 ? (
-              <Animated.View entering={FadeInDown.duration(300).delay(200)} style={st.pushHistoryCard}>
+              <View style={st.pushHistoryCard}>
                 <Text style={st.pushHistoryTitle}>{fr ? 'Envois recents' : 'Recent sends'}</Text>
                 {recentPushes.map((p, i) => (
                   <View key={i} style={st.pushHistoryItem}>
@@ -3281,7 +3362,7 @@ export default function SponsorPortalScreen() {
                     </View>
                   </View>
                 ))}
-              </Animated.View>
+              </View>
             ) : null}
           </>
         ) : null}
@@ -3309,7 +3390,7 @@ export default function SponsorPortalScreen() {
               events.map((ev, idx) => {
                 const statusColor = ev.status === 'active' ? '#22C55E' : ev.status === 'completed' ? '#3B82F6' : '#F59E0B';
                 return (
-                  <Animated.View key={ev.id} entering={FadeInDown.duration(250).delay(idx * 50)}>
+                  <View key={ev.id}>
                     <Pressable style={st.eventCard} onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}>
                       <View style={st.eventHeader}>
                         <View style={[st.eventDot, { backgroundColor: statusColor }]} />
@@ -3330,7 +3411,7 @@ export default function SponsorPortalScreen() {
                       </View>
                       <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} style={{ position: 'absolute', right: 14, top: '50%' }} />
                     </Pressable>
-                  </Animated.View>
+                  </View>
                 );
               })
             )}
@@ -3340,7 +3421,7 @@ export default function SponsorPortalScreen() {
         {/* ====== CRM SECTION ====== */}
         {activeSection === 'crm' ? (
           <>
-            <Animated.View entering={FadeInDown.duration(300)} style={st.ctrCard}>
+            <View style={st.ctrCard}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                 <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: tierColor + '12', alignItems: 'center', justifyContent: 'center' }}>
                   <MaterialIcons name="people" size={20} color={tierColor} />
@@ -3405,10 +3486,10 @@ export default function SponsorPortalScreen() {
                   )}
                 </Pressable>
               ) : null}
-            </Animated.View>
+            </View>
 
             {/* CRM KPI */}
-            <Animated.View entering={FadeInDown.duration(300).delay(100)} style={st.kpiGrid}>
+            <View style={st.kpiGrid}>
               <View style={st.kpiCard}>
                 <View style={[st.kpiIcon, { backgroundColor: '#10B98112' }]}>
                   <MaterialIcons name="card-giftcard" size={20} color="#10B981" />
@@ -3437,91 +3518,10 @@ export default function SponsorPortalScreen() {
                 <Text style={st.kpiValue}>{ctr}%</Text>
                 <Text style={st.kpiLabel}>CTR</Text>
               </View>
-            </Animated.View>
+            </View>
           </>
         ) : null}
 
-        {/* Onboarding Checklist */}
-        {!checklistComplete || !checklistXpClaimed ? (
-          <Animated.View entering={FadeIn.duration(300).delay(150)} style={st.checklistCard}>
-            <View style={st.checklistHeader}>
-              <View style={[st.checklistIconBg, { backgroundColor: tierColor + '12' }]}>
-                <MaterialIcons name="checklist" size={20} color={tierColor} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={st.checklistTitle}>{fr ? 'Demarrage rapide' : 'Quick Start'}</Text>
-                <Text style={st.checklistSub}>{checklistDoneCount}/{checklistTotal} {fr ? 'etapes' : 'steps'}</Text>
-              </View>
-              {checklistComplete && !checklistXpClaimed ? (
-                <Pressable style={[st.checklistClaimBtn, { backgroundColor: tierColor }]} onPress={handleClaimChecklistXp}>
-                  <MaterialIcons name="star" size={14} color="#FFF" />
-                  <Text style={st.checklistClaimText}>+200 XP</Text>
-                </Pressable>
-              ) : (
-                <View style={[st.checklistProgressBadge, { borderColor: tierColor + '30' }]}>
-                  <Text style={[st.checklistProgressText, { color: tierColor }]}>{Math.round((checklistDoneCount / checklistTotal) * 100)}%</Text>
-                </View>
-              )}
-            </View>
-            {/* Progress bar */}
-            <View style={st.checklistBarTrack}>
-              <Animated.View entering={FadeIn.duration(600)} style={[st.checklistBarFill, { width: `${(checklistDoneCount / checklistTotal) * 100}%`, backgroundColor: tierColor }]} />
-            </View>
-            {/* Items */}
-            {checklistItems.map((item, i) => (
-              <Pressable
-                key={item.key}
-                style={({ pressed }) => [st.checklistItem, pressed && !item.done && { backgroundColor: tierColor + '06' }]}
-                onPress={() => { if (!item.done) { Haptics.selectionAsync(); item.action(); } }}
-                disabled={item.done}
-              >
-                <View style={[st.checklistCheck, item.done ? { backgroundColor: '#10B981' } : { borderColor: '#CBD5E1' }]}>
-                  {item.done ? <MaterialIcons name="check" size={12} color="#FFF" /> : <Text style={{ fontSize: 10, fontWeight: '700', color: '#CBD5E1' }}>{i + 1}</Text>}
-                </View>
-                <MaterialIcons name={item.icon} size={16} color={item.done ? '#94A3B8' : tierColor} />
-                <Text style={[st.checklistItemText, item.done && { color: '#94A3B8', textDecorationLine: 'line-through' }]}>{item.label}</Text>
-                {!item.done ? <MaterialIcons name="chevron-right" size={16} color={tierColor + '60'} /> : null}
-              </Pressable>
-            ))}
-            {checklistComplete && checklistXpClaimed ? (
-              <View style={st.checklistDoneBanner}>
-                <MaterialIcons name="check-circle" size={16} color="#10B981" />
-                <Text style={st.checklistDoneText}>{fr ? 'Onboarding termine ! +200 XP' : 'Onboarding complete! +200 XP'}</Text>
-              </View>
-            ) : null}
-          </Animated.View>
-        ) : null}
-
-        {/* Quick Actions */}
-        <Animated.View entering={FadeIn.duration(300).delay(200)} style={st.actionsCard}>
-          <Text style={st.actionsTitle}>{fr ? 'Actions rapides' : 'Quick actions'}</Text>
-          <View style={st.actionsGrid}>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/ambassador-dashboard' as any)}>
-              <View style={[st.actionIcon, { backgroundColor: '#7C3AED12' }]}>
-                <MaterialIcons name="dashboard" size={22} color="#7C3AED" />
-              </View>
-              <Text style={st.actionLabel}>{fr ? 'Portail complet' : 'Full portal'}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/sponsored-event/new' as any)}>
-              <View style={[st.actionIcon, { backgroundColor: '#10B98112' }]}>
-                <MaterialIcons name="add-circle" size={22} color="#10B981" />
-              </View>
-              <Text style={st.actionLabel}>{fr ? 'Defi sponsor' : 'Sponsor challenge'}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/partners' as any)}>
-              <View style={[st.actionIcon, { backgroundColor: '#3B82F612' }]}>
-                <MaterialIcons name="storefront" size={22} color="#3B82F6" />
-              </View>
-              <Text style={st.actionLabel}>{fr ? 'Page partenaires' : 'Partners page'}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => { if (sponsor.website_url) Linking.openURL(sponsor.website_url); }}>
-              <View style={[st.actionIcon, { backgroundColor: tierColor + '12' }]}>
-                <MaterialIcons name="language" size={22} color={tierColor} />
-              </View>
-              <Text style={st.actionLabel}>{fr ? 'Mon site' : 'My site'}</Text>
-            </Pressable>
-          </View>
-        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -3554,11 +3554,11 @@ const st = StyleSheet.create({
   heroKpiLabel: { fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.6)', marginTop: 2, textTransform: 'uppercase' },
   // Period
   periodRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 },
-  sectionTabsRow: { paddingHorizontal: 16, paddingBottom: 10, gap: 6 },
+  sectionTabsRow: { paddingHorizontal: 16, paddingBottom: 6, paddingTop: 2, gap: 4 },
   periodChip: { paddingHorizontal: 16, paddingVertical: 7, borderRadius: 16, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
   periodText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
-  sectionTab: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
-  sectionTabText: { fontSize: 11, fontWeight: '700', color: theme.textMuted },
+  sectionTab: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 16, borderWidth: 1.5, borderColor: '#E2E8F0', backgroundColor: '#FFF' },
+  sectionTabText: { fontSize: 12, fontWeight: '700', color: theme.textMuted },
   scrollContent: { paddingHorizontal: 16, paddingTop: 4, maxWidth: 640, alignSelf: 'center' as const, width: '100%' },
   // KPI Grid
   kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
