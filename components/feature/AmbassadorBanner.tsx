@@ -90,7 +90,6 @@ const EliteCard = memo(({ amb, language, t, screenWidth, userId }: { amb: Ambass
 function getCardStyle(amb: Ambassador) {
   const isPartner = amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner';
   if (isPartner && amb.brandColor) {
-    // Use partner's brand color for gradient
     const bc = amb.brandColor;
     return {
       gradient: [bc + 'DD', bc, bc + 'AA'] as [string, string, string],
@@ -104,6 +103,7 @@ function getCardStyle(amb: Ambassador) {
       dotColor: bc,
       verifiedBg: bc,
       verifiedBorder: bc + 'CC',
+      isEliteAmbassador: false,
     };
   }
   if (isPartner) {
@@ -120,17 +120,26 @@ function getCardStyle(amb: Ambassador) {
       dotColor: tierColor,
       verifiedBg: tierColor,
       verifiedBorder: tierColor + 'CC',
+      isEliteAmbassador: false,
     };
   }
-  // Ambassador
+  // Ambassador — show level in tag
+  const level = amb.ambassadorLevel || 'decouverte';
+  const isElite = level === 'elite';
   return {
-    gradient: ['#7C3AED', '#9333EA', '#A855F7'] as [string, string, string],
+    gradient: isElite
+      ? ['#1E1B4B', '#312E81', '#4338CA'] as [string, string, string]
+      : ['#7C3AED', '#9333EA', '#A855F7'] as [string, string, string],
     tagBg: 'rgba(255,255,255,0.12)',
-    tagIcon: 'campaign' as const,
-    tagLabel: (lang: string) => lang === 'fr' ? 'AMBASSADEUR' : 'AMBASSADOR',
-    dotColor: '#7C3AED',
-    verifiedBg: '#7C3AED',
-    verifiedBorder: '#9333EA',
+    tagIcon: isElite ? 'military-tech' as const : 'campaign' as const,
+    tagLabel: (lang: string) => {
+      if (isElite) return lang === 'fr' ? 'AMBASSADEUR ELITE' : 'ELITE AMBASSADOR';
+      return lang === 'fr' ? 'AMBASSADEUR CONFIRME' : 'CONFIRMED AMBASSADOR';
+    },
+    dotColor: isElite ? '#F59E0B' : '#7C3AED',
+    verifiedBg: isElite ? '#F59E0B' : '#7C3AED',
+    verifiedBorder: isElite ? '#D97706' : '#9333EA',
+    isEliteAmbassador: isElite,
   };
 }
 
@@ -208,7 +217,8 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
             onPress={() => amb.playerId ? router.push(`/player/${amb.playerId}` as any) : router.push({ pathname: '/ambassadors', params: { scrollTo: amb.id } } as any)}
           >
             <LinearGradient colors={cs.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.gradient}>
-              <View style={s.sponsorTag}><MaterialIcons name={cs.tagIcon} size={10} color="rgba(255,255,255,0.7)" /><Text style={s.sponsorText}>{cs.tagLabel(language)}</Text></View>
+              {cs.isEliteAmbassador ? <View style={s.eliteAccentBarCarousel} /> : null}
+          <View style={[s.sponsorTag, cs.isEliteAmbassador && { backgroundColor: '#F59E0B20', borderWidth: 1, borderColor: '#F59E0B40' }]}><MaterialIcons name={cs.tagIcon} size={10} color={cs.isEliteAmbassador ? '#F59E0B' : 'rgba(255,255,255,0.7)'} /><Text style={[s.sponsorText, cs.isEliteAmbassador && { color: '#F59E0B' }]}>{cs.tagLabel(language)}</Text></View>
               <View style={s.bannerContent}>
                 <View style={s.avatarWrap}>
                   {amb.photo ? (
@@ -260,31 +270,18 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
 
 // ===== MAIN COMPONENT =====
 function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Props) {
-  // Split into Elite (permanent) and Rotating (Confirmé + sponsors/partners)
-  const { eliteAmbassadors, rotatingAmbassadors } = useMemo(() => {
-    const elite: Ambassador[] = [];
-    const rotating: Ambassador[] = [];
-
-    ambassadors.forEach(amb => {
-      // Sponsors and partners always go to rotating
-      if (amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner') {
-        rotating.push(amb);
-        return;
-      }
-      // For ambassadors, check level
+  // All non-decouverte ambassadors + all partners go into rotating carousel
+  const rotatingAmbassadors = useMemo(() => {
+    return ambassadors.filter(amb => {
+      // Partners/sponsors always included
+      if (amb.badgeType === 'gold_sponsor' || amb.badgeType === 'sponsor' || amb.badgeType === 'partner') return true;
+      // Ambassadors: include confirme and elite, exclude decouverte
       const level = amb.ambassadorLevel || 'decouverte';
-      if (level === 'elite') {
-        elite.push(amb);
-      } else if (level === 'confirme') {
-        rotating.push(amb);
-      }
-      // Découverte excluded from both
+      return level === 'confirme' || level === 'elite';
     });
-
-    return { eliteAmbassadors: elite, rotatingAmbassadors: rotating };
   }, [ambassadors]);
 
-  if (eliteAmbassadors.length === 0 && rotatingAmbassadors.length === 0) return null;
+  if (rotatingAmbassadors.length === 0) return null;
 
   return (
     <View>
@@ -292,20 +289,9 @@ function AmbassadorBanner({ ambassadors, language, t, screenWidth, userId }: Pro
         <View style={s.ambassadorIcon}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
         <Text style={s.headerTitle} numberOfLines={1} adjustsFontSizeToFit>{language === 'fr' ? 'Ambassadeurs & Partenaires' : 'Ambassadors & Partners'}</Text>
         <View style={{ flex: 1 }} />
-
       </View>
 
-      {/* Elite permanent cards — always visible, no rotation */}
-      {eliteAmbassadors.map(amb => (
-        <EliteCard key={amb.id} amb={amb} language={language} t={t} screenWidth={screenWidth} userId={userId} />
-      ))}
-
-      {/* Spacing between elite and rotating */}
-      {eliteAmbassadors.length > 0 && rotatingAmbassadors.length > 0 ? (
-        <View style={{ height: 12 }} />
-      ) : null}
-
-      {/* Rotating carousel for Confirmé + sponsors/partners */}
+      {/* Rotating carousel for all ambassadors (Confirmé/Elite) + partners */}
       <RotatingCarousel ambassadors={rotatingAmbassadors} language={language} t={t} screenWidth={screenWidth} userId={userId} />
     </View>
   );
@@ -347,6 +333,7 @@ const s = StyleSheet.create({
   eliteCtaText: { fontSize: 11, fontWeight: '600', color: '#F59E0B' },
 
   // ===== ROTATING CAROUSEL =====
+  eliteAccentBarCarousel: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, backgroundColor: '#F59E0B', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   carousel: { overflow: 'hidden', borderRadius: 20 },
   slide: { borderRadius: 20, overflow: 'hidden' },
   gradient: { borderRadius: 20, padding: 16, position: 'relative' },
