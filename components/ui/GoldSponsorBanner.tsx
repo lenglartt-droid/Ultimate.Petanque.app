@@ -53,7 +53,7 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
 
   // Dynamic brand color
   const brandColor = sponsor?.brandColor || '#F59E0B';
-  const brandColorDark = sponsor?.brandColor ? sponsor.brandColor + 'CC' : '#B45309';
+  const brandColorDark = sponsor?.brandColor ? sponsor.brandColor : '#B45309';
 
   if (!loaded || !sponsor) return null;
 
@@ -61,10 +61,10 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
     <Animated.View entering={FadeIn.duration(500)} style={[styles.container, style]}>
       <Pressable style={({ pressed }) => [styles.banner, pressed && { transform: [{ scale: 0.98 }], opacity: 0.95 }]} onPress={handlePress}>
         <LinearGradient
-          colors={[brandColor + '35', brandColor + '50']}
+          colors={[brandColor, brandColor]}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 1 }}
-          style={[styles.gradient, { borderWidth: 1.5, borderColor: brandColor + '60' }]}
+          style={[styles.gradient, { borderWidth: 1.5, borderColor: brandColor }]}
         >
           {/* Gold border accent */}
           <View style={[styles.goldAccent, { backgroundColor: brandColor }]} />
