@@ -16,7 +16,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
@@ -972,7 +971,7 @@ export default function EditMatchScreen() {
             const isFr2 = language === 'fr';
             if (!canRequestWitness && witnessRequests.length === 0) return null;
             return (
-              <Animated.View entering={FadeInDown.duration(400)} style={[styles.section, { marginBottom: 16 }]}>
+              <View style={[styles.section, { marginBottom: 16 }]}>
                 <View style={[validationStyles.card, { borderColor: '#7C3AED30', backgroundColor: '#7C3AED06' }]}>
                   <View style={validationStyles.cardTop}>
                     <View style={[validationStyles.iconBg, { backgroundColor: '#7C3AED15' }]}>
@@ -1027,7 +1026,7 @@ export default function EditMatchScreen() {
                     </Pressable>
                   ) : null}
                 </View>
-              </Animated.View>
+              </View>
             );
           })()}
 
@@ -1042,7 +1041,7 @@ export default function EditMatchScreen() {
             const weight = getMatchValidationWeight(Array.isArray(pIds) ? pIds.length : 0, isWitnessed);
             const isFr = language === 'fr';
             return (
-              <Animated.View entering={FadeInDown.duration(400)} style={[styles.section, { marginBottom: 16 }]}>
+              <View style={[styles.section, { marginBottom: 16 }]}>
                 <View style={[validationStyles.card, { borderColor: vColor + '30', backgroundColor: vColor + '06' }]}>
                   <View style={validationStyles.cardTop}>
                     <View style={[validationStyles.iconBg, { backgroundColor: vColor + '15' }]}>
@@ -1067,13 +1066,13 @@ export default function EditMatchScreen() {
                     </Text>
                   </View>
                 </View>
-              </Animated.View>
+              </View>
             );
           })()}
 
           {/* Series Panel */}
           {seriesMatches.length > 1 && seriesStats && (
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+            <View style={styles.section}>
               <Pressable style={styles.seriesPanelHeader} onPress={() => setShowSeriesPanel(!showSeriesPanel)}>
                 <View style={styles.seriesPanelHeaderLeft}>
                   <View style={[styles.seriesIcon, seriesStats.seriesWinner === 'A' && styles.seriesIconWin, seriesStats.seriesWinner === 'B' && styles.seriesIconLoss]}>
@@ -1089,7 +1088,7 @@ export default function EditMatchScreen() {
                 <MaterialIcons name={showSeriesPanel ? 'keyboard-arrow-up' : 'keyboard-arrow-down'} size={24} color={theme.textSecondary} />
               </Pressable>
               {showSeriesPanel && (
-                <Animated.View entering={FadeIn.duration(200)} style={styles.seriesMatchesList}>
+                <View style={styles.seriesMatchesList}>
                   {seriesMatches.map((sm, idx) => {
                     const isCurrent = sm.id === match.id;
                     const isWin = sm.winner === 'A';
@@ -1122,14 +1121,14 @@ export default function EditMatchScreen() {
                       <Text style={[styles.seriesSummaryValue, seriesStats.winsB > seriesStats.winsA && styles.seriesSummaryValueLoss]}>{seriesStats.winsB}</Text>
                     </View>
                   </View>
-                </Animated.View>
+                </View>
               )}
-            </Animated.View>
+            </View>
           )}
 
           {/* Gold Sponsor Badge */}
           {goldSponsor ? (
-            <Animated.View entering={FadeInDown.duration(300)} style={{ marginBottom: 16 }}>
+            <View style={{ marginBottom: 16 }}>
               <Pressable
                 style={({ pressed }) => [matchSponsorStyles.row, pressed && { opacity: 0.9 }]}
                 onPress={() => {
@@ -1158,11 +1157,11 @@ export default function EditMatchScreen() {
                   </View>
                 </LinearGradient>
               </Pressable>
-            </Animated.View>
+            </View>
           ) : null}
 
           {/* Date & Time */}
-          <Animated.View entering={FadeInDown.duration(400).delay(seriesMatches.length > 1 ? 50 : 0)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'dateAndTime')}</Text>
             <View style={styles.dateTimeContainer}>
               <Pressable style={styles.dateButton} onPress={() => setShowDatePicker(true)}>
@@ -1176,11 +1175,11 @@ export default function EditMatchScreen() {
             </View>
             {showDatePicker && <DateTimePicker value={matchDate} mode="date" display="default" onChange={handleDateChange} />}
             {showTimePicker && <DateTimePicker value={matchDate} mode="time" display="default" onChange={handleTimeChange} />}
-          </Animated.View>
+          </View>
 
           {/* Boules Set (read-only display) */}
           {matchBoulesSet ? (
-            <Animated.View entering={FadeInDown.duration(400).delay(25)} style={styles.section}>
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'boulesSet').toUpperCase()}</Text>
               <View style={styles.pickerButton}>
                 <View style={styles.pickerSelected}>
@@ -1193,11 +1192,11 @@ export default function EditMatchScreen() {
                   </View>
                 </View>
               </View>
-            </Animated.View>
+            </View>
           ) : null}
 
           {/* Location / Terrain */}
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'terrain')}</Text>
             <Pressable style={styles.pickerButton} onPress={() => { setTerrainSearch(''); setShowTerrainPicker(true); }}>
               {selectedTerrain ? (
@@ -1219,11 +1218,11 @@ export default function EditMatchScreen() {
                 </View>
               )}
             </Pressable>
-          </Animated.View>
+          </View>
 
           {/* Mode (read-only) */}
           {!match.tournamentId && (
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
               <View style={styles.modeBadgeContainer}>
                 <View style={[styles.modeBadgeReadonly, { backgroundColor: (mode === 'Tournoi' ? theme.carreauColor : theme.primary) + '12', borderColor: (mode === 'Tournoi' ? theme.carreauColor : theme.primary) + '30' }]}>
@@ -1233,12 +1232,12 @@ export default function EditMatchScreen() {
                   </Text>
                 </View>
               </View>
-            </Animated.View>
+            </View>
           )}
 
           {/* Tournament Badge for tournament matches */}
           {match.tournamentId && (
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+            <View style={styles.section}>
               <Text style={styles.sectionTitle}>{t('match', 'modeLabel')}</Text>
               <View style={styles.tournamentBadgeContainer}>
                 <View style={styles.tournamentBadge}>
@@ -1254,11 +1253,11 @@ export default function EditMatchScreen() {
                   </View>
                 )}
               </View>
-            </Animated.View>
+            </View>
           )}
 
           {/* Format */}
-          <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'formatLabel')}</Text>
             <View style={styles.formatContainer}>
               {config.game.formats.map(f => (
@@ -1268,10 +1267,10 @@ export default function EditMatchScreen() {
                 </Pressable>
               ))}
             </View>
-          </Animated.View>
+          </View>
 
           {/* Teams */}
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'teamsLabel')}</Text>
             <View style={styles.teamsCard}>
               {/* Team A */}
@@ -1328,10 +1327,10 @@ export default function EditMatchScreen() {
                 </View>
               </View>
             </View>
-          </Animated.View>
+          </View>
 
           {/* Score */}
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'finalScore')}</Text>
             <View style={styles.scoreContainer}>
               <View style={styles.teamScore}>
@@ -1352,10 +1351,10 @@ export default function EditMatchScreen() {
                 </View>
               </View>
             </View>
-          </Animated.View>
+          </View>
 
           {/* Duration */}
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'durationMinutes')}</Text>
             {isInlineEditing ? (
               <View style={styles.durationContainer}>
@@ -1370,10 +1369,10 @@ export default function EditMatchScreen() {
                 <Pressable style={[styles.durationButton, isReadOnly && { opacity: 0.4 }]} onPress={() => { if (!isReadOnly) setDuration(prev => prev + 5); }} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
               </View>
             )}
-          </Animated.View>
+          </View>
 
           {/* Player Actions */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('match', 'playerActions')}</Text>
             <Text style={styles.sectionSubtitle}>{t('matchEdit', 'actionsDesc')}</Text>
             {teamAPlayersList.length > 0 && (
@@ -1388,10 +1387,10 @@ export default function EditMatchScreen() {
                 {teamBPlayersList.map(p => renderPlayerActionEditor(p))}
               </View>
             )}
-          </Animated.View>
+          </View>
 
           {/* Notes */}
-          <Animated.View entering={FadeInDown.duration(400).delay(350)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>NOTES</Text>
             {isInlineEditing ? (
               <TextInput
@@ -1414,10 +1413,10 @@ export default function EditMatchScreen() {
                 <Text style={inlineStyles.emptyNotesText}>{language === 'fr' ? 'Aucune note' : 'No notes'}</Text>
               </View>
             )}
-          </Animated.View>
+          </View>
 
           {/* Menes */}
-          <Animated.View entering={FadeInDown.duration(400).delay(400)} style={styles.section}>
+          <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('match', 'menesCount')} ({menes.length})</Text>
               {!isReadOnly || isInlineEditing ? (
@@ -1456,7 +1455,7 @@ export default function EditMatchScreen() {
             ) : (
               <View style={styles.noMenesCard}><Text style={styles.noMenesText}>{t('match', 'noMenesRecorded')}</Text></View>
             )}
-          </Animated.View>
+          </View>
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>

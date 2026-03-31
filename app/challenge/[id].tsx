@@ -440,7 +440,7 @@ export default function ChallengeDetailScreen() {
                     <Image source={{ uri: goldSponsor.photo }} style={s.sponsorBadgeLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                   ) : (
                     <LinearGradient colors={['#B45309', '#F59E0B']} style={s.sponsorBadgeLogoFallback}>
-                      <MaterialIcons name="workspace-premium" size={12} color="#FFF" />
+                      <MaterialIcons name="workspace-premium" size={24} color="#FFF" />
                     </LinearGradient>
                   )}
                   <View style={{ flex: 1 }}>
@@ -448,7 +448,7 @@ export default function ChallengeDetailScreen() {
                     <Text style={s.sponsorBadgeName} numberOfLines={1}>{goldSponsor.displayName}</Text>
                   </View>
                   <LinearGradient colors={['#B45309', '#D97706']} style={s.sponsorBadgeTier}>
-                    <MaterialIcons name="star" size={8} color="#FFF" />
+                    <MaterialIcons name="star" size={10} color="#FFF" />
                   </LinearGradient>
                 </View>
               </LinearGradient>
@@ -872,8 +872,8 @@ const s = StyleSheet.create({
   sponsorBadgeGradient: { borderRadius: 12, position: 'relative' },
   sponsorBadgeAccentLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, backgroundColor: '#F59E0B', borderTopLeftRadius: 12, borderTopRightRadius: 12 },
   sponsorBadgeContent: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, paddingHorizontal: 12, gap: 10 },
-  sponsorBadgeLogo: { width: 32, height: 32, borderRadius: 10, overflow: 'hidden' },
-  sponsorBadgeLogoFallback: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  sponsorBadgeLogo: { width: 64, height: 64, borderRadius: 18, overflow: 'hidden' },
+  sponsorBadgeLogoFallback: { width: 64, height: 64, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
   sponsorBadgeLabel: { fontSize: 9, fontWeight: '600', color: '#92400E', textTransform: 'uppercase', letterSpacing: 0.5 },
   sponsorBadgeName: { fontSize: 14, fontWeight: '700', color: '#78350F', marginTop: 1 },
   sponsorBadgeTier: { width: 24, height: 24, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
