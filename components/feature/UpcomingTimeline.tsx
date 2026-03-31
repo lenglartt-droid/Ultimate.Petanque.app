@@ -24,14 +24,13 @@ interface Props {
   language: string;
   t: (ns: string, key: string) => string;
   now: number;
-  onShowJoinMeetup: () => void;
   onShowMeetupList: () => void;
   onJoinSuccess?: (meetupId: string) => void;
 }
 
 function UpcomingTimeline({
   tournaments, meetups, upcomingEvents, meetupsLoading, eventsLoading,
-  pendingInviteCount, language, t, now, onShowJoinMeetup, onShowMeetupList, onJoinSuccess,
+  pendingInviteCount, language, t, now, onShowMeetupList, onJoinSuccess,
 }: Props) {
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
@@ -88,10 +87,7 @@ function UpcomingTimeline({
               <View style={s.actionBadge}><Text style={s.actionBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
             </Pressable>
           ) : null}
-          <Pressable style={s.joinBtn} onPress={onShowJoinMeetup}>
-            <MaterialIcons name="event" size={14} color="#FFF" />
-            <Text style={s.joinBtnText}>{language === 'fr' ? 'Rejoindre RDV' : 'Join Meetup'}</Text>
-          </Pressable>
+
         </View>
       </View>
 
@@ -317,20 +313,20 @@ const s = StyleSheet.create({
   moreText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   emptyWrap: { gap: 12 },
   // Join card
-  joinCard: { backgroundColor: '#F0F9FF', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BAE6FD' },
-  joinCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
-  joinCardIconBg: { width: 56, height: 56, borderRadius: 16, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
-  joinCardTitle: { fontSize: 16, fontWeight: '700', color: '#0C4A6E' },
-  joinCardDesc: { fontSize: 12, color: '#0369A1', marginTop: 2 },
-  joinScanBtn: { width: 42, height: 42, borderRadius: 12, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
-  joinInputRow: { flexDirection: 'row', gap: 10 },
-  joinInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, borderWidth: 1.5, borderColor: '#BAE6FD' },
-  joinInput: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0C4A6E', paddingVertical: Platform.select({ ios: 13, android: 10, default: 12 }), letterSpacing: 1.5 },
-  joinSubmitBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#0369A1', paddingHorizontal: 18, borderRadius: 12, justifyContent: 'center' },
+  joinCard: { backgroundColor: '#F0F9FF', borderRadius: 14, padding: 10, borderWidth: 1, borderColor: '#BAE6FD' },
+  joinCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  joinCardIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
+  joinCardTitle: { fontSize: 13, fontWeight: '700', color: '#0C4A6E' },
+  joinCardDesc: { fontSize: 11, color: '#0369A1', marginTop: 1 },
+  joinScanBtn: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#E0F2FE', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#BAE6FD' },
+  joinInputRow: { flexDirection: 'row', gap: 8 },
+  joinInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 10, borderWidth: 1, borderColor: '#BAE6FD' },
+  joinInput: { flex: 1, fontSize: 13, fontWeight: '700', color: '#0C4A6E', paddingVertical: Platform.select({ ios: 8, android: 6, default: 8 }), letterSpacing: 1.5 },
+  joinSubmitBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#0369A1', paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center' },
   joinSubmitBtnDisabled: { backgroundColor: '#93C5FD', opacity: 0.6 },
-  joinSubmitText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
-  joinErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 4 },
-  joinErrorText: { fontSize: 12, color: '#DC2626', fontWeight: '500' },
+  joinSubmitText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  joinErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, paddingHorizontal: 2 },
+  joinErrorText: { fontSize: 11, color: '#DC2626', fontWeight: '500' },
   empty: { backgroundColor: '#FFF', borderRadius: 18, padding: 28, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   emptyIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 },

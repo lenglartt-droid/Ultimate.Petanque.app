@@ -14,7 +14,7 @@ import * as Haptics from '@/services/haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import theme, { blurhash } from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -414,7 +414,7 @@ export default function PlayerDetailScreen() {
           <View style={isTablet ? s.tabletLeft : undefined}>
 
             {/* ===== HERO CARD ===== */}
-            <Animated.View entering={FadeInDown.duration(400)} style={s.heroCard}>
+            <View style={s.heroCard}>
               {/* Shared Badge */}
               {sharedPermission ? (
                 <View style={{ marginBottom: 8 }}><SharedBadge permission={sharedPermission} /></View>
@@ -705,14 +705,14 @@ export default function PlayerDetailScreen() {
                   <Text style={s.quickStatLabel}>{t('player', 'defeats')}</Text>
                 </View>
               </View>
-            </Animated.View>
+            </View>
           </View>
 
           <View style={isTablet ? s.tabletRight : undefined}>
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
-              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={s.sectionCard}>
+              <View style={s.sectionCard}>
                 <View style={s.sectionHeader}>
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
                     <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
@@ -821,13 +821,13 @@ export default function PlayerDetailScreen() {
                     </View>
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
           </View>
         </View>
 
         {/* ===== MATCH STATISTICS ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name="sports" size={18} color={theme.primary} />
@@ -877,10 +877,10 @@ export default function PlayerDetailScreen() {
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* ===== SHOT PERFORMANCE ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.accent + '15' }]}>
               <MaterialIcons name="gps-fixed" size={18} color={theme.accent} />
@@ -911,10 +911,10 @@ export default function PlayerDetailScreen() {
               </View>
             </View>
           ))}
-        </Animated.View>
+        </View>
 
         {/* ===== DETAILED STATS ===== */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.warning + '15' }]}>
               <MaterialIcons name="bar-chart" size={18} color={theme.warning} />
@@ -934,11 +934,11 @@ export default function PlayerDetailScreen() {
             <Text style={s.detailLabel}>{t('player', 'memberSince')}</Text>
             <Text style={s.detailValue}>{new Date(player.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'long', year: 'numeric' })}</Text>
           </View>
-        </Animated.View>
+        </View>
 
         {/* ===== RECENT MATCHES ===== */}
         {recentMatches.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={s.sectionCard}>
+          <View style={s.sectionCard}>
             <View style={s.sectionHeader}>
               <View style={[s.sectionIconBox, { backgroundColor: theme.success + '15' }]}>
                 <MaterialIcons name="history" size={18} color={theme.success} />
@@ -964,7 +964,7 @@ export default function PlayerDetailScreen() {
                 </Pressable>
               );
             })}
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Modification Logs */}
