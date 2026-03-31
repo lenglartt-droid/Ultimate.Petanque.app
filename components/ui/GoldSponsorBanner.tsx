@@ -53,7 +53,7 @@ export default function GoldSponsorBanner({ style, page = 'home', userId }: Gold
 
   // Dynamic brand color
   const brandColor = sponsor?.brandColor || '#F59E0B';
-  const brandColorDark = sponsor?.brandColor ? sponsor.brandColor : '#B45309';
+  const brandColorDark = '#B45309';
 
   if (!loaded || !sponsor) return null;
 
@@ -129,7 +129,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
   },
   content: { flexDirection: 'row', alignItems: 'center', padding: 14, gap: 12 },
-  photoWrap: { position: 'relative' as const },
+  photoWrap: { position: 'relative' as const, backgroundColor: '#FFF', borderRadius: 24, padding: 2, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 }, android: { elevation: 3 }, default: {} }) },
   photo: { width: 96, height: 96, borderRadius: 22, overflow: 'hidden' as const },
   photoFallback: { width: 96, height: 96, borderRadius: 22, alignItems: 'center' as const, justifyContent: 'center' as const },
   goldBadge: {
