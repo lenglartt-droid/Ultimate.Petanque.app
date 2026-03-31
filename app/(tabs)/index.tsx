@@ -31,7 +31,7 @@ import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
 import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
 import TournamentPickerModal from '@/components/feature/TournamentPickerModal';
-import JoinMeetupModal from '@/components/feature/JoinMeetupModal';
+
 import QRShareModal from '@/components/feature/QRShareModal';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -118,7 +118,7 @@ export default function HomeScreen() {
   const [meetups, setMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number; _maxParticipants?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
   const [pendingInviteCount, setPendingInviteCount] = useState(0);
-  const [showJoinMeetupModal, setShowJoinMeetupModal] = useState(false);
+
   const [showMeetupListModal, setShowMeetupListModal] = useState(false);
   const [showQRModal, setShowQRModal] = useState(false);
 
@@ -532,7 +532,6 @@ export default function HomeScreen() {
               language={language}
               t={t}
               now={now}
-              onShowJoinMeetup={() => setShowJoinMeetupModal(true)}
               onShowMeetupList={() => setShowMeetupListModal(true)}
             />
           </View>
@@ -654,7 +653,7 @@ export default function HomeScreen() {
         </SafeAreaView>
       </Modal>
 
-      <JoinMeetupModal visible={showJoinMeetupModal} onClose={() => setShowJoinMeetupModal(false)} />
+
       <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} />
       <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} />
     </SafeAreaView>

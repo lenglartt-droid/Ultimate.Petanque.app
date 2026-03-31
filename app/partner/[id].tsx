@@ -264,12 +264,12 @@ export default function PartnerDetailScreen() {
                   <Image source={{ uri: partner.photo }} style={st.heroAvatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                 ) : (
                   <View style={[st.heroAvatar, { backgroundColor: 'rgba(255,255,255,0.15)' }]}>
-                    <MaterialIcons name={tierIcon as any} size={44} color="#FFF" />
+                    <MaterialIcons name={tierIcon as any} size={64} color="#FFF" />
                   </View>
                 )}
                 {/* Tier badge overlay */}
                 <View style={[st.heroTierBadge, { backgroundColor: tierColor }]}>
-                  <MaterialIcons name={tierIcon as any} size={12} color="#FFF" />
+                  <MaterialIcons name={tierIcon as any} size={18} color="#FFF" />
                 </View>
               </View>
 
@@ -653,7 +653,7 @@ const st = StyleSheet.create({
   heroContent: { alignItems: 'center' as const, position: 'relative' as const, zIndex: 1 },
   heroAvatarContainer: { position: 'relative' as const, marginBottom: 16 },
   heroAvatar: {
-    width: 100, height: 100, borderRadius: 30,
+    width: 160, height: 160, borderRadius: 40,
     borderWidth: 3.5, borderColor: 'rgba(255,255,255,0.35)',
     alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const,
     ...Platform.select({
@@ -664,7 +664,7 @@ const st = StyleSheet.create({
   },
   heroTierBadge: {
     position: 'absolute' as const, bottom: -4, right: -4,
-    width: 30, height: 30, borderRadius: 15,
+    width: 40, height: 40, borderRadius: 20,
     alignItems: 'center' as const, justifyContent: 'center' as const,
     borderWidth: 3, borderColor: 'rgba(255,255,255,0.9)',
   },
