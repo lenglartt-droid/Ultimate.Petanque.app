@@ -389,6 +389,10 @@ export default function MapScreen() {
   const [eloRankFilter, setEloRankFilter] = useState<EloRankTier | null>(null);
   const [trustFilter, setTrustFilter] = useState<'verified' | 'high' | 'medium_low' | null>(null);
 
+  // Terrain sub-filters (type & environment)
+  const [terrainTypeFilter, setTerrainTypeFilter] = useState<string | null>(null);
+  const [terrainEnvFilter, setTerrainEnvFilter] = useState<'indoor' | 'outdoor' | null>(null);
+
   // Meetup invitation state
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
   const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
@@ -628,6 +632,18 @@ export default function MapScreen() {
       return true;
     };
 
+    // Terrain sub-filter matching
+    const matchTerrainSubFilters = (item: any) => {
+      if (terrainTypeFilter) {
+        if (item.type !== terrainTypeFilter) return false;
+      }
+      if (terrainEnvFilter) {
+        const env = item.environment || 'outdoor';
+        if (env !== terrainEnvFilter) return false;
+      }
+      return true;
+    };
+
     const items: any[] = [];
     const addItems = (data: any, type: string, isPublic: boolean) => {
       const filtered = data.filter((it: any) => matchSearch(it, type));
@@ -638,8 +654,9 @@ export default function MapScreen() {
     const showPublic = true;
 
     if (filter === 'all' || filter === 'terrains') {
-      if (showOwn) addItems(ownData.terrains, 'terrains', false);
-      if (showPublic) addItems(pubData.terrains, 'terrains', true);
+      const filterTerrains = (arr: any[]) => (terrainTypeFilter || terrainEnvFilter) ? arr.filter(matchTerrainSubFilters) : arr;
+      if (showOwn) addItems(filterTerrains(ownData.terrains), 'terrains', false);
+      if (showPublic) addItems(filterTerrains(pubData.terrains), 'terrains', true);
     }
     if (filter === 'all' || filter === 'clubs') {
       if (showOwn) addItems(ownData.clubs, 'clubs', false);
@@ -682,7 +699,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter, terrainTypeFilter, terrainEnvFilter]);
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -822,10 +839,14 @@ export default function MapScreen() {
     Haptics.selectionAsync();
     setFilter(f);
     setSelected(null);
-    // Reset player sub-filters when switching away from players
+    // Reset sub-filters when switching categories
     if (f !== 'players') {
       setEloRankFilter(null);
       setTrustFilter(null);
+    }
+    if (f !== 'terrains') {
+      setTerrainTypeFilter(null);
+      setTerrainEnvFilter(null);
     }
   }, []);
 
@@ -1245,6 +1266,63 @@ export default function MapScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {/* Terrain sub-filters: type & environment */}
+        {filter === 'terrains' ? (
+          <View style={styles.subFiltersContainer}>
+            {/* Terrain Type (surface) */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="landscape" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Surface' : 'Surface'}</Text>
+              </View>
+              {config.terrainTypes.map(tt => {
+                const active = terrainTypeFilter === tt.id;
+                return (
+                  <Pressable
+                    key={tt.id}
+                    style={[styles.subChip, active && { backgroundColor: theme.success, borderColor: theme.success }]}
+                    onPress={() => { Haptics.selectionAsync(); setTerrainTypeFilter(active ? null : tt.id); }}
+                  >
+                    <MaterialIcons name={tt.icon as any} size={11} color={active ? '#FFF' : theme.success} />
+                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: theme.success }]}>{tt.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Environment */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="wb-sunny" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Environnement' : 'Environment'}</Text>
+              </View>
+              {config.terrainEnvironments.map(env => {
+                const active = terrainEnvFilter === env.id;
+                const envColor = env.id === 'indoor' ? '#3B82F6' : '#F59E0B';
+                return (
+                  <Pressable
+                    key={env.id}
+                    style={[styles.subChip, active && { backgroundColor: envColor, borderColor: envColor }]}
+                    onPress={() => { Haptics.selectionAsync(); setTerrainEnvFilter(active ? null : env.id as 'indoor' | 'outdoor'); }}
+                  >
+                    <MaterialIcons name={env.icon as any} size={11} color={active ? '#FFF' : envColor} />
+                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: envColor }]}>{env.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Active filter count */}
+            {(terrainTypeFilter || terrainEnvFilter) ? (
+              <View style={styles.subFilterActiveBar}>
+                <Text style={styles.subFilterActiveText}>{counts.terrains} {language === 'fr' ? 'terrain(s) filtre(s)' : 'terrain(s) filtered'}</Text>
+                <Pressable style={styles.subFilterClearBtn} onPress={() => { Haptics.selectionAsync(); setTerrainTypeFilter(null); setTerrainEnvFilter(null); }}>
+                  <MaterialIcons name="close" size={12} color={theme.primary} />
+                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Player sub-filters: ELO rank & trust score */}
         {filter === 'players' ? (
