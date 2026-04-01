@@ -87,6 +87,7 @@ export interface Player {
 
 export interface Club {
   id: string;
+  userId?: string;
   name: string;
   logo?: string;
   address: string;
