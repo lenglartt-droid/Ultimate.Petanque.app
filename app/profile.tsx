@@ -38,6 +38,7 @@ import { isUserAmbassador, isUserSponsor } from '@/services/ambassadorService';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import AdBanner from '@/components/ui/AdBanner';
+import { getEloRank } from '@/services/eloService';
 import XPBar from '@/components/ui/XPBar';
 import BadgeUnlockModal from '@/components/ui/BadgeUnlockModal';
 import { BADGES, getBadgeName, getBadgeDescription } from '@/services/badgeService';
@@ -924,7 +925,7 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Profile Hero Section */}
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
+        <View style={styles.heroSection}>
           {/* Avatar with photo picker */}
           <Pressable 
             testID="profile-avatar"
@@ -980,6 +981,15 @@ export default function ProfileScreen() {
                 <Text style={styles.heroBadgeText}>{t('roles', role)}</Text>
               </View>
 
+              {handedness ? (
+                <View style={styles.heroBadge}>
+                  <MaterialIcons name={handedness === 'left' ? 'front-hand' : handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />
+                  <Text style={[styles.heroBadgeText, { color: '#6366F1' }]}>
+                    {handedness === 'right' ? t('player', 'rightHanded') : handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                  </Text>
+                </View>
+              ) : null}
+
               {selfPlayer?.experience ? (
                 <View style={styles.heroBadge}>
                   <MaterialIcons name="timeline" size={14} color="#9333EA" />
@@ -989,6 +999,17 @@ export default function ProfileScreen() {
                 </View>
               ) : null}
             </View>
+            {selfPlayer?.eloRating ? (() => {
+              const eloR = getEloRank(selfPlayer.eloRating);
+              return (
+                <View style={[styles.heroBadge, { backgroundColor: eloR.color + '15', marginTop: 4 }]}>
+                  <MaterialIcons name={eloR.icon as any} size={14} color={eloR.color} />
+                  <Text style={[styles.heroBadgeText, { color: eloR.color }]}>
+                    ELO {selfPlayer.eloRating} - {eloR.label[language === 'fr' ? 'fr' : 'en']}
+                  </Text>
+                </View>
+              );
+            })() : null}
             {club && (
               <View style={styles.heroClub}>
                 <MaterialIcons name="location-city" size={14} color={theme.textSecondary} />
@@ -1090,11 +1111,11 @@ export default function ProfileScreen() {
               })()}
             </View>
           ) : null}
-        </Animated.View>
+        </View>
 
         {/* Progression Section: XP + Streak + Badges (compact unified card) */}
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={{ marginBottom: 20 }}>
+          <View style={{ marginBottom: 20 }}>
             <View style={progStyles.card}>
               {/* XP Bar inline */}
               <XPBar xp={userXp} language={language} />
@@ -1205,12 +1226,12 @@ export default function ProfileScreen() {
                 );
               })()}
             </View>
-          </Animated.View>
+          </View>
         )}
 
         {/* Edit Mode Fields */}
         {isEditing && (
-          <Animated.View entering={FadeIn.duration(300)} style={styles.editSection}>
+          <View style={styles.editSection}>
             <Text style={styles.sectionTitle}>{t('profile', 'editProfile')}</Text>
             
             {/* Username */}
@@ -1566,11 +1587,11 @@ export default function ProfileScreen() {
                 </Pressable>
               ));
             })()}
-          </Animated.View>
+          </View>
         )}
 
         {!isEditing && (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.section}>
+          <View style={styles.section}>
             <Pressable 
               style={styles.playerCardLink}
               onPress={() => router.push('/player/me')}
@@ -1614,12 +1635,12 @@ export default function ProfileScreen() {
             </Pressable>
 
 
-          </Animated.View>
+          </View>
         )}
 
         {/* Federation Card Section */}
         {!isEditing && !loading && (
-          <Animated.View entering={FadeInDown.duration(400).delay(175)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('player', 'federationCard').toUpperCase()}</Text>
             {uploadingCard ? (
               <View style={styles.fedUploadingCard}>
@@ -1680,7 +1701,7 @@ export default function ProfileScreen() {
                 </View>
               </Pressable>
             )}
-          </Animated.View>
+          </View>
         )}
 
         {/* Ad Banner */}
@@ -2220,7 +2241,7 @@ export default function ProfileScreen() {
                   </View>
                   <View style={styles.clubPickerInfo}>
                     <Text style={styles.clubPickerName}>{terr.name}</Text>
-                    <Text style={styles.clubPickerCity}>{terr.city} \u2022 {t('terrainTypes', terr.type)}</Text>
+                    <Text style={styles.clubPickerCity}>{terr.city} {"\u2022"} {t('terrainTypes', terr.type)}</Text>
                   </View>
                   {terrainId === terr.id ? (
                     <MaterialIcons name="check-circle" size={24} color={theme.carreauColor} />
