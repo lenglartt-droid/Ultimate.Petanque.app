@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset'];
 
     const results: Record<string, any> = {};
 
@@ -560,9 +560,165 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 6: Clean up old analytics (older than 365 days)
+    // TASK 6: ELO Inactivity Decay
+    // Applies -10 ELO/month for players inactive 30+ days (floor 800)
     // ============================================================
-    if (tasks.includes('cleanup_analytics')) {
+    if (tasks.includes('elo_decay')) {
+      console.log('[weekly-cron] Applying ELO inactivity decay...');
+      try {
+        const decayCutoff = new Date();
+        decayCutoff.setDate(decayCutoff.getDate() - 30);
+
+        const { data: inactivePlayers } = await supabaseAdmin
+          .from('players')
+          .select('id, elo_rating, last_match_date')
+          .lt('last_match_date', decayCutoff.toISOString())
+          .gt('elo_rating', 800);
+
+        let decayed = 0;
+        if (inactivePlayers && inactivePlayers.length > 0) {
+          for (const p of inactivePlayers) {
+            if (!p.last_match_date) continue;
+            const lastMatch = new Date(p.last_match_date);
+            const now = new Date();
+            const daysSince = Math.floor((now.getTime() - lastMatch.getTime()) / (1000 * 60 * 60 * 24));
+            if (daysSince < 30) continue;
+            const monthsInactive = Math.floor((daysSince - 30) / 30) + 1;
+            const totalDecay = monthsInactive * 10;
+            const decayedElo = Math.max(800, (p.elo_rating || 1000) - totalDecay);
+            const actualDecay = (p.elo_rating || 1000) - decayedElo;
+            if (actualDecay > 0) {
+              await supabaseAdmin.from('players').update({ elo_rating: decayedElo }).eq('id', p.id);
+              decayed++;
+            }
+          }
+        }
+
+        console.log(`[weekly-cron] ELO decay applied to ${decayed} players`);
+        results.elo_decay = { playersDecayed: decayed, totalInactive: inactivePlayers?.length || 0 };
+      } catch (eloErr: any) {
+        console.error('[weekly-cron] ELO decay error:', eloErr.message);
+        results.elo_decay = { error: eloErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 7: ELO Seasonal Reset
+    // Archives previous season and compresses ELO towards 1000
+    // Only runs in January
+    // ============================================================
+    if (tasks.includes('elo_seasonal_reset')) {
+      console.log('[weekly-cron] Checking ELO seasonal reset...');
+      try {
+        const now = new Date();
+        const currentYear = now.getFullYear();
+        const previousYear = currentYear - 1;
+
+        // Only apply in January
+        if (now.getMonth() === 0) {
+          // Check if already archived
+          const { data: existing } = await supabaseAdmin
+            .from('elo_seasons')
+            .select('id')
+            .eq('season_year', previousYear)
+            .limit(1);
+
+          if (!existing || existing.length === 0) {
+            // Fetch all players
+            const { data: allPlayers } = await supabaseAdmin
+              .from('players')
+              .select('id, user_id, elo_rating, elo_tireur, elo_pointeur, elo_milieu, stats');
+
+            if (allPlayers && allPlayers.length > 0) {
+              // Find peak ELO from history
+              const yearStart = `${previousYear}-01-01T00:00:00Z`;
+              const yearEnd = `${previousYear}-12-31T23:59:59Z`;
+              const { data: historyData } = await supabaseAdmin
+                .from('elo_history')
+                .select('player_id, elo_after')
+                .gte('recorded_at', yearStart)
+                .lte('recorded_at', yearEnd);
+
+              const peakEloMap = new Map<string, number>();
+              if (historyData) {
+                for (const h of historyData) {
+                  const current = peakEloMap.get(h.player_id) || 1000;
+                  if (h.elo_after > current) peakEloMap.set(h.player_id, h.elo_after);
+                }
+              }
+
+              const COMPRESSION = 0.75;
+              const seasonRows: any[] = [];
+              let resetCount = 0;
+
+              for (const p of allPlayers) {
+                const finalElo = p.elo_rating || 1000;
+                const peakElo = Math.max(peakEloMap.get(p.id) || finalElo, finalElo);
+                const rankTiers = [
+                  { tier: 'master', minElo: 1800 },
+                  { tier: 'diamond', minElo: 1500 },
+                  { tier: 'gold', minElo: 1200 },
+                  { tier: 'silver', minElo: 1000 },
+                  { tier: 'bronze', minElo: 0 },
+                ];
+                const rank = rankTiers.find(r => finalElo >= r.minElo) || rankTiers[4];
+
+                if (p.user_id) {
+                  seasonRows.push({
+                    user_id: p.user_id,
+                    player_id: p.id,
+                    season_year: previousYear,
+                    peak_elo: peakElo,
+                    final_elo: finalElo,
+                    final_rank: rank.tier,
+                    matches_played: p.stats?.matchesPlayed || 0,
+                    wins: p.stats?.wins || 0,
+                    elo_tireur: p.elo_tireur || 1000,
+                    elo_pointeur: p.elo_pointeur || 1000,
+                    elo_milieu: p.elo_milieu || 1000,
+                  });
+                }
+
+                const newElo = Math.round(1000 + (finalElo - 1000) * COMPRESSION);
+                const newTireur = Math.round(1000 + ((p.elo_tireur || 1000) - 1000) * COMPRESSION);
+                const newPointeur = Math.round(1000 + ((p.elo_pointeur || 1000) - 1000) * COMPRESSION);
+                const newMilieu = Math.round(1000 + ((p.elo_milieu || 1000) - 1000) * COMPRESSION);
+
+                await supabaseAdmin.from('players').update({
+                  elo_rating: newElo,
+                  elo_tireur: newTireur,
+                  elo_pointeur: newPointeur,
+                  elo_milieu: newMilieu,
+                }).eq('id', p.id);
+                resetCount++;
+              }
+
+              // Insert season archives
+              for (let i = 0; i < seasonRows.length; i += 50) {
+                await supabaseAdmin.from('elo_seasons').upsert(seasonRows.slice(i, i + 50), { onConflict: 'player_id,season_year' });
+              }
+
+              console.log(`[weekly-cron] Seasonal reset: ${resetCount} players compressed, ${seasonRows.length} seasons archived`);
+              results.elo_seasonal_reset = { applied: true, playersReset: resetCount, seasonsArchived: seasonRows.length, season: previousYear };
+            } else {
+              results.elo_seasonal_reset = { applied: false, reason: 'no_players' };
+            }
+          } else {
+            results.elo_seasonal_reset = { applied: false, reason: 'already_archived', season: previousYear };
+          }
+        } else {
+          results.elo_seasonal_reset = { applied: false, reason: 'not_january', month: now.getMonth() };
+        }
+      } catch (seasonErr: any) {
+        console.error('[weekly-cron] Seasonal reset error:', seasonErr.message);
+        results.elo_seasonal_reset = { error: seasonErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 8: Clean up old analytics (older than 365 days)
+    // ============================================================
+    if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');
       const threshold365d = new Date(Date.now() - 365 * 24 * 60 * 60 * 1000).toISOString();
 
