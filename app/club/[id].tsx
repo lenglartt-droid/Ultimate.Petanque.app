@@ -598,7 +598,7 @@ export default function ClubDetailScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.locationAddress}>{mainTerrain.name}</Text>
-                    <Text style={styles.locationCity}>{t('terrainTypes', mainTerrain.type)} \u2022 {mainTerrain.city}</Text>
+                    <Text style={styles.locationCity}>{t('terrainTypes', mainTerrain.type)} {"\u2022"} {mainTerrain.city}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </View>
@@ -1396,8 +1396,6 @@ const styles = StyleSheet.create({
   pvToggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   pvNote: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.primary + '15' },
   pvNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
-  pvReadOnlyBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.warning + '10', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: theme.warning + '20' },
-  pvReadOnlyText: { flex: 1, fontSize: 12, fontWeight: '600' as const, color: theme.warning, lineHeight: 17 },
   pvActions: { flexDirection: 'row' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
   pvCancelBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
   pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },

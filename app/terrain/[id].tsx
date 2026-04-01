@@ -61,7 +61,7 @@ export default function TerrainDetailScreen() {
   const [showAllTournaments, setShowAllTournaments] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [showPublicPreview, setShowPublicPreview] = useState(false);
-  const [showSharePreview, setShowSharePreview] = useState(false);
+
   const { showAlert } = useAlert();
   const { user } = useAuth();
   const { t, language } = useLanguage();
@@ -104,14 +104,9 @@ export default function TerrainDetailScreen() {
     setShowPublicPreview(false);
   };
 
-  const handleOpenSharePreview = () => {
+  const handleOpenShare = () => {
     if (!terrain) return;
     Haptics.selectionAsync();
-    setShowSharePreview(true);
-  };
-
-  const handleConfirmShare = () => {
-    setShowSharePreview(false);
     setShowShareModal(true);
   };
   
@@ -275,7 +270,7 @@ export default function TerrainDetailScreen() {
               <MaterialIcons name="save-alt" size={22} color={theme.accent} />
             </Pressable>
           )}
-          <Pressable style={styles.shareButton} onPress={handleOpenSharePreview}>
+          <Pressable style={styles.shareButton} onPress={handleOpenShare}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
           {canEdit && (
@@ -858,94 +853,6 @@ export default function TerrainDetailScreen() {
                     }</Text>
                   </>
                 )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ===== SHARE PREVIEW MODAL ===== */}
-      <Modal visible={showSharePreview} animationType="slide" transparent>
-        <View style={styles.pvOverlay}>
-          <View style={styles.pvModal}>
-            <View style={styles.pvHeader}>
-              <View style={[styles.pvHeaderIcon, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="share" size={22} color={theme.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
-                <Text style={styles.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
-              </View>
-              <Pressable style={styles.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={styles.pvReadOnlyBadge}>
-                <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={styles.pvReadOnlyText}>{t('preview', 'readOnlyTerrain')}</Text>
-              </View>
-
-              <View style={styles.pvCard}>
-                <View style={styles.pvAvatarRow}>
-                  <View style={[styles.pvAvatar, { backgroundColor: colors.bg }]}>
-                    <MaterialIcons name={typeConfig.icon as any} size={28} color="#FFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pvName}>{terrain.name}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                      <MaterialIcons name={typeConfig.icon as any} size={14} color={colors.bg} />
-                      <Text style={{ fontSize: 13, fontWeight: '600', color: colors.bg }}>{t('terrainTypes', terrain.type)}</Text>
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.pvLocationRow}>
-                  <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                  <Text style={styles.pvLocationText}>{terrain.address}, {terrain.city}</Text>
-                </View>
-
-                {terrain.clubName ? (
-                  <View style={styles.pvInfoRow}>
-                    <View style={styles.pvInfoPill}>
-                      <MaterialIcons name="home" size={12} color={theme.accent} />
-                      <Text style={[styles.pvInfoText, { color: theme.accent }]}>{terrain.clubName}</Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                <View style={styles.pvStatsRow}>
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{terrain.courtsCount}</Text>
-                    <Text style={styles.pvStatLabel}>{terrain.courtsCount > 1 ? t('terrain', 'courtsLabelPlural') : t('terrain', 'courtsLabel')}</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={[styles.pvStatValue, { color: terrain.lighting ? theme.warning : theme.textMuted }]}>{terrain.lighting ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
-                    <Text style={styles.pvStatLabel}>{t('terrain', 'lighting')}</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={[styles.pvStatValue, { color: terrain.covered ? theme.accent : theme.textMuted }]}>{terrain.covered ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
-                    <Text style={styles.pvStatLabel}>{t('terrain', 'covered')}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.pvNote}>
-                <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{t('preview', 'shareNoteTerrain')}</Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.pvActions}>
-              <Pressable style={styles.pvCancelBtn} onPress={() => setShowSharePreview(false)}>
-                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable style={[styles.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
-                <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={styles.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>
@@ -1560,8 +1467,6 @@ const styles = StyleSheet.create({
   pvStatDivider: { width: 1, height: 24, backgroundColor: theme.border, marginHorizontal: 6 },
   pvNote: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.primary + '15' },
   pvNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
-  pvReadOnlyBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.warning + '10', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: theme.warning + '20' },
-  pvReadOnlyText: { flex: 1, fontSize: 12, fontWeight: '600' as const, color: theme.warning, lineHeight: 17 },
   pvActions: { flexDirection: 'row' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
   pvCancelBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
   pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
