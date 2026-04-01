@@ -487,6 +487,7 @@ export function buildPlayerDbPayload(player: Record<string, any>): Record<string
     club_id: player.clubId,
     role: player.role,
     level: player.level,
+    experience: player.experience,
     location: player.location,
     phone: player.phone,
     email: player.email,
@@ -621,7 +622,7 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
     players: {
       name: 'name', nickname: 'nickname', avatar: 'avatar',
       club: 'club', clubId: 'club_id', role: 'role', level: 'level',
-      location: 'location', country: 'country', boules: 'boules',
+      experience: 'experience', location: 'location', country: 'country', boules: 'boules',
       handedness: 'handedness', terrainId: 'terrain_id', terrainName: 'terrain_name',
       phone: 'phone', email: 'email', isPublic: 'is_public',
       showContactPublic: 'show_contact_public', stats: 'stats',

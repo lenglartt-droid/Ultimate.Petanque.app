@@ -405,7 +405,7 @@ export default function DirectoryScreen() {
       const matchesClub = filters.playerClub === 'all' || p.club === filters.playerClub;
       const matchesCity = filters.playerCity === 'all' || p.location?.city === filters.playerCity;
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
-      const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
+      const matchesLevel = true;
       const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
       const matchesEloRank = filters.playerEloRank === 'all' || (() => {
         const elo = p.eloRating || ELO_INITIAL;
@@ -599,13 +599,7 @@ export default function DirectoryScreen() {
               icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'auto-awesome' }}
               allLabel={t('directory', 'allLabel')}
             />
-            <FilterSection
-              title={t('directory', 'level')}
-              options={uniqueValues.playerLevels}
-              value={filters.playerLevel}
-              onChange={(v) => setFilters(f => ({ ...f, playerLevel: v }))}
-              allLabel={t('directory', 'allLabel')}
-            />
+
             <FilterSection
               title={t('directory', 'clubs')}
               options={uniqueValues.playerClubs}
@@ -993,7 +987,7 @@ export default function DirectoryScreen() {
               <>
                 {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
                 {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
-                {filters.playerLevel !== 'all' && <ActiveFilterChip label={t('levels', filters.playerLevel)} onRemove={() => setFilters(f => ({ ...f, playerLevel: 'all' }))} />}
+
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
                 {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}
                 {filters.playerCountry !== 'all' && <ActiveFilterChip label={filters.playerCountry} onRemove={() => setFilters(f => ({ ...f, playerCountry: 'all' }))} />}
@@ -1700,7 +1694,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
           ); })() : null}
           <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text></View>
           <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text></View>
-          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('levels', item.level)}</Text></View>
+
         </View>
         {isRealUser ? (
           <Pressable style={styles.inviteMeetupBtn} onPress={(e) => { e.stopPropagation?.(); handleInviteToMeetup(item.id, item.name); }} hitSlop={4}>
