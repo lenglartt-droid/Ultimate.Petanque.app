@@ -32,6 +32,7 @@ import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL, fetchPlayerRoleElos, calculateInactivityDecay } from '@/services/eloService';
+import { fetchWeeklyRankHistory } from '@/services/weeklyLeaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -196,6 +197,9 @@ export default function PlayerDetailScreen() {
   const [roleElos, setRoleElos] = React.useState<{ tireur: number; pointeur: number; milieu: number } | null>(null);
   // Inactivity decay warning
   const [inactivityDecay, setInactivityDecay] = React.useState<{ decayAmount: number; daysSince: number } | null>(null);
+  // Leaderboard rank history
+  const [rankHistory, setRankHistory] = React.useState<Array<{ weekStart: string; rank: number; eloRating: number; matchesPlayed: number; winRate: number }>>([]);
+  const [rankHistoryLoading, setRankHistoryLoading] = React.useState(false);
   React.useEffect(() => {
     if (!player) return;
     setEloLoading(true);
@@ -213,6 +217,15 @@ export default function PlayerDetailScreen() {
         const { decayAmount } = calculateInactivityDecay(player.eloRating || ELO_INITIAL, player.lastMatchDate);
         if (decayAmount > 0) setInactivityDecay({ decayAmount, daysSince });
       }
+    }
+    // Load leaderboard rank history
+    const playerUserId3 = (player as any)?.userId;
+    if (playerUserId3) {
+      setRankHistoryLoading(true);
+      fetchWeeklyRankHistory(playerUserId3, 12).then(({ history }) => {
+        setRankHistory(history);
+        setRankHistoryLoading(false);
+      }).catch(() => setRankHistoryLoading(false));
     }
   }, [player?.id]);
 
@@ -1071,6 +1084,81 @@ export default function PlayerDetailScreen() {
                     </View>
                   </Pressable>
                 ))}
+              </View>
+            ) : null}
+            {/* Leaderboard Rank History Chart */}
+            {rankHistory.length >= 2 ? (() => {
+              const chartW = Math.max(1, screenWidth - 96);
+              const chartH = 100;
+              const ranks = rankHistory.map(h => h.rank);
+              const maxRank = Math.max(...ranks, 1);
+              const minRank = Math.min(...ranks, 1);
+              const range = Math.max(maxRank - minRank, 1);
+              const stepX = chartW / Math.max(ranks.length - 1, 1);
+              const getYR = (rank: number) => 10 + ((rank - minRank) / range) * (chartH - 20);
+              const lastPtR = { x: (ranks.length - 1) * stepX, y: getYR(ranks[ranks.length - 1]) };
+              const trendR = ranks[ranks.length - 1] <= ranks[0];
+              const lineColorR = trendR ? '#10B981' : '#EF4444';
+              return (
+                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <MaterialIcons name="leaderboard" size={14} color="#D97706" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                      {t('leaderboard', 'eloLeaderboardHistory')}
+                    </Text>
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>({rankHistory.length} {t('leaderboard', 'eloLeaderboardHistoryDesc')})</Text>
+                  </View>
+                  <Svg width={chartW} height={chartH + 20}>
+                    {[minRank, Math.round((minRank + maxRank) / 2), maxRank].filter((v, i, a) => a.indexOf(v) === i).map((rank, i) => (
+                      <G key={`ref-${i}`}>
+                        <Line x1={0} y1={getYR(rank)} x2={chartW} y2={getYR(rank)} stroke={theme.border} strokeWidth={0.8} strokeDasharray="4,4" />
+                        <SvgText x={chartW - 2} y={getYR(rank) - 4} fontSize="9" fill={theme.textMuted} textAnchor="end" fontWeight="600">#{rank}</SvgText>
+                      </G>
+                    ))}
+                    <Polygon
+                      points={`0,${chartH + 5} ${ranks.map((r, i) => `${i * stepX},${getYR(r)}`).join(' ')} ${(ranks.length - 1) * stepX},${chartH + 5}`}
+                      fill={lineColorR + '10'}
+                    />
+                    {ranks.length > 1 ? (
+                      <G>
+                        {ranks.slice(1).map((r, i) => (
+                          <Line key={i} x1={i * stepX} y1={getYR(ranks[i])} x2={(i + 1) * stepX} y2={getYR(r)} stroke={lineColorR} strokeWidth={2.5} />
+                        ))}
+                      </G>
+                    ) : null}
+                    {ranks.map((r, i) => (
+                      <SvgCircle key={i} cx={i * stepX} cy={getYR(r)} r={i === ranks.length - 1 ? 5 : 3} fill={i === ranks.length - 1 ? lineColorR : lineColorR + '80'} stroke="#FFF" strokeWidth={i === ranks.length - 1 ? 2 : 1} />
+                    ))}
+                    <SvgText x={Math.min(lastPtR.x, chartW - 20)} y={lastPtR.y - 10} fontSize="12" fill={lineColorR} fontWeight="800" textAnchor="middle">
+                      #{ranks[ranks.length - 1]}
+                    </SvgText>
+                    {rankHistory.map((h, i) => {
+                      if (rankHistory.length > 6 && i % 2 !== 0 && i !== rankHistory.length - 1) return null;
+                      const d = new Date(h.weekStart);
+                      const label = `${d.getDate()}/${d.getMonth() + 1}`;
+                      return (
+                        <SvgText key={`wl-${i}`} x={i * stepX} y={chartH + 14} fontSize="8" fill={theme.textMuted} textAnchor="middle" fontWeight="500">
+                          {label}
+                        </SvgText>
+                      );
+                    })}
+                  </Svg>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>
+                      {language === 'fr' ? 'Meilleur' : 'Best'}: #{minRank}
+                    </Text>
+                    <Pressable onPress={() => router.push('/leaderboard' as any)} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: '#D97706' }}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
+                      <MaterialIcons name="chevron-right" size={12} color="#D97706" />
+                    </Pressable>
+                  </View>
+                </View>
+              );
+            })() : rankHistory.length === 0 && !rankHistoryLoading && (player as any)?.userId ? (
+              <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'center', paddingVertical: 16 }}>
+                <MaterialIcons name="leaderboard" size={24} color={theme.textMuted} />
+                <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>{t('leaderboard', 'eloNoLeaderboardHistory')}</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 3, textAlign: 'center', paddingHorizontal: 16 }}>{t('leaderboard', 'eloNoLeaderboardHistoryDesc')}</Text>
               </View>
             ) : null}
           </View>
