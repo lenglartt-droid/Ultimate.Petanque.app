@@ -31,6 +31,8 @@ export const leaderboardTranslations = {
     eloRecalculate: { fr: 'Recalculer tous les ELO', en: 'Recalculate all ELO' },
     eloRecalculating: { fr: 'Recalcul en cours...', en: 'Recalculating...' },
     eloRecalculated: { fr: 'ELO recalcule pour {count} joueurs', en: 'ELO recalculated for {count} players' },
+    eloDelta: { fr: 'Delta ELO', en: 'ELO Delta' },
+    eloWeeklySummary: { fr: 'ELO cette semaine', en: 'ELO this week' },
     devantBouleShort: { fr: 'Dev. boule', en: 'Front' },
     you: { fr: 'Vous', en: 'You' },
     topPlayers: { fr: 'Top joueurs', en: 'Top players' },

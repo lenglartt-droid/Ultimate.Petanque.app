@@ -24,6 +24,7 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort, LeaderboardPeriod } from '@/services/leaderboardService';
+import { getEloRank, getEloColor, formatEloDelta, ELO_RANKS } from '@/services/eloService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry, BoulesLeaderboardSort, BoulesLeaderboardMode } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
@@ -142,10 +143,17 @@ const WeeklyPlayerRow = React.memo(function WeeklyPlayerRow({
           <Text style={s.statValue}>{player.weeklyWins || player.stats.wins}</Text>
           <Text style={s.statLabel}>{(extraTranslations.weeklyLeaderboard?.weeklyWinsLabel as any)?.[language] || 'wins'}</Text>
         </View>
-        <View style={s.statBlock}>
-          <Text style={s.statValue}>{player.stats.tirRate > 0 ? `${player.stats.tirRate}%` : '-'}</Text>
-          <Text style={s.statLabel}>{t('leaderboard', 'shotRate')}</Text>
-        </View>
+        {player.eloRating ? (
+          <View style={s.statBlock}>
+            <Text style={[s.statValue, { color: getEloColor(player.eloRating || 1000), fontWeight: '800' }]}>{player.eloRating}</Text>
+            <Text style={s.statLabel}>ELO</Text>
+          </View>
+        ) : (
+          <View style={s.statBlock}>
+            <Text style={s.statValue}>{player.stats.tirRate > 0 ? `${player.stats.tirRate}%` : '-'}</Text>
+            <Text style={s.statLabel}>{t('leaderboard', 'shotRate')}</Text>
+          </View>
+        )}
       </View>
     </Pressable>
   );
@@ -218,6 +226,15 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
               {player.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
             </Text>
             {player.country ? <Text style={{ fontSize: 12, lineHeight: 14 }}>{getCountryFlag(player.country)}</Text> : null}
+            {player.eloRating ? (() => {
+              const eloRank = getEloRank(player.eloRating);
+              return (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: eloRank.color + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: eloRank.color + '30' }}>
+                  <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: eloRank.color }}>{player.eloRating}</Text>
+                </View>
+              );
+            })() : null}
             {player.isAmbassador ? (
               <View style={s.ambassadorBadge}>
                 <MaterialIcons name="verified" size={10} color="#7C3AED" />
@@ -248,14 +265,11 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
         </View>
       </View>
 
-      {/* Stats */}
       <View style={s.statsCol}>
-        {player.trustScore !== undefined ? (
-          <View style={[s.trustBadgeRow, { borderColor: getTrustScoreColor(player.trustScore) + '30', backgroundColor: getTrustScoreColor(player.trustScore) + '08' }]}>
-            <MaterialIcons name={getTrustScoreIcon(player.trustScore) as any} size={10} color={getTrustScoreColor(player.trustScore)} />
-            <Text style={[s.trustBadgeText, { color: getTrustScoreColor(player.trustScore) }]}>{player.trustScore}</Text>
-          </View>
-        ) : null}
+        <View style={s.statBlock}>
+          <Text style={[s.statValue, sortBy === 'elo' && { color: getEloColor(player.eloRating || 1000), fontWeight: '800' }]}>{player.eloRating || 1000}</Text>
+          <Text style={s.statLabel}>ELO</Text>
+        </View>
         <View style={s.statBlock}>
           <Text style={[s.statValue, sortBy === 'winRate' && { color: '#D97706', fontWeight: '800' }]}>{player.stats.winRate}%</Text>
           <Text style={s.statLabel}>{t('leaderboard', 'winRate')}</Text>
@@ -323,7 +337,7 @@ export default function LeaderboardScreen() {
   const [allPlayers, setAllPlayers] = useState<LeaderboardPlayer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<LeaderboardSort>('winRate');
+  const [sortBy, setSortBy] = useState<LeaderboardSort>('elo');
   const [search, setSearch] = useState('');
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
@@ -962,6 +976,7 @@ export default function LeaderboardScreen() {
         <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
             {activeTab === 'players' ? ([
+              { id: 'elo' as LeaderboardSort, label: t('leaderboard', 'eloRating'), icon: 'diamond' },
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },

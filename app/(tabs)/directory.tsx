@@ -32,6 +32,7 @@ import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventSer
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
+import { getEloRank, getEloColor } from '@/services/eloService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import { useAuth, useAlert } from '@/template';
@@ -604,6 +605,15 @@ export default function DirectoryScreen() {
                 </Text>
               </View>
             ) : null}
+            {item.eloRating ? (() => {
+              const eloRank = getEloRank(item.eloRating);
+              return (
+                <View style={[styles.tag, { backgroundColor: eloRank.color + '12', borderWidth: 1, borderColor: eloRank.color + '25' }]}>
+                  <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
+                  <Text style={[styles.tagText, { color: eloRank.color }]}>{item.eloRating}</Text>
+                </View>
+              );
+            })() : null}
             <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
               <Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text>
             </View>
