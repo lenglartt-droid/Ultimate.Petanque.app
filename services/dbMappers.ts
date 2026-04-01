@@ -44,7 +44,7 @@ export function mapPlayerFromDb(p: any): Player {
 
 export function mapClubFromDb(c: any): Club {
   return {
-    id: c.id, name: c.name, logo: c.logo, address: c.address, city: c.city,
+    id: c.id, userId: c.user_id || undefined, name: c.name, logo: c.logo, address: c.address, city: c.city,
     country: c.country || 'France', location: c.location || { latitude: 0, longitude: 0 },
     membersCount: c.members_count || 0, foundedYear: c.founded_year,
     description: c.description, facilities: c.facilities || [],

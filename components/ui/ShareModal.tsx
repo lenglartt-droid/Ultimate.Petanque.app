@@ -120,7 +120,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
     }
     if (itemType === 'club') {
       const c = getClubById(itemId);
-      return !!(c && user?.id && (c as any).userId === user.id);
+      return !!(c && user?.id && c.userId === user.id);
     }
     return false;
   }, [itemType, itemId, getClubById, selfPlayer, user]);
@@ -614,10 +614,10 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       {d.hasContact ? (
                         <View style={s.contactPreviewBlock}>
                           <View style={s.contactPreviewHeader}>
-                            <MaterialIcons name={d.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={12} color={d.showContactPublic ? '#10B981' : '#94A3B8'} />
-                            <Text style={[s.contactPreviewHeaderText, { color: d.showContactPublic ? '#10B981' : '#94A3B8' }]}>{d.showContactPublic ? (fr ? 'Contacts visibles' : 'Contacts visible') : (fr ? 'Contacts masques' : 'Contacts hidden')}</Text>
+                            <MaterialIcons name={contactVisible ? 'contact-phone' : 'phone-disabled'} size={12} color={contactVisible ? '#10B981' : '#94A3B8'} />
+                            <Text style={[s.contactPreviewHeaderText, { color: contactVisible ? '#10B981' : '#94A3B8' }]}>{contactVisible ? (fr ? 'Contacts visibles' : 'Contacts visible') : (fr ? 'Contacts masques' : 'Contacts hidden')}</Text>
                           </View>
-                          {d.showContactPublic ? (
+                          {contactVisible ? (
                             <View style={s.contactPreviewItems}>
                               {d.contactEmail ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#3B82F6" /><Text style={s.contactPreviewItemText}>{d.contactEmail}</Text></View> : null}
                               {d.contactPhone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#10B981" /><Text style={s.contactPreviewItemText}>{d.contactPhone}</Text></View> : null}
