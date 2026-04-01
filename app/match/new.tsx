@@ -28,6 +28,7 @@ import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import { createShareLink } from '@/services/shareService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { showInterstitial } from '@/services/adService';
+import { predictMatch, getEloRank, formatEloDelta, ELO_INITIAL } from '@/services/eloService';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
 const PHASE_IDS = {
@@ -2016,6 +2017,78 @@ export default function NewMatchScreen() {
             </Pressable>
           </Animated.View>
 
+          {/* ELO Match Prediction */}
+          {teamAPlayers.length > 0 && teamBPlayers.length > 0 ? (() => {
+            const teamAElos = teamAPlayers.map(p => {
+              const pl = players.find(x => x.id === p.playerId);
+              return pl?.eloRating || ELO_INITIAL;
+            });
+            const teamBElos = teamBPlayers.map(p => {
+              const pl = players.find(x => x.id === p.playerId);
+              return pl?.eloRating || ELO_INITIAL;
+            });
+            const avgA = Math.round(teamAElos.reduce((a, b) => a + b, 0) / teamAElos.length);
+            const avgB = Math.round(teamBElos.reduce((a, b) => a + b, 0) / teamBElos.length);
+            // Only show if at least one team has non-default ELO
+            if (avgA === ELO_INITIAL && avgB === ELO_INITIAL) return null;
+            const prediction = predictMatch(teamAElos, teamBElos);
+            const favTeam = prediction.teamAWinProbability >= prediction.teamBWinProbability ? 'A' : 'B';
+            const favPct = favTeam === 'A' ? prediction.teamAWinProbability : prediction.teamBWinProbability;
+            const favColor = favTeam === 'A' ? theme.primary : theme.accent;
+            const rankA = getEloRank(avgA);
+            const rankB = getEloRank(avgB);
+            return (
+              <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.predictionCard}>
+                <View style={styles.predictionHeader}>
+                  <MaterialIcons name="analytics" size={16} color="#9333EA" />
+                  <Text style={styles.predictionTitle}>{t('leaderboard', 'eloPrediction')}</Text>
+                  <View style={[styles.predictionFavBadge, { backgroundColor: favColor + '15' }]}>
+                    <MaterialIcons name="star" size={12} color={favColor} />
+                    <Text style={[styles.predictionFavText, { color: favColor }]}>{t('leaderboard', 'eloFavorite')}</Text>
+                  </View>
+                </View>
+                <View style={styles.predictionContent}>
+                  <View style={styles.predictionTeam}>
+                    <View style={[styles.predictionTeamDot, { backgroundColor: theme.primary }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.predictionTeamLabel}>{t('match', 'myTeam')}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={[styles.predictionEloValue, { color: rankA.color }]}>{avgA}</Text>
+                        <View style={[styles.predictionRankBadge, { backgroundColor: rankA.color + '15' }]}>
+                          <MaterialIcons name={rankA.icon as any} size={10} color={rankA.color} />
+                        </View>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={[styles.predictionPct, prediction.teamAWinProbability >= 50 && { color: theme.success, fontWeight: '900' as const }]}>{prediction.teamAWinProbability}%</Text>
+                      <Text style={styles.predictionDelta}>{formatEloDelta(prediction.estimatedDeltaIfAWins)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.predictionBar}>
+                    <View style={[styles.predictionBarA, { flex: Math.max(prediction.teamAWinProbability, 1) }]} />
+                    <View style={[styles.predictionBarB, { flex: Math.max(prediction.teamBWinProbability, 1) }]} />
+                  </View>
+                  <View style={styles.predictionTeam}>
+                    <View style={[styles.predictionTeamDot, { backgroundColor: theme.accent }]} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.predictionTeamLabel}>{t('match', 'opponent')}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Text style={[styles.predictionEloValue, { color: rankB.color }]}>{avgB}</Text>
+                        <View style={[styles.predictionRankBadge, { backgroundColor: rankB.color + '15' }]}>
+                          <MaterialIcons name={rankB.icon as any} size={10} color={rankB.color} />
+                        </View>
+                      </View>
+                    </View>
+                    <View style={{ alignItems: 'center' }}>
+                      <Text style={[styles.predictionPct, prediction.teamBWinProbability >= 50 && { color: theme.success, fontWeight: '900' as const }]}>{prediction.teamBWinProbability}%</Text>
+                      <Text style={styles.predictionDelta}>{formatEloDelta(prediction.estimatedDeltaIfBWins)}</Text>
+                    </View>
+                  </View>
+                </View>
+              </Animated.View>
+            );
+          })() : null}
+
           {/* Summary Stats */}
           {(menes.length > 0 || matchTime > 0) && (
             <Animated.View entering={FadeInDown.duration(300).delay(200)} style={styles.summaryCard}>
@@ -2824,6 +2897,23 @@ const styles = StyleSheet.create({
   createPlayerSubtitle: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   emptySearch: { alignItems: 'center', paddingVertical: 40 },
   emptySearchText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
+  // ELO Prediction
+  predictionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 16, ...theme.shadows.card, borderWidth: 1, borderColor: '#9333EA' + '20' },
+  predictionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12 },
+  predictionTitle: { fontSize: 12, fontWeight: '700' as const, color: '#9333EA', flex: 1, letterSpacing: 0.3 },
+  predictionFavBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  predictionFavText: { fontSize: 10, fontWeight: '700' as const },
+  predictionContent: { gap: 8 },
+  predictionTeam: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  predictionTeamDot: { width: 8, height: 8, borderRadius: 4 },
+  predictionTeamLabel: { fontSize: 11, color: theme.textMuted, fontWeight: '600' as const },
+  predictionEloValue: { fontSize: 16, fontWeight: '800' as const },
+  predictionRankBadge: { width: 18, height: 18, borderRadius: 9, alignItems: 'center' as const, justifyContent: 'center' as const },
+  predictionPct: { fontSize: 18, fontWeight: '700' as const, color: theme.textSecondary },
+  predictionDelta: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted, marginTop: 1 },
+  predictionBar: { flexDirection: 'row' as const, height: 6, borderRadius: 3, overflow: 'hidden' as const, gap: 2 },
+  predictionBarA: { backgroundColor: theme.primary, borderRadius: 3 },
+  predictionBarB: { backgroundColor: theme.accent, borderRadius: 3 },
   terrainMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   terrainMatchBadgeText: { fontSize: 11, fontWeight: '700', color: theme.primary },
   // Terrain picker modal

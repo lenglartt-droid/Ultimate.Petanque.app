@@ -877,6 +877,62 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // ELO_RANK_CHANGED: Notify user when ELO rank tier changes
+    // ============================================================
+    else if (type === 'elo_rank_changed') {
+      const { targetUserId, playerName, oldRank, newRank, oldElo, newElo, direction } = payload || {};
+      if (!targetUserId || !newRank) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/newRank' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check notification preference
+      const enabled = await isNotifEnabled(targetUserId, 'ranking_changed');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const rankLabels: Record<string, { fr: string; en: string; emoji: string }> = {
+          bronze: { fr: 'Bronze', en: 'Bronze', emoji: '\u{1F94E}' },
+          silver: { fr: 'Argent', en: 'Silver', emoji: '\u{1FA99}' },
+          gold: { fr: 'Or', en: 'Gold', emoji: '\u{1F3C5}' },
+          diamond: { fr: 'Diamant', en: 'Diamond', emoji: '\u{1F48E}' },
+          master: { fr: 'Maitre', en: 'Master', emoji: '\u{1F451}' },
+        };
+        const isPromotion = direction === 'up';
+        const rankInfo = rankLabels[newRank] || rankLabels.bronze;
+        const emoji = isPromotion ? rankInfo.emoji : '\u{1F4C9}';
+        const title = isPromotion
+          ? `${emoji} Nouveau rang ELO : ${rankInfo.fr} !`
+          : `${emoji} Changement de rang ELO`;
+        const body = isPromotion
+          ? `Felicitations ! Votre ELO est passe a ${newElo} et vous atteignez le rang ${rankInfo.fr}. Continuez comme ca !`
+          : `Votre ELO est descendu a ${newElo} (rang ${rankInfo.fr}). Rejouez pour remonter !`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'elo_rank_changed', newRank, newElo, oldRank, oldElo, direction },
+          { channelId: 'tournament-reminders', priority: isPromotion ? 'high' : 'default' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

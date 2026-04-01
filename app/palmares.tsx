@@ -7,6 +7,7 @@ import {
   StyleSheet,
   FlatList,
   Dimensions,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -683,6 +684,21 @@ export default function PalmaresScreen() {
 
             {/* ============ TOURNAMENT LIST TOGGLE ============ */}
             {/* ============ ELO SEASONS HISTORY ============ */}
+            {/* ELO Awards Link */}
+            <Pressable
+              style={styles.eloAwardsLink}
+              onPress={() => { Haptics.selectionAsync(); router.push('/elo-awards' as any); }}
+            >
+              <View style={[styles.eloSeasonsIconBox, { backgroundColor: '#9333EA15' }]}>
+                <MaterialIcons name="emoji-events" size={18} color="#9333EA" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.eloAwardsLinkTitle}>{t('leaderboard', 'eloAwardsTitle')}</Text>
+                <Text style={styles.eloAwardsLinkDesc}>{t('leaderboard', 'eloAwardsDesc')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#9333EA" />
+            </Pressable>
+
             <View style={styles.eloSeasonsSection}>
               <View style={styles.eloSeasonsHeader}>
                 <View style={[styles.eloSeasonsIconBox, { backgroundColor: '#9333EA15' }]}>
@@ -1037,6 +1053,9 @@ const styles = StyleSheet.create({
 
   // ELO Seasons
   eloSeasonsSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  eloAwardsLink: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#9333EA' + '20', ...theme.shadows.card },
+  eloAwardsLinkTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
+  eloAwardsLinkDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   eloSeasonsHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
   eloSeasonsIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
   eloSeasonsTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },

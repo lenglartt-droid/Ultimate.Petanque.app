@@ -14,6 +14,7 @@
  */
 import { getSupabaseClient } from '@/template';
 import { getMatchValidationWeight } from '@/services/trustScoreService';
+import { triggerServerPush } from '@/services/pushTokenService';
 
 // ============================================
 // TYPES
@@ -490,6 +491,25 @@ export async function updateEloAfterMatch(
     // Insert history records
     if (historyRows.length > 0) {
       await supabase.from('elo_history').insert(historyRows);
+    }
+
+    // Check for rank tier changes and send notifications
+    for (const row of historyRows) {
+      const oldRank = getEloRank(row.elo_before);
+      const newRank = getEloRank(row.elo_after);
+      if (oldRank.tier !== newRank.tier) {
+        const p = [...playerMap.values()].find(pl => pl.user_id === row.user_id);
+        const direction = row.elo_after > row.elo_before ? 'up' : 'down';
+        triggerServerPush('elo_rank_changed', {
+          targetUserId: row.user_id,
+          playerName: p?.name || '',
+          oldRank: oldRank.tier,
+          newRank: newRank.tier,
+          oldElo: row.elo_before,
+          newElo: row.elo_after,
+          direction,
+        }).catch(() => {});
+      }
     }
   } catch (e) {
     console.log('[ELO] Error updating after match:', e);

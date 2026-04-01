@@ -31,7 +31,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
-import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL } from '@/services/eloService';
+import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL, fetchPlayerRoleElos, calculateInactivityDecay } from '@/services/eloService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -192,6 +192,10 @@ export default function PlayerDetailScreen() {
   // ELO history
   const [eloHistory, setEloHistory] = React.useState<EloHistoryEntry[]>([]);
   const [eloLoading, setEloLoading] = React.useState(false);
+  // Role-specific ELO
+  const [roleElos, setRoleElos] = React.useState<{ tireur: number; pointeur: number; milieu: number } | null>(null);
+  // Inactivity decay warning
+  const [inactivityDecay, setInactivityDecay] = React.useState<{ decayAmount: number; daysSince: number } | null>(null);
   React.useEffect(() => {
     if (!player) return;
     setEloLoading(true);
@@ -199,6 +203,17 @@ export default function PlayerDetailScreen() {
       setEloHistory(history);
       setEloLoading(false);
     }).catch(() => setEloLoading(false));
+    // Load role ELOs
+    fetchPlayerRoleElos(player.id).then(setRoleElos).catch(() => {});
+    // Check inactivity decay
+    if (player.lastMatchDate) {
+      const lastMatch = new Date(player.lastMatchDate);
+      const daysSince = Math.floor((new Date().getTime() - lastMatch.getTime()) / (1000 * 60 * 60 * 24));
+      if (daysSince >= 30) {
+        const { decayAmount } = calculateInactivityDecay(player.eloRating || ELO_INITIAL, player.lastMatchDate);
+        if (decayAmount > 0) setInactivityDecay({ decayAmount, daysSince });
+      }
+    }
   }, [player?.id]);
 
   const eloChartData = React.useMemo(() => {
@@ -883,7 +898,43 @@ export default function PlayerDetailScreen() {
                   </View>
                 ) : null}
               </View>
+
+              {/* Inactivity decay warning */}
+              {inactivityDecay ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#F59E0B12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#F59E0B25' }}>
+                  <MaterialIcons name="warning" size={14} color="#F59E0B" />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#F59E0B' }}>
+                    {t('leaderboard', 'eloInactivityWarning').replace('{days}', String(inactivityDecay.daysSince)).replace('{decay}', String(inactivityDecay.decayAmount))}
+                  </Text>
+                </View>
+              ) : null}
             </View>
+
+            {/* Role-specific ELO */}
+            {roleElos && (roleElos.tireur !== 1000 || roleElos.pointeur !== 1000 || roleElos.milieu !== 1000) ? (
+              <View style={{ marginBottom: 16, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{t('leaderboard', 'eloRoleSpecific')}</Text>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  {[
+                    { label: t('leaderboard', 'eloRoleTireur'), value: roleElos.tireur, color: '#F97316', icon: 'gps-fixed' as const },
+                    { label: t('leaderboard', 'eloRolePointeur'), value: roleElos.pointeur, color: '#3B82F6', icon: 'adjust' as const },
+                    { label: t('leaderboard', 'eloRoleMilieu'), value: roleElos.milieu, color: '#8B5CF6', icon: 'swap-horiz' as const },
+                  ].map((role, idx) => {
+                    const rRank = getEloRank(role.value);
+                    return (
+                      <View key={idx} style={{ flex: 1, alignItems: 'center', backgroundColor: role.color + '08', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: role.color + '20' }}>
+                        <MaterialIcons name={role.icon} size={16} color={role.color} />
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: role.color, marginTop: 4 }}>{role.value}</Text>
+                        <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{role.label}</Text>
+                        <View style={{ backgroundColor: rRank.color + '15', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 4 }}>
+                          <Text style={{ fontSize: 8, fontWeight: '700', color: rRank.color }}>{rRank.label[language === 'fr' ? 'fr' : 'en']}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
 
             {/* ELO Sparkline Chart */}
             {eloChartData && eloChartData.points.length >= 2 ? (() => {

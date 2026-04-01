@@ -31,6 +31,7 @@ import {
 } from '@/services/badgeService';
 import { isUserAmbassador } from '@/services/ambassadorService';
 import { fetchTrustScore } from '@/services/trustScoreService';
+import { getEloRank, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
 import XPBar from '@/components/ui/XPBar';
 import theme from '@/constants/theme';
 
@@ -185,6 +186,37 @@ function getBadgeProgress(
         label: `${pc}% ${lang === 'fr' ? 'complete' : 'complete'}`,
       };
     }
+    case 'premier_diamant': {
+      const elo = (ctx as any).eloRating || 1000;
+      return {
+        current: Math.min(elo, 1500),
+        target: 1500,
+        percent: Math.min(100, Math.round((elo / 1500) * 100)),
+        label: `${elo}/1500 ELO`,
+      };
+    }
+    case 'maitre_petanque': {
+      const elo2 = (ctx as any).eloRating || 1000;
+      return {
+        current: Math.min(elo2, 1800),
+        target: 1800,
+        percent: Math.min(100, Math.round((elo2 / 1800) * 100)),
+        label: `${elo2}/1800 ELO`,
+      };
+    }
+    case 'specialiste': {
+      const eT = (ctx as any).eloTireur || 1000;
+      const eP = (ctx as any).eloPointeur || 1000;
+      const eM = (ctx as any).eloMilieu || 1000;
+      const bestRole = Math.max(eT, eP, eM);
+      const roleLabel = bestRole === eT ? (lang === 'fr' ? 'Tireur' : 'Shooter') : bestRole === eP ? (lang === 'fr' ? 'Pointeur' : 'Pointer') : (lang === 'fr' ? 'Milieu' : 'All-round');
+      return {
+        current: Math.min(bestRole, 1300),
+        target: 1300,
+        percent: Math.min(100, Math.round((bestRole / 1300) * 100)),
+        label: `${bestRole}/1300 ELO (${roleLabel})`,
+      };
+    }
     default:
       return { current: 0, target: 1, percent: 0, label: '' };
   }
@@ -198,6 +230,18 @@ export default function BadgesScreen() {
   const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useApp();
   const { language } = useLanguage();
   const { badges: userBadges, xp, loading, totalBadges } = useBadges();
+  const { selfPlayer: selfP } = useApp();
+
+  // ELO data for badge context
+  const eloData = useMemo(() => {
+    if (!selfP) return { eloRating: ELO_INITIAL, eloTireur: ELO_INITIAL, eloPointeur: ELO_INITIAL, eloMilieu: ELO_INITIAL };
+    return {
+      eloRating: selfP.eloRating || ELO_INITIAL,
+      eloTireur: selfP.eloTireur || ELO_INITIAL,
+      eloPointeur: selfP.eloPointeur || ELO_INITIAL,
+      eloMilieu: selfP.eloMilieu || ELO_INITIAL,
+    };
+  }, [selfP]);
 
   // Build badge context for progress calculation
   const badgeContext = useMemo(() => {
@@ -471,7 +515,7 @@ export default function BadgesScreen() {
 
           {BADGES.map((badge, index) => {
             const unlocked = userBadges.find(b => b.badgeId === badge.id);
-            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount, profileCompleteness } : null;
+            const ctxWithTrust = badgeContext ? { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount, profileCompleteness, ...eloData } : null;
             const prog = ctxWithTrust
               ? getBadgeProgress(badge.id, ctxWithTrust, language)
               : { current: 0, target: 1, percent: 0, label: '' };
