@@ -23,6 +23,8 @@ import theme, { blurhash } from '@/constants/theme';
 import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/template';
+import { router } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
 import { config } from '@/constants/config';
 import { getEloRank, ELO_RANKS } from '@/services/eloService';
@@ -75,6 +77,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
   const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, updatePlayer, updateClub, selfPlayer, players } = useApp();
+  const { user } = useAuth();
   const fr = language === 'fr';
 
   const [step, setStep] = useState<ShareStep>('options');
@@ -113,15 +116,14 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   // Only show toggle if user owns the item
   const isOwnItem = useMemo(() => {
     if (itemType === 'player') {
-      const p = getPlayerById(itemId);
       return selfPlayer?.id === itemId;
     }
     if (itemType === 'club') {
       const c = getClubById(itemId);
-      return !!(c && (c as any).userId);
+      return !!(c && user?.id && (c as any).userId === user.id);
     }
     return false;
-  }, [itemType, itemId, getPlayerById, getClubById, selfPlayer]);
+  }, [itemType, itemId, getClubById, selfPlayer, user]);
 
   const scrollRef = useRef<ScrollView>(null);
 
@@ -158,7 +160,17 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   const previewSubtitle = useMemo(() => {
     if (itemType === 'player') {
       const p = getPlayerById(itemId);
-      return p ? [p.role, p.club, p.country].filter(Boolean).join(' \u2022 ') : '';
+      if (!p) return '';
+      const parts = [p.role, p.club, p.country].filter(Boolean);
+      if (p.experience) {
+        const expLabel = p.experience === 'less_than_1' ? (fr ? '< 1 an' : '< 1 year') : p.experience === '1_to_3' ? (fr ? '1-3 ans' : '1-3 yrs') : p.experience === '3_to_10' ? (fr ? '3-10 ans' : '3-10 yrs') : (fr ? '10+ ans' : '10+ yrs');
+        parts.push(expLabel);
+      }
+      if (p.eloRating) {
+        const rank = getEloRank(p.eloRating);
+        parts.push(`ELO ${p.eloRating} (${rank.label[fr ? 'fr' : 'en']})`);
+      }
+      return parts.join(' \u2022 ');
     }
     if (itemType === 'club') {
       const c = getClubById(itemId);
@@ -317,6 +329,18 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       : `I am sharing my ${typeLabelLower} "${itemName}" on Ultimate Petanque!`;
     if (shareCode) msg += `\n${fr ? 'Code' : 'Code'}: ${shareCode}`;
     if (previewSubtitle) msg += `\n${previewSubtitle}`;
+    // Add experience and ELO for player shares
+    if (itemType === 'player' && previewDetails && previewDetails.type === 'player') {
+      const pd = previewDetails as any;
+      if (pd.experience) {
+        const expLabel = pd.experience === 'less_than_1' ? (fr ? '< 1 an' : '< 1 year') : pd.experience === '1_to_3' ? (fr ? '1-3 ans' : '1-3 years') : pd.experience === '3_to_10' ? (fr ? '3-10 ans' : '3-10 years') : (fr ? '10+ ans' : '10+ years');
+        msg += `\n${fr ? 'Experience' : 'Experience'}: ${expLabel}`;
+      }
+      if (pd.eloRating) {
+        const rank = getEloRank(pd.eloRating);
+        msg += `\nELO: ${pd.eloRating} (${rank.label[fr ? 'fr' : 'en']})`;
+      }
+    }
     if (sharedAssociatedItems.length > 0) {
       sharedAssociatedItems.forEach(ai => {
         const name = ai.type === 'club' ? associatedClub?.name : associatedTerrain?.name;

@@ -226,7 +226,7 @@ export default function TournamentDetailScreen() {
   const [showMergePicker, setShowMergePicker] = useState(false);
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [showPublicPreview, setShowPublicPreview] = useState(false);
-  const [showSharePreview, setShowSharePreview] = useState(false);
+
   const { showAlert: showShareAlert } = useAlert();
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
@@ -274,16 +274,11 @@ export default function TournamentDetailScreen() {
     setShowPublicPreview(false);
   }, [tournament, isPublicState, togglingPublic, showShareAlert, t]);
 
-  const handleOpenSharePreview = useCallback(() => {
+  const handleOpenShare = useCallback(() => {
     if (!tournament) return;
     Haptics.selectionAsync();
-    setShowSharePreview(true);
-  }, [tournament]);
-
-  const handleConfirmShare = useCallback(() => {
-    setShowSharePreview(false);
     setShowShareModal(true);
-  }, []);
+  }, [tournament]);
   
   // Notification state
   const isNotificationEnabled = tournament ? isTournamentNotificationEnabled(tournament.id) : false;
@@ -582,7 +577,7 @@ export default function TournamentDetailScreen() {
               <MaterialIcons name="save-alt" size={22} color={theme.accent} />
             </Pressable>
           )}
-          <Pressable style={styles.shareButton} onPress={handleOpenSharePreview}>
+          <Pressable style={styles.shareButton} onPress={handleOpenShare}>
             <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
           {canEdit && (
@@ -1376,124 +1371,6 @@ export default function TournamentDetailScreen() {
                     }</Text>
                   </>
                 )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ===== SHARE PREVIEW MODAL ===== */}
-      <Modal visible={showSharePreview} animationType="slide" transparent>
-        <View style={styles.pvOverlay}>
-          <View style={styles.pvModal}>
-            <View style={styles.pvHeader}>
-              <View style={[styles.pvHeaderIcon, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="share" size={22} color={theme.primary} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{t('preview', 'shareTitle')}</Text>
-                <Text style={styles.pvHeaderSub}>{t('preview', 'shareDesc')}</Text>
-              </View>
-              <Pressable style={styles.pvCloseBtn} onPress={() => setShowSharePreview(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={styles.pvReadOnlyBadge}>
-                <MaterialIcons name="lock" size={14} color={theme.warning} />
-                <Text style={styles.pvReadOnlyText}>{t('preview', 'readOnlyTournament')}</Text>
-              </View>
-
-              <View style={styles.pvCard}>
-                <View style={styles.pvAvatarRow}>
-                  <View style={styles.pvAvatarTournament}>
-                    <MaterialIcons name="emoji-events" size={28} color={theme.carreauColor} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pvName}>{tournament.name}</Text>
-                    <Text style={styles.pvSubtext}>{t('formats', tournament.format)} \u2022 {t('tournamentTypes', tournament.type)}</Text>
-                  </View>
-                </View>
-
-                <View style={styles.pvLocationRow}>
-                  <MaterialIcons name="event" size={14} color={theme.textSecondary} />
-                  <Text style={styles.pvLocationText}>
-                    {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
-                  </Text>
-                </View>
-
-                <View style={styles.pvLocationRow}>
-                  <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                  <Text style={styles.pvLocationText}>{tournament.location.city}</Text>
-                </View>
-
-                {(tournament.tournamentLevel || tournament.tournamentCategory) ? (
-                  <View style={styles.pvInfoRow}>
-                    {tournament.tournamentLevel ? (
-                      <View style={styles.pvInfoPill}>
-                        <MaterialIcons name="signal-cellular-alt" size={12} color={theme.success} />
-                        <Text style={[styles.pvInfoText, { color: theme.success }]}>{t('tournamentLevels', tournament.tournamentLevel)}</Text>
-                      </View>
-                    ) : null}
-                    {tournament.tournamentCategory ? (
-                      <View style={styles.pvInfoPill}>
-                        <MaterialIcons name="category" size={12} color={theme.warning} />
-                        <Text style={[styles.pvInfoText, { color: theme.warning }]}>{t('tournamentCategories', tournament.tournamentCategory)}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                {terrain ? (
-                  <View style={styles.pvInfoRow}>
-                    <View style={styles.pvInfoPill}>
-                      <MaterialIcons name="sports-soccer" size={12} color={theme.accent} />
-                      <Text style={[styles.pvInfoText, { color: theme.accent }]}>{terrain.name}</Text>
-                    </View>
-                  </View>
-                ) : null}
-
-                {tournament.finalResult && tournament.status === 'Termine' ? (
-                  <View style={[styles.pvResultBanner, { backgroundColor: theme.carreauColor + '10' }]}>
-                    <MaterialIcons name="emoji-events" size={16} color={theme.carreauColor} />
-                    <Text style={[styles.pvResultText, { color: theme.carreauColor }]}>{t('palmaresResults', tournament.finalResult)}</Text>
-                  </View>
-                ) : null}
-
-                <View style={styles.pvStatsRow}>
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{tournament.participants || 0}</Text>
-                    <Text style={styles.pvStatLabel}>{t('tournament', 'participants')}</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{tournament.maxParticipants || 32}</Text>
-                    <Text style={styles.pvStatLabel}>Max</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={[styles.pvStatValue, { color: tournament.status === 'A venir' ? theme.primary : tournament.status === 'Termine' ? theme.success : theme.warning }]}>
-                      {t('tournamentStatus', tournament.status)}
-                    </Text>
-                    <Text style={styles.pvStatLabel}>{t('preview', 'statusLabel')}</Text>
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.pvNote}>
-                <MaterialIcons name="visibility" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{t('preview', 'shareNoteTournament')}</Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.pvActions}>
-              <Pressable style={styles.pvCancelBtn} onPress={() => setShowSharePreview(false)}>
-                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable style={[styles.pvConfirmBtn, { backgroundColor: theme.primary }]} onPress={handleConfirmShare}>
-                <MaterialIcons name="share" size={18} color="#FFF" />
-                <Text style={styles.pvConfirmText}>{t('preview', 'shareBtn')}</Text>
               </Pressable>
             </View>
           </View>
