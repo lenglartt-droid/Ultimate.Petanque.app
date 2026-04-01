@@ -974,14 +974,7 @@ export default function ProfileScreen() {
                 />
                 <Text style={styles.heroBadgeText}>{t('roles', role)}</Text>
               </View>
-              <View style={[styles.heroBadge, { backgroundColor: theme.accent + '15' }]}>
-                <MaterialIcons 
-                  name={levels.find(l => l.id === level)?.icon as any || 'trending-up'} 
-                  size={14} 
-                  color={theme.accent} 
-                />
-                <Text style={[styles.heroBadgeText, { color: theme.accent }]}>{t('levels', level)}</Text>
-              </View>
+
             </View>
             {club && (
               <View style={styles.heroClub}>
@@ -1260,35 +1253,6 @@ export default function ProfileScreen() {
                     />
                     <Text style={[styles.optionText, role === r.id && styles.optionTextActive]}>
                       {t('roles', r.id)}
-                    </Text>
-                  </Pressable>
-                ))}
-              </View>
-            </View>
-
-            {/* Level Selection */}
-            <View style={styles.fieldCard}>
-              <View style={styles.fieldHeader}>
-                <MaterialIcons name="trending-up" size={18} color={theme.carreauColor} />
-                <Text style={styles.fieldLabel}>{t('profile', 'level')}</Text>
-              </View>
-              <View style={styles.levelGrid}>
-                {levels.map((l) => (
-                  <Pressable
-                    key={l.id}
-                    style={[styles.levelCard, level === l.id && styles.levelCardActive]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setLevel(l.id);
-                    }}
-                  >
-                    <MaterialIcons 
-                      name={l.icon as any} 
-                      size={20} 
-                      color={level === l.id ? theme.carreauColor : theme.textSecondary} 
-                    />
-                    <Text style={[styles.levelText, level === l.id && styles.levelTextActive]}>
-                      {t('levels', l.id)}
                     </Text>
                   </Pressable>
                 ))}

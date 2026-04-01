@@ -100,7 +100,7 @@ export function onSyncConfigChange(listener: (config: SyncConfig) => void): () =
  * Only fetch the fields we actually map, excluding large unused fields
  */
 export const DELTA_SELECT = {
-  players: 'id,user_id,name,nickname,avatar,club,club_id,role,level,location,phone,email,country,boules,handedness,terrain_id,terrain_name,is_public,show_contact_public,stats,elo_rating,elo_tireur,elo_pointeur,elo_milieu,last_match_date,created_at,updated_at',
+  players: 'id,user_id,name,nickname,avatar,club,club_id,role,level,experience,location,phone,email,country,boules,handedness,terrain_id,terrain_name,is_public,show_contact_public,stats,elo_rating,elo_tireur,elo_pointeur,elo_milieu,last_match_date,created_at,updated_at',
   clubs: 'id,user_id,name,logo,address,city,country,location,members_count,founded_year,description,facilities,contact_email,contact_phone,terrain_id,terrain_name,membership_cost,is_public,show_contact_public,club_card_url,updated_at',
   tournaments: 'id,user_id,name,date,end_date,type,format,location,terrain_id,terrain_name,terrain_type,club_id,club_name,status,participants,max_participants,prize,description,teams,phases,current_phase_id,tournament_level,tournament_category,registration_type,tournament_scope,registration_cost,prize_won,final_result,is_public,updated_at',
   matches: 'id,user_id,date,mode,format,tournament_id,tournament_name,tournament_phase,tournament_bracket,bracket_match_id,terrain_id,terrain_type,boules_set_id,team_a,team_b,winner,duration,menes,player_actions,series_info,updated_at',

@@ -24,6 +24,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import { toggleItemPublic } from '@/services/publicItemsService';
+import { getEloRank, ELO_INITIAL } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
@@ -405,10 +406,6 @@ export default function MyPlayerCardScreen() {
                     <MaterialIcons name={getRoleIcon(selfPlayer.role)} size={14} color={getRoleColor(selfPlayer.role)} />
                     <Text style={[s.pillBadgeText, { color: getRoleColor(selfPlayer.role) }]}>{t('roles', selfPlayer.role)}</Text>
                   </View>
-                  <View style={[s.pillBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <MaterialIcons name="trending-up" size={14} color={theme.accent} />
-                    <Text style={[s.pillBadgeText, { color: theme.accent }]}>{t('levels', selfPlayer.level)}</Text>
-                  </View>
                   {selfPlayer.handedness ? (
                     <View style={[s.pillBadge, { backgroundColor: '#6366F1' + '15' }]}>
                       <MaterialIcons name={selfPlayer.handedness === 'left' ? 'front-hand' : selfPlayer.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />
@@ -565,6 +562,49 @@ export default function MyPlayerCardScreen() {
           </View>
 
           <View style={isTablet ? s.tabletRight : undefined}>
+
+            {/* ===== ELO RATING (above preferences) ===== */}
+            {selfPlayer?.eloRating ? (() => {
+              const eloRank = getEloRank(selfPlayer.eloRating || ELO_INITIAL);
+              return (
+                <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+                  <View style={s.sectionHeader}>
+                    <View style={[s.sectionIconBox, { backgroundColor: eloRank.color + '15' }]}>
+                      <MaterialIcons name={eloRank.icon as any} size={18} color={eloRank.color} />
+                    </View>
+                    <Text style={s.sectionTitle}>{language === 'fr' ? 'CLASSEMENT ELO' : 'ELO RANKING'}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                    <Text style={{ fontSize: 40, fontWeight: '900', color: eloRank.color }}>{selfPlayer.eloRating || ELO_INITIAL}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                      <View style={{ backgroundColor: eloRank.color + '15', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: eloRank.color + '30' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: eloRank.color }}>{eloRank.label[language === 'fr' ? 'fr' : 'en']}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  {(selfPlayer.eloTireur && selfPlayer.eloTireur !== 1000) || (selfPlayer.eloPointeur && selfPlayer.eloPointeur !== 1000) || (selfPlayer.eloMilieu && selfPlayer.eloMilieu !== 1000) ? (
+                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
+                      {[
+                        { label: language === 'fr' ? 'Tireur' : 'Shooter', value: selfPlayer.eloTireur || 1000, color: '#F97316', icon: 'gps-fixed' as const },
+                        { label: language === 'fr' ? 'Pointeur' : 'Pointer', value: selfPlayer.eloPointeur || 1000, color: '#3B82F6', icon: 'adjust' as const },
+                        { label: language === 'fr' ? 'Milieu' : 'Middle', value: selfPlayer.eloMilieu || 1000, color: '#8B5CF6', icon: 'swap-horiz' as const },
+                      ].map((role, idx) => (
+                        <View key={idx} style={{ flex: 1, alignItems: 'center', backgroundColor: role.color + '08', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: role.color + '20' }}>
+                          <MaterialIcons name={role.icon} size={16} color={role.color} />
+                          <Text style={{ fontSize: 18, fontWeight: '800', color: role.color, marginTop: 4 }}>{role.value}</Text>
+                          <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{role.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: eloRank.color + '08', borderRadius: 12, borderWidth: 1, borderColor: eloRank.color + '20' }} onPress={() => router.push('/elo-awards' as any)}>
+                    <MaterialIcons name="emoji-events" size={16} color={eloRank.color} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: eloRank.color }}>{language === 'fr' ? 'Voir mon palmares ELO' : 'View ELO awards'}</Text>
+                    <MaterialIcons name="chevron-right" size={16} color={eloRank.color} />
+                  </Pressable>
+                </Animated.View>
+              );
+            })() : null}
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
@@ -880,9 +920,6 @@ export default function MyPlayerCardScreen() {
                   <View style={[s.pvBadge, { backgroundColor: getRoleColor(selfPlayer.role) + '15' }]}>
                     <Text style={[s.pvBadgeText, { color: getRoleColor(selfPlayer.role) }]}>{t('roles', selfPlayer.role)}</Text>
                   </View>
-                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', selfPlayer.level)}</Text>
-                  </View>
                   {selfPlayer.handedness ? (
                     <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
                       <Text style={[s.pvBadgeText, { color: '#6366F1' }]}>
@@ -1053,9 +1090,6 @@ export default function MyPlayerCardScreen() {
                 <View style={s.pvBadgesRow}>
                   <View style={[s.pvBadge, { backgroundColor: getRoleColor(selfPlayer.role) + '15' }]}>
                     <Text style={[s.pvBadgeText, { color: getRoleColor(selfPlayer.role) }]}>{t('roles', selfPlayer.role)}</Text>
-                  </View>
-                  <View style={[s.pvBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <Text style={[s.pvBadgeText, { color: theme.accent }]}>{t('levels', selfPlayer.level)}</Text>
                   </View>
                   {selfPlayer.handedness ? (
                     <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
