@@ -533,10 +533,7 @@ export default function PlayerDetailScreen() {
                     <MaterialIcons name={getRoleIcon(player.role)} size={14} color={getRoleColor(player.role)} />
                     <Text style={[s.pillBadgeText, { color: getRoleColor(player.role) }]}>{t('roles', player.role)}</Text>
                   </View>
-                  <View style={[s.pillBadge, { backgroundColor: theme.accent + '15' }]}>
-                    <MaterialIcons name="trending-up" size={14} color={theme.accent} />
-                    <Text style={[s.pillBadgeText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
-                  </View>
+
                   {player.handedness ? (
                     <View style={[s.pillBadge, { backgroundColor: '#6366F1' + '15' }]}>
                       <MaterialIcons name={player.handedness === 'left' ? 'front-hand' : player.handedness === 'ambidextrous' ? 'swap-horiz' : 'back-hand'} size={14} color="#6366F1" />

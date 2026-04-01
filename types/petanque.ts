@@ -42,7 +42,7 @@ export interface Player {
   club?: string;
   clubId?: string;
   role: PlayerRole;
-  level: 'Débutant' | 'Intermédiaire' | 'Confirmé' | 'Expert';
+  level?: 'Débutant' | 'Intermédiaire' | 'Confirmé' | 'Expert';
   phone?: string;
   email?: string;
   terrainId?: string;

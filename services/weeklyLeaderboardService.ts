@@ -438,3 +438,36 @@ export async function checkAndTriggerWeeklyReset(): Promise<boolean> {
 
   return !existing || existing.length === 0; // true = needs processing
 }
+
+/**
+ * Fetch weekly rank history for a player (last N weeks).
+ * Returns an array of { weekStart, rank, eloRating, matchesPlayed, winRate } sorted chronologically.
+ */
+export async function fetchWeeklyRankHistory(
+  userId: string,
+  limit: number = 12
+): Promise<{ history: Array<{ weekStart: string; rank: number; eloRating: number; matchesPlayed: number; winRate: number }>; error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('weekly_leaderboard_snapshots')
+      .select('week_start, rank, matches_played, wins, win_rate, elo_rating')
+      .eq('user_id', userId)
+      .order('week_start', { ascending: false })
+      .limit(limit);
+
+    if (error) return { history: [], error: error.message };
+
+    const history = (data || []).reverse().map((row: any) => ({
+      weekStart: row.week_start,
+      rank: row.rank,
+      eloRating: row.elo_rating || 1000,
+      matchesPlayed: row.matches_played || 0,
+      winRate: Number(row.win_rate) || 0,
+    }));
+
+    return { history, error: null };
+  } catch (e: any) {
+    return { history: [], error: e.message || 'Failed to fetch rank history' };
+  }
+}

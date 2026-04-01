@@ -28,19 +28,10 @@ import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
 
-const levels = ['Débutant', 'Intermédiaire', 'Confirmé', 'Expert'] as const;
-
 const ROLE_CONFIG: Record<string, { icon: string; color: string }> = {
   'Tireur': { icon: 'gps-fixed', color: '#EF4444' },
   'Pointeur': { icon: 'radio-button-on', color: '#10B981' },
   'Milieu': { icon: 'swap-horiz', color: '#3B82F6' },
-};
-
-const LEVEL_CONFIG: Record<string, { icon: string }> = {
-  'Débutant': { icon: 'sentiment-satisfied' },
-  'Intermédiaire': { icon: 'trending-up' },
-  'Confirmé': { icon: 'shield' },
-  'Expert': { icon: 'diamond' },
 };
 
 // ============================================
@@ -95,7 +86,7 @@ export default function NewPlayerScreen() {
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [role, setRole] = useState<PlayerRole>('Milieu');
-  const [level, setLevel] = useState<typeof levels[number]>('Intermédiaire');
+
   const [clubId, setClubId] = useState<string | undefined>();
   const [terrainId, setTerrainId] = useState<string | undefined>();
   const [location, setLocation] = useState<LocationData>({
@@ -109,7 +100,6 @@ export default function NewPlayerScreen() {
   const [boulesWeight, setBoulesWeight] = useState('');
 
   // Picker modals
-  const [showLevelPicker, setShowLevelPicker] = useState(false);
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -187,7 +177,7 @@ export default function NewPlayerScreen() {
       weight: boulesWeight ? parseInt(boulesWeight) : undefined,
     } : undefined;
     addPlayer({
-      name: name.trim(), nickname: nickname.trim() || undefined, avatar: avatarUrl, role, level,
+      name: name.trim(), nickname: nickname.trim() || undefined, avatar: avatarUrl, role,
       clubId, club: selectedClub?.name, terrainId, terrainName: selectedTerrain?.name,
       phone: phone.trim() || undefined, email: email.trim() || undefined, handedness: handedness || undefined, boules,
       location: location.city ? { city: location.city, latitude: location.latitude, longitude: location.longitude } : undefined,
@@ -371,20 +361,7 @@ export default function NewPlayerScreen() {
             </View>
           </SectionCard>
 
-          {/* 8. Niveau (Picker) */}
-          <SectionCard title={t('player', 'levelLabel')} icon="signal-cellular-alt" color={theme.success} delay={380}>
-            <Pressable style={styles.pickerButton} onPress={() => setShowLevelPicker(true)}>
-              <View style={styles.pickerSelected}>
-                <MaterialIcons name={(LEVEL_CONFIG[level]?.icon || 'star') as any} size={20} color={theme.success} />
-                <View style={styles.pickerSelectedInfo}>
-                  <Text style={styles.pickerSelectedName}>{t('levels', level)}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-              </View>
-            </Pressable>
-          </SectionCard>
-
-          {/* 9. Boules */}
+          {/* 8. Boules */}
           <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={430}>
             <TextInput style={styles.textInput} value={boulesName} onChangeText={setBoulesName} placeholder={t('player', 'boulesPlaceholder')} placeholderTextColor={theme.textMuted} />
             <View style={styles.specsRow}>
@@ -412,33 +389,6 @@ export default function NewPlayerScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
-
-      {/* Level Picker Modal */}
-      <Modal visible={showLevelPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowLevelPicker(false)}>
-        <SafeAreaView edges={['top']} style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('player', 'levelLabel')}</Text>
-            <Pressable style={styles.modalCloseBtn} onPress={() => setShowLevelPicker(false)}>
-              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
-            </Pressable>
-          </View>
-          <View style={styles.modalContent}>
-            {levels.map(l => {
-              const isActive = level === l;
-              const ico = LEVEL_CONFIG[l]?.icon || 'star';
-              return (
-                <Pressable key={l} style={[styles.modalItem, isActive && styles.modalItemActive]} onPress={() => { Haptics.selectionAsync(); setLevel(l); setShowLevelPicker(false); }}>
-                  <View style={[styles.modalItemIcon, { backgroundColor: (isActive ? theme.success : theme.textMuted) + '15' }]}>
-                    <MaterialIcons name={ico as any} size={22} color={isActive ? theme.success : theme.textSecondary} />
-                  </View>
-                  <Text style={[styles.modalItemText, isActive && { color: theme.success, fontWeight: '700' }]}>{t('levels', l)}</Text>
-                  {isActive ? <MaterialIcons name="check-circle" size={22} color={theme.success} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </SafeAreaView>
-      </Modal>
 
       {/* Club Picker Modal */}
       <Modal visible={showClubPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowClubPicker(false)}>
