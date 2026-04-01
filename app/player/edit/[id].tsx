@@ -99,6 +99,7 @@ export default function EditPlayerScreen() {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
+  const [experience, setExperience] = useState<'less_than_1' | '1_to_3' | '3_to_10' | 'more_than_10' | ''>('');
   const [terrainId, setTerrainId] = useState<string | undefined>();
   const [terrainName, setTerrainName] = useState('');
   const [boulesName, setBoulesName] = useState('');
@@ -144,6 +145,7 @@ export default function EditPlayerScreen() {
       setPhone(player.phone || '');
       setEmail(player.email || '');
       setHandedness(player.handedness || '');
+      setExperience(player.experience || '');
       setTerrainId(player.terrainId);
       setTerrainName(player.terrainName || '');
       setBoulesName(player.boules?.name || '');
@@ -279,7 +281,7 @@ export default function EditPlayerScreen() {
       name: name.trim(), nickname: nickname.trim() || null, avatar: avatarUrl, role,
       clubId: clubId || null, club: sc?.name || null, terrainId: terrainId || null,
       terrainName: st?.name || terrainName || null, phone: phone.trim() || null,
-      email: email.trim() || null, handedness: handedness || null, boules,
+      email: email.trim() || null, handedness: handedness || null, experience: experience || null, boules,
       location: location.city ? { city: location.city, latitude: location.latitude, longitude: location.longitude } : undefined,
       country: location.country || 'France',
     });
@@ -426,7 +428,19 @@ export default function EditPlayerScreen() {
             </Pressable>
           </SectionCard>
 
-          {/* 6. Rôle */}
+          {/* 6. Experience */}
+          <SectionCard title={t('player', 'experienceLabel')} icon="timeline" color="#9333EA" delay={290}>
+            <View style={styles.roleGrid}>
+              {([{ id: 'less_than_1' as const, icon: 'child-care', label: t('player', 'experienceLessThan1') }, { id: '1_to_3' as const, icon: 'school', label: t('player', 'experience1to3') }, { id: '3_to_10' as const, icon: 'trending-up', label: t('player', 'experience3to10') }, { id: 'more_than_10' as const, icon: 'emoji-events', label: t('player', 'experienceMoreThan10') }]).map(e => (
+                <Pressable key={e.id} style={[styles.roleCard, experience === e.id && { backgroundColor: '#9333EA', borderColor: '#9333EA' }]} onPress={() => { Haptics.selectionAsync(); setExperience(experience === e.id ? '' : e.id); }}>
+                  <MaterialIcons name={e.icon as any} size={20} color={experience === e.id ? '#FFF' : theme.textSecondary} />
+                  <Text style={[styles.roleCardName, { fontSize: 11 }, experience === e.id && { color: '#FFF' }]}>{e.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </SectionCard>
+
+          {/* 7. Rôle */}
           <SectionCard title={t('player', 'roleLabel')} icon="sports" color={theme.tirColor} delay={300} required>
             <View style={styles.roleGrid}>
               {config.playerRoles.map(r => {
@@ -444,7 +458,7 @@ export default function EditPlayerScreen() {
             </View>
           </SectionCard>
 
-          {/* 7. Latéralité */}
+          {/* 8. Latéralité */}
           <SectionCard title={t('player', 'handedness')} icon="front-hand" color="#6366F1" delay={330}>
             <View style={styles.roleGrid}>
               {([{ id: 'right' as const, icon: 'back-hand', label: t('player', 'rightHanded') }, { id: 'left' as const, icon: 'front-hand', label: t('player', 'leftHanded') }, { id: 'ambidextrous' as const, icon: 'swap-horiz', label: t('player', 'ambidextrous') }]).map(h => (
@@ -456,7 +470,7 @@ export default function EditPlayerScreen() {
             </View>
           </SectionCard>
 
-          {/* 8. Boules */}
+          {/* 9. Boules */}
           <SectionCard title={t('player', 'boulesLabel')} icon="sports-baseball" color="#D97706" delay={430}>
             <TextInput style={styles.textInput} value={boulesName} onChangeText={setBoulesName} placeholder={t('player', 'boulesPlaceholder')} placeholderTextColor={theme.textMuted} />
             <View style={styles.specsRow}>

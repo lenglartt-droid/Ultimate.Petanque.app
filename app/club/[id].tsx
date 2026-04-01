@@ -620,7 +620,7 @@ export default function ClubDetailScreen() {
                 </View>
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{player.name}</Text>
-                  <Text style={styles.memberRole}>{player.role} • {player.level}</Text>
+                  <Text style={styles.memberRole}>{player.role}</Text>
                 </View>
                 <View style={styles.memberStats}>
                   <Text style={styles.memberWinRate}>{player.stats.winRate}%</Text>
