@@ -97,6 +97,9 @@ export default function ProfileScreen() {
   // Handedness
   const [handedness, setHandedness] = useState<'right' | 'left' | 'ambidextrous' | ''>('');
 
+  // Experience
+  const [experience, setExperience] = useState<'less_than_1' | '1_to_3' | '3_to_10' | 'more_than_10' | ''>('');
+
   // Federation card state
   const [federationCardUrl, setFederationCardUrl] = useState<string | null>(null);
   const [federationCardType, setFederationCardType] = useState<'image' | 'pdf'>('image');
@@ -328,6 +331,7 @@ export default function ProfileScreen() {
           setPhone(selfPlayer.phone || '');
           setEmail(selfPlayer.email || '');
           setHandedness(selfPlayer.handedness || '');
+          setExperience(selfPlayer.experience || '');
           setNickname(selfPlayer.nickname || '');
           setBoulesName(selfPlayer.boules?.name || '');
           setBoulesDiameter(selfPlayer.boules?.diameter || '');
@@ -531,6 +535,7 @@ export default function ProfileScreen() {
           phone: phone.trim() || null,
           email: email.trim() || null,
           handedness: handedness || null,
+          experience: experience || null,
           country: location.country || 'France',
         };
 
@@ -975,6 +980,14 @@ export default function ProfileScreen() {
                 <Text style={styles.heroBadgeText}>{t('roles', role)}</Text>
               </View>
 
+              {selfPlayer?.experience ? (
+                <View style={styles.heroBadge}>
+                  <MaterialIcons name="timeline" size={14} color="#9333EA" />
+                  <Text style={[styles.heroBadgeText, { color: '#9333EA' }]}>
+                    {t('player', selfPlayer.experience === 'less_than_1' ? 'experienceLessThan1' : selfPlayer.experience === '1_to_3' ? 'experience1to3' : selfPlayer.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             {club && (
               <View style={styles.heroClub}>
@@ -1282,6 +1295,35 @@ export default function ProfileScreen() {
                     />
                     <Text style={[styles.optionText, handedness === h.id && { color: '#6366F1' }]}>
                       {h.label}
+                    </Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+
+            {/* Experience */}
+            <View style={styles.fieldCard}>
+              <View style={styles.fieldHeader}>
+                <MaterialIcons name="timeline" size={18} color="#9333EA" />
+                <Text style={styles.fieldLabel}>{t('player', 'experienceLabel')}</Text>
+              </View>
+              <View style={styles.optionGrid}>
+                {([{ id: 'less_than_1' as const, icon: 'child-care', label: t('player', 'experienceLessThan1') }, { id: '1_to_3' as const, icon: 'school', label: t('player', 'experience1to3') }, { id: '3_to_10' as const, icon: 'trending-up', label: t('player', 'experience3to10') }, { id: 'more_than_10' as const, icon: 'emoji-events', label: t('player', 'experienceMoreThan10') }]).map((e) => (
+                  <Pressable
+                    key={e.id}
+                    style={[styles.optionCard, experience === e.id && { borderColor: '#9333EA', backgroundColor: '#9333EA' + '10' }]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setExperience(experience === e.id ? '' : e.id);
+                    }}
+                  >
+                    <MaterialIcons
+                      name={e.icon as any}
+                      size={24}
+                      color={experience === e.id ? '#9333EA' : theme.textSecondary}
+                    />
+                    <Text style={[styles.optionText, { fontSize: 11 }, experience === e.id && { color: '#9333EA' }]}>
+                      {e.label}
                     </Text>
                   </Pressable>
                 ))}
