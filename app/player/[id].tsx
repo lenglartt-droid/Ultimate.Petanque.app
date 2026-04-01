@@ -31,6 +31,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
+import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL } from '@/services/eloService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
@@ -188,6 +189,36 @@ export default function PlayerDetailScreen() {
   }, []);
   const screenWidth = Math.max(1, screenDims.width);
   const isTablet = screenWidth >= 600;
+  // ELO history
+  const [eloHistory, setEloHistory] = React.useState<EloHistoryEntry[]>([]);
+  const [eloLoading, setEloLoading] = React.useState(false);
+  React.useEffect(() => {
+    if (!player) return;
+    setEloLoading(true);
+    fetchEloHistory(player.id, 30).then(({ history }) => {
+      setEloHistory(history);
+      setEloLoading(false);
+    }).catch(() => setEloLoading(false));
+  }, [player?.id]);
+
+  const eloChartData = React.useMemo(() => {
+    if (eloHistory.length === 0) return null;
+    // Reverse to chronological order
+    const sorted = [...eloHistory].reverse();
+    const points = sorted.map(h => h.eloAfter);
+    const min = Math.min(...points, ELO_INITIAL) - 30;
+    const max = Math.max(...points, ELO_INITIAL) + 30;
+    const currentElo = sorted[sorted.length - 1]?.eloAfter || player?.eloRating || ELO_INITIAL;
+    const weekAgoElo = sorted.length > 7 ? sorted[sorted.length - 8]?.eloAfter : sorted[0]?.eloAfter || ELO_INITIAL;
+    const weekDelta = currentElo - weekAgoElo;
+    return { points, min, max, currentElo, weekDelta, entries: sorted };
+  }, [eloHistory, player?.eloRating]);
+
+  const currentEloRank = React.useMemo(() => {
+    const elo = player?.eloRating || ELO_INITIAL;
+    return getEloRank(elo);
+  }, [player?.eloRating]);
+
   const { refreshData } = useApp();
 
   const handleRefresh = React.useCallback(async () => {
@@ -825,6 +856,120 @@ export default function PlayerDetailScreen() {
             ) : null}
           </View>
         </View>
+
+        {/* ===== ELO RATING & HISTORY ===== */}
+        {(player.eloRating || eloHistory.length > 0) ? (
+          <View style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: currentEloRank.color + '15' }]}>
+                <MaterialIcons name={currentEloRank.icon as any} size={18} color={currentEloRank.color} />
+              </View>
+              <Text style={s.sectionTitle}>{t('leaderboard', 'eloRating')}</Text>
+            </View>
+
+            {/* ELO Hero */}
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 40, fontWeight: '900', color: currentEloRank.color }}>{player.eloRating || ELO_INITIAL}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                <View style={{ backgroundColor: currentEloRank.color + '15', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: currentEloRank.color + '30' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: currentEloRank.color }}>
+                    {currentEloRank.label[language === 'fr' ? 'fr' : 'en']}
+                  </Text>
+                </View>
+                {eloChartData && eloChartData.weekDelta !== 0 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: eloChartData.weekDelta > 0 ? '#10B98115' : '#EF444415', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                    <MaterialIcons name={eloChartData.weekDelta > 0 ? 'arrow-upward' : 'arrow-downward'} size={12} color={eloChartData.weekDelta > 0 ? '#10B981' : '#EF4444'} />
+                    <Text style={{ fontSize: 12, fontWeight: '800', color: eloChartData.weekDelta > 0 ? '#10B981' : '#EF4444' }}>{formatEloDelta(eloChartData.weekDelta)}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+
+            {/* ELO Sparkline Chart */}
+            {eloChartData && eloChartData.points.length >= 2 ? (() => {
+              const chartW = Math.max(1, screenWidth - 96);
+              const chartH = 100;
+              const pts = eloChartData.points;
+              const range = Math.max(eloChartData.max - eloChartData.min, 1);
+              const stepX = chartW / Math.max(pts.length - 1, 1);
+              const getY = (val: number) => chartH - ((val - eloChartData.min) / range) * (chartH - 10) - 5;
+              const pathD = pts.map((v, i) => `${i === 0 ? 'M' : 'L'}${i * stepX},${getY(v)}`).join(' ');
+              const lastPt = { x: (pts.length - 1) * stepX, y: getY(pts[pts.length - 1]) };
+              const trend = pts[pts.length - 1] >= pts[0];
+              const lineColor = trend ? '#10B981' : '#EF4444';
+              return (
+                <View style={{ marginBottom: 12, paddingHorizontal: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 8 }}>{t('leaderboard', 'eloLast30')}</Text>
+                  <Svg width={chartW} height={chartH + 10}>
+                    {/* Reference line at 1000 */}
+                    {ELO_INITIAL >= eloChartData.min && ELO_INITIAL <= eloChartData.max ? (
+                      <Line x1={0} y1={getY(ELO_INITIAL)} x2={chartW} y2={getY(ELO_INITIAL)} stroke={theme.border} strokeWidth={1} strokeDasharray="4,4" />
+                    ) : null}
+                    {/* Area fill */}
+                    <Polygon
+                      points={`0,${chartH + 5} ${pts.map((v, i) => `${i * stepX},${getY(v)}`).join(' ')} ${(pts.length - 1) * stepX},${chartH + 5}`}
+                      fill={lineColor + '10'}
+                    />
+                    {/* Line */}
+                    <Polygon points="" />
+                    <Line x1={0} y1={0} x2={0} y2={0} stroke="transparent" />
+                    {pts.length > 1 ? (
+                      <G>
+                        {pts.slice(1).map((v, i) => (
+                          <Line key={i} x1={i * stepX} y1={getY(pts[i])} x2={(i + 1) * stepX} y2={getY(v)} stroke={lineColor} strokeWidth={2.5} />
+                        ))}
+                      </G>
+                    ) : null}
+                    {/* Current point */}
+                    <SvgCircle cx={lastPt.x} cy={lastPt.y} r={5} fill={lineColor} stroke="#FFF" strokeWidth={2} />
+                    {/* Current value label */}
+                    <SvgText x={Math.min(lastPt.x, chartW - 25)} y={lastPt.y - 10} fontSize="11" fill={lineColor} fontWeight="700" textAnchor="middle">
+                      {pts[pts.length - 1]}
+                    </SvgText>
+                  </Svg>
+                </View>
+              );
+            })() : eloLoading ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <ActivityIndicator size="small" color={currentEloRank.color} />
+              </View>
+            ) : (
+              <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                <Text style={{ fontSize: 12, color: theme.textMuted }}>{t('leaderboard', 'eloNoHistory')}</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 4 }}>{t('leaderboard', 'eloNoHistoryDesc')}</Text>
+              </View>
+            )}
+
+            {/* Recent ELO changes */}
+            {eloHistory.length > 0 ? (
+              <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 8 }}>{t('leaderboard', 'eloHistory')}</Text>
+                {eloHistory.slice(0, 5).map((entry, idx) => (
+                  <Pressable key={entry.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: idx < 4 && idx < eloHistory.length - 1 ? 1 : 0, borderBottomColor: theme.border + '40' }} onPress={entry.matchId ? () => router.push(`/match/${entry.matchId}`) : undefined}>
+                    <View style={{ width: 4, height: 28, borderRadius: 2, backgroundColor: entry.won ? '#10B981' : '#EF4444' }} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>
+                        vs {entry.opponentName || '?'}
+                      </Text>
+                      <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>
+                        {new Date(entry.recordedAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                        {entry.opponentElo ? ` • ELO ${entry.opponentElo}` : ''}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>{entry.eloAfter}</Text>
+                      <View style={{ backgroundColor: entry.eloDelta >= 0 ? '#10B98115' : '#EF444415', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: entry.eloDelta >= 0 ? '#10B981' : '#EF4444' }}>
+                          {formatEloDelta(entry.eloDelta)}
+                        </Text>
+                      </View>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* ===== MATCH STATISTICS ===== */}
         <View style={s.sectionCard}>

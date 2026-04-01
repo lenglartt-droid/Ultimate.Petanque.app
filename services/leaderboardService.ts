@@ -21,6 +21,7 @@ export interface LeaderboardPlayer {
   trustScore?: number;
   trustLevel?: 'high' | 'medium' | 'low' | 'suspicious';
   createdAt?: string;
+  eloRating?: number;
   stats: {
     matchesPlayed: number;
     wins: number;
@@ -32,7 +33,7 @@ export interface LeaderboardPlayer {
   };
 }
 
-export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate';
+export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate' | 'elo';
 
 export type LeaderboardPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y' | 'season' | 'lastSeason';
 
@@ -87,7 +88,7 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
     // Always fetch public players
     const { data: playersData, error: playersError } = await supabase
       .from('players')
-      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name, created_at')
+      .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name, created_at, elo_rating')
       .eq('is_public', true);
 
     if (playersError) return { players: [], error: playersError.message };
@@ -335,6 +336,7 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
             if (ts >= 25) return 'low' as const;
             return 'suspicious' as const;
           })(),
+          eloRating: p.elo_rating || 1000,
           createdAt: p.created_at || undefined,
           stats: {
             matchesPlayed: stats.matchesPlayed || 0,
@@ -370,6 +372,9 @@ export function sortLeaderboard(players: LeaderboardPlayer[], sortBy: Leaderboar
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       case 'carreauRate':
         if (b.stats.carreauRate !== a.stats.carreauRate) return b.stats.carreauRate - a.stats.carreauRate;
+        return b.stats.matchesPlayed - a.stats.matchesPlayed;
+      case 'elo':
+        if ((b.eloRating || 1000) !== (a.eloRating || 1000)) return (b.eloRating || 1000) - (a.eloRating || 1000);
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       default:
         return b.stats.winRate - a.stats.winRate;

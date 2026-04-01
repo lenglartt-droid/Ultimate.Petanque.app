@@ -5,7 +5,7 @@
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import theme from '@/constants/theme';
 import { ProgressRing, StatRow, SectionHeader, ProgressBar, BreakdownBar } from './StatsPrimitives';
 import { statsSharedStyles as ss } from './statsSharedStyles';
@@ -44,7 +44,7 @@ export function PerformanceSection({
             : (ch.successRate ? Math.round(ch.successRate) : 0);
           const heroLabel = isPrecision ? `${ch.totalPoints || 0}/${ch.maxPoints || 100} pts` : `${ch.successCount || 0}/${ch.totalShots || 10}`;
           return (
-            <Animated.View key={ch.id} entering={FadeInDown.duration(400).delay(idx * 50)} style={[ss.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.accent }]}>
+            <View key={ch.id} style={[ss.heroCard, { borderLeftWidth: 4, borderLeftColor: theme.accent }]}>
               <View style={ss.heroContent}>
                 <ProgressRing value={successRate} size={110} strokeWidth={9} color={theme.accent} label={t('stats', 'successLabel')} />
                 <View style={ss.heroStats}>
@@ -87,18 +87,18 @@ export function PerformanceSection({
                   ))}
                 </View>
               ) : null}
-            </Animated.View>
+            </View>
           );
         })}
         {tirStats.totalTirs > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={ss.section}>
+          <View style={ss.section}>
             <SectionHeader title={t('stats', 'challengeTirSummary')} icon="gps-fixed" color={theme.tirColor} />
             <View style={ss.card}>
               <StatRow label={t('stats', 'shotsAttempted')} value={tirStats.totalTirs} icon="radio-button-unchecked" color={theme.textSecondary} />
               <StatRow label={t('stats', 'successPercent')} value={`${tirStats.successRate}%`} icon="percent" color={theme.tirColor} />
               <StatRow label={t('stats', 'carreauPercent')} value={`${tirStats.carreauRate}%`} icon="stars" color={theme.carreauColor} />
             </View>
-          </Animated.View>
+          </View>
         )}
       </>
     );
@@ -106,7 +106,7 @@ export function PerformanceSection({
 
   // Standard performance view
   const renderGamesPlayed = () => (
-    <Animated.View entering={FadeInDown.duration(400).delay(50)} style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
+    <View style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
       <SectionHeader title={t('stats', 'gamesPlayedSection')} icon="sports" color={theme.primary} />
       <View style={ss.card}>
         <View style={ss.statsGrid3}>
@@ -115,11 +115,11 @@ export function PerformanceSection({
           <View style={ss.gridItem}><Text style={ss.gridValue}>{performanceStats.tournamentCount}</Text><Text style={ss.gridLabel}>{t('stats', 'tournamentLabel')}</Text></View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 
   const renderWinRateByMode = () => (
-    <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
+    <View style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
       <SectionHeader title={t('stats', 'winRateByModeSection')} icon="emoji-events" color={theme.carreauColor} />
       <View style={ss.card}>
         <View style={ss.modeWinRates}>
@@ -133,11 +133,11 @@ export function PerformanceSection({
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 
   const renderWinRateByFormat = () => (
-    <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
+    <View style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
       <SectionHeader title={t('stats', 'winRateByFormatSection')} icon="group" color={theme.accent} />
       <View style={ss.card}>
         {Object.entries(performanceStats.byFormat).map(([format, data]: [string, any]) => {
@@ -155,11 +155,11 @@ export function PerformanceSection({
           );
         })}
       </View>
-    </Animated.View>
+    </View>
   );
 
   const renderAvgScore = () => (
-    <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
+    <View style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
       <SectionHeader title={t('stats', 'avgScoreSection')} icon="scoreboard" color={theme.success} />
       <View style={ss.card}>
         <View style={ss.scoreComparison}>
@@ -183,13 +183,13 @@ export function PerformanceSection({
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 
   return (
     <>
       {/* Hero Ring */}
-      <Animated.View entering={FadeInDown.duration(400)} style={[ss.heroCard, isTablet && ss.heroCardTablet]}>
+      <View style={[ss.heroCard, isTablet && ss.heroCardTablet]}>
         <View style={ss.heroContent}>
           <ProgressRing value={performanceStats.winRate} size={isTablet ? 130 : 110} strokeWidth={isTablet ? 10 : 9} color={theme.primary} label={t('stats', 'victoriesLabel')} />
           <View style={ss.heroStats}>
@@ -207,7 +207,7 @@ export function PerformanceSection({
             </View>
           </View>
         </View>
-      </Animated.View>
+      </View>
 
       {/* Games Played + Win Rate by Mode */}
       {isTablet ? (
@@ -227,7 +227,7 @@ export function PerformanceSection({
 
       {/* Duration */}
       {performanceStats.matchesWithDuration > 0 && (
-        <Animated.View entering={FadeInDown.duration(400).delay(250)} style={ss.section}>
+        <View style={ss.section}>
           <SectionHeader title={t('stats', 'gameDurationSection')} icon="timer" color={theme.accent} />
           <View style={ss.card}>
             <View style={ss.durationHero}>
@@ -256,12 +256,12 @@ export function PerformanceSection({
               <Text style={ss.totalTimeValue}>{formatDuration(performanceStats.totalDuration)}</Text>
             </View>
           </View>
-        </Animated.View>
+        </View>
       )}
 
       {/* Terrain Type Stats */}
       {terrainTypeStats.hasData && (
-        <Animated.View entering={FadeInDown.duration(400).delay(300)} style={ss.section}>
+        <View style={ss.section}>
           <SectionHeader title={t('stats', 'statsByTerrainSection')} subtitle={`${terrainTypeStats.totalTerrainMatches} ${t('stats', 'terrainMatchesSubtitle')}`} icon="terrain" color={theme.success} />
           <View style={ss.card}>
             <View style={ss.crossTableHeader}>
@@ -285,12 +285,12 @@ export function PerformanceSection({
               );
             })}
           </View>
-        </Animated.View>
+        </View>
       )}
 
       {/* Boules Set Stats */}
       {boulesSetStats.hasData && (
-        <Animated.View entering={FadeInDown.duration(400).delay(350)} style={ss.section}>
+        <View style={ss.section}>
           <SectionHeader title={t('stats', 'statsByBoulesSection')} subtitle={`${boulesSetStats.totalWithBoules} ${t('profile', 'matchesWithBoulesSet')}`} icon="sports-baseball" color={'#D97706'} />
           <View style={ss.card}>
             <View style={ss.crossTableHeader}>
@@ -397,7 +397,7 @@ export function PerformanceSection({
               );
             })()}
           </View>
-        </Animated.View>
+        </View>
       )}
     </>
   );
