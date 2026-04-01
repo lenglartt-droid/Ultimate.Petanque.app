@@ -206,7 +206,7 @@ export default function DirectoryScreen() {
 
   // All filters state
   const [filters, setFilters] = useState<{
-    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string;
+    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string; playerExperience: string;
     clubCity: string; clubCountry: string;
     terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
@@ -219,6 +219,7 @@ export default function DirectoryScreen() {
     playerLevel: 'all',
     playerRole: 'all',
     playerEloRank: 'all',
+    playerExperience: 'all',
     // Club filters
     clubCity: 'all',
     clubCountry: 'all',
@@ -352,7 +353,7 @@ export default function DirectoryScreen() {
 
   // Active filter counts
   const activeFilterCounts = useMemo(() => ({
-    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank].filter(f => f !== 'all').length,
+    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
@@ -418,8 +419,9 @@ export default function DirectoryScreen() {
           default: return true;
         }
       })();
+      const matchesExperience = filters.playerExperience === 'all' || p.experience === filters.playerExperience;
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesRealUser;
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesRealUser;
     });
     
     // Put selfPlayer at top
@@ -519,7 +521,7 @@ export default function DirectoryScreen() {
 
   const clearFilters = useCallback(() => {
     if (activeTab === 'players') {
-      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all', playerEloRank: 'all' }));
+      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all', playerEloRank: 'all', playerExperience: 'all' }));
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
     } else if (activeTab === 'terrains') {
@@ -588,6 +590,15 @@ export default function DirectoryScreen() {
               value={filters.playerRole}
               onChange={(v) => setFilters(f => ({ ...f, playerRole: v }))}
               icons={{ 'Pointeur': 'radio-button-on', 'Tireur': 'gps-fixed', 'Milieu': 'swap-horiz' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
+              title={t('player', 'experienceLabel')}
+              options={['all', 'less_than_1', '1_to_3', '3_to_10', 'more_than_10']}
+              labels={{ all: t('directory', 'allLabel'), less_than_1: t('player', 'experienceLessThan1'), '1_to_3': t('player', 'experience1to3'), '3_to_10': t('player', 'experience3to10'), more_than_10: t('player', 'experienceMoreThan10') }}
+              value={filters.playerExperience}
+              onChange={(v) => setFilters(f => ({ ...f, playerExperience: v }))}
+              icons={{ less_than_1: 'child-care', '1_to_3': 'school', '3_to_10': 'trending-up', more_than_10: 'emoji-events' }}
               allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
@@ -987,6 +998,7 @@ export default function DirectoryScreen() {
               <>
                 {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
                 {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
+                {filters.playerExperience !== 'all' && <ActiveFilterChip label={t('player', filters.playerExperience === 'less_than_1' ? 'experienceLessThan1' : filters.playerExperience === '1_to_3' ? 'experience1to3' : filters.playerExperience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')} onRemove={() => setFilters(f => ({ ...f, playerExperience: 'all' }))} icon="timeline" />}
 
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
                 {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}
@@ -1693,9 +1705,14 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
             </View>
           ); })() : null}
           <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text></View>
+          {item.experience ? <View style={[styles.tag, { backgroundColor: '#9333EA' + '15' }]}><Text style={[styles.tagText, { color: '#9333EA' }]}>{t('player', item.experience === 'less_than_1' ? 'experienceLessThan1' : item.experience === '1_to_3' ? 'experience1to3' : item.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}</Text></View> : null}
           <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text></View>
-
         </View>
+        {(item.location?.latitude || item.location?.longitude) ? (
+          <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name } } as any); }} hitSlop={4}>
+            <MaterialIcons name="map" size={13} color={theme.success} />
+          </Pressable>
+        ) : null}
         {isRealUser ? (
           <Pressable style={styles.inviteMeetupBtn} onPress={(e) => { e.stopPropagation?.(); handleInviteToMeetup(item.id, item.name); }} hitSlop={4}>
             <MaterialIcons name="event" size={13} color={theme.primary} />
@@ -1704,6 +1721,16 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
         ) : null}
       </View>
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
+
+// Helper: map link for geolocated items
+const MapLinkButton = React.memo(({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
+  if (!lat && !lng) return null;
+  return (
+    <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/(tabs)/map', params: { lat: String(lat), lng: String(lng), name } } as any); }} hitSlop={4}>
+      <MaterialIcons name="map" size={13} color={theme.success} />
     </Pressable>
   );
 });
@@ -1743,6 +1770,7 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
           {item.foundedYear ? <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('directory', 'since')} {item.foundedYear}</Text></View> : null}
         </View>
       </View>
+      {item.location?.latitude && item.location?.longitude ? <MapLinkButton lat={item.location.latitude} lng={item.location.longitude} name={item.name} /> : null}
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
     </Pressable>
   );
@@ -1790,6 +1818,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
         </View>
       </View>
+      {item.location?.latitude && item.location?.longitude ? <MapLinkButton lat={item.location.latitude} lng={item.location.longitude} name={item.name} /> : null}
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
     </Pressable>
   );
@@ -1826,6 +1855,7 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('tournamentTypes', item.type)}</Text></View>
         </View>
       </View>
+      {item.location?.latitude && item.location?.longitude ? <MapLinkButton lat={item.location.latitude} lng={item.location.longitude} name={item.name} /> : null}
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
     </Pressable>
   );
@@ -2772,6 +2802,17 @@ const styles = StyleSheet.create({
   loadMoreFooter: {
     paddingVertical: 20,
     alignItems: 'center' as const,
+  },
+  mapLinkBtn: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: theme.success + '12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: theme.success + '25',
+    marginRight: 4,
   },
   // Meetup Invitation Picker
   meetupOverlay: {

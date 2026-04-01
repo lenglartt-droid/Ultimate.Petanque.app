@@ -105,6 +105,7 @@ export async function updatePlayerOp(
     if (updates.country !== undefined) dbUpdates.country = updates.country;
     if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
     if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness || null;
+    if (updates.experience !== undefined) dbUpdates.experience = updates.experience || null;
     if (updates.terrainId !== undefined) dbUpdates.terrain_id = updates.terrainId || null;
     if (updates.terrainName !== undefined) dbUpdates.terrain_name = updates.terrainName || null;
     if (updates.phone !== undefined) dbUpdates.phone = updates.phone || null;

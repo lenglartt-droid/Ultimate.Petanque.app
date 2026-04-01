@@ -981,13 +981,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 }
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: '#FFF' },
-  sheet: { flex: 1, backgroundColor: '#FFF' },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' as const },
+  sheet: { backgroundColor: '#FFF', maxHeight: '92%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flex: 1 },
-  scrollContent: { paddingBottom: 48, flexGrow: 1 },
+  scrollView: { flexShrink: 1 },
+  scrollContent: { paddingBottom: 48 },
 
   // Preview gradient
   previewGradient: { padding: 16, marginHorizontal: 16, marginTop: 16, borderTopLeftRadius: 16, borderTopRightRadius: 16 },

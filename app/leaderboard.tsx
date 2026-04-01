@@ -255,12 +255,18 @@ const MemoizedPlayerRow = React.memo(function PlayerRow({
             ) : null}
           </View>
           <View style={s.playerTags}>
+            {player.eloRating ? (() => { const eloR = getEloRank(player.eloRating); return (
+              <View style={[s.playerTag, { backgroundColor: eloR.color + '12', borderWidth: 1, borderColor: eloR.color + '25' }]}>
+                <MaterialIcons name={eloR.icon as any} size={10} color={eloR.color} />
+                <Text style={[s.playerTagText, { color: eloR.color }]}>{eloR.label[language === 'fr' ? 'fr' : 'en']}</Text>
+              </View>
+            ); })() : null}
             <View style={[s.playerTag, { backgroundColor: theme.primary + '12' }]}>
               <Text style={[s.playerTagText, { color: theme.primary }]}>{t('roles', player.role)}</Text>
             </View>
-            <View style={[s.playerTag, { backgroundColor: theme.accent + '12' }]}>
-              <Text style={[s.playerTagText, { color: theme.accent }]}>{t('levels', player.level)}</Text>
-            </View>
+            {player.experience ? <View style={[s.playerTag, { backgroundColor: '#9333EA' + '12' }]}>
+              <Text style={[s.playerTagText, { color: '#9333EA' }]}>{t('player', player.experience === 'less_than_1' ? 'experienceLessThan1' : player.experience === '1_to_3' ? 'experience1to3' : player.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}</Text>
+            </View> : null}
           </View>
         </View>
       </View>
@@ -715,7 +721,7 @@ export default function LeaderboardScreen() {
 
     // Filters
     if (filterRole !== 'all') result = result.filter(p => p.role === filterRole);
-    if (filterLevel !== 'all') result = result.filter(p => p.level === filterLevel);
+
     // Geographic scope filter
     if (geoScope === 'city' && geoValue) result = result.filter(p => p.city?.toLowerCase() === geoValue.toLowerCase());
     else if (geoScope === 'country' && geoValue) result = result.filter(p => p.country?.toLowerCase() === geoValue.toLowerCase());
@@ -912,12 +918,7 @@ export default function LeaderboardScreen() {
                   <Pressable onPress={() => setFilterRole('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
                 </Pressable>
               ) : null}
-              {filterLevel !== 'all' ? (
-                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
-                  <Text style={s.headerFilterChipText}>{t('levels', filterLevel)}</Text>
-                  <Pressable onPress={() => setFilterLevel('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
-                </Pressable>
-              ) : null}
+
               {filterClub !== 'all' ? (
                 <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
                   <MaterialIcons name="home" size={11} color="#F59E0B" />
@@ -1905,22 +1906,7 @@ export default function LeaderboardScreen() {
               </View>
             ) : null}
 
-            {/* Level (players tab) */}
-            {activeTab === 'players' ? (
-              <View style={s.fmSection}>
-                <View style={s.fmSectionHeader}>
-                  <View style={[s.fmSectionIcon, { backgroundColor: theme.accent + '18' }]}><MaterialIcons name="signal-cellular-alt" size={16} color={theme.accent} /></View>
-                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'filterByLevel')}</Text>
-                </View>
-                <View style={s.fmChipGrid}>
-                  {['all', 'D\u00e9butant', 'Interm\u00e9diaire', 'Confirm\u00e9', 'Expert'].map(opt => (
-                    <Pressable key={opt} style={[s.fmChip, filterLevel === opt && s.fmChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterLevel(opt); }}>
-                      <Text style={[s.fmChipText, filterLevel === opt && s.fmChipTextActive]}>{opt === 'all' ? t('leaderboard', 'allLevels') : t('levels', opt)}</Text>
-                    </Pressable>
-                  ))}
-                </View>
-              </View>
-            ) : null}
+
 
             {/* Club (players tab) */}
             {activeTab === 'players' && uniqueClubs.length > 0 ? (
@@ -2161,7 +2147,7 @@ const s = StyleSheet.create({
   playerCity: { fontSize: 11, color: theme.textMuted, maxWidth: 80 },
   metaDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted, marginHorizontal: 5 },
   playerTags: { flexDirection: 'row', gap: 4, marginTop: 4 },
-  playerTag: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  playerTag: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
   playerTagText: { fontSize: 10, fontWeight: '600' },
   statsCol: { flexDirection: 'row', gap: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '40' },
   statBlock: { alignItems: 'center', flex: 1 },

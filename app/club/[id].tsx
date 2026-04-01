@@ -565,7 +565,15 @@ export default function ClubDetailScreen() {
             </View>
             <Pressable 
               style={styles.mapButton}
-              onPress={() => router.push('/(tabs)/map')}
+              onPress={() => {
+                const lat = club.location?.latitude;
+                const lng = club.location?.longitude;
+                if (lat || lng) {
+                  router.push({ pathname: '/(tabs)/map', params: { lat: String(lat || 0), lng: String(lng || 0), name: club.name } } as any);
+                } else {
+                  router.push('/(tabs)/map');
+                }
+              }}
             >
               <MaterialIcons name="map" size={20} color={theme.primary} />
               <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>

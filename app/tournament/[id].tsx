@@ -768,6 +768,18 @@ export default function TournamentDetailScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
             ) : null}
+
+            {/* View on Map */}
+            {(tournament.location?.latitude || tournament.location?.longitude) ? (
+              <Pressable
+                style={styles.heroMapBtn}
+                onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(tournament.location.latitude), lng: String(tournament.location.longitude), name: tournament.name } } as any)}
+              >
+                <MaterialIcons name="map" size={16} color={theme.success} />
+                <Text style={styles.heroMapBtnText}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
+                <MaterialIcons name="chevron-right" size={16} color={theme.success} />
+              </Pressable>
+            ) : null}
           </View>
         </Animated.View>
 
@@ -2004,6 +2016,24 @@ const styles = StyleSheet.create({
   heroTerrainType: {
     fontSize: 12,
     color: theme.textMuted,
+  },
+  heroMapBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: theme.success + '10',
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: theme.borderRadius.full,
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: theme.success + '25',
+    justifyContent: 'center',
+  },
+  heroMapBtnText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.success,
   },
   // Gold Sponsor Badge
   sponsorBadgeRow: {

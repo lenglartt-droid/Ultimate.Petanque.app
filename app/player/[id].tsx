@@ -549,6 +549,16 @@ export default function PlayerDetailScreen() {
                       <Text style={s.locationPillText}>{[player.location?.city, player.country].filter(Boolean).join(', ')}</Text>
                     </View>
                   ) : null}
+                  {(player.location?.latitude || player.location?.longitude) ? (
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.success + '10', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, marginBottom: 8, borderWidth: 1, borderColor: theme.success + '25' }}
+                      onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(player.location?.latitude), lng: String(player.location?.longitude), name: player.name } } as any)}
+                    >
+                      <MaterialIcons name="map" size={16} color={theme.success} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.success }}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
+                      <MaterialIcons name="chevron-right" size={16} color={theme.success} />
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
 
