@@ -12,7 +12,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
@@ -69,7 +69,6 @@ interface PerformanceBadge {
 }
 
 const BadgeCard = React.memo(({ badge, index }: { badge: PerformanceBadge; index: number }) => (
-  <Animated.View entering={FadeInDown.duration(250).delay(index * 40)}>
     <View style={[styles.badgeCard, !badge.earned && styles.badgeCardLocked, badge.earned && { borderColor: badge.color + '25' }]}>
       <View style={styles.badgeTop}>
         <View style={[styles.badgeIconCircle, { backgroundColor: badge.earned ? badge.bgColor : theme.backgroundSecondary }]}>
@@ -94,7 +93,6 @@ const BadgeCard = React.memo(({ badge, index }: { badge: PerformanceBadge; index
         </View>
       ) : null}
     </View>
-  </Animated.View>
 ));
 
 // ============================================
@@ -109,7 +107,6 @@ const TournamentCard = React.memo(({ item, index, t, language }: { item: Tournam
   const translatedResult = tournament.finalResult ? t('palmaresResults', tournament.finalResult) : null;
 
   return (
-    <Animated.View entering={FadeInDown.duration(300).delay(index * 50)}>
       <Pressable
         style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
         onPress={() => { Haptics.selectionAsync(); router.push(`/tournament/${tournament.id}`); }}
@@ -221,7 +218,6 @@ const TournamentCard = React.memo(({ item, index, t, language }: { item: Tournam
           </View>
         </View>
       </Pressable>
-    </Animated.View>
   );
 });
 
@@ -505,7 +501,7 @@ export default function PalmaresScreen() {
         ListHeaderComponent={() => (
           <>
             {/* ============ PODIUM HERO ============ */}
-            <Animated.View entering={FadeInDown.duration(500)} style={styles.heroCardOuter}>
+            <View style={styles.heroCardOuter}>
               <LinearGradient
                 colors={['#0F172A', '#1E3A5F', '#1E3A5F']}
                 start={{ x: 0, y: 0 }}
@@ -514,7 +510,7 @@ export default function PalmaresScreen() {
               >
                 {summary.podiums > 0 ? (
                   <View style={styles.podiumContainer}>
-                    <Animated.View entering={FadeInUp.duration(500).delay(200)} style={styles.podiumColumn}>
+                    <View style={styles.podiumColumn}>
                       <View style={[styles.podiumMedalCircle, { backgroundColor: 'rgba(192,192,192,0.15)', borderColor: 'rgba(192,192,192,0.35)', borderWidth: 2 }]}>
                         <MaterialIcons name="workspace-premium" size={26} color="#C0C8D4" />
                       </View>
@@ -522,8 +518,8 @@ export default function PalmaresScreen() {
                       <LinearGradient colors={['rgba(192,192,192,0.25)', 'rgba(192,192,192,0.08)']} style={[styles.podiumBar, styles.podiumBar2nd]}>
                         <Text style={[styles.podiumBarText, { color: '#C0C8D4' }]}>{language === 'en' ? '2nd' : '2e'}</Text>
                       </LinearGradient>
-                    </Animated.View>
-                    <Animated.View entering={FadeInUp.duration(600).delay(100)} style={styles.podiumColumn}>
+                    </View>
+                    <View style={styles.podiumColumn}>
                       <View style={[styles.podiumMedalCircle, styles.podiumMedalGold]}>
                         <MaterialIcons name="emoji-events" size={34} color="#FFD700" />
                       </View>
@@ -531,8 +527,8 @@ export default function PalmaresScreen() {
                       <LinearGradient colors={['rgba(255,215,0,0.3)', 'rgba(255,215,0,0.08)']} style={[styles.podiumBar, styles.podiumBar1st]}>
                         <Text style={[styles.podiumBarText, { fontWeight: '800', color: '#FFD700' }]}>{language === 'en' ? '1st' : '1er'}</Text>
                       </LinearGradient>
-                    </Animated.View>
-                    <Animated.View entering={FadeInUp.duration(500).delay(300)} style={styles.podiumColumn}>
+                    </View>
+                    <View style={styles.podiumColumn}>
                       <View style={[styles.podiumMedalCircle, { backgroundColor: 'rgba(205,127,50,0.15)', borderColor: 'rgba(205,127,50,0.35)', borderWidth: 2 }]}>
                         <MaterialIcons name="military-tech" size={26} color="#D4956A" />
                       </View>
@@ -540,7 +536,7 @@ export default function PalmaresScreen() {
                       <LinearGradient colors={['rgba(205,127,50,0.25)', 'rgba(205,127,50,0.08)']} style={[styles.podiumBar, styles.podiumBar3rd]}>
                         <Text style={[styles.podiumBarText, { color: '#D4956A' }]}>{language === 'en' ? '3rd' : '3e'}</Text>
                       </LinearGradient>
-                    </Animated.View>
+                    </View>
                   </View>
                 ) : (
                   <View style={styles.heroIconRow}>
@@ -577,11 +573,11 @@ export default function PalmaresScreen() {
                   </View>
                 </View>
               </LinearGradient>
-            </Animated.View>
+            </View>
 
             {/* ============ ADVANCED STATS ============ */}
             {summary.totalMatches > 0 ? (
-              <Animated.View entering={FadeInDown.duration(400).delay(60)} style={styles.advancedStatsCard}>
+              <View style={styles.advancedStatsCard}>
                 <View style={styles.advStatsGrid}>
                   <View style={styles.advStatItem}>
                     <MaterialIcons name="local-fire-department" size={18} color="#FF6B35" />
@@ -616,12 +612,12 @@ export default function PalmaresScreen() {
                   <MaterialIcons name={showFormatStats ? 'expand-less' : 'expand-more'} size={18} color={theme.primary} />
                 </Pressable>
                 {showFormatStats ? <FormatStatsBar formatStats={formatStats} t={t} /> : null}
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* ============ FINANCIAL SUMMARY ============ */}
             {summary.totalTournaments > 0 ? (
-              <Animated.View entering={FadeInDown.duration(400).delay(70)}>
+              <View>
                 <Pressable
                   style={styles.financialCard}
                   onPress={() => router.push('/financial')}
@@ -656,14 +652,14 @@ export default function PalmaresScreen() {
                     </View>
                   </View>
                 </Pressable>
-              </Animated.View>
+              </View>
             ) : null}
 
             {/* Ad Banner */}
             <AdBanner position="inline" />
 
             {/* ============ BADGES (no filter card here — moved to header) ============ */}
-            <Animated.View entering={FadeInDown.duration(400).delay(80)}>
+            <View>
               <Pressable style={styles.badgesSectionHeader} onPress={() => { Haptics.selectionAsync(); setShowBadges(!showBadges); }}>
                 <View style={styles.badgesSectionLeft}>
                   <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
@@ -673,12 +669,12 @@ export default function PalmaresScreen() {
                 <MaterialIcons name={showBadges ? 'expand-less' : 'expand-more'} size={22} color={theme.textSecondary} />
               </Pressable>
               {showBadges ? (
-                <Animated.View entering={FadeIn.duration(300)} style={styles.badgesGrid}>
+                <View style={styles.badgesGrid}>
                   {earnedBadges.map((badge, i) => <BadgeCard key={badge.id} badge={badge} index={i} />)}
                   {lockedBadges.map((badge, i) => <BadgeCard key={badge.id} badge={badge} index={earnedBadges.length + i} />)}
-                </Animated.View>
+                </View>
               ) : null}
-            </Animated.View>
+            </View>
 
 
 
@@ -726,8 +722,7 @@ export default function PalmaresScreen() {
                   const rank = getEloRank(season.finalElo);
                   const peakRank = getEloRank(season.peakElo);
                   return (
-                    <Animated.View key={season.id} entering={FadeInDown.duration(300).delay(idx * 60)}>
-                      <View style={[styles.eloSeasonCard, { borderLeftColor: rank.color, borderLeftWidth: 4 }]}>
+                      <View key={season.id} style={[styles.eloSeasonCard, { borderLeftColor: rank.color, borderLeftWidth: 4 }]}>
                         <View style={styles.eloSeasonCardHeader}>
                           <View style={[styles.eloSeasonYearBadge, { backgroundColor: rank.color + '15' }]}>
                             <MaterialIcons name={rank.icon as any} size={18} color={rank.color} />
@@ -782,7 +777,6 @@ export default function PalmaresScreen() {
                           </View>
                         ) : null}
                       </View>
-                    </Animated.View>
                   );
                 })
               )}

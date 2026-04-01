@@ -88,6 +88,14 @@ export function useBadges() {
       });
       context.trustScore = trustScore;
 
+      // Set ELO data for ELO badges
+      if (selfPlayer) {
+        context.eloRating = selfPlayer.eloRating || 1000;
+        context.eloTireur = selfPlayer.eloTireur || 1000;
+        context.eloPointeur = selfPlayer.eloPointeur || 1000;
+        context.eloMilieu = selfPlayer.eloMilieu || 1000;
+      }
+
       // Fetch witness attestations given count for Trusted Witness badge
       try {
         const supabase = (await import('@/template')).getSupabaseClient();

@@ -33,6 +33,7 @@ export const homeTranslations = {
     shareAppNote: { fr: 'Montrez ce QR code aux joueurs autour de vous pour qu\'ils installent l\'application et rejoignent la communaute.', en: 'Show this QR code to players around you so they install the app and join the community.' },
     copyLink: { fr: 'Copier le lien', en: 'Copy link' },
     linkCopied: { fr: 'Lien copie dans le presse-papier', en: 'Link copied to clipboard' },
+    eloDecayWarning: { fr: 'Inactivite ELO detectee', en: 'ELO inactivity detected' },
   },
   login: {
     welcomeBack: { fr: 'Content de vous revoir !', en: 'Welcome back!' },
