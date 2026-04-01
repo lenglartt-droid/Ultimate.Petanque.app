@@ -77,6 +77,7 @@ interface Cluster {
 }
 
 const MAX_VISIBLE_MARKERS = 200;
+const ELO_RANKS_REVERSED = [...ELO_RANKS].reverse();
 
 function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number; latitude?: number; longitude?: number } | null): Cluster[] {
   // Filter items with valid locations first
@@ -305,6 +306,156 @@ const ClusterMarkerView = React.memo(({ count, typeCounts }: { count: number; ty
 });
 
 // ============================================
+// MEMOIZED FILTER CHIP
+// ============================================
+const FilterChip = React.memo(({ label, icon, isActive, activeColor, onPress }: { label: string; icon: string; isActive: boolean; activeColor?: string; onPress: () => void }) => (
+  <Pressable style={[styles.chip, isActive && (activeColor ? { backgroundColor: activeColor } : styles.chipActive)]} onPress={onPress}>
+    <MaterialIcons name={icon as any} size={14} color={isActive ? '#FFF' : theme.textSecondary} />
+    <Text style={[styles.chipText, isActive && styles.chipTextActive]}>{label}</Text>
+  </Pressable>
+));
+
+// ============================================
+// MEMOIZED SUB-FILTER CHIP
+// ============================================
+const SubFilterChip = React.memo(({ label, icon, isActive, color, onPress }: { label: string; icon?: string; isActive: boolean; color: string; onPress: () => void }) => (
+  <Pressable
+    style={[styles.subChip, isActive && { backgroundColor: color, borderColor: color }]}
+    onPress={onPress}
+  >
+    {icon ? <MaterialIcons name={icon as any} size={11} color={isActive ? '#FFF' : color} /> : null}
+    <Text style={[styles.subChipText, isActive ? { color: '#FFF' } : { color }]}>{label}</Text>
+  </Pressable>
+));
+
+// ============================================
+// MEMOIZED SUB-FILTER SECTIONS
+// ============================================
+interface TerrainSubFiltersProps {
+  terrainTypeFilter: string | null;
+  terrainEnvFilter: 'indoor' | 'outdoor' | null;
+  onTerrainTypePress: (id: string) => void;
+  onTerrainEnvPress: (id: 'indoor' | 'outdoor') => void;
+  onClear: () => void;
+  count: number;
+  language: string;
+}
+const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, onTerrainTypePress, onTerrainEnvPress, onClear, count, language }: TerrainSubFiltersProps) => (
+  <View style={styles.subFiltersContainer}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="landscape" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>Surface</Text>
+      </View>
+      {config.terrainTypes.map(tt => (
+        <SubFilterChip key={tt.id} label={tt.label} icon={tt.icon} isActive={terrainTypeFilter === tt.id} color={theme.success} onPress={() => onTerrainTypePress(tt.id)} />
+      ))}
+    </ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="wb-sunny" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Environnement' : 'Environment'}</Text>
+      </View>
+      {config.terrainEnvironments.map(env => {
+        const envColor = env.id === 'indoor' ? '#3B82F6' : '#F59E0B';
+        return <SubFilterChip key={env.id} label={env.label} icon={env.icon} isActive={terrainEnvFilter === env.id} color={envColor} onPress={() => onTerrainEnvPress(env.id as 'indoor' | 'outdoor')} />;
+      })}
+    </ScrollView>
+    {(terrainTypeFilter || terrainEnvFilter) ? (
+      <View style={styles.subFilterActiveBar}>
+        <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'terrain(s) filtre(s)' : 'terrain(s) filtered'}</Text>
+        <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
+          <MaterialIcons name="close" size={12} color={theme.primary} />
+          <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+        </Pressable>
+      </View>
+    ) : null}
+  </View>
+));
+
+interface TournamentSubFiltersProps {
+  tournamentFormatFilter: string | null;
+  tournamentStatusFilter: string | null;
+  onFormatPress: (fmt: string) => void;
+  onStatusPress: (key: string) => void;
+  onClear: () => void;
+  count: number;
+  language: string;
+}
+const TournamentSubFilters = React.memo(({ tournamentFormatFilter, tournamentStatusFilter, onFormatPress, onStatusPress, onClear, count, language }: TournamentSubFiltersProps) => (
+  <View style={styles.subFiltersContainer}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="sports" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>Format</Text>
+      </View>
+      {(['Doublette', 'Triplette', 'Tete-a-tete'] as const).map(fmt => (
+        <SubFilterChip key={fmt} label={fmt} isActive={tournamentFormatFilter === fmt} color={theme.carreauColor} onPress={() => onFormatPress(fmt)} />
+      ))}
+    </ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="event" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Statut' : 'Status'}</Text>
+      </View>
+      {([{ key: 'À venir', label: language === 'fr' ? 'A venir' : 'Upcoming', icon: 'event', color: theme.primary }, { key: 'En cours', label: language === 'fr' ? 'En cours' : 'In progress', icon: 'play-circle-filled', color: theme.warning }] as const).map(st => (
+        <SubFilterChip key={st.key} label={st.label} icon={st.icon} isActive={tournamentStatusFilter === st.key} color={st.color} onPress={() => onStatusPress(st.key)} />
+      ))}
+    </ScrollView>
+    {(tournamentFormatFilter || tournamentStatusFilter) ? (
+      <View style={styles.subFilterActiveBar}>
+        <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'tournoi(s) filtre(s)' : 'tournament(s) filtered'}</Text>
+        <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
+          <MaterialIcons name="close" size={12} color={theme.primary} />
+          <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+        </Pressable>
+      </View>
+    ) : null}
+  </View>
+));
+
+interface PlayerSubFiltersProps {
+  eloRankFilter: EloRankTier | null;
+  trustFilter: 'verified' | 'high' | 'medium_low' | null;
+  onEloRankPress: (tier: EloRankTier) => void;
+  onTrustPress: (key: 'verified' | 'high' | 'medium_low') => void;
+  onClear: () => void;
+  count: number;
+  language: string;
+}
+const PlayerSubFilters = React.memo(({ eloRankFilter, trustFilter, onEloRankPress, onTrustPress, onClear, count, language }: PlayerSubFiltersProps) => (
+  <View style={styles.subFiltersContainer}>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="emoji-events" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>ELO</Text>
+      </View>
+      {ELO_RANKS_REVERSED.map(rank => (
+        <SubFilterChip key={rank.tier} label={language === 'fr' ? rank.label.fr : rank.label.en} icon={rank.icon} isActive={eloRankFilter === rank.tier} color={rank.color} onPress={() => onEloRankPress(rank.tier)} />
+      ))}
+    </ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="verified-user" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Confiance' : 'Trust'}</Text>
+      </View>
+      {([{ key: 'verified' as const, label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', color: '#22C55E' }, { key: 'high' as const, label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', color: '#3B82F6' }, { key: 'medium_low' as const, label: language === 'fr' ? '< Fiable' : '< Trusted', icon: 'warning', color: '#F97316' }]).map(opt => (
+        <SubFilterChip key={opt.key} label={opt.label} icon={opt.icon} isActive={trustFilter === opt.key} color={opt.color} onPress={() => onTrustPress(opt.key)} />
+      ))}
+    </ScrollView>
+    {(eloRankFilter || trustFilter) ? (
+      <View style={styles.subFilterActiveBar}>
+        <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'joueur(s) filtre(s)' : 'player(s) filtered'}</Text>
+        <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
+          <MaterialIcons name="close" size={12} color={theme.primary} />
+          <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+        </Pressable>
+      </View>
+    ) : null}
+  </View>
+));
+
+// ============================================
 // LIST ITEM COMPONENT
 // ============================================
 const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, isPublicItem, onImport, t }: any) => {
@@ -392,6 +543,10 @@ export default function MapScreen() {
   // Terrain sub-filters (type & environment)
   const [terrainTypeFilter, setTerrainTypeFilter] = useState<string | null>(null);
   const [terrainEnvFilter, setTerrainEnvFilter] = useState<'indoor' | 'outdoor' | null>(null);
+
+  // Tournament sub-filters (format & status)
+  const [tournamentFormatFilter, setTournamentFormatFilter] = useState<string | null>(null);
+  const [tournamentStatusFilter, setTournamentStatusFilter] = useState<string | null>(null);
 
   // Meetup invitation state
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
@@ -663,8 +818,15 @@ export default function MapScreen() {
       if (showPublic) addItems(pubData.clubs, 'clubs', true);
     }
     if (filter === 'all' || filter === 'tournaments') {
-      if (showOwn) addItems(ownData.tournaments, 'tournaments', false);
-      if (showPublic) addItems(pubData.tournaments, 'tournaments', true);
+      // Only show upcoming/in-progress tournaments on map (exclude Terminé)
+      const filterTournaments = (arr: any[]) => {
+        let filtered = arr.filter(t => t.status !== 'Terminé');
+        if (tournamentFormatFilter) filtered = filtered.filter(t => t.format === tournamentFormatFilter);
+        if (tournamentStatusFilter) filtered = filtered.filter(t => t.status === tournamentStatusFilter);
+        return filtered;
+      };
+      if (showOwn) addItems(filterTournaments(ownData.tournaments), 'tournaments', false);
+      if (showPublic) addItems(filterTournaments(pubData.tournaments), 'tournaments', true);
     }
     if (filter === 'all' || filter === 'players') {
       const filterPlayers = (arr: any[]) => (eloRankFilter || trustFilter) ? arr.filter(matchPlayerSubFilters) : arr;
@@ -699,12 +861,23 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter, terrainTypeFilter, terrainEnvFilter]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter, terrainTypeFilter, terrainEnvFilter, tournamentFormatFilter, tournamentStatusFilter]);
 
-  // Compute clusters
-  const clusters = useMemo(() => {
-    return clusterMarkers(results, currentRegion);
+  // Compute clusters with debounced region to avoid expensive re-clustering on every pan
+  const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [debouncedClusterInput, setDebouncedClusterInput] = useState({ results, region: currentRegion });
+
+  useEffect(() => {
+    if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
+    clusterDebounceRef.current = setTimeout(() => {
+      setDebouncedClusterInput({ results, region: currentRegion });
+    }, 120);
+    return () => { if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current); };
   }, [results, currentRegion]);
+
+  const clusters = useMemo(() => {
+    return clusterMarkers(debouncedClusterInput.results, debouncedClusterInput.region);
+  }, [debouncedClusterInput]);
 
   // Total items in directory (regardless of location)
   const totalCounts = useMemo(() => ({
@@ -848,6 +1021,59 @@ export default function MapScreen() {
       setTerrainTypeFilter(null);
       setTerrainEnvFilter(null);
     }
+    if (f !== 'tournaments') {
+      setTournamentFormatFilter(null);
+      setTournamentStatusFilter(null);
+    }
+  }, []);
+
+  // Stable sub-filter toggle handlers (avoid inline closures in JSX)
+  const handleEloRankToggle = useCallback((tier: EloRankTier) => {
+    Haptics.selectionAsync();
+    setEloRankFilter(prev => prev === tier ? null : tier);
+  }, []);
+
+  const handleTrustToggle = useCallback((key: 'verified' | 'high' | 'medium_low') => {
+    Haptics.selectionAsync();
+    setTrustFilter(prev => prev === key ? null : key);
+  }, []);
+
+  const handleTerrainTypeToggle = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setTerrainTypeFilter(prev => prev === id ? null : id);
+  }, []);
+
+  const handleTerrainEnvToggle = useCallback((id: 'indoor' | 'outdoor') => {
+    Haptics.selectionAsync();
+    setTerrainEnvFilter(prev => prev === id ? null : id);
+  }, []);
+
+  const handleTournamentFormatToggle = useCallback((fmt: string) => {
+    Haptics.selectionAsync();
+    setTournamentFormatFilter(prev => prev === fmt ? null : fmt);
+  }, []);
+
+  const handleTournamentStatusToggle = useCallback((key: string) => {
+    Haptics.selectionAsync();
+    setTournamentStatusFilter(prev => prev === key ? null : key);
+  }, []);
+
+  const handleClearPlayerSubFilters = useCallback(() => {
+    Haptics.selectionAsync();
+    setEloRankFilter(null);
+    setTrustFilter(null);
+  }, []);
+
+  const handleClearTerrainSubFilters = useCallback(() => {
+    Haptics.selectionAsync();
+    setTerrainTypeFilter(null);
+    setTerrainEnvFilter(null);
+  }, []);
+
+  const handleClearTournamentSubFilters = useCallback(() => {
+    Haptics.selectionAsync();
+    setTournamentFormatFilter(null);
+    setTournamentStatusFilter(null);
   }, []);
 
   const handleRegionChange = useCallback((region: any) => {
@@ -859,13 +1085,14 @@ export default function MapScreen() {
         latitudeDelta: region.latitudeDelta,
         longitudeDelta: region.longitudeDelta,
       });
-    }, 400);
+    }, 650);
   }, []);
 
-  // Cleanup debounce on unmount
+  // Cleanup debounces on unmount
   useEffect(() => {
     return () => {
       if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
+      if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
     };
   }, []);
 
@@ -1031,7 +1258,6 @@ export default function MapScreen() {
         <Text style={styles.listTitle}>{t('map', 'interactiveMap')}</Text>
         <Text style={styles.listSubtitle}>{t('map', 'availableOnMobile')}</Text>
       </View>
-      <AdBanner position="inline" />
       <FlatList
         data={results}
         renderItem={renderItem}
@@ -1153,9 +1379,16 @@ export default function MapScreen() {
 
 
 
+      {/* Ad Banner - floating above bottom panel */}
+      {Platform.OS !== 'web' ? (
+        <View style={styles.floatingAdBanner}>
+          <AdBanner position="inline" />
+        </View>
+      ) : null}
+
       {/* No-Geo Banner */}
       {noGeoCount > 0 && showNoGeoBanner && Platform.OS !== 'web' ? (
-        <Animated.View entering={FadeInDown.duration(300)} style={[styles.noGeoBanner, { bottom: 175 }]}>
+        <Animated.View entering={FadeInDown.duration(300)} style={[styles.noGeoBanner, { bottom: 145 }]}>
           <View style={styles.noGeoBannerIcon}>
             <MaterialIcons name="location-off" size={20} color={theme.warning} />
           </View>
@@ -1188,141 +1421,59 @@ export default function MapScreen() {
           </Animated.View>
         ) : null}
 
-        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} page="map" />
-
-        <AdBanner position="inline" />
+        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 4, marginBottom: 0 }} page="map" />
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          <Pressable style={[styles.chip, filter === 'all' && styles.chipActive]} onPress={() => handleFilterPress('all')}>
-            <MaterialIcons name="layers" size={14} color={filter === 'all' ? '#FFF' : theme.textSecondary} />
-            <Text style={[styles.chipText, filter === 'all' && styles.chipTextActive]}>{t('map', 'all')}</Text>
-          </Pressable>
+          <FilterChip label={t('map', 'all')} icon="layers" isActive={filter === 'all'} onPress={() => handleFilterPress('all')} />
           {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-            <Pressable key={k} style={[styles.chip, filter === k && { backgroundColor: MARKER_CONFIG[k].color }]} onPress={() => handleFilterPress(k)}>
-              <MaterialIcons name={MARKER_CONFIG[k].icon as any} size={14} color={filter === k ? '#FFF' : theme.textSecondary} />
-              <Text style={[styles.chipText, filter === k && styles.chipTextActive]}>{MARKER_CONFIG[k].label}</Text>
-            </Pressable>
+            <FilterChip key={k} label={MARKER_CONFIG[k].label} icon={MARKER_CONFIG[k].icon} isActive={filter === k} activeColor={MARKER_CONFIG[k].color} onPress={() => handleFilterPress(k)} />
           ))}
         </ScrollView>
 
         {/* Terrain sub-filters: type & environment */}
         {filter === 'terrains' ? (
-          <View style={styles.subFiltersContainer}>
-            {/* Terrain Type (surface) */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-              <View style={styles.subFilterLabel}>
-                <MaterialIcons name="landscape" size={12} color={theme.textMuted} />
-                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Surface' : 'Surface'}</Text>
-              </View>
-              {config.terrainTypes.map(tt => {
-                const active = terrainTypeFilter === tt.id;
-                return (
-                  <Pressable
-                    key={tt.id}
-                    style={[styles.subChip, active && { backgroundColor: theme.success, borderColor: theme.success }]}
-                    onPress={() => { Haptics.selectionAsync(); setTerrainTypeFilter(active ? null : tt.id); }}
-                  >
-                    <MaterialIcons name={tt.icon as any} size={11} color={active ? '#FFF' : theme.success} />
-                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: theme.success }]}>{tt.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Environment */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-              <View style={styles.subFilterLabel}>
-                <MaterialIcons name="wb-sunny" size={12} color={theme.textMuted} />
-                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Environnement' : 'Environment'}</Text>
-              </View>
-              {config.terrainEnvironments.map(env => {
-                const active = terrainEnvFilter === env.id;
-                const envColor = env.id === 'indoor' ? '#3B82F6' : '#F59E0B';
-                return (
-                  <Pressable
-                    key={env.id}
-                    style={[styles.subChip, active && { backgroundColor: envColor, borderColor: envColor }]}
-                    onPress={() => { Haptics.selectionAsync(); setTerrainEnvFilter(active ? null : env.id as 'indoor' | 'outdoor'); }}
-                  >
-                    <MaterialIcons name={env.icon as any} size={11} color={active ? '#FFF' : envColor} />
-                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: envColor }]}>{env.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Active filter count */}
-            {(terrainTypeFilter || terrainEnvFilter) ? (
-              <View style={styles.subFilterActiveBar}>
-                <Text style={styles.subFilterActiveText}>{counts.terrains} {language === 'fr' ? 'terrain(s) filtre(s)' : 'terrain(s) filtered'}</Text>
-                <Pressable style={styles.subFilterClearBtn} onPress={() => { Haptics.selectionAsync(); setTerrainTypeFilter(null); setTerrainEnvFilter(null); }}>
-                  <MaterialIcons name="close" size={12} color={theme.primary} />
-                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
+          <TerrainSubFilters
+            terrainTypeFilter={terrainTypeFilter}
+            terrainEnvFilter={terrainEnvFilter}
+            onTerrainTypePress={handleTerrainTypeToggle}
+            onTerrainEnvPress={handleTerrainEnvToggle}
+            onClear={handleClearTerrainSubFilters}
+            count={counts.terrains}
+            language={language}
+          />
+        ) : null}
+
+        {/* Tournament sub-filters: format & status */}
+        {filter === 'tournaments' ? (
+          <TournamentSubFilters
+            tournamentFormatFilter={tournamentFormatFilter}
+            tournamentStatusFilter={tournamentStatusFilter}
+            onFormatPress={handleTournamentFormatToggle}
+            onStatusPress={handleTournamentStatusToggle}
+            onClear={handleClearTournamentSubFilters}
+            count={counts.tournaments}
+            language={language}
+          />
         ) : null}
 
         {/* Player sub-filters: ELO rank & trust score */}
         {filter === 'players' ? (
-          <View style={styles.subFiltersContainer}>
-            {/* ELO Rank */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-              <View style={styles.subFilterLabel}>
-                <MaterialIcons name="emoji-events" size={12} color={theme.textMuted} />
-                <Text style={styles.subFilterLabelText}>ELO</Text>
-              </View>
-              {[...ELO_RANKS].reverse().map(rank => {
-                const active = eloRankFilter === rank.tier;
-                return (
-                  <Pressable
-                    key={rank.tier}
-                    style={[styles.subChip, active && { backgroundColor: rank.color, borderColor: rank.color }]}
-                    onPress={() => { Haptics.selectionAsync(); setEloRankFilter(active ? null : rank.tier); }}
-                  >
-                    <MaterialIcons name={rank.icon as any} size={11} color={active ? '#FFF' : rank.color} />
-                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: rank.color }]}>{language === 'fr' ? rank.label.fr : rank.label.en}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Trust Score */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-              <View style={styles.subFilterLabel}>
-                <MaterialIcons name="verified-user" size={12} color={theme.textMuted} />
-                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Confiance' : 'Trust'}</Text>
-              </View>
-              {([{ key: 'verified', label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', color: '#22C55E' }, { key: 'high', label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', color: '#3B82F6' }, { key: 'medium_low', label: language === 'fr' ? '< Fiable' : '< Trusted', icon: 'warning', color: '#F97316' }] as const).map(opt => {
-                const active = trustFilter === opt.key;
-                return (
-                  <Pressable
-                    key={opt.key}
-                    style={[styles.subChip, active && { backgroundColor: opt.color, borderColor: opt.color }]}
-                    onPress={() => { Haptics.selectionAsync(); setTrustFilter(active ? null : opt.key); }}
-                  >
-                    <MaterialIcons name={opt.icon as any} size={11} color={active ? '#FFF' : opt.color} />
-                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: opt.color }]}>{opt.label}</Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-            {/* Active filter count */}
-            {(eloRankFilter || trustFilter) ? (
-              <View style={styles.subFilterActiveBar}>
-                <Text style={styles.subFilterActiveText}>{counts.players} {language === 'fr' ? 'joueur(s) filtre(s)' : 'player(s) filtered'}</Text>
-                <Pressable style={styles.subFilterClearBtn} onPress={() => { Haptics.selectionAsync(); setEloRankFilter(null); setTrustFilter(null); }}>
-                  <MaterialIcons name="close" size={12} color={theme.primary} />
-                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
+          <PlayerSubFilters
+            eloRankFilter={eloRankFilter}
+            trustFilter={trustFilter}
+            onEloRankPress={handleEloRankToggle}
+            onTrustPress={handleTrustToggle}
+            onClear={handleClearPlayerSubFilters}
+            count={counts.players}
+            language={language}
+          />
         ) : null}
       </View>
 
       {/* Selected Card */}
       {selected ? (
-        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 190 }]}>
+        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 155 }]}>
           <Pressable style={styles.selectedInner} onPress={selected._isPublic ? undefined : handleNavigate}>
             <View style={[styles.selectedIcon, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
               <MaterialIcons
@@ -1416,7 +1567,7 @@ export default function MapScreen() {
         const isGold = selectedPartner._tier === 'gold_sponsor';
         const tierLabel = isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner');
         return (
-          <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 190 }]}>
+          <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 155 }]}>
             <Pressable style={styles.partnerPopupClose} onPress={() => setSelectedPartner(null)} hitSlop={8}>
               <MaterialIcons name="close" size={16} color={theme.textMuted} />
             </Pressable>
@@ -1686,33 +1837,33 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   // ========== GRADIENT HERO HEADER ==========
   heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
-  heroGradient: { paddingTop: 12, paddingBottom: 20, paddingHorizontal: 20, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden' as const, position: 'relative' as const },
+  heroGradient: { paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, overflow: 'hidden' as const, position: 'relative' as const },
   heroDecoCircle1: { position: 'absolute' as const, top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.04)' },
   heroDecoCircle2: { position: 'absolute' as const, bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' },
-  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 },
-  heroTitle: { fontSize: 26, fontWeight: '800', color: '#FFF', letterSpacing: -0.3 },
-  heroSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.6)', marginTop: 3, fontWeight: '500' },
+  heroTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 },
+  heroTitle: { fontSize: 22, fontWeight: '800', color: '#FFF', letterSpacing: -0.3 },
+  heroSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2, fontWeight: '500' },
   heroActions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  heroActionBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  heroActionBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
   heroActionBtnActive: { backgroundColor: 'rgba(255,255,255,0.3)' },
-  heroStatsSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 10, paddingHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  heroStatsSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 12, paddingVertical: 6, paddingHorizontal: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   heroStatItem: { flex: 1, alignItems: 'center' as const },
-  heroStatValue: { fontSize: 15, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
-  heroStatLabel: { fontSize: 8, fontWeight: '700' as const, color: 'rgba(255,255,255,0.3)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.4 },
-  heroStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.08)' },
+  heroStatValue: { fontSize: 13, fontWeight: '800' as const, color: 'rgba(255,255,255,0.5)' },
+  heroStatLabel: { fontSize: 7, fontWeight: '700' as const, color: 'rgba(255,255,255,0.3)', marginTop: 1, textTransform: 'uppercase' as const, letterSpacing: 0.4 },
+  heroStatDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
 
   bottomPanel: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    paddingBottom: Platform.select({ ios: 8, default: 8 }),
+    borderTopLeftRadius: 20, borderTopRightRadius: 20,
+    paddingBottom: Platform.select({ ios: 4, default: 4 }),
     shadowColor: '#0F172A', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8,
     borderTopWidth: 1, borderTopColor: '#E8EDF2',
   },
 
   // Player sub-filters
-  subFiltersContainer: { paddingTop: 2, paddingBottom: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  subFiltersRow: { paddingHorizontal: 12, paddingVertical: 4, gap: 5, alignItems: 'center' as const },
+  subFiltersContainer: { paddingTop: 2, paddingBottom: 2, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  subFiltersRow: { paddingHorizontal: 10, paddingVertical: 3, gap: 4, alignItems: 'center' as const },
   subFilterLabel: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, marginRight: 4 },
   subFilterLabelText: { fontSize: 9, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
   subChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0' },
@@ -1723,19 +1874,20 @@ const styles = StyleSheet.create({
   subFilterClearText: { fontSize: 11, fontWeight: '600' as const, color: theme.primary },
 
   searchRowOuter: {
-    paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
+    paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2,
   },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9',
-    borderRadius: 14, paddingHorizontal: 14, height: 42, gap: 8, borderWidth: 1, borderColor: '#E2E8F0',
+    borderRadius: 12, paddingHorizontal: 12, height: 38, gap: 8, borderWidth: 1, borderColor: '#E2E8F0',
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
-  filters: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 6, gap: 6 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  filters: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 4, gap: 5 },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 18, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
   chipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
-  chipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  chipText: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
   chipTextActive: { color: '#FFF' },
+
   panelLeaderboardCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginHorizontal: 12, marginTop: 6, marginBottom: 4, backgroundColor: '#F8FAFC', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 10, borderWidth: 1, borderColor: '#E8EDF2' },
   panelLeaderboardIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary, alignItems: 'center' as const, justifyContent: 'center' as const },
   panelLeaderboardTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
@@ -1873,6 +2025,11 @@ const styles = StyleSheet.create({
   manageEmptyText: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginTop: 16 },
   manageEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 20 },
 
+  // Floating ad banner above bottom panel
+  floatingAdBanner: {
+    position: 'absolute' as const, bottom: 120, left: 0, right: 0,
+    paddingHorizontal: 12, opacity: 0.95,
+  },
   // No-Geo Banner
   noGeoBanner: {
     position: 'absolute', left: 12, right: 12,
