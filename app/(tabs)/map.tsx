@@ -1075,7 +1075,7 @@ export default function MapScreen() {
 
       {/* Legend */}
       {Platform.OS !== 'web' ? (
-        <View style={[styles.legendContainer, { top: insets.top + 130 }]}>
+        <View style={[styles.legendContainer, { top: insets.top + 170 }]}>
           <Pressable
             style={styles.legendToggle}
             onPress={() => { Haptics.selectionAsync(); setShowLegend(!showLegend); }}
@@ -1173,20 +1173,7 @@ export default function MapScreen() {
 
         <SponsorBanner style={{ marginHorizontal: 12, marginTop: 6, marginBottom: 2 }} page="map" />
 
-        {/* City Leaderboard shortcut */}
-        <Pressable
-          style={styles.panelLeaderboardCard}
-          onPress={() => { Haptics.selectionAsync(); router.push('/city-leaderboard' as any); }}
-        >
-          <View style={styles.panelLeaderboardIcon}>
-            <MaterialIcons name="leaderboard" size={16} color="#FFF" />
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.panelLeaderboardTitle}>{language === 'fr' ? 'Classement par zone' : 'Zone Leaderboard'}</Text>
-            <Text style={styles.panelLeaderboardSub}>{language === 'fr' ? 'Decouvrir les meilleurs joueurs' : 'Discover top players'}</Text>
-          </View>
-          <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-        </Pressable>
+        <AdBanner position="inline" />
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
@@ -1739,7 +1726,7 @@ const styles = StyleSheet.create({
   manageEmptyText: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginTop: 16 },
   manageEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 20 },
   // Legend
-  legendContainer: { position: 'absolute', left: 12, zIndex: 10 },
+  legendContainer: { position: 'absolute', left: 12, zIndex: 10, marginTop: 8 },
   legendToggle: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: 'rgba(255,255,255,0.95)',

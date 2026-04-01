@@ -414,8 +414,35 @@ export default function MyPlayerCardScreen() {
                       </Text>
                     </View>
                   ) : null}
+                  {selfPlayer.experience ? (
+                    <View style={[s.pillBadge, { backgroundColor: '#9333EA' + '15' }]}>
+                      <MaterialIcons name="timeline" size={14} color="#9333EA" />
+                      <Text style={[s.pillBadgeText, { color: '#9333EA' }]}>
+                        {t('player', selfPlayer.experience === 'less_than_1' ? 'experienceLessThan1' : selfPlayer.experience === '1_to_3' ? 'experience1to3' : selfPlayer.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
+
+              {/* ── BLOC 2b: ELO ── */}
+              {selfPlayer.eloRating ? (() => {
+                const eloR = getEloRank(selfPlayer.eloRating);
+                return (
+                  <View style={s.heroSectionBlock}>
+                    <View style={s.heroSectionBlockHeader}>
+                      <MaterialIcons name={eloR.icon as any} size={12} color={eloR.color} />
+                      <Text style={[s.heroSectionBlockLabel, { color: eloR.color }]}>ELO</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 28, fontWeight: '900', color: eloR.color }}>{selfPlayer.eloRating}</Text>
+                      <View style={{ backgroundColor: eloR.color + '15', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: eloR.color + '30' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: eloR.color }}>{eloR.label[language === 'fr' ? 'fr' : 'en']}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })() : null}
 
               {/* ── BLOC 3: LIEU ── */}
               {(selfPlayer.club || profileTerrainName || selfPlayer.location?.city || selfPlayer.country) ? (
@@ -924,6 +951,13 @@ export default function MyPlayerCardScreen() {
                     <View style={[s.pvBadge, { backgroundColor: '#6366F1' + '15' }]}>
                       <Text style={[s.pvBadgeText, { color: '#6366F1' }]}>
                         {selfPlayer.handedness === 'right' ? t('player', 'rightHanded') : selfPlayer.handedness === 'left' ? t('player', 'leftHanded') : t('player', 'ambidextrous')}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {selfPlayer.experience ? (
+                    <View style={[s.pvBadge, { backgroundColor: '#9333EA' + '15' }]}>
+                      <Text style={[s.pvBadgeText, { color: '#9333EA' }]}>
+                        {t('player', selfPlayer.experience === 'less_than_1' ? 'experienceLessThan1' : selfPlayer.experience === '1_to_3' ? 'experience1to3' : selfPlayer.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}
                       </Text>
                     </View>
                   ) : null}

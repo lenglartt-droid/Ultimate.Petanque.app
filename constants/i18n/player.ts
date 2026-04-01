@@ -37,6 +37,7 @@ export const playerTranslations = {
     noClub: { fr: 'Aucun club', en: 'No club' },
     createPlayer: { fr: 'Créer le joueur', en: 'Create player' },
     saving: { fr: 'Enregistrement...', en: 'Saving...' },
+    savePlayer: { fr: 'Enregistrer', en: 'Save player' },
     deletePlayer: { fr: 'Supprimer le joueur', en: 'Delete player' },
     deleteConfirm: { fr: 'Supprimer', en: 'Delete' },
     deleteIrreversible: { fr: 'Cette action est irréversible.', en: 'This action is irreversible.' },
