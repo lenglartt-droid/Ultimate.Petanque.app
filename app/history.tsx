@@ -43,6 +43,7 @@ import EditConflictModal from '@/components/ui/EditConflictModal';
 import ShareStatusSection from '@/components/ui/ShareStatusSection';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import AdBanner from '@/components/ui/AdBanner';
+import { fetchEloHistory, EloHistoryEntry } from '@/services/eloService';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
 import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
@@ -120,6 +121,38 @@ export default function HistoryScreen() {
   // Meetup state
   const [allMeetups, setAllMeetups] = useState<(Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number })[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(true);
+
+  // ELO delta map: matchId → eloDelta
+  const [eloDeltas, setEloDeltas] = useState<Map<string, number>>(new Map());
+
+  // Load ELO history for current user to get match deltas
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadEloDeltas = async () => {
+      try {
+        const { selfPlayer: sp } = useApp.getState ? { selfPlayer: null } : { selfPlayer: null };
+        // Fetch from all players owned by user - use selfPlayer id if available
+        const supabase = getSupabaseClient();
+        const { data } = await supabase
+          .from('elo_history')
+          .select('match_id, elo_delta')
+          .eq('user_id', user.id)
+          .not('match_id', 'is', null)
+          .order('recorded_at', { ascending: false })
+          .limit(200);
+        if (data) {
+          const map = new Map<string, number>();
+          for (const row of data) {
+            if (row.match_id && !map.has(row.match_id)) {
+              map.set(row.match_id, row.elo_delta);
+            }
+          }
+          setEloDeltas(map);
+        }
+      } catch { /* silent */ }
+    };
+    loadEloDeltas();
+  }, [user?.id, matches.length]);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -708,7 +741,7 @@ export default function HistoryScreen() {
       const matchPerm = getSharedPermission(matchData.id);
       return (
         <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>
-          <MatchCard match={matchData} onPress={() => handleMatchPress(matchData)} t={t} language={language} isShared={matchIsShared} sharedPermission={matchPerm} />
+          <MatchCard match={matchData} onPress={() => handleMatchPress(matchData)} t={t} language={language} isShared={matchIsShared} sharedPermission={matchPerm} eloDelta={eloDeltas.get(matchData.id) ?? null} />
         </Animated.View>
       );
     }

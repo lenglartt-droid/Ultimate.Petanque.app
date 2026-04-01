@@ -95,7 +95,7 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     // 1. Fetch all public players
     const { data: playersData, error: pErr } = await supabase
       .from('players')
-      .select('id, user_id, name, nickname, avatar, club, club_id, role, level, country, location, stats, boules, terrain_name, created_at, is_public')
+      .select('id, user_id, name, nickname, avatar, club, club_id, role, level, country, location, stats, boules, terrain_name, created_at, is_public, elo_rating')
       .eq('is_public', true);
 
     if (pErr) return { players: [], error: pErr.message };
@@ -195,8 +195,8 @@ export async function fetchWeeklyLeaderboard(): Promise<{
       return true;
     });
 
-    // 5. Build player entries
-    const players: Array<LeaderboardPlayer & { weeklyMatches: number; weeklyWins: number; weeklyWinRate: number; rankChange: WeeklyRankChange; trustScore?: number }> = visiblePlayersData.map((p: any) => {
+    // 5. Build player entries (include ELO)
+    const players: Array<LeaderboardPlayer & { weeklyMatches: number; weeklyWins: number; weeklyWinRate: number; rankChange: WeeklyRankChange; trustScore?: number; eloRating?: number }> = visiblePlayersData.map((p: any) => {
       const ws = weeklyStatsMap.get(p.id)!;
       // Use weighted win rate for fairer ranking
       const winRate = ws.totalWeight > 0 ? Math.round((ws.weightedWins / ws.totalWeight) * 1000) / 10 : 0;
@@ -224,6 +224,7 @@ export async function fetchWeeklyLeaderboard(): Promise<{
           pointRate: 0,
           carreauRate: ws.tirSuccess > 0 ? Math.round((ws.carreaux / ws.tirSuccess) * 1000) / 10 : 0,
         },
+        eloRating: p.elo_rating || 1000,
         weeklyMatches: ws.matchesPlayed,
         weeklyWins: ws.wins,
         weeklyWinRate: winRate,

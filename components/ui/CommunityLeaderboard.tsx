@@ -11,6 +11,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
+import { getEloRank, getEloColor } from '@/services/eloService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
 import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
 import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
@@ -41,7 +42,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
   const [players, setPlayers] = useState<LeaderboardPlayer[]>([]);
   const [playersLoading, setPlayersLoading] = useState(true);
   const [playersError, setPlayersError] = useState<string | null>(null);
-  const [sortBy, setSortBy] = useState<LeaderboardSort>('winRate');
+  const [sortBy, setSortBy] = useState<LeaderboardSort>('elo');
 
   // Clubs
   const [clubs, setClubs] = useState<LeaderboardClub[]>([]);
@@ -305,6 +306,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
       {activeTab === 'players' ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
           {([
+            { id: 'elo' as LeaderboardSort, label: t('leaderboard', 'eloRating') },
             { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate') },
             { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches') },
             { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate') },
@@ -408,8 +410,10 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                       {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
                     </View>
                     <View style={s.rowStats}>
-                      <Text style={[s.rowStatMain, sortBy === 'winRate' && { color: '#F59E0B' }]}>{p.stats.winRate}%</Text>
-                      <Text style={s.rowStatSub}>{p.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
+                      <Text style={[s.rowStatMain, sortBy === 'elo' ? { color: getEloColor(p.eloRating || 1000) } : sortBy === 'winRate' ? { color: '#F59E0B' } : undefined]}>
+                        {sortBy === 'elo' ? (p.eloRating || 1000) : `${p.stats.winRate}%`}
+                      </Text>
+                      <Text style={s.rowStatSub}>{sortBy === 'elo' ? `${p.stats.winRate}%` : `${p.stats.matchesPlayed} ${t('leaderboard', 'matches')}`}</Text>
                     </View>
                   </Pressable>
                 );
@@ -441,8 +445,8 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         {myP.club ? <Text style={s.playerClub} numberOfLines={1}>{myP.club}</Text> : null}
                       </View>
                       <View style={s.rowStats}>
-                        <Text style={[s.rowStatMain, { color: '#F59E0B' }]}>{myP.stats.winRate}%</Text>
-                        <Text style={s.rowStatSub}>{myP.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
+                        <Text style={[s.rowStatMain, { color: '#F59E0B' }]}>{sortBy === 'elo' ? (myP.eloRating || 1000) : `${myP.stats.winRate}%`}</Text>
+                        <Text style={s.rowStatSub}>{sortBy === 'elo' ? `${myP.stats.winRate}%` : `${myP.stats.matchesPlayed} ${t('leaderboard', 'matches')}`}</Text>
                       </View>
                     </Pressable>
                   </React.Fragment>

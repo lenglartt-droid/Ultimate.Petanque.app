@@ -19,6 +19,7 @@ import {
   banPlayer,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
+import { recalculateAllElo } from '@/services/eloService';
 
 const et = extraTranslations.trustScore;
 
@@ -38,6 +39,9 @@ export default function AdminAntiCheatScreen() {
   const [scanning, setScanning] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [search, setSearch] = useState('');
+
+  // ELO recalculation
+  const [recalculating, setRecalculating] = useState(false);
 
   // Detail modal
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
@@ -217,6 +221,24 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.headerTitle}>{(et.adminTitle as any)?.[language] || 'Anti-cheat'}</Text>
           <Text style={st.headerSub}>{filtered.length} {(et.adminDesc as any)?.[language] || 'players'}</Text>
         </View>
+        <Pressable
+          style={[st.eloRecalcBtn, recalculating && { opacity: 0.6 }]}
+          onPress={async () => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            setRecalculating(true);
+            const { success, error, playersUpdated } = await recalculateAllElo();
+            setRecalculating(false);
+            if (success) {
+              showAlert(t('leaderboard', 'eloRecalculated').replace('{count}', String(playersUpdated)));
+            } else {
+              showAlert('Error', error || 'Unknown error');
+            }
+          }}
+          disabled={recalculating}
+        >
+          {recalculating ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="calculate" size={16} color="#FFF" />}
+          <Text style={st.eloRecalcBtnText}>{recalculating ? t('leaderboard', 'eloRecalculating') : 'ELO'}</Text>
+        </Pressable>
         <Pressable
           style={[st.scanBtn, scanning && { opacity: 0.6 }]}
           onPress={handleRunFullScan}
@@ -550,6 +572,8 @@ const st = StyleSheet.create({
   headerSub: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
   scanBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EF4444', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   scanBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  eloRecalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  eloRecalcBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 
   filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },

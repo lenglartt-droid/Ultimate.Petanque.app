@@ -12,9 +12,10 @@ interface MatchCardProps {
   language: 'fr' | 'en';
   isShared?: boolean;
   sharedPermission?: 'read' | 'write' | null;
+  eloDelta?: number | null;
 }
 
-export const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission }: MatchCardProps) => {
+export const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission, eloDelta }: MatchCardProps) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
 
@@ -75,6 +76,14 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
               {isWin ? t('history', 'victory') : t('history', 'defeat')}
             </Text>
           </View>
+          {eloDelta !== undefined && eloDelta !== null && eloDelta !== 0 ? (
+            <View style={[styles.eloDeltaBadge, { backgroundColor: eloDelta > 0 ? '#10B98115' : '#EF444415' }]}>
+              <MaterialIcons name={eloDelta > 0 ? 'arrow-upward' : 'arrow-downward'} size={10} color={eloDelta > 0 ? '#10B981' : '#EF4444'} />
+              <Text style={[styles.eloDeltaText, { color: eloDelta > 0 ? '#10B981' : '#EF4444' }]}>
+                {eloDelta > 0 ? `+${eloDelta}` : `${eloDelta}`} ELO
+              </Text>
+            </View>
+          ) : null}
           {isShared ? (
             <View style={styles.sharedInlineBadge}>
               <MaterialIcons name={sharedPermission === 'write' ? 'edit' : 'visibility'} size={10} color={sharedPermission === 'write' ? theme.accent : theme.primary} />
@@ -124,4 +133,6 @@ const styles = StyleSheet.create({
   compactScoreWin: { color: theme.success },
   compactScoreLoss: { color: theme.error },
   compactScoreSep: { fontSize: 12, color: theme.textMuted },
+  eloDeltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: theme.borderRadius.full },
+  eloDeltaText: { fontSize: 10, fontWeight: '800' },
 });
