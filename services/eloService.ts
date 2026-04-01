@@ -73,6 +73,7 @@ export const ELO_INACTIVITY_THRESHOLD_DAYS = 30;
 export const ELO_INACTIVITY_DECAY_PER_MONTH = 10;
 export const ELO_INACTIVITY_FLOOR = 800;
 export const ELO_SEASON_COMPRESSION = 0.75;
+export const ELO_PLACEMENT_MATCHES = 10;
 
 export const ELO_RANKS: EloRankInfo[] = [
   { tier: 'master', label: { fr: 'Maitre', en: 'Master' }, color: '#9333EA', icon: 'auto-awesome', minElo: 1800 },
@@ -86,11 +87,21 @@ export const ELO_RANKS: EloRankInfo[] = [
 // CORE ELO CALCULATION
 // ============================================
 
-/** Get adaptive K-factor based on number of matches played */
+/** 
+ * Get adaptive K-factor based on number of matches played.
+ * Placement phase (first 10 matches): K=60 for faster calibration.
+ * Post-placement: K=40 (<30 matches), K=20 (30-50), K=10 (50+).
+ */
 export function getKFactor(matchesPlayed: number): number {
-  if (matchesPlayed < 10) return 40;
-  if (matchesPlayed <= 30) return 20;
+  if (matchesPlayed < ELO_PLACEMENT_MATCHES) return 60; // Placement phase
+  if (matchesPlayed < 30) return 40;
+  if (matchesPlayed <= 50) return 20;
   return 10;
+}
+
+/** Check if player is still in placement phase */
+export function isInPlacement(matchesPlayed: number): boolean {
+  return matchesPlayed < ELO_PLACEMENT_MATCHES;
 }
 
 /** Calculate expected score (probability of winning) */

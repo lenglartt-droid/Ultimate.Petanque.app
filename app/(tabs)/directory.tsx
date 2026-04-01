@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
@@ -140,18 +140,25 @@ export default function DirectoryScreen() {
   const [sponsoredEvents, setSponsoredEvents] = useState<SponsoredEvent[]>([]);
   const [eventsLoading, setEventsLoading] = useState(true);
 
-  // Partner data for tier badges in directory
+  // Partner data for tier badges in directory — lazy loaded
   const [partnerUserIds, setPartnerUserIds] = useState<Map<string, { tier: string; name: string }>>(new Map());
+  const partnerLoaded = useRef(false);
   useEffect(() => {
-    fetchAmbassadors().then(({ ambassadors }) => {
-      const map = new Map<string, { tier: string; name: string }>();
-      ambassadors.forEach(a => {
-        if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
-          map.set(a.userId, { tier: a.badgeType, name: a.displayName });
-        }
+    // Defer partner badge loading to avoid blocking initial render
+    const timer = setTimeout(() => {
+      if (partnerLoaded.current) return;
+      partnerLoaded.current = true;
+      fetchAmbassadors().then(({ ambassadors }) => {
+        const map = new Map<string, { tier: string; name: string }>();
+        ambassadors.forEach(a => {
+          if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
+            map.set(a.userId, { tier: a.badgeType, name: a.displayName });
+          }
+        });
+        setPartnerUserIds(map);
       });
-      setPartnerUserIds(map);
-    });
+    }, 800);
+    return () => clearTimeout(timer);
   }, []);
   const loadSponsoredEvents = useCallback(async () => {
     setEventsLoading(true);
@@ -241,54 +248,73 @@ export default function DirectoryScreen() {
     setVisibleCount(PAGE_SIZE);
   }, [activeTab, searchQuery, filters, showRealUsersOnly]);
 
-  // Levenshtein-based duplicate detection
-  const duplicates = useMemo(() => {
-    const normalize = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    const levenshtein = (a: string, b: string): number => {
-      if (a.length === 0) return b.length;
-      if (b.length === 0) return a.length;
-      const matrix: number[][] = [];
-      for (let i = 0; i <= b.length; i++) matrix[i] = [i];
-      for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
-      for (let i = 1; i <= b.length; i++) {
-        for (let j = 1; j <= a.length; j++) {
-          const cost = b[i - 1] === a[j - 1] ? 0 : 1;
-          matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+  // Levenshtein-based duplicate detection — debounced for performance
+  // Stable fingerprint to avoid recalculating when data hasn't changed
+  const dataFingerprint = useMemo(() => {
+    return `${players.length}-${clubs.length}-${terrains.length}-${tournaments.length}-${dismissedPairs.size}`;
+  }, [players.length, clubs.length, terrains.length, tournaments.length, dismissedPairs.size]);
+
+  const [duplicates, setDuplicates] = useState<{ itemA: any; itemB: any; score: number; type: string; pairKey: string }[]>([]);
+  const duplicateTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    // Debounce duplicate calculation by 500ms to avoid blocking UI
+    if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current);
+    duplicateTimerRef.current = setTimeout(() => {
+      const normalize = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const levenshtein = (a: string, b: string): number => {
+        if (a.length === 0) return b.length;
+        if (b.length === 0) return a.length;
+        // Optimized: early exit if length difference makes threshold impossible
+        const maxLen = Math.max(a.length, b.length);
+        if (Math.abs(a.length - b.length) > maxLen * 0.3) return maxLen;
+        const matrix: number[][] = [];
+        for (let i = 0; i <= b.length; i++) matrix[i] = [i];
+        for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+        for (let i = 1; i <= b.length; i++) {
+          for (let j = 1; j <= a.length; j++) {
+            const cost = b[i - 1] === a[j - 1] ? 0 : 1;
+            matrix[i][j] = Math.min(matrix[i - 1][j] + 1, matrix[i][j - 1] + 1, matrix[i - 1][j - 1] + cost);
+          }
         }
-      }
-      return matrix[b.length][a.length];
-    };
-    const similarity = (a: string, b: string): number => {
-      const na = normalize(a);
-      const nb = normalize(b);
-      if (na === nb) return 100;
-      if (na.includes(nb) || nb.includes(na)) return 85;
-      const maxLen = Math.max(na.length, nb.length);
-      if (maxLen === 0) return 0;
-      return Math.round((1 - levenshtein(na, nb) / maxLen) * 100);
-    };
-    const findDuplicates = <T extends { id: string; name: string }>(items: T[], type: string) => {
-      const pairs: { itemA: T; itemB: T; score: number; type: string; pairKey: string }[] = [];
-      for (let i = 0; i < items.length; i++) {
-        for (let j = i + 1; j < items.length; j++) {
-          const score = similarity(items[i].name, items[j].name);
-          if (score >= 70) {
-            const pairKey = `${type}-${[items[i].id, items[j].id].sort().join('-')}`;
-            if (!dismissedPairs.has(pairKey)) {
-              pairs.push({ itemA: items[i], itemB: items[j], score, type, pairKey });
+        return matrix[b.length][a.length];
+      };
+      const similarity = (a: string, b: string): number => {
+        const na = normalize(a);
+        const nb = normalize(b);
+        if (na === nb) return 100;
+        if (na.includes(nb) || nb.includes(na)) return 85;
+        const maxLen = Math.max(na.length, nb.length);
+        if (maxLen === 0) return 0;
+        return Math.round((1 - levenshtein(na, nb) / maxLen) * 100);
+      };
+      const findDuplicates = <T extends { id: string; name: string }>(items: T[], type: string) => {
+        const pairs: { itemA: T; itemB: T; score: number; type: string; pairKey: string }[] = [];
+        // Cap comparison to first 100 items to avoid O(n^2) explosion
+        const capped = items.slice(0, 100);
+        for (let i = 0; i < capped.length; i++) {
+          for (let j = i + 1; j < capped.length; j++) {
+            const score = similarity(capped[i].name, capped[j].name);
+            if (score >= 70) {
+              const pairKey = `${type}-${[capped[i].id, capped[j].id].sort().join('-')}`;
+              if (!dismissedPairs.has(pairKey)) {
+                pairs.push({ itemA: capped[i], itemB: capped[j], score, type, pairKey });
+              }
             }
           }
         }
-      }
-      return pairs;
-    };
-    return [
-      ...findDuplicates(players, 'player'),
-      ...findDuplicates(clubs, 'club'),
-      ...findDuplicates(terrains, 'terrain'),
-      ...findDuplicates(tournaments, 'tournament'),
-    ].sort((a, b) => b.score - a.score);
-  }, [players, clubs, terrains, tournaments, dismissedPairs]);
+        return pairs;
+      };
+      const result = [
+        ...findDuplicates(players, 'player'),
+        ...findDuplicates(clubs, 'club'),
+        ...findDuplicates(terrains, 'terrain'),
+        ...findDuplicates(tournaments, 'tournament'),
+      ].sort((a, b) => b.score - a.score);
+      setDuplicates(result);
+    }, 500);
+    return () => { if (duplicateTimerRef.current) clearTimeout(duplicateTimerRef.current); };
+  }, [dataFingerprint, players, clubs, terrains, tournaments, dismissedPairs]);
 
   // Set active tab from navigation param
   React.useEffect(() => {
@@ -519,398 +545,26 @@ export default function DirectoryScreen() {
     return map[status] || status;
   };
 
-  // Render functions
-  const renderPlayer = ({ item }: { item: Player }) => {
-    const isSelf = selfPlayer && item.id === selfPlayer.id;
-    const sharedPerm = getSharedPermission(item.id);
-    const isPublicItem = (item as any).isPublic;
-    // A public player is a real registered user (their user_id is an actual app user)
-    const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
-    // Partner tier badge
-    const partnerInfo = partnerUserIds.get(item.id);
-    return (
-      <Pressable
-        style={[styles.itemCard, isSelf && styles.selfCard]}
-        onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
-      >
-        <View style={[styles.itemAvatarOuter, isSelf && styles.selfAvatarOuter]}>
-          <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
-            {item.avatar ? (
-              <Image
-                source={{ uri: item.avatar }}
-                style={styles.avatarImage}
-                contentFit="cover"
-                transition={200}
-                placeholder={{ blurhash: blurhash.avatar }}
-                cachePolicy="memory-disk"
-                recyclingKey={item.id}
-              />
-            ) : (
-              <Text style={styles.avatarText}>
-                {item.name.split(' ').map(n => n[0]).join('')}
-              </Text>
-            )}
-          </View>
-          {isSelf ? (
-            <>
-              <View style={styles.selfBadge}>
-                <MaterialIcons name="star" size={10} color="#FFF" />
-              </View>
-              <View style={styles.selfVerifiedBadge}>
-                <MaterialIcons name="verified" size={12} color="#FFF" />
-              </View>
-            </>
-          ) : isRealUser ? (
-            <View style={styles.verifiedBadge}>
-              <MaterialIcons name="verified" size={11} color="#FFF" />
-            </View>
-          ) : isPublicItem ? (
-            <View style={styles.publicOverlay}>
-              <MaterialIcons name="public" size={10} color={theme.success} />
-            </View>
-          ) : sharedPerm ? (
-            <SharedOverlayBadge permission={sharedPerm} />
-          ) : null}
-        </View>
-        <View style={styles.itemContent}>
-          <View style={styles.itemHeader}>
-            <Text style={[styles.itemTitle, isSelf && { color: theme.primary }]} numberOfLines={1}>
-              {item.name}
-            </Text>
-            {isSelf ? (
-              <>
-                <View style={styles.moiBadge}>
-                  <Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text>
-                </View>
-                <View style={styles.realUserBadge}>
-                  <MaterialIcons name="verified" size={10} color={theme.primary} />
-                  <Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text>
-                </View>
-              </>
-            ) : isRealUser ? (
-              <View style={styles.realUserBadge}>
-                <MaterialIcons name="verified" size={10} color={theme.primary} />
-                <Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.itemMeta}>
-            {item.club && (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="home" size={12} color={theme.textMuted} />
-                <Text style={styles.metaText} numberOfLines={1}>{item.club}</Text>
-              </View>
-            )}
-            {item.location?.city && (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="place" size={12} color={theme.textMuted} />
-                <Text style={styles.metaText}>{item.location.city}</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.itemTags}>
-            {partnerInfo ? (
-              <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : partnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
-                <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-                <Text style={[styles.tagText, { color: partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                  {partnerInfo.tier === 'gold_sponsor' ? 'Or' : partnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
-                </Text>
-              </View>
-            ) : null}
-            {item.eloRating ? (() => {
-              const eloRank = getEloRank(item.eloRating);
-              return (
-                <View style={[styles.tag, { backgroundColor: eloRank.color + '12', borderWidth: 1, borderColor: eloRank.color + '25' }]}>
-                  <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
-                  <Text style={[styles.tagText, { color: eloRank.color }]}>{item.eloRating}</Text>
-                </View>
-              );
-            })() : null}
-            <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
-              <Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
-              <Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('levels', item.level)}</Text>
-            </View>
-          </View>
-          {/* Invite to meetup button for real registered users */}
-          {isRealUser ? (
-            <Pressable
-              style={styles.inviteMeetupBtn}
-              onPress={(e) => {
-                e.stopPropagation?.();
-                handleInviteToMeetup(item.id, item.name);
-              }}
-              hitSlop={4}
-            >
-              <MaterialIcons name="event" size={13} color={theme.primary} />
-              <Text style={styles.inviteMeetupBtnText}>{t('meetup', 'inviteToMeetup')}</Text>
-            </Pressable>
-          ) : null}
-        </View>
-        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+  // Render functions — use memoized components
+  const renderPlayer = useCallback(({ item }: { item: Player }) => {
+    return <MemoizedPlayerCard item={item} selfPlayer={selfPlayer} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} handleInviteToMeetup={handleInviteToMeetup} user={user} />;
+  }, [selfPlayer, getSharedPermission, partnerUserIds, t, language, handleInviteToMeetup, user]);
 
-  const renderClub = ({ item }: { item: Club }) => {
-    const sharedPerm = getSharedPermission(item.id);
-    const isPublicItem = (item as any).isPublic;
-    const isFavorite = favoriteClubIds.includes(item.id);
-    // Check if this club is owned by a partner (match by userId)
-    const clubPartnerInfo = partnerUserIds.get((item as any).userId || '');
-    return (
-      <Pressable
-        style={[styles.itemCard, isFavorite && styles.favoriteCard]}
-        onPress={() => router.push(`/club/${item.id}`)}
-      >
-        <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
-          <MaterialIcons name="home" size={24} color="#FFF" />
-          {isFavorite ? (
-            <View style={styles.favoriteBadge}>
-              <MaterialIcons name="favorite" size={10} color={theme.error} />
-            </View>
-          ) : isPublicItem ? (
-            <View style={styles.publicOverlay}>
-              <MaterialIcons name="public" size={10} color={theme.success} />
-            </View>
-          ) : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
-        </View>
-      <View style={styles.itemContent}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
-        <View style={styles.itemMeta}>
-          <View style={styles.metaItem}>
-            <MaterialIcons name="place" size={12} color={theme.textMuted} />
-            <Text style={styles.metaText}>{item.city}, {item.country || 'France'}</Text>
-          </View>
-          {item.terrainName && (
-            <View style={styles.metaItem}>
-              <MaterialIcons name="sports-soccer" size={12} color={theme.success} />
-              <Text style={[styles.metaText, { color: theme.success }]}>{item.terrainName}</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.itemTags}>
-          {clubPartnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : clubPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
-              <MaterialIcons name={clubPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-              <Text style={[styles.tagText, { color: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {clubPartnerInfo.tier === 'gold_sponsor' ? 'Or' : clubPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
-              </Text>
-            </View>
-          ) : null}
-          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-            <MaterialIcons name="people" size={10} color={theme.textSecondary} />
-            <Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.membersCount}</Text>
-          </View>
-          {item.foundedYear && (
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('directory', 'since')} {item.foundedYear}</Text>
-            </View>
-          )}
-        </View>
-      </View>
-      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+  const renderClub = useCallback(({ item }: { item: Club }) => {
+    return <MemoizedClubCard item={item} favoriteClubIds={favoriteClubIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} />;
+  }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
 
-  const renderTerrain = ({ item }: { item: Terrain }) => {
-    const typeConfig = getTerrainTypeConfig(item.type);
-    const isFavorite = favoriteTerrainIds.includes(item.id);
-    const sharedPerm = getSharedPermission(item.id);
-    const isPublicItem = (item as any).isPublic;
-    const terrainPartnerInfo = partnerUserIds.get((item as any).userId || '');
-    return (
-      <Pressable
-        style={[styles.itemCard, isFavorite && styles.favoriteCard]}
-        onPress={() => router.push(`/terrain/${item.id}`)}
-      >
-        <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
-          {item.photos && item.photos.length > 0 ? (
-            <Image
-              source={{ uri: item.photos[0] }}
-              style={styles.avatarImage}
-              contentFit="cover"
-              transition={200}
-              placeholder={{ blurhash: blurhash.terrain }}
-              cachePolicy="memory-disk"
-              recyclingKey={item.id}
-            />
-          ) : (
-            <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />
-          )}
-          {isFavorite ? (
-            <View style={styles.favoriteBadge}>
-              <MaterialIcons name="favorite" size={10} color={theme.error} />
-            </View>
-          ) : isPublicItem ? (
-            <View style={styles.publicOverlay}>
-              <MaterialIcons name="public" size={10} color={theme.success} />
-            </View>
-          ) : sharedPerm ? (
-            <SharedOverlayBadge permission={sharedPerm} />
-          ) : null}
-        </View>
-        <View style={styles.itemContent}>
-          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.itemMeta}>
-            <View style={styles.metaItem}>
-              <MaterialIcons name="place" size={12} color={theme.textMuted} />
-              <Text style={styles.metaText}>{item.city}</Text>
-            </View>
-            {item.clubName && (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="home" size={12} color={theme.textMuted} />
-                <Text style={styles.metaText}>{item.clubName}</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.itemTags}>
-            {terrainPartnerInfo ? (
-              <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : terrainPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
-                <MaterialIcons name={terrainPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-                <Text style={[styles.tagText, { color: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                  {terrainPartnerInfo.tier === 'gold_sponsor' ? 'Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
-                </Text>
-              </View>
-            ) : null}
-            <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}>
-              <Text style={[styles.tagText, { color: theme.success }]}>{t('terrainTypes', item.type)}</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>
-                {item.courtsCount} {item.courtsCount > 1 ? t('directory', 'terrainCountPlural') : t('directory', 'terrainCount')}
-              </Text>
-            </View>
-            {item.lighting && (
-              <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}>
-                <MaterialIcons name="lightbulb" size={10} color={theme.warning} />
-              </View>
-            )}
-            {item.covered && (
-              <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}>
-                <MaterialIcons name="roofing" size={10} color={theme.primary} />
-              </View>
-            )}
-            {item.publicAccess === false ? (
-              <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}>
-                <MaterialIcons name="lock" size={10} color={theme.error} />
-                <Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+  const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
+    return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} />;
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language]);
 
-  const renderTournament = ({ item }: { item: Tournament }) => {
-    const statusConfig: Record<string, { bg: string; color: string }> = {
-      'À venir': { bg: theme.primary + '15', color: theme.primary },
-      'En cours': { bg: theme.warning + '15', color: theme.warning },
-      'Terminé': { bg: theme.backgroundSecondary, color: theme.textSecondary },
-    };
-    const status = statusConfig[item.status] || statusConfig['Terminé'];
-    const sharedPerm = getSharedPermission(item.id);
-    const isPublicItem = (item as any).isPublic;
-    
-    return (
-      <Pressable
-        style={styles.itemCard}
-        onPress={() => router.push(`/tournament/${item.id}`)}
-      >
-        <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
-          <MaterialIcons name="emoji-events" size={24} color="#FFF" />
-          {isPublicItem ? (
-            <View style={styles.publicOverlay}>
-              <MaterialIcons name="public" size={10} color={theme.success} />
-            </View>
-          ) : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
-        </View>
-        <View style={styles.itemContent}>
-          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
-          <View style={styles.itemMeta}>
-            <View style={styles.metaItem}>
-              <MaterialIcons name="event" size={12} color={theme.textMuted} />
-              <Text style={styles.metaText}>
-                {new Date(item.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-              </Text>
-            </View>
-            <View style={styles.metaItem}>
-              <MaterialIcons name="place" size={12} color={theme.textMuted} />
-              <Text style={styles.metaText}>{item.terrainName || item.location.city}</Text>
-            </View>
-          </View>
-          <View style={styles.itemTags}>
-            <View style={[styles.tag, { backgroundColor: status.bg }]}>
-              <Text style={[styles.tagText, { color: status.color }]}>{getStatusLabel(item.status)}</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('formats', item.format)}</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('tournamentTypes', item.type)}</Text>
-            </View>
-          </View>
-        </View>
-        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+  const renderTournament = useCallback(({ item }: { item: Tournament }) => {
+    return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
+  }, [getSharedPermission, t, language]);
 
-  const renderEvent = ({ item }: { item: any }) => {
-    const ev = item as SponsoredEvent;
-    const evDate = new Date(ev.startTime);
-    const endDate = new Date(ev.endTime);
-    const isActive = ev.status === 'active' || (ev.status === 'upcoming' && new Date() >= evDate && new Date() <= endDate);
-    const sc = isActive ? '#22C55E' : ev.status === 'completed' ? '#3B82F6' : ev.status === 'cancelled' ? '#EF4444' : '#F59E0B';
-    const typeColor: Record<string, string> = { '10_tirs': '#2563EB', '10_tirs_sautee': '#D97706', precision: '#7C3AED' };
-    const tc = typeColor[ev.challengeType] || '#7C3AED';
-    const challengeLabel = ev.challengeType === '10_tirs' ? '10 Tirs' : ev.challengeType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : (language === 'fr' ? 'Precision' : 'Precision');
-    return (
-      <Pressable style={[styles.itemCard, { borderLeftWidth: 3, borderLeftColor: sc }]} onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}>
-        <View style={[styles.itemAvatar, { backgroundColor: tc + '15' }]}>
-          <MaterialIcons name={ev.challengeType === '10_tirs' ? 'gps-fixed' : ev.challengeType === 'precision' ? 'stars' : 'flight-takeoff'} size={24} color={tc} />
-        </View>
-        <View style={styles.itemContent}>
-          <Text style={styles.itemTitle} numberOfLines={1}>{ev.title}</Text>
-          <View style={styles.itemMeta}>
-            <View style={styles.metaItem}>
-              <MaterialIcons name="event" size={12} color={theme.textMuted} />
-              <Text style={styles.metaText}>{evDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
-            </View>
-            {ev.ambassadorName ? (
-              <View style={styles.metaItem}>
-                <MaterialIcons name="verified" size={12} color="#7C3AED" />
-                <Text style={[styles.metaText, { color: '#7C3AED' }]}>{ev.ambassadorName}</Text>
-              </View>
-            ) : null}
-          </View>
-          <View style={styles.itemTags}>
-            <View style={[styles.tag, { backgroundColor: sc + '15' }]}>
-              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc }} />
-              <Text style={[styles.tagText, { color: sc }]}>
-                {isActive ? (language === 'fr' ? 'En cours' : 'Active') : ev.status === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : ev.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')}
-              </Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: tc + '12' }]}>
-              <Text style={[styles.tagText, { color: tc }]}>{challengeLabel}</Text>
-            </View>
-            <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}>
-              <MaterialIcons name="group" size={10} color={theme.textSecondary} />
-              <Text style={[styles.tagText, { color: theme.textSecondary }]}>{ev.maxParticipants}</Text>
-            </View>
-          </View>
-        </View>
-        <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
-      </Pressable>
-    );
-  };
+  const renderEvent = useCallback(({ item }: { item: any }) => {
+    return <MemoizedEventCard item={item} language={language} />;
+  }, [language]);
 
   const getCurrentRenderItem = () => {
     switch (activeTab) {
@@ -1303,7 +957,7 @@ export default function DirectoryScreen() {
 
       {/* Duplicate Detection Banner */}
       {duplicates.length > 0 && showDuplicateBanner ? (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.duplicateBanner}>
+        <View style={styles.duplicateBanner}>
           <View style={styles.duplicateBannerIcon}>
             <MaterialIcons name="content-copy" size={18} color={theme.warning} />
           </View>
@@ -1320,12 +974,12 @@ export default function DirectoryScreen() {
           <Pressable style={styles.duplicateBannerClose} onPress={() => setShowDuplicateBanner(false)} hitSlop={8}>
             <MaterialIcons name="close" size={14} color={theme.textMuted} />
           </Pressable>
-        </Animated.View>
+        </View>
       ) : null}
 
       {/* Active Filters Display */}
-      {currentFilterCount > 0 && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.activeFiltersContainer}>
+      {currentFilterCount > 0 ? (
+        <View style={styles.activeFiltersContainer}>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -1380,8 +1034,8 @@ export default function DirectoryScreen() {
               </>
             )}
           </ScrollView>
-        </Animated.View>
-      )}
+        </View>
+      ) : null}
 
       <SponsorBanner style={{ marginTop: 10 }} page="directory" />
 
@@ -1967,6 +1621,244 @@ export default function DirectoryScreen() {
     </SafeAreaView>
   );
 }
+
+// ============================================
+// MEMOIZED CARD COMPONENTS
+// ============================================
+const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, partnerUserIds, t, language, handleInviteToMeetup, user }: {
+  item: Player; selfPlayer: Player | null; getSharedPermission: (id: string) => string | null;
+  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
+  language: string; handleInviteToMeetup: (id: string, name: string) => void; user: any;
+}) => {
+  const isSelf = selfPlayer && item.id === selfPlayer.id;
+  const sharedPerm = getSharedPermission(item.id);
+  const isPublicItem = (item as any).isPublic;
+  const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
+  const partnerInfo = partnerUserIds.get(item.id);
+  return (
+    <Pressable
+      style={[styles.itemCard, isSelf && styles.selfCard]}
+      onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
+    >
+      <View style={[styles.itemAvatarOuter, isSelf && styles.selfAvatarOuter]}>
+        <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
+          {item.avatar ? (
+            <Image source={{ uri: item.avatar }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" recyclingKey={item.id} />
+          ) : (
+            <Text style={styles.avatarText}>{item.name.split(' ').map(n => n[0]).join('')}</Text>
+          )}
+        </View>
+        {isSelf ? (
+          <>
+            <View style={styles.selfBadge}><MaterialIcons name="star" size={10} color="#FFF" /></View>
+            <View style={styles.selfVerifiedBadge}><MaterialIcons name="verified" size={12} color="#FFF" /></View>
+          </>
+        ) : isRealUser ? (
+          <View style={styles.verifiedBadge}><MaterialIcons name="verified" size={11} color="#FFF" /></View>
+        ) : isPublicItem ? (
+          <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
+        ) : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+      </View>
+      <View style={styles.itemContent}>
+        <View style={styles.itemHeader}>
+          <Text style={[styles.itemTitle, isSelf && { color: theme.primary }]} numberOfLines={1}>{item.name}</Text>
+          {isSelf ? (
+            <>
+              <View style={styles.moiBadge}><Text style={styles.moiBadgeText}>{t('directory', 'me')}</Text></View>
+              <View style={styles.realUserBadge}><MaterialIcons name="verified" size={10} color={theme.primary} /><Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text></View>
+            </>
+          ) : isRealUser ? (
+            <View style={styles.realUserBadge}><MaterialIcons name="verified" size={10} color={theme.primary} /><Text style={styles.realUserBadgeText}>{t('meetup', 'registeredUser')}</Text></View>
+          ) : null}
+        </View>
+        <View style={styles.itemMeta}>
+          {item.club ? <View style={styles.metaItem}><MaterialIcons name="home" size={12} color={theme.textMuted} /><Text style={styles.metaText} numberOfLines={1}>{item.club}</Text></View> : null}
+          {item.location?.city ? <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.location.city}</Text></View> : null}
+        </View>
+        <View style={styles.itemTags}>
+          {partnerInfo ? (
+            <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : partnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+              <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+              <Text style={[styles.tagText, { color: partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                {partnerInfo.tier === 'gold_sponsor' ? 'Or' : partnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+              </Text>
+            </View>
+          ) : null}
+          {item.eloRating ? (() => { const eloRank = getEloRank(item.eloRating); return (
+            <View style={[styles.tag, { backgroundColor: eloRank.color + '12', borderWidth: 1, borderColor: eloRank.color + '25' }]}>
+              <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
+              <Text style={[styles.tagText, { color: eloRank.color }]}>{item.eloRating}</Text>
+            </View>
+          ); })() : null}
+          <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('levels', item.level)}</Text></View>
+        </View>
+        {isRealUser ? (
+          <Pressable style={styles.inviteMeetupBtn} onPress={(e) => { e.stopPropagation?.(); handleInviteToMeetup(item.id, item.name); }} hitSlop={4}>
+            <MaterialIcons name="event" size={13} color={theme.primary} />
+            <Text style={styles.inviteMeetupBtnText}>{t('meetup', 'inviteToMeetup')}</Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
+
+const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermission, partnerUserIds, t, language }: {
+  item: Club; favoriteClubIds: string[]; getSharedPermission: (id: string) => string | null;
+  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string; language: string;
+}) => {
+  const sharedPerm = getSharedPermission(item.id);
+  const isPublicItem = (item as any).isPublic;
+  const isFavorite = favoriteClubIds.includes(item.id);
+  const clubPartnerInfo = partnerUserIds.get((item as any).userId || '');
+  return (
+    <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/club/${item.id}`)}>
+      <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
+        <MaterialIcons name="home" size={24} color="#FFF" />
+        {isFavorite ? <View style={styles.favoriteBadge}><MaterialIcons name="favorite" size={10} color={theme.error} /></View>
+        : isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
+        : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+      </View>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.city}, {item.country || 'France'}</Text></View>
+          {item.terrainName ? <View style={styles.metaItem}><MaterialIcons name="sports-soccer" size={12} color={theme.success} /><Text style={[styles.metaText, { color: theme.success }]}>{item.terrainName}</Text></View> : null}
+        </View>
+        <View style={styles.itemTags}>
+          {clubPartnerInfo ? (
+            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : clubPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+              <MaterialIcons name={clubPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+              <Text style={[styles.tagText, { color: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                {clubPartnerInfo.tier === 'gold_sponsor' ? 'Or' : clubPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><MaterialIcons name="people" size={10} color={theme.textSecondary} /><Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.membersCount}</Text></View>
+          {item.foundedYear ? <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('directory', 'since')} {item.foundedYear}</Text></View> : null}
+        </View>
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
+
+const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig }: {
+  item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
+  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
+  language: string; getTerrainTypeConfig: (type: string) => any;
+}) => {
+  const typeConfig = getTerrainTypeConfig(item.type);
+  const isFavorite = favoriteTerrainIds.includes(item.id);
+  const sharedPerm = getSharedPermission(item.id);
+  const isPublicItem = (item as any).isPublic;
+  const terrainPartnerInfo = partnerUserIds.get((item as any).userId || '');
+  return (
+    <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
+      <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
+        {item.photos && item.photos.length > 0 ? (
+          <Image source={{ uri: item.photos[0] }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.terrain }} cachePolicy="memory-disk" recyclingKey={item.id} />
+        ) : <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />}
+        {isFavorite ? <View style={styles.favoriteBadge}><MaterialIcons name="favorite" size={10} color={theme.error} /></View>
+        : isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
+        : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+      </View>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.city}</Text></View>
+          {item.clubName ? <View style={styles.metaItem}><MaterialIcons name="home" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.clubName}</Text></View> : null}
+        </View>
+        <View style={styles.itemTags}>
+          {terrainPartnerInfo ? (
+            <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : terrainPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+              <MaterialIcons name={terrainPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
+              <Text style={[styles.tagText, { color: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
+                {terrainPartnerInfo.tier === 'gold_sponsor' ? 'Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{t('terrainTypes', item.type)}</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.courtsCount} {item.courtsCount > 1 ? t('directory', 'terrainCountPlural') : t('directory', 'terrainCount')}</Text></View>
+          {item.lighting ? <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="lightbulb" size={10} color={theme.warning} /></View> : null}
+          {item.covered ? <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="roofing" size={10} color={theme.primary} /></View> : null}
+          {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
+        </View>
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
+
+const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, language, getStatusLabel }: {
+  item: Tournament; getSharedPermission: (id: string) => string | null;
+  t: (s: string, k: string) => string; language: string; getStatusLabel: (s: string) => string;
+}) => {
+  const statusConfig: Record<string, { bg: string; color: string }> = {
+    'À venir': { bg: theme.primary + '15', color: theme.primary },
+    'En cours': { bg: theme.warning + '15', color: theme.warning },
+    'Terminé': { bg: theme.backgroundSecondary, color: theme.textSecondary },
+  };
+  const status = statusConfig[item.status] || statusConfig['Terminé'];
+  const sharedPerm = getSharedPermission(item.id);
+  const isPublicItem = (item as any).isPublic;
+  return (
+    <Pressable style={styles.itemCard} onPress={() => router.push(`/tournament/${item.id}`)}>
+      <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
+        <MaterialIcons name="emoji-events" size={24} color="#FFF" />
+        {isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
+        : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
+      </View>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.metaItem}><MaterialIcons name="event" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{new Date(item.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text></View>
+          <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.terrainName || item.location.city}</Text></View>
+        </View>
+        <View style={styles.itemTags}>
+          <View style={[styles.tag, { backgroundColor: status.bg }]}><Text style={[styles.tagText, { color: status.color }]}>{getStatusLabel(item.status)}</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('formats', item.format)}</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('tournamentTypes', item.type)}</Text></View>
+        </View>
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
+
+const MemoizedEventCard = React.memo(({ item, language }: { item: any; language: string }) => {
+  const ev = item as SponsoredEvent;
+  const evDate = new Date(ev.startTime);
+  const endDate = new Date(ev.endTime);
+  const isActive = ev.status === 'active' || (ev.status === 'upcoming' && new Date() >= evDate && new Date() <= endDate);
+  const sc = isActive ? '#22C55E' : ev.status === 'completed' ? '#3B82F6' : ev.status === 'cancelled' ? '#EF4444' : '#F59E0B';
+  const typeColor: Record<string, string> = { '10_tirs': '#2563EB', '10_tirs_sautee': '#D97706', precision: '#7C3AED' };
+  const tc = typeColor[ev.challengeType] || '#7C3AED';
+  const challengeLabel = ev.challengeType === '10_tirs' ? '10 Tirs' : ev.challengeType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : (language === 'fr' ? 'Precision' : 'Precision');
+  return (
+    <Pressable style={[styles.itemCard, { borderLeftWidth: 3, borderLeftColor: sc }]} onPress={() => router.push(`/sponsored-event/${ev.id}` as any)}>
+      <View style={[styles.itemAvatar, { backgroundColor: tc + '15' }]}>
+        <MaterialIcons name={ev.challengeType === '10_tirs' ? 'gps-fixed' : ev.challengeType === 'precision' ? 'stars' : 'flight-takeoff'} size={24} color={tc} />
+      </View>
+      <View style={styles.itemContent}>
+        <Text style={styles.itemTitle} numberOfLines={1}>{ev.title}</Text>
+        <View style={styles.itemMeta}>
+          <View style={styles.metaItem}><MaterialIcons name="event" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{evDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text></View>
+          {ev.ambassadorName ? <View style={styles.metaItem}><MaterialIcons name="verified" size={12} color="#7C3AED" /><Text style={[styles.metaText, { color: '#7C3AED' }]}>{ev.ambassadorName}</Text></View> : null}
+        </View>
+        <View style={styles.itemTags}>
+          <View style={[styles.tag, { backgroundColor: sc + '15' }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc }} /><Text style={[styles.tagText, { color: sc }]}>{isActive ? (language === 'fr' ? 'En cours' : 'Active') : ev.status === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : ev.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')}</Text></View>
+          <View style={[styles.tag, { backgroundColor: tc + '12' }]}><Text style={[styles.tagText, { color: tc }]}>{challengeLabel}</Text></View>
+          <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><MaterialIcons name="group" size={10} color={theme.textSecondary} /><Text style={[styles.tagText, { color: theme.textSecondary }]}>{ev.maxParticipants}</Text></View>
+        </View>
+      </View>
+      <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
+    </Pressable>
+  );
+});
 
 // Filter Section Component
 function FilterSection({ 
