@@ -1664,6 +1664,10 @@ export default function LeaderboardScreen() {
           showsVerticalScrollIndicator={false}
           onEndReached={handleLoadMore}
           onEndReachedThreshold={0.4}
+          removeClippedSubviews={true}
+          windowSize={7}
+          maxToRenderPerBatch={10}
+          initialNumToRender={15}
           ListHeaderComponent={
             <View>
 

@@ -2,10 +2,9 @@
  * WeeklyStatsCard — Weekly summary card for the Stats tab.
  * Shows win rate trend vs last week, best performance, and sparkline daily activity.
  */
-import React, { useMemo } from 'react';
+import React, { useMemo, memo } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-import Animated, { FadeInDown } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
@@ -13,7 +12,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { computeStreakFromDates, getDailyActivityLast7Days } from '@/services/streakService';
 import { extraTranslations } from '@/constants/i18nExtra';
 
-export default function WeeklyStatsCard() {
+function WeeklyStatsCard() {
   const { matches, challenges } = useApp();
   const { t, language } = useLanguage();
   const et = extraTranslations.streak;
@@ -72,7 +71,7 @@ export default function WeeklyStatsCard() {
   if (matches.length === 0 && challenges.length === 0) return null;
 
   return (
-    <Animated.View entering={FadeInDown.duration(400)} style={{ marginBottom: 16 }}>
+    <View style={{ marginBottom: 16 }}>
       <View style={s.card}>
         {/* Header */}
         <View style={s.header}>
@@ -176,9 +175,11 @@ export default function WeeklyStatsCard() {
           <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
         </Pressable>
       </View>
-    </Animated.View>
+    </View>
   );
 }
+
+export default memo(WeeklyStatsCard);
 
 const s = StyleSheet.create({
   card: {
