@@ -19,6 +19,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Tournament, Match } from '@/types/petanque';
 import AdBanner from '@/components/ui/AdBanner';
+import { fetchEloSeasons, getEloRank, getEloColor, EloSeasonEntry, ELO_RANKS, checkAndApplySeasonalReset } from '@/services/eloService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -272,6 +273,23 @@ export default function PalmaresScreen() {
   const [showFormatStats, setShowFormatStats] = useState(false);
   const [showTournamentDetails, setShowTournamentDetails] = useState(false);
   const [showHeaderFilters, setShowHeaderFilters] = useState(false);
+
+  // ELO Seasons
+  const [eloSeasons, setEloSeasons] = useState<EloSeasonEntry[]>([]);
+  const [eloSeasonsLoading, setEloSeasonsLoading] = useState(true);
+  const { selfPlayer } = useApp();
+
+  // Load ELO seasons and check for seasonal reset
+  React.useEffect(() => {
+    if (!selfPlayer) { setEloSeasonsLoading(false); return; }
+    // Check seasonal reset on mount
+    checkAndApplySeasonalReset().catch(() => {});
+    // Fetch seasons
+    fetchEloSeasons(selfPlayer.id).then(({ seasons }) => {
+      setEloSeasons(seasons);
+      setEloSeasonsLoading(false);
+    }).catch(() => setEloSeasonsLoading(false));
+  }, [selfPlayer?.id]);
 
   // Build palmares data
   const allPalmaresData = useMemo(() => {
@@ -664,6 +682,97 @@ export default function PalmaresScreen() {
 
 
             {/* ============ TOURNAMENT LIST TOGGLE ============ */}
+            {/* ============ ELO SEASONS HISTORY ============ */}
+            <View style={styles.eloSeasonsSection}>
+              <View style={styles.eloSeasonsHeader}>
+                <View style={[styles.eloSeasonsIconBox, { backgroundColor: '#9333EA15' }]}>
+                  <MaterialIcons name="diamond" size={18} color="#9333EA" />
+                </View>
+                <Text style={styles.eloSeasonsTitle}>{t('leaderboard', 'eloSeasons')}</Text>
+              </View>
+
+              {eloSeasonsLoading ? (
+                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                  <ActivityIndicator size="small" color="#9333EA" />
+                </View>
+              ) : eloSeasons.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                  <MaterialIcons name="history" size={36} color={theme.textMuted} />
+                  <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8, textAlign: 'center' }}>
+                    {t('leaderboard', 'eloNoSeasons')}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, textAlign: 'center', paddingHorizontal: 24 }}>
+                    {t('leaderboard', 'eloNoSeasonsDesc')}
+                  </Text>
+                </View>
+              ) : (
+                eloSeasons.map((season, idx) => {
+                  const rank = getEloRank(season.finalElo);
+                  const peakRank = getEloRank(season.peakElo);
+                  return (
+                    <Animated.View key={season.id} entering={FadeInDown.duration(300).delay(idx * 60)}>
+                      <View style={[styles.eloSeasonCard, { borderLeftColor: rank.color, borderLeftWidth: 4 }]}>
+                        <View style={styles.eloSeasonCardHeader}>
+                          <View style={[styles.eloSeasonYearBadge, { backgroundColor: rank.color + '15' }]}>
+                            <MaterialIcons name={rank.icon as any} size={18} color={rank.color} />
+                            <Text style={[styles.eloSeasonYear, { color: rank.color }]}>{season.seasonYear}</Text>
+                          </View>
+                          <View style={{ flex: 1 }} />
+                          <View style={[styles.eloSeasonRankBadge, { backgroundColor: rank.color + '12', borderColor: rank.color + '30' }]}>
+                            <Text style={[styles.eloSeasonRankText, { color: rank.color }]}>
+                              {rank.label[language === 'fr' ? 'fr' : 'en']}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={styles.eloSeasonStatsRow}>
+                          <View style={styles.eloSeasonStat}>
+                            <Text style={[styles.eloSeasonStatValue, { color: rank.color }]}>{season.finalElo}</Text>
+                            <Text style={styles.eloSeasonStatLabel}>{t('leaderboard', 'eloFinalElo')}</Text>
+                          </View>
+                          <View style={styles.eloSeasonStat}>
+                            <Text style={[styles.eloSeasonStatValue, { color: peakRank.color }]}>{season.peakElo}</Text>
+                            <Text style={styles.eloSeasonStatLabel}>{t('leaderboard', 'eloPeakElo')}</Text>
+                          </View>
+                          <View style={styles.eloSeasonStat}>
+                            <Text style={styles.eloSeasonStatValue}>{season.matchesPlayed}</Text>
+                            <Text style={styles.eloSeasonStatLabel}>{t('palmares', 'matchs')}</Text>
+                          </View>
+                          <View style={styles.eloSeasonStat}>
+                            <Text style={[styles.eloSeasonStatValue, { color: theme.success }]}>{season.wins}</Text>
+                            <Text style={styles.eloSeasonStatLabel}>{t('palmares', 'victoires')}</Text>
+                          </View>
+                        </View>
+                        {/* Role ELOs */}
+                        {(season.eloTireur && season.eloTireur !== 1000) || (season.eloPointeur && season.eloPointeur !== 1000) || (season.eloMilieu && season.eloMilieu !== 1000) ? (
+                          <View style={styles.eloSeasonRolesRow}>
+                            {season.eloTireur && season.eloTireur !== 1000 ? (
+                              <View style={[styles.eloSeasonRoleBadge, { backgroundColor: '#F9731612' }]}>
+                                <MaterialIcons name="gps-fixed" size={10} color="#F97316" />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#F97316' }}>{season.eloTireur}</Text>
+                              </View>
+                            ) : null}
+                            {season.eloPointeur && season.eloPointeur !== 1000 ? (
+                              <View style={[styles.eloSeasonRoleBadge, { backgroundColor: '#3B82F612' }]}>
+                                <MaterialIcons name="adjust" size={10} color="#3B82F6" />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6' }}>{season.eloPointeur}</Text>
+                              </View>
+                            ) : null}
+                            {season.eloMilieu && season.eloMilieu !== 1000 ? (
+                              <View style={[styles.eloSeasonRoleBadge, { backgroundColor: '#8B5CF612' }]}>
+                                <MaterialIcons name="swap-horiz" size={10} color="#8B5CF6" />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6' }}>{season.eloMilieu}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        ) : null}
+                      </View>
+                    </Animated.View>
+                  );
+                })
+              )}
+            </View>
+
+
             {palmaresData.length > 0 ? (
               <Pressable style={styles.toggleDetailsBtn} onPress={() => { Haptics.selectionAsync(); setShowTournamentDetails(!showTournamentDetails); }}>
                 <MaterialIcons name={showTournamentDetails ? 'expand-less' : 'expand-more'} size={16} color={theme.textSecondary} />
@@ -925,4 +1034,22 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 260, marginBottom: 24 },
   emptyButton: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   emptyButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+
+  // ELO Seasons
+  eloSeasonsSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  eloSeasonsHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 14 },
+  eloSeasonsIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  eloSeasonsTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
+  eloSeasonCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10 },
+  eloSeasonCardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 12 },
+  eloSeasonYearBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
+  eloSeasonYear: { fontSize: 16, fontWeight: '800' as const },
+  eloSeasonRankBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+  eloSeasonRankText: { fontSize: 12, fontWeight: '700' as const },
+  eloSeasonStatsRow: { flexDirection: 'row' as const, gap: 8 },
+  eloSeasonStat: { flex: 1, alignItems: 'center' as const },
+  eloSeasonStatValue: { fontSize: 17, fontWeight: '800' as const, color: theme.textPrimary },
+  eloSeasonStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600' as const },
+  eloSeasonRolesRow: { flexDirection: 'row' as const, gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  eloSeasonRoleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
 });

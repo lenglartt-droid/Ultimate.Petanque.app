@@ -53,6 +53,10 @@ export interface Player {
   isPublic?: boolean;
   showContactPublic?: boolean;
   eloRating?: number;
+  eloTireur?: number;
+  eloPointeur?: number;
+  eloMilieu?: number;
+  lastMatchDate?: string;
   location?: {
     latitude: number;
     longitude: number;
@@ -103,6 +107,10 @@ export interface Club {
   isPublic?: boolean;
   showContactPublic?: boolean;
   eloRating?: number;
+  eloTireur?: number;
+  eloPointeur?: number;
+  eloMilieu?: number;
+  lastMatchDate?: string;
   clubCardUrl?: string;
   website?: string;
   facebookUrl?: string;

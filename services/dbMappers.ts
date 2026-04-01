@@ -28,6 +28,10 @@ export function mapPlayerFromDb(p: any): Player {
     terrainName: p.terrain_name, isPublic: p.is_public ?? false,
     showContactPublic: p.show_contact_public ?? false,
     eloRating: p.elo_rating || 1000,
+    eloTireur: p.elo_tireur || 1000,
+    eloPointeur: p.elo_pointeur || 1000,
+    eloMilieu: p.elo_milieu || 1000,
+    lastMatchDate: p.last_match_date || undefined,
     stats: p.stats || {
       matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
       tirRate: 0, pointRate: 0, carreauRate: 0,

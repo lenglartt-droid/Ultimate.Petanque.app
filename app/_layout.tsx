@@ -280,13 +280,7 @@ function LayoutInner() {
                   animation: 'slide_from_bottom',
                 }} 
               />
-              <Stack.Screen 
-                name="player/compare" 
-                options={{ 
-                  presentation: 'card',
-                  animation: 'slide_from_right',
-                }} 
-              />
+
               <Stack.Screen 
                 name="player/me" 
                 options={{ 

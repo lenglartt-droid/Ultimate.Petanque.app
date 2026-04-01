@@ -82,7 +82,10 @@ export async function addMatchOp(
         newMatch.teamA.players,
         newMatch.teamB.players,
         newMatch.winner,
-        participantIds
+        participantIds,
+        newMatch.teamA.score,
+        newMatch.teamB.score,
+        newMatch.playerActions
       ).catch(e => console.log('[ELO] Error:', e));
       // Detect and notify ranking changes after match save (fire-and-forget)
       setTimeout(() => detectAndNotifyRankingChanges().catch(() => {}), 2000);

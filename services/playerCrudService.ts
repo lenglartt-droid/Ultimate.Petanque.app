@@ -111,6 +111,11 @@ export async function updatePlayerOp(
     if (updates.isPublic !== undefined) dbUpdates.is_public = updates.isPublic;
     if (updates.showContactPublic !== undefined) dbUpdates.show_contact_public = updates.showContactPublic;
     if (updates.stats !== undefined) dbUpdates.stats = updates.stats;
+    if (updates.eloRating !== undefined) dbUpdates.elo_rating = updates.eloRating;
+    if ((updates as any).eloTireur !== undefined) dbUpdates.elo_tireur = (updates as any).eloTireur;
+    if ((updates as any).eloPointeur !== undefined) dbUpdates.elo_pointeur = (updates as any).eloPointeur;
+    if ((updates as any).eloMilieu !== undefined) dbUpdates.elo_milieu = (updates as any).eloMilieu;
+    if ((updates as any).lastMatchDate !== undefined) dbUpdates.last_match_date = (updates as any).lastMatchDate;
     dbUpdates.updated_at = new Date().toISOString();
 
     await supabase.from('players').update(dbUpdates).eq('id', id);

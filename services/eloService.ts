@@ -6,6 +6,11 @@
  * - Adaptive K-factor: 40 (<10 matches), 20 (10-30), 10 (30+)
  * - Match validation weight multiplier from trustScoreService
  * - ELO history tracking for progression charts
+ * - Score margin bonus (13-0 has more impact than 13-12)
+ * - Inactivity decay (-10/month after 30 days, floor 800)
+ * - Match prediction (probability + estimated delta)
+ * - Role-specific ELO (Tireur/Pointeur/Milieu)
+ * - Seasonal reset (annual compression towards 1000)
  */
 import { getSupabaseClient } from '@/template';
 import { getMatchValidationWeight } from '@/services/trustScoreService';
@@ -26,6 +31,29 @@ export interface EloHistoryEntry {
   recordedAt: string;
 }
 
+export interface EloSeasonEntry {
+  id: string;
+  userId: string;
+  playerId: string;
+  seasonYear: number;
+  peakElo: number;
+  finalElo: number;
+  finalRank: string;
+  matchesPlayed: number;
+  wins: number;
+  eloTireur?: number;
+  eloPointeur?: number;
+  eloMilieu?: number;
+  createdAt: string;
+}
+
+export interface MatchPrediction {
+  teamAWinProbability: number;
+  teamBWinProbability: number;
+  estimatedDeltaIfAWins: number;
+  estimatedDeltaIfBWins: number;
+}
+
 export type EloRankTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'master';
 
 export interface EloRankInfo {
@@ -40,6 +68,10 @@ export interface EloRankInfo {
 // CONSTANTS
 // ============================================
 export const ELO_INITIAL = 1000;
+export const ELO_INACTIVITY_THRESHOLD_DAYS = 30;
+export const ELO_INACTIVITY_DECAY_PER_MONTH = 10;
+export const ELO_INACTIVITY_FLOOR = 800;
+export const ELO_SEASON_COMPRESSION = 0.75;
 
 export const ELO_RANKS: EloRankInfo[] = [
   { tier: 'master', label: { fr: 'Maitre', en: 'Master' }, color: '#9333EA', icon: 'auto-awesome', minElo: 1800 },
@@ -72,6 +104,7 @@ export function expectedScore(playerElo: number, opponentElo: number): number {
  * @param won Whether the player won
  * @param matchesPlayed Number of matches played (for K-factor)
  * @param validationWeight Match validation weight (0.3-2.0)
+ * @param scoreMarginMultiplier Score margin bonus (1.0-1.5)
  * @returns New ELO rating and delta
  */
 export function calculateElo(
@@ -79,18 +112,106 @@ export function calculateElo(
   opponentElo: number,
   won: boolean,
   matchesPlayed: number,
-  validationWeight: number = 1.0
+  validationWeight: number = 1.0,
+  scoreMarginMultiplier: number = 1.0
 ): { newElo: number; delta: number } {
   const K = getKFactor(matchesPlayed);
   const expected = expectedScore(playerElo, opponentElo);
   const actual = won ? 1 : 0;
   
-  // Apply validation weight to K-factor (stronger matches have more impact)
-  const adjustedK = K * Math.min(validationWeight, 2.0);
+  // Apply validation weight and score margin bonus to K-factor
+  const adjustedK = K * Math.min(validationWeight, 2.0) * Math.min(scoreMarginMultiplier, 1.5);
   const delta = Math.round(adjustedK * (actual - expected));
   const newElo = Math.max(100, playerElo + delta); // Floor at 100
   
   return { newElo, delta };
+}
+
+// ============================================
+// SCORE MARGIN BONUS
+// ============================================
+
+/**
+ * Calculate score margin multiplier.
+ * A 13-0 win has 1.5x impact, a 13-12 win has ~1.04x impact.
+ * Formula: 1 + (winnerScore - loserScore) / (2 * winnerScore), capped at 1.5
+ */
+export function getScoreMarginMultiplier(winnerScore: number, loserScore: number): number {
+  if (winnerScore <= 0) return 1.0;
+  const margin = (winnerScore - loserScore) / (2 * winnerScore);
+  return Math.min(1 + margin, 1.5);
+}
+
+// ============================================
+// MATCH PREDICTION
+// ============================================
+
+/**
+ * Predict match outcome based on team ELO averages.
+ * Returns win probabilities and estimated ELO deltas.
+ */
+export function predictMatch(
+  teamAElos: number[],
+  teamBElos: number[],
+  kFactor: number = 20
+): MatchPrediction {
+  if (teamAElos.length === 0 || teamBElos.length === 0) {
+    return { teamAWinProbability: 50, teamBWinProbability: 50, estimatedDeltaIfAWins: 0, estimatedDeltaIfBWins: 0 };
+  }
+  const avgA = Math.round(teamAElos.reduce((a, b) => a + b, 0) / teamAElos.length);
+  const avgB = Math.round(teamBElos.reduce((a, b) => a + b, 0) / teamBElos.length);
+  const probA = Math.round(expectedScore(avgA, avgB) * 100);
+  const probB = 100 - probA;
+  const deltaIfAWins = Math.round(kFactor * (1 - expectedScore(avgA, avgB)));
+  const deltaIfBWins = Math.round(kFactor * (1 - expectedScore(avgB, avgA)));
+  return {
+    teamAWinProbability: probA,
+    teamBWinProbability: probB,
+    estimatedDeltaIfAWins: deltaIfAWins,
+    estimatedDeltaIfBWins: deltaIfBWins,
+  };
+}
+
+// ============================================
+// INACTIVITY DECAY
+// ============================================
+
+/**
+ * Calculate ELO decay for inactive players.
+ * -10 per month after 30 days of inactivity, floor at 800.
+ * @returns decayed ELO and the decay amount (0 if not decayed)
+ */
+export function calculateInactivityDecay(
+  currentElo: number,
+  lastMatchDate: string | null | undefined
+): { decayedElo: number; decayAmount: number } {
+  if (!lastMatchDate) return { decayedElo: currentElo, decayAmount: 0 };
+  const lastMatch = new Date(lastMatchDate);
+  const now = new Date();
+  const daysSinceLastMatch = Math.floor((now.getTime() - lastMatch.getTime()) / (1000 * 60 * 60 * 24));
+  
+  if (daysSinceLastMatch < ELO_INACTIVITY_THRESHOLD_DAYS) {
+    return { decayedElo: currentElo, decayAmount: 0 };
+  }
+  
+  const monthsInactive = Math.floor((daysSinceLastMatch - ELO_INACTIVITY_THRESHOLD_DAYS) / 30) + 1;
+  const totalDecay = monthsInactive * ELO_INACTIVITY_DECAY_PER_MONTH;
+  const decayedElo = Math.max(ELO_INACTIVITY_FLOOR, currentElo - totalDecay);
+  const actualDecay = currentElo - decayedElo;
+  
+  return { decayedElo, decayAmount: actualDecay };
+}
+
+// ============================================
+// SEASONAL RESET
+// ============================================
+
+/**
+ * Apply seasonal ELO compression towards 1000.
+ * Formula: newElo = 1000 + (currentElo - 1000) * 0.75
+ */
+export function applySeasonalCompression(currentElo: number): number {
+  return Math.round(ELO_INITIAL + (currentElo - ELO_INITIAL) * ELO_SEASON_COMPRESSION);
 }
 
 /** Get rank tier from ELO rating */
@@ -215,25 +336,34 @@ export async function recalculateAllElo(): Promise<{ success: boolean; error: st
 /**
  * Update ELO ratings after a single match.
  * Called after match creation/save.
+ * Includes score margin bonus and role-specific ELO.
  */
 export async function updateEloAfterMatch(
   matchId: string,
   teamAPlayerIds: string[],
   teamBPlayerIds: string[],
   winner: 'A' | 'B',
-  participantUserIds: string[]
+  participantUserIds: string[],
+  scoreA?: number,
+  scoreB?: number,
+  playerActions?: any[]
 ): Promise<void> {
   if (participantUserIds.length < 2) return; // Skip solo matches
 
   const supabase = getSupabaseClient();
   const validationWeight = getMatchValidationWeight(participantUserIds.length);
 
+  // Calculate score margin multiplier
+  const winnerScore = winner === 'A' ? (scoreA || 13) : (scoreB || 13);
+  const loserScore = winner === 'A' ? (scoreB || 0) : (scoreA || 0);
+  const marginMultiplier = getScoreMarginMultiplier(winnerScore, loserScore);
+
   try {
     // Fetch current ELO and stats for all players in the match
     const allPlayerIds = [...teamAPlayerIds, ...teamBPlayerIds];
     const { data: playersData } = await supabase
       .from('players')
-      .select('id, user_id, name, elo_rating, stats')
+      .select('id, user_id, name, elo_rating, elo_tireur, elo_pointeur, elo_milieu, stats')
       .in('id', allPlayerIds);
 
     if (!playersData || playersData.length === 0) return;
@@ -249,11 +379,27 @@ export async function updateEloAfterMatch(
     const avgEloA = Math.round(teamAElos.reduce((a, b) => a + b, 0) / teamAElos.length);
     const avgEloB = Math.round(teamBElos.reduce((a, b) => a + b, 0) / teamBElos.length);
 
+    // Build player role map from playerActions
+    const playerRoleMap = new Map<string, string>();
+    if (playerActions) {
+      for (const pa of playerActions) {
+        // Detect role from action distribution
+        if (pa.playerId) {
+          const tirs = pa.actions?.tirs || 0;
+          const points = pa.actions?.points || 0;
+          if (tirs > points * 2) playerRoleMap.set(pa.playerId, 'tireur');
+          else if (points > tirs * 2) playerRoleMap.set(pa.playerId, 'pointeur');
+          else playerRoleMap.set(pa.playerId, 'milieu');
+        }
+      }
+    }
+
     // Get opponent team names for history
     const teamANames = teamAPlayerIds.map(id => playerMap.get(id)?.name || '').filter(Boolean).join(', ');
     const teamBNames = teamBPlayerIds.map(id => playerMap.get(id)?.name || '').filter(Boolean).join(', ');
 
     const historyRows: any[] = [];
+    const now = new Date().toISOString();
 
     // Update team A players
     for (const pid of teamAPlayerIds) {
@@ -262,9 +408,26 @@ export async function updateEloAfterMatch(
       const currentElo = p.elo_rating || ELO_INITIAL;
       const mc = p.stats?.matchesPlayed || 0;
       const won = winner === 'A';
-      const { newElo, delta } = calculateElo(currentElo, avgEloB, won, mc, validationWeight);
+      const { newElo, delta } = calculateElo(currentElo, avgEloB, won, mc, validationWeight, marginMultiplier);
       
-      await supabase.from('players').update({ elo_rating: newElo }).eq('id', pid);
+      // Role-specific ELO update
+      const roleKey = playerRoleMap.get(pid);
+      const roleUpdates: any = { elo_rating: newElo, last_match_date: now };
+      if (roleKey === 'tireur') {
+        const roleElo = p.elo_tireur || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloB, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_tireur = newRoleElo;
+      } else if (roleKey === 'pointeur') {
+        const roleElo = p.elo_pointeur || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloB, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_pointeur = newRoleElo;
+      } else if (roleKey === 'milieu') {
+        const roleElo = p.elo_milieu || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloB, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_milieu = newRoleElo;
+      }
+
+      await supabase.from('players').update(roleUpdates).eq('id', pid);
 
       if (p.user_id) {
         historyRows.push({
@@ -288,9 +451,26 @@ export async function updateEloAfterMatch(
       const currentElo = p.elo_rating || ELO_INITIAL;
       const mc = p.stats?.matchesPlayed || 0;
       const won = winner === 'B';
-      const { newElo, delta } = calculateElo(currentElo, avgEloA, won, mc, validationWeight);
+      const { newElo, delta } = calculateElo(currentElo, avgEloA, won, mc, validationWeight, marginMultiplier);
       
-      await supabase.from('players').update({ elo_rating: newElo }).eq('id', pid);
+      // Role-specific ELO update
+      const roleKey = playerRoleMap.get(pid);
+      const roleUpdates: any = { elo_rating: newElo, last_match_date: now };
+      if (roleKey === 'tireur') {
+        const roleElo = p.elo_tireur || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloA, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_tireur = newRoleElo;
+      } else if (roleKey === 'pointeur') {
+        const roleElo = p.elo_pointeur || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloA, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_pointeur = newRoleElo;
+      } else if (roleKey === 'milieu') {
+        const roleElo = p.elo_milieu || ELO_INITIAL;
+        const { newElo: newRoleElo } = calculateElo(roleElo, avgEloA, won, mc, validationWeight, marginMultiplier);
+        roleUpdates.elo_milieu = newRoleElo;
+      }
+
+      await supabase.from('players').update(roleUpdates).eq('id', pid);
 
       if (p.user_id) {
         historyRows.push({
@@ -368,5 +548,207 @@ export async function fetchPlayerElo(playerId: string): Promise<number> {
     return data?.elo_rating || ELO_INITIAL;
   } catch {
     return ELO_INITIAL;
+  }
+}
+
+/**
+ * Fetch role-specific ELO for a player
+ */
+export async function fetchPlayerRoleElos(playerId: string): Promise<{ tireur: number; pointeur: number; milieu: number }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data } = await supabase
+      .from('players')
+      .select('elo_tireur, elo_pointeur, elo_milieu')
+      .eq('id', playerId)
+      .single();
+    return {
+      tireur: data?.elo_tireur || ELO_INITIAL,
+      pointeur: data?.elo_pointeur || ELO_INITIAL,
+      milieu: data?.elo_milieu || ELO_INITIAL,
+    };
+  } catch {
+    return { tireur: ELO_INITIAL, pointeur: ELO_INITIAL, milieu: ELO_INITIAL };
+  }
+}
+
+// ============================================
+// SEASONAL OPERATIONS
+// ============================================
+
+/**
+ * Check if seasonal reset is needed and apply it.
+ * Runs on Jan 1: archives previous season, compresses ELO.
+ */
+export async function checkAndApplySeasonalReset(): Promise<{ applied: boolean; playersReset: number; season: number }> {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const previousYear = currentYear - 1;
+  const supabase = getSupabaseClient();
+
+  try {
+    // Check if we already archived the previous season
+    const { data: existing } = await supabase
+      .from('elo_seasons')
+      .select('id')
+      .eq('season_year', previousYear)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      return { applied: false, playersReset: 0, season: previousYear };
+    }
+
+    // Only apply in January (grace period)
+    if (now.getMonth() > 0) {
+      return { applied: false, playersReset: 0, season: previousYear };
+    }
+
+    // Fetch all players with ELO data
+    const { data: playersData } = await supabase
+      .from('players')
+      .select('id, user_id, elo_rating, elo_tireur, elo_pointeur, elo_milieu, stats');
+
+    if (!playersData || playersData.length === 0) {
+      return { applied: false, playersReset: 0, season: previousYear };
+    }
+
+    // Find peak ELO for each player from elo_history for the previous year
+    const yearStart = `${previousYear}-01-01T00:00:00Z`;
+    const yearEnd = `${previousYear}-12-31T23:59:59Z`;
+    const { data: historyData } = await supabase
+      .from('elo_history')
+      .select('player_id, elo_after')
+      .gte('recorded_at', yearStart)
+      .lte('recorded_at', yearEnd);
+
+    const peakEloMap = new Map<string, number>();
+    if (historyData) {
+      for (const h of historyData) {
+        const current = peakEloMap.get(h.player_id) || ELO_INITIAL;
+        if (h.elo_after > current) peakEloMap.set(h.player_id, h.elo_after);
+      }
+    }
+
+    // Archive and compress
+    const seasonRows: any[] = [];
+    let resetCount = 0;
+
+    for (const p of playersData) {
+      const finalElo = p.elo_rating || ELO_INITIAL;
+      const peakElo = Math.max(peakEloMap.get(p.id) || finalElo, finalElo);
+      const rank = getEloRank(finalElo);
+
+      // Archive season
+      if (p.user_id) {
+        seasonRows.push({
+          user_id: p.user_id,
+          player_id: p.id,
+          season_year: previousYear,
+          peak_elo: peakElo,
+          final_elo: finalElo,
+          final_rank: rank.tier,
+          matches_played: p.stats?.matchesPlayed || 0,
+          wins: p.stats?.wins || 0,
+          elo_tireur: p.elo_tireur || ELO_INITIAL,
+          elo_pointeur: p.elo_pointeur || ELO_INITIAL,
+          elo_milieu: p.elo_milieu || ELO_INITIAL,
+        });
+      }
+
+      // Apply compression
+      const newElo = applySeasonalCompression(finalElo);
+      const newTireur = applySeasonalCompression(p.elo_tireur || ELO_INITIAL);
+      const newPointeur = applySeasonalCompression(p.elo_pointeur || ELO_INITIAL);
+      const newMilieu = applySeasonalCompression(p.elo_milieu || ELO_INITIAL);
+
+      await supabase.from('players').update({
+        elo_rating: newElo,
+        elo_tireur: newTireur,
+        elo_pointeur: newPointeur,
+        elo_milieu: newMilieu,
+      }).eq('id', p.id);
+      resetCount++;
+    }
+
+    // Insert season archives in batches
+    for (let i = 0; i < seasonRows.length; i += 50) {
+      const batch = seasonRows.slice(i, i + 50);
+      await supabase.from('elo_seasons').upsert(batch, { onConflict: 'player_id,season_year' });
+    }
+
+    return { applied: true, playersReset: resetCount, season: previousYear };
+  } catch (e: any) {
+    console.log('[ELO] Seasonal reset error:', e);
+    return { applied: false, playersReset: 0, season: previousYear };
+  }
+}
+
+/**
+ * Fetch ELO season history for a player.
+ */
+export async function fetchEloSeasons(playerId: string): Promise<{ seasons: EloSeasonEntry[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('elo_seasons')
+      .select('*')
+      .eq('player_id', playerId)
+      .order('season_year', { ascending: false });
+
+    if (error) return { seasons: [], error: error.message };
+
+    const seasons: EloSeasonEntry[] = (data || []).map((row: any) => ({
+      id: row.id,
+      userId: row.user_id,
+      playerId: row.player_id,
+      seasonYear: row.season_year,
+      peakElo: row.peak_elo,
+      finalElo: row.final_elo,
+      finalRank: row.final_rank,
+      matchesPlayed: row.matches_played,
+      wins: row.wins,
+      eloTireur: row.elo_tireur,
+      eloPointeur: row.elo_pointeur,
+      eloMilieu: row.elo_milieu,
+      createdAt: row.created_at,
+    }));
+
+    return { seasons, error: null };
+  } catch (e: any) {
+    return { seasons: [], error: e.message || 'Failed to fetch ELO seasons' };
+  }
+}
+
+/**
+ * Apply inactivity decay to all players who haven't played in 30+ days.
+ * Should be called periodically (e.g., weekly cron or on leaderboard load).
+ */
+export async function applyInactivityDecay(): Promise<{ playersDecayed: number }> {
+  const supabase = getSupabaseClient();
+  try {
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - ELO_INACTIVITY_THRESHOLD_DAYS);
+
+    const { data: inactivePlayers } = await supabase
+      .from('players')
+      .select('id, elo_rating, last_match_date')
+      .lt('last_match_date', cutoff.toISOString())
+      .gt('elo_rating', ELO_INACTIVITY_FLOOR);
+
+    if (!inactivePlayers || inactivePlayers.length === 0) return { playersDecayed: 0 };
+
+    let decayed = 0;
+    for (const p of inactivePlayers) {
+      const { decayedElo, decayAmount } = calculateInactivityDecay(p.elo_rating, p.last_match_date);
+      if (decayAmount > 0) {
+        await supabase.from('players').update({ elo_rating: decayedElo }).eq('id', p.id);
+        decayed++;
+      }
+    }
+
+    return { playersDecayed: decayed };
+  } catch (e) {
+    console.log('[ELO] Inactivity decay error:', e);
+    return { playersDecayed: 0 };
   }
 }
