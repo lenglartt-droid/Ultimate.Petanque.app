@@ -383,7 +383,7 @@ export default function MapScreen() {
   const [myItems, setMyItems] = useState<any>({ players: [], clubs: [], terrains: [], tournaments: [] });
   const [loadingPublic, setLoadingPublic] = useState(false);
   const [loadingManage, setLoadingManage] = useState(false);
-  const [showLegend, setShowLegend] = useState(false);
+
 
   // Player sub-filters (ELO rank & trust score)
   const [eloRankFilter, setEloRankFilter] = useState<EloRankTier | null>(null);
@@ -1151,68 +1151,7 @@ export default function MapScreen() {
         </View>
       </View>
 
-      {/* Legend */}
-      {Platform.OS !== 'web' ? (
-        <View style={[styles.legendContainer, { top: insets.top + 170 }]}>
-          <Pressable
-            style={styles.legendToggle}
-            onPress={() => { Haptics.selectionAsync(); setShowLegend(!showLegend); }}
-            hitSlop={8}
-          >
-            <MaterialIcons name={showLegend ? 'close' : 'info-outline'} size={18} color={theme.textSecondary} />
-          </Pressable>
-          {showLegend ? (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.legendPanel}>
-              <Text style={styles.legendTitle}>{t('map', 'legendTitle')}</Text>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: theme.success }]}>
-                  <MaterialIcons name="lock-open" size={7} color="#FFF" />
-                </View>
-                <Text style={styles.legendLabel}>{t('map', 'legendPublicAccess')}</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: '#F59E0B' }]}>
-                  <MaterialIcons name="lock" size={7} color="#FFF" />
-                </View>
-                <Text style={styles.legendLabel}>{t('map', 'legendMembersOnly')}</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={styles.legendBorderSample} />
-                <Text style={styles.legendLabel}>{t('map', 'legendPublicItem')}</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: theme.success }]}>
-                  <MaterialIcons name="sports-soccer" size={7} color="#FFF" />
-                </View>
-                <Text style={styles.legendLabel}>{t('map', 'legendFallbackTerrain')}</Text>
-              </View>
-              <View style={styles.legendRow}>
-                <View style={[styles.legendDot, { backgroundColor: theme.accent }]}>
-                  <MaterialIcons name="home" size={7} color="#FFF" />
-                </View>
-                <Text style={styles.legendLabel}>{t('map', 'legendFallbackClub')}</Text>
-              </View>
-              {/* Partner legend entries */}
-              {partnerMarkers.length > 0 ? (
-                <>
-                  <View style={[styles.legendRow, { marginTop: 4 }]}>
-                    <View style={[styles.legendDot, { backgroundColor: '#F59E0B', borderColor: '#F59E0B' }]}>
-                      <MaterialIcons name="star" size={7} color="#FFF" />
-                    </View>
-                    <Text style={styles.legendLabel}>{language === 'fr' ? 'Partenaire Or' : 'Gold Partner'}</Text>
-                  </View>
-                  <View style={styles.legendRow}>
-                    <View style={[styles.legendDot, { backgroundColor: '#90A4AE', borderColor: '#90A4AE' }]}>
-                      <MaterialIcons name="workspace-premium" size={7} color="#FFF" />
-                    </View>
-                    <Text style={styles.legendLabel}>{language === 'fr' ? 'Partenaire Argent' : 'Silver Partner'}</Text>
-                  </View>
-                </>
-              ) : null}
-            </Animated.View>
-          ) : null}
-        </View>
-      ) : null}
+
 
       {/* No-Geo Banner */}
       {noGeoCount > 0 && showNoGeoBanner && Platform.OS !== 'web' ? (
@@ -1933,24 +1872,7 @@ const styles = StyleSheet.create({
   manageEmpty: { alignItems: 'center', paddingVertical: 48 },
   manageEmptyText: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginTop: 16 },
   manageEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 20 },
-  // Legend
-  legendContainer: { position: 'absolute', left: 12, zIndex: 10, marginTop: 8 },
-  legendToggle: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    alignItems: 'center', justifyContent: 'center',
-    ...theme.shadows.card,
-  },
-  legendPanel: {
-    marginTop: 6, backgroundColor: 'rgba(255,255,255,0.97)',
-    borderRadius: theme.borderRadius.md, padding: 10,
-    ...theme.shadows.card, minWidth: 160,
-  },
-  legendTitle: { fontSize: 11, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 },
-  legendRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  legendDot: { width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF' },
-  legendLabel: { fontSize: 12, color: theme.textSecondary, fontWeight: '500' },
-  legendBorderSample: { width: 14, height: 14, borderRadius: 7, backgroundColor: theme.textMuted + '30', borderWidth: 2.5, borderColor: theme.success },
+
   // No-Geo Banner
   noGeoBanner: {
     position: 'absolute', left: 12, right: 12,
