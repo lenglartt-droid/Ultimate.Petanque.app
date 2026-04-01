@@ -7,6 +7,7 @@ import { Match } from '@/types/petanque';
 import { enqueueOperation, buildMatchDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
 import { mapMatchFromDb } from '@/services/dbMappers';
 import { snapshotRankings, detectAndNotifyRankingChanges } from '@/services/rankingChangeService';
+import { updateEloAfterMatch } from '@/services/eloService';
 
 interface MatchCrudDeps {
   supabase: any;
@@ -74,6 +75,15 @@ export async function addMatchOp(
       const updatedMatches = [newMatch, ...matches];
       const affectedPlayers = [...new Set([...newMatch.teamA.players, ...newMatch.teamB.players])];
       persistPlayerStats(updatedMatches, affectedPlayers);
+      // Update ELO ratings for all players in the match (fire-and-forget)
+      const participantIds: string[] = data.participant_user_ids || [];
+      updateEloAfterMatch(
+        data.id,
+        newMatch.teamA.players,
+        newMatch.teamB.players,
+        newMatch.winner,
+        participantIds
+      ).catch(e => console.log('[ELO] Error:', e));
       // Detect and notify ranking changes after match save (fire-and-forget)
       setTimeout(() => detectAndNotifyRankingChanges().catch(() => {}), 2000);
       return data.id;
