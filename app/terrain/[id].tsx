@@ -17,7 +17,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
@@ -29,6 +29,7 @@ import MergePickerModal from '@/components/ui/MergePickerModal';
 import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMeetupsForTerrain, Meetup } from '@/services/meetupService';
+import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -196,6 +197,9 @@ export default function TerrainDetailScreen() {
   const [meetups, setMeetups] = useState<Meetup[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(false);
 
+  // Clubs using this terrain (many-to-many: clubs.terrain_id + terrain.club_id)
+  const [linkedClubs, setLinkedClubs] = useState<{ id: string; name: string; city?: string; logo?: string }[]>([]);
+
   useEffect(() => {
     if (terrain?.id) {
       setMeetupsLoading(true);
@@ -203,8 +207,30 @@ export default function TerrainDetailScreen() {
         setMeetups(m);
         setMeetupsLoading(false);
       });
+
+      // Fetch all clubs that reference this terrain
+      const supabase = getSupabaseClient();
+      supabase
+        .from('clubs')
+        .select('id, name, city, logo')
+        .eq('terrain_id', terrain.id)
+        .then(({ data }) => {
+          const clubs: { id: string; name: string; city?: string; logo?: string }[] = [];
+          const seenIds = new Set<string>();
+          // Add clubs from DB query (clubs.terrain_id = this terrain)
+          if (data) {
+            for (const c of data) {
+              if (!seenIds.has(c.id)) { seenIds.add(c.id); clubs.push({ id: c.id, name: c.name, city: c.city, logo: c.logo }); }
+            }
+          }
+          // Also include the terrain's own clubId if not already present
+          if (terrain.clubId && !seenIds.has(terrain.clubId)) {
+            clubs.push({ id: terrain.clubId, name: terrain.clubName || '', city: undefined, logo: undefined });
+          }
+          setLinkedClubs(clubs);
+        });
     }
-  }, [terrain?.id]);
+  }, [terrain?.id, terrain?.clubId, terrain?.clubName]);
 
   // Check if terrain has photos
   const hasPhotos = terrain.photos && terrain.photos.length > 0;
@@ -301,7 +327,7 @@ export default function TerrainDetailScreen() {
       >
         {/* Photo Gallery */}
         {hasPhotos ? (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.photoSection}>
+          <View style={styles.photoSection}>
             <Image
               source={{ uri: terrain.photos![currentPhotoIndex] }}
               style={styles.mainPhoto}
@@ -347,9 +373,9 @@ export default function TerrainDetailScreen() {
                 ))}
               </ScrollView>
             )}
-          </Animated.View>
+          </View>
         ) : (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.heroSection}>
+          <View style={styles.heroSection}>
             <View style={[styles.terrainIcon, { backgroundColor: colors.bg }]}>
               <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
             </View>
@@ -364,12 +390,12 @@ export default function TerrainDetailScreen() {
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
-          </Animated.View>
+          </View>
         )}
 
         {/* Name and Type (when photos are shown) */}
         {hasPhotos && (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.nameSection}>
+          <View style={styles.nameSection}>
             <Text style={styles.terrainNameLarge}>{terrain.name}</Text>
             {sharedPermission ? (
               <View style={{ marginBottom: 8 }}>
@@ -381,11 +407,11 @@ export default function TerrainDetailScreen() {
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
-          </Animated.View>
+          </View>
         )}
 
         {/* Quick Info */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickInfoGrid}>
+        <View style={styles.quickInfoGrid}>
           <View style={styles.quickInfoItem}>
             <View style={[styles.quickInfoIcon, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
@@ -414,11 +440,11 @@ export default function TerrainDetailScreen() {
             <Text style={styles.quickInfoValue}>{terrain.publicAccess ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
             <Text style={styles.quickInfoLabel}>{t('terrain', 'accessLabel')}</Text>
           </View>
-        </Animated.View>
+        </View>
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[styles.section, isTablet && styles.tabletHalf]}>
+        <View style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('terrain', 'addressSection')}</Text>
           <Pressable style={styles.locationCard} onPress={openMaps}>
             <View style={styles.locationIcon}>
@@ -430,11 +456,44 @@ export default function TerrainDetailScreen() {
             </View>
             <MaterialIcons name="directions" size={24} color={theme.primary} />
           </Pressable>
-        </Animated.View>
+          {(terrain.location?.latitude || terrain.location?.longitude) ? (
+            <Pressable
+              style={styles.mapButton}
+              onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(terrain.location.latitude), lng: String(terrain.location.longitude), name: terrain.name } } as any)}
+            >
+              <MaterialIcons name="map" size={20} color={theme.primary} />
+              <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>
+            </Pressable>
+          ) : null}
+        </View>
 
-        {/* Club */}
-        {terrain.clubName && (
-          <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
+        {/* Clubs using this terrain */}
+        {linkedClubs.length > 0 ? (
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
+            <Text style={styles.sectionTitle}>{linkedClubs.length > 1 ? (language === 'fr' ? 'CLUBS UTILISANT CE TERRAIN' : 'CLUBS USING THIS TERRAIN') : t('terrain', 'clubSection')}</Text>
+            {linkedClubs.map((c) => (
+              <Pressable
+                key={c.id}
+                style={[styles.clubCard, linkedClubs.length > 1 && { marginBottom: 8 }]}
+                onPress={() => router.push(`/club/${c.id}`)}
+              >
+                <View style={styles.clubIcon}>
+                  {c.logo ? (
+                    <Image source={{ uri: c.logo }} style={{ width: 48, height: 48, borderRadius: 12 }} contentFit="cover" transition={200} />
+                  ) : (
+                    <MaterialIcons name="home" size={24} color={theme.accent} />
+                  )}
+                </View>
+                <View style={styles.clubInfo}>
+                  <Text style={styles.clubName}>{c.name}</Text>
+                  <Text style={styles.clubSubtitle}>{c.city || t('terrain', 'organizingClub')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+              </Pressable>
+            ))}
+          </View>
+        ) : terrain.clubName ? (
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('terrain', 'clubSection')}</Text>
             <Pressable 
               style={styles.clubCard}
@@ -449,25 +508,25 @@ export default function TerrainDetailScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
-          </Animated.View>
-        )}
+          </View>
+        ) : null}
 
         </View>
 
         {/* Description */}
         {terrain.description && (
-          <Animated.View entering={FadeInDown.duration(400).delay(250)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('terrain', 'descriptionLabel')}</Text>
             <View style={styles.descriptionCard}>
               <Text style={styles.descriptionText}>{terrain.description}</Text>
             </View>
-          </Animated.View>
+          </View>
         )}
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Facilities */}
         {terrain.facilities && terrain.facilities.length > 0 && (
-          <Animated.View entering={FadeInDown.duration(400).delay(300)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('terrain', 'facilitiesSection')}</Text>
             <View style={styles.facilitiesGrid}>
               {terrain.facilities.map((facility, index) => (
@@ -477,11 +536,11 @@ export default function TerrainDetailScreen() {
                 </View>
               ))}
             </View>
-          </Animated.View>
+          </View>
         )}
 
         {/* Terrain Type Tips */}
-        <Animated.View entering={FadeInDown.duration(400).delay(350)} style={[styles.section, isTablet && styles.tabletHalf]}>
+        <View style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('terrain', 'playingTips')}</Text>
           <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
             <View style={styles.tipsHeader}>
@@ -526,12 +585,12 @@ export default function TerrainDetailScreen() {
               )}
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         </View>
 
         {/* Upcoming Meetups */}
-        <Animated.View entering={FadeInDown.duration(400).delay(370)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.meetupSectionHeader}>
             <Text style={styles.sectionTitle}>{t('meetup', 'upcomingMeetups').toUpperCase()}</Text>
             <Pressable
@@ -577,10 +636,10 @@ export default function TerrainDetailScreen() {
               <Text style={styles.meetupEmptyText}>{t('meetup', 'noMeetups')}</Text>
             </View>
           )}
-        </Animated.View>
+        </View>
 
         {/* Associated Tournaments */}
-        <Animated.View entering={FadeInUp.duration(400).delay(400)} style={styles.section}>
+        <View style={styles.section}>
           <View style={styles.tournamentSectionHeader}>
             <Text style={styles.sectionTitle}>{t('terrain', 'associatedTournaments').toUpperCase()}</Text>
             {terrainTournaments.length > 0 ? (
@@ -677,10 +736,10 @@ export default function TerrainDetailScreen() {
               </Pressable>
             </View>
           )}
-        </Animated.View>
+        </View>
         {/* Visibility Toggle - only for owner */}
         {canEdit && !isSharedItem && (
-          <Animated.View entering={FadeInDown.duration(400).delay(420)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
             <Pressable
               style={styles.visibilityCard}
@@ -702,7 +761,7 @@ export default function TerrainDetailScreen() {
                 </Text>
               </View>
             </Pressable>
-          </Animated.View>
+          </View>
         )}
 
         {/* Modification Logs - only visible to owner */}
@@ -1175,6 +1234,21 @@ const styles = StyleSheet.create({
   locationCity: {
     fontSize: 13,
     color: theme.textSecondary,
+  },
+  mapButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: theme.primaryLight + '20',
+    paddingVertical: 12,
+    borderRadius: theme.borderRadius.md,
+    marginTop: 12,
+  },
+  mapButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: theme.primary,
   },
   clubCard: {
     flexDirection: 'row',

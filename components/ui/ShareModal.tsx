@@ -10,7 +10,9 @@ import {
   ScrollView,
   Switch,
   Dimensions,
+  Platform,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
 import * as Clipboard from 'expo-clipboard';
@@ -23,7 +25,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 import QRCode from 'react-native-qrcode-svg';
 import { config } from '@/constants/config';
-import { getEloRank } from '@/services/eloService';
+import { getEloRank, ELO_RANKS } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
@@ -70,8 +72,9 @@ interface ShareModalProps {
 }
 
 export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
+  const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
-  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, updatePlayer, updateClub, selfPlayer } = useApp();
+  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, updatePlayer, updateClub, selfPlayer, players } = useApp();
   const fr = language === 'fr';
 
   const [step, setStep] = useState<ShareStep>('options');
@@ -210,6 +213,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         handedness: p.handedness || null,
         stats: { matches: p.stats?.matchesPlayed || 0, wins: p.stats?.wins || 0, winRate: p.stats?.winRate || 0, losses: p.stats?.losses || 0 },
         hasContact: !!(p.phone || p.email),
+        phone: p.phone || null,
+        email: p.email || null,
       };
     }
     if (itemType === 'club') {
@@ -225,9 +230,12 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         foundedYear: c.foundedYear || null,
         facilities: c.facilities || [],
         hasContact: !!(c.contactEmail || c.contactPhone),
+        showContactPublic: (c as any).showContactPublic ?? false,
         description: c.description || null,
         membershipCost: c.membershipCost || null,
         website: c.website || null,
+        contactEmail: c.contactEmail || null,
+        contactPhone: c.contactPhone || null,
       };
     }
     if (itemType === 'terrain') {
@@ -468,18 +476,18 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
   }, [onClose]);
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <View style={s.overlay}>
-        <View style={s.sheet}>
-          {/* Header */}
-          <View style={s.header}>
-            <Text style={s.headerTitle}>{t('shareModal', 'shareTitle')}</Text>
-            <Pressable style={s.closeBtn} onPress={handleClose}>
-              <MaterialIcons name="close" size={22} color="#64748B" />
-            </Pressable>
-          </View>
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleClose}>
+      <SafeAreaView style={s.safeArea}>
+        {/* Header */}
+        <View style={s.header}>
+          <Pressable style={s.backBtn} onPress={handleClose}>
+            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
+          </Pressable>
+          <Text style={s.headerTitle}>{t('shareModal', 'shareTitle')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-          <ScrollView ref={scrollRef} style={s.scrollView} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" bounces={false} nestedScrollEnabled>
+        <ScrollView ref={scrollRef} style={s.scrollView} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
             {/* ===== PREVIEW CARD (always visible) ===== */}
             <LinearGradient colors={typeConfig.gradient} style={s.previewGradient}>
@@ -533,7 +541,25 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                         <View style={s.detailStatDivider} />
                         <View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: typeConfig.color }]}>{d.stats.winRate}%</Text><Text style={s.detailStatLabel}>{fr ? 'Victoires' : 'Win rate'}</Text></View>
                       </View>
-                      {d.hasContact ? <View style={s.detailNote}><MaterialIcons name="info-outline" size={12} color="#94A3B8" /><Text style={s.detailNoteText}>{fr ? 'Contacts inclus selon vos reglages de visibilite' : 'Contacts included per your visibility settings'}</Text></View> : null}
+                      {d.hasContact ? (
+                        <View style={s.contactPreviewBlock}>
+                          <View style={s.contactPreviewHeader}>
+                            <MaterialIcons name={contactVisible ? 'contact-phone' : 'phone-disabled'} size={12} color={contactVisible ? '#10B981' : '#94A3B8'} />
+                            <Text style={[s.contactPreviewHeaderText, { color: contactVisible ? '#10B981' : '#94A3B8' }]}>{contactVisible ? (fr ? 'Contacts visibles' : 'Contacts visible') : (fr ? 'Contacts masques' : 'Contacts hidden')}</Text>
+                          </View>
+                          {contactVisible ? (
+                            <View style={s.contactPreviewItems}>
+                              {d.email ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#3B82F6" /><Text style={s.contactPreviewItemText}>{d.email}</Text></View> : null}
+                              {d.phone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#10B981" /><Text style={s.contactPreviewItemText}>{d.phone}</Text></View> : null}
+                            </View>
+                          ) : (
+                            <View style={s.contactPreviewItems}>
+                              {d.email ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"\u2022".repeat(Math.min(d.email.indexOf("@"), 6)) + d.email.slice(d.email.indexOf("@"))}</Text></View> : null}
+                              {d.phone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.phone.slice(0, 3) + "\u2022".repeat(Math.max(0, d.phone.length - 5)) + d.phone.slice(-2)}</Text></View> : null}
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
                     </View>
                   );
                 })() : null}
@@ -561,7 +587,25 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       </View>
                       {d.facilities.length > 0 ? <View style={s.detailInfoRow}>{d.facilities.slice(0, 4).map((f: string, i: number) => <View key={i} style={s.detailInfoPill}><MaterialIcons name="check-circle" size={10} color="#10B981" /><Text style={[s.detailInfoPillText, { color: '#10B981' }]}>{f}</Text></View>)}</View> : null}
                       {d.website ? <View style={s.detailLocationRow}><MaterialIcons name="language" size={12} color={typeConfig.color} /><Text style={[s.detailLocationText, { color: typeConfig.color }]}>{d.website}</Text></View> : null}
-                      {d.hasContact ? <View style={s.detailNote}><MaterialIcons name="info-outline" size={12} color="#94A3B8" /><Text style={s.detailNoteText}>{fr ? 'Contacts inclus selon vos reglages de visibilite' : 'Contacts included per your visibility settings'}</Text></View> : null}
+                      {d.hasContact ? (
+                        <View style={s.contactPreviewBlock}>
+                          <View style={s.contactPreviewHeader}>
+                            <MaterialIcons name={d.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={12} color={d.showContactPublic ? '#10B981' : '#94A3B8'} />
+                            <Text style={[s.contactPreviewHeaderText, { color: d.showContactPublic ? '#10B981' : '#94A3B8' }]}>{d.showContactPublic ? (fr ? 'Contacts visibles' : 'Contacts visible') : (fr ? 'Contacts masques' : 'Contacts hidden')}</Text>
+                          </View>
+                          {d.showContactPublic ? (
+                            <View style={s.contactPreviewItems}>
+                              {d.contactEmail ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#3B82F6" /><Text style={s.contactPreviewItemText}>{d.contactEmail}</Text></View> : null}
+                              {d.contactPhone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#10B981" /><Text style={s.contactPreviewItemText}>{d.contactPhone}</Text></View> : null}
+                            </View>
+                          ) : (
+                            <View style={s.contactPreviewItems}>
+                              {d.contactEmail ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"\u2022".repeat(Math.min(d.contactEmail.indexOf("@"), 6)) + d.contactEmail.slice(d.contactEmail.indexOf("@"))}</Text></View> : null}
+                              {d.contactPhone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.contactPhone.slice(0, 3) + "\u2022".repeat(Math.max(0, d.contactPhone.length - 5)) + d.contactPhone.slice(-2)}</Text></View> : null}
+                            </View>
+                          )}
+                        </View>
+                      ) : null}
                     </View>
                   );
                 })() : null}
@@ -976,20 +1020,18 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               </View>
             ) : null}
 
-          </ScrollView>
-        </View>
-      </View>
+        </ScrollView>
+      </SafeAreaView>
     </Modal>
   );
 }
 
 const s = StyleSheet.create({
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' as const },
-  sheet: { backgroundColor: '#FFF', maxHeight: '92%', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' as const },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
-  closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flex: 1 },
+  safeArea: { flex: 1, backgroundColor: '#FFF' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9', backgroundColor: '#FFF' },
+  headerTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
+  backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  scrollView: { flex: 1, backgroundColor: '#F8FAFC' },
   scrollContent: { paddingBottom: 48 },
 
   // Preview gradient
@@ -1024,6 +1066,13 @@ const s = StyleSheet.create({
   detailStatDivider: { width: 1, height: 22, backgroundColor: '#E2E8F0', marginHorizontal: 4 },
   detailNote: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   detailNoteText: { fontSize: 10, color: '#94A3B8', flex: 1, fontStyle: 'italic' },
+  contactPreviewBlock: { marginTop: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+  contactPreviewHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 },
+  contactPreviewHeaderText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+  contactPreviewItems: { gap: 4 },
+  contactPreviewItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  contactPreviewItemText: { fontSize: 12, color: '#0F172A', fontWeight: '500' },
+  contactPreviewItemMasked: { fontSize: 12, color: '#CBD5E1', fontWeight: '500', letterSpacing: 0.5 },
   detailReadOnlyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   detailReadOnlyText: { fontSize: 11, color: '#64748B', flex: 1 },
   // Match preview
