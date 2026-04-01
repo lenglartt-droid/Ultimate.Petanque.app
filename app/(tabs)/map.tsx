@@ -28,6 +28,8 @@ import { useAuth } from '@/template';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getEloRank, ELO_RANKS, EloRankTier } from '@/services/eloService';
+import { getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, TrustScoreData } from '@/services/trustScoreService';
 import {
   fetchPublicPlayers, fetchPublicClubs, fetchPublicTerrains, fetchPublicTournaments,
   toggleItemPublic, importPublicItemToDirectory, getMyPublicableItems,
@@ -383,6 +385,10 @@ export default function MapScreen() {
   const [loadingManage, setLoadingManage] = useState(false);
   const [showLegend, setShowLegend] = useState(false);
 
+  // Player sub-filters (ELO rank & trust score)
+  const [eloRankFilter, setEloRankFilter] = useState<EloRankTier | null>(null);
+  const [trustFilter, setTrustFilter] = useState<'verified' | 'high' | 'medium_low' | null>(null);
+
   // Meetup invitation state
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
   const [meetupPickerUserId, setMeetupPickerUserId] = useState<string | null>(null);
@@ -606,6 +612,22 @@ export default function MapScreen() {
       return fields.some((f: string | undefined) => f?.toLowerCase().includes(q));
     };
 
+    // Player sub-filter matching
+    const matchPlayerSubFilters = (item: any) => {
+      if (eloRankFilter) {
+        const elo = item.eloRating || item.elo_rating || 1000;
+        const rank = getEloRank(elo);
+        if (rank.tier !== eloRankFilter) return false;
+      }
+      if (trustFilter) {
+        const trustScore = item.trustScore ?? item.trust_score ?? 75;
+        if (trustFilter === 'verified' && trustScore < 80) return false;
+        if (trustFilter === 'high' && (trustScore < 65 || trustScore >= 80)) return false;
+        if (trustFilter === 'medium_low' && trustScore >= 65) return false;
+      }
+      return true;
+    };
+
     const items: any[] = [];
     const addItems = (data: any, type: string, isPublic: boolean) => {
       const filtered = data.filter((it: any) => matchSearch(it, type));
@@ -628,8 +650,9 @@ export default function MapScreen() {
       if (showPublic) addItems(pubData.tournaments, 'tournaments', true);
     }
     if (filter === 'all' || filter === 'players') {
-      if (showOwn) addItems(ownData.players, 'players', false);
-      if (showPublic) addItems(pubData.players, 'players', true);
+      const filterPlayers = (arr: any[]) => (eloRankFilter || trustFilter) ? arr.filter(matchPlayerSubFilters) : arr;
+      if (showOwn) addItems(filterPlayers(ownData.players), 'players', false);
+      if (showPublic) addItems(filterPlayers(pubData.players), 'players', true);
     }
     if (filter === 'all' || filter === 'events') {
       // Skip events when partner filter active
@@ -659,7 +682,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter]);
 
   // Compute clusters
   const clusters = useMemo(() => {
@@ -799,6 +822,11 @@ export default function MapScreen() {
     Haptics.selectionAsync();
     setFilter(f);
     setSelected(null);
+    // Reset player sub-filters when switching away from players
+    if (f !== 'players') {
+      setEloRankFilter(null);
+      setTrustFilter(null);
+    }
   }, []);
 
   const handleRegionChange = useCallback((region: any) => {
@@ -1217,6 +1245,62 @@ export default function MapScreen() {
             </Pressable>
           ))}
         </ScrollView>
+
+        {/* Player sub-filters: ELO rank & trust score */}
+        {filter === 'players' ? (
+          <View style={styles.subFiltersContainer}>
+            {/* ELO Rank */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="emoji-events" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>ELO</Text>
+              </View>
+              {[...ELO_RANKS].reverse().map(rank => {
+                const active = eloRankFilter === rank.tier;
+                return (
+                  <Pressable
+                    key={rank.tier}
+                    style={[styles.subChip, active && { backgroundColor: rank.color, borderColor: rank.color }]}
+                    onPress={() => { Haptics.selectionAsync(); setEloRankFilter(active ? null : rank.tier); }}
+                  >
+                    <MaterialIcons name={rank.icon as any} size={11} color={active ? '#FFF' : rank.color} />
+                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: rank.color }]}>{language === 'fr' ? rank.label.fr : rank.label.en}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Trust Score */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="verified-user" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Confiance' : 'Trust'}</Text>
+              </View>
+              {([{ key: 'verified', label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', color: '#22C55E' }, { key: 'high', label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', color: '#3B82F6' }, { key: 'medium_low', label: language === 'fr' ? '< Fiable' : '< Trusted', icon: 'warning', color: '#F97316' }] as const).map(opt => {
+                const active = trustFilter === opt.key;
+                return (
+                  <Pressable
+                    key={opt.key}
+                    style={[styles.subChip, active && { backgroundColor: opt.color, borderColor: opt.color }]}
+                    onPress={() => { Haptics.selectionAsync(); setTrustFilter(active ? null : opt.key); }}
+                  >
+                    <MaterialIcons name={opt.icon as any} size={11} color={active ? '#FFF' : opt.color} />
+                    <Text style={[styles.subChipText, active ? { color: '#FFF' } : { color: opt.color }]}>{opt.label}</Text>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Active filter count */}
+            {(eloRankFilter || trustFilter) ? (
+              <View style={styles.subFilterActiveBar}>
+                <Text style={styles.subFilterActiveText}>{counts.players} {language === 'fr' ? 'joueur(s) filtre(s)' : 'player(s) filtered'}</Text>
+                <Pressable style={styles.subFilterClearBtn} onPress={() => { Haptics.selectionAsync(); setEloRankFilter(null); setTrustFilter(null); }}>
+                  <MaterialIcons name="close" size={12} color={theme.primary} />
+                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
       </View>
 
       {/* Selected Card */}
@@ -1266,6 +1350,11 @@ export default function MapScreen() {
                 {selected.itemType === 'players' ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{selected.role}</Text></View>
                 ) : null}
+                {selected.itemType === 'players' && (selected.eloRating || selected.elo_rating) ? (() => {
+                  const elo = selected.eloRating || selected.elo_rating || 1000;
+                  const rank = getEloRank(elo);
+                  return <View style={[styles.tag, { backgroundColor: rank.color + '15' }]}><MaterialIcons name={rank.icon as any} size={8} color={rank.color} /><Text style={[styles.tagText, { color: rank.color }]}>{elo}</Text></View>;
+                })() : null}
                 {selected.itemType === 'tournaments' ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{t('formats', selected.format)}</Text></View>
                 ) : null}
@@ -1603,6 +1692,18 @@ const styles = StyleSheet.create({
     shadowColor: '#0F172A', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8,
     borderTopWidth: 1, borderTopColor: '#E8EDF2',
   },
+
+  // Player sub-filters
+  subFiltersContainer: { paddingTop: 2, paddingBottom: 4, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  subFiltersRow: { paddingHorizontal: 12, paddingVertical: 4, gap: 5, alignItems: 'center' as const },
+  subFilterLabel: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, marginRight: 4 },
+  subFilterLabelText: { fontSize: 9, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  subChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  subChipText: { fontSize: 11, fontWeight: '600' as const },
+  subFilterActiveBar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 5 },
+  subFilterActiveText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
+  subFilterClearBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: theme.primary + '10' },
+  subFilterClearText: { fontSize: 11, fontWeight: '600' as const, color: theme.primary },
 
   searchRowOuter: {
     paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4,
