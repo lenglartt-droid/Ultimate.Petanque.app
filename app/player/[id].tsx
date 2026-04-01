@@ -991,6 +991,60 @@ export default function PlayerDetailScreen() {
               </View>
             )}
 
+            {/* ELO Milestones Timeline */}
+            {eloHistory.length > 2 ? (() => {
+              const sorted = [...eloHistory].reverse();
+              const milestones: { date: string; oldRank: string; newRank: string; elo: number; matchId?: string; direction: 'up' | 'down' }[] = [];
+              for (let i = 1; i < sorted.length; i++) {
+                const prev = getEloRank(sorted[i - 1].eloAfter);
+                const curr = getEloRank(sorted[i].eloAfter);
+                if (prev.tier !== curr.tier) {
+                  milestones.push({
+                    date: sorted[i].recordedAt,
+                    oldRank: prev.tier,
+                    newRank: curr.tier,
+                    elo: sorted[i].eloAfter,
+                    matchId: sorted[i].matchId,
+                    direction: sorted[i].eloAfter > sorted[i - 1].eloAfter ? 'up' : 'down',
+                  });
+                }
+              }
+              if (milestones.length === 0) return null;
+              return (
+                <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 10 }}>
+                    {language === 'fr' ? 'JALONS ELO' : 'ELO MILESTONES'}
+                  </Text>
+                  {milestones.slice(-5).reverse().map((ms, idx) => {
+                    const rank = getEloRank(ms.elo);
+                    const isPromo = ms.direction === 'up';
+                    return (
+                      <Pressable key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: idx < Math.min(milestones.length, 5) - 1 ? 1 : 0, borderBottomColor: theme.border + '40' }} onPress={ms.matchId ? () => router.push(`/match/${ms.matchId}`) : undefined}>
+                        <View style={{ width: 4, height: 32, borderRadius: 2, backgroundColor: isPromo ? '#10B981' : '#EF4444' }} />
+                        <View style={[{ width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, { backgroundColor: rank.color + '15' }]}>
+                          <MaterialIcons name={isPromo ? 'arrow-upward' : 'arrow-downward'} size={16} color={isPromo ? '#10B981' : '#EF4444'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <View style={{ backgroundColor: rank.color + '15', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: rank.color + '30' }}>
+                              <Text style={{ fontSize: 11, fontWeight: '700', color: rank.color }}>
+                                {rank.label[language === 'fr' ? 'fr' : 'en']}
+                              </Text>
+                            </View>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: rank.color }}>{ms.elo}</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                            {new Date(ms.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </Text>
+                        </View>
+                        <MaterialIcons name={isPromo ? 'celebration' : 'trending-down'} size={16} color={isPromo ? '#10B981' : '#EF4444'} />
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              );
+            })() : null}
+
             {/* Recent ELO changes */}
             {eloHistory.length > 0 ? (
               <View style={{ borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 12 }}>

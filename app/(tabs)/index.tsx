@@ -37,6 +37,7 @@ import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
+import { getEloRank, ELO_INACTIVITY_THRESHOLD_DAYS, ELO_INACTIVITY_DECAY_PER_MONTH, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
 import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
@@ -94,7 +95,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'witness' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -150,6 +151,26 @@ export default function HomeScreen() {
 
   // Pending match witnesses
   const [pendingWitnessMatchCount, setPendingWitnessMatchCount] = useState(0);
+
+  // ELO Decay Warning
+  const eloDecayWarning = useMemo(() => {
+    if (!selfPlayer?.lastMatchDate) return null;
+    const lastMatch = new Date(selfPlayer.lastMatchDate);
+    const nowDate = new Date();
+    const daysSince = Math.floor((nowDate.getTime() - lastMatch.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysSince < 20) return null; // Only warn from 20 days
+    const daysUntilDecay = Math.max(0, ELO_INACTIVITY_THRESHOLD_DAYS - daysSince);
+    const isDecaying = daysSince >= ELO_INACTIVITY_THRESHOLD_DAYS;
+    const monthsDecayed = isDecaying ? Math.floor((daysSince - ELO_INACTIVITY_THRESHOLD_DAYS) / 30) + 1 : 0;
+    return { daysSince, daysUntilDecay, isDecaying, decayAmount: isDecaying ? monthsDecayed * ELO_INACTIVITY_DECAY_PER_MONTH : ELO_INACTIVITY_DECAY_PER_MONTH };
+  }, [selfPlayer?.lastMatchDate]);
+
+  // Placement matches info
+  const placementInfo = useMemo(() => {
+    const mp = userStats?.matchesPlayed || matches.length;
+    if (mp >= ELO_PLACEMENT_MATCHES) return null;
+    return { current: mp, remaining: ELO_PLACEMENT_MATCHES - mp };
+  }, [userStats?.matchesPlayed, matches.length]);
 
   // === LOAD FUNCTIONS ===
 
@@ -305,6 +326,7 @@ export default function HomeScreen() {
     s.push({ key: 'hero', data: ['hero'] });
     s.push({ key: 'actions', data: ['actions'] });
     if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
+    if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
     if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
     s.push({ key: 'sponsor', data: ['sponsor'] });
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
@@ -398,6 +420,36 @@ export default function HomeScreen() {
             </View>
           </View>
         );
+
+      // ===== ELO DECAY WARNING =====
+      case 'eloDecay':
+        return eloDecayWarning ? (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={st.eloDecayCard}>
+              <View style={st.eloDecayHeader}>
+                <View style={st.eloDecayIconBg}>
+                  <MaterialIcons name={eloDecayWarning.isDecaying ? 'warning' : 'schedule'} size={18} color={eloDecayWarning.isDecaying ? '#EF4444' : '#F59E0B'} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.eloDecayTitle}>{t('leaderboard', 'eloDecayWarningTitle')}</Text>
+                  <Text style={st.eloDecayDesc}>
+                    {eloDecayWarning.isDecaying
+                      ? t('leaderboard', 'eloInactivityWarning').replace('{days}', String(eloDecayWarning.daysSince)).replace('{decay}', String(eloDecayWarning.decayAmount))
+                      : t('leaderboard', 'eloDecayWarningDesc').replace('{days}', String(eloDecayWarning.daysUntilDecay)).replace('{decay}', String(ELO_INACTIVITY_DECAY_PER_MONTH))
+                    }
+                  </Text>
+                </View>
+              </View>
+              <View style={st.eloDecayProgressTrack}>
+                <View style={[st.eloDecayProgressFill, { width: `${Math.min((eloDecayWarning.daysSince / ELO_INACTIVITY_THRESHOLD_DAYS) * 100, 100)}%`, backgroundColor: eloDecayWarning.isDecaying ? '#EF4444' : '#F59E0B' }]} />
+              </View>
+              <Pressable style={st.eloDecayCta} onPress={() => router.push('/match/new')}>
+                <MaterialIcons name="sports" size={16} color="#FFF" />
+                <Text style={st.eloDecayCtaText}>{t('leaderboard', 'eloDecayWarningCta')}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null;
 
       // ===== WITNESS ALERTS =====
       case 'witness':
@@ -576,7 +628,7 @@ export default function HomeScreen() {
     }
   }, [
     isTablet, greeting, displayName, selfPlayer, pendingInviteCount, eventNotifCount, pendingWitnessMatchCount,
-    totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t,
+    totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t, eloDecayWarning, placementInfo,
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors,
     now, screenWidth, user?.id, matches, recentResults,
   ]);
@@ -777,4 +829,15 @@ const st = StyleSheet.create({
   divider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, marginBottom: 20 },
   dividerLine: { flex: 1, height: 1, backgroundColor: '#E2E8F0' },
   dividerDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#CBD5E1', marginHorizontal: 12 },
+
+  // ELO DECAY WARNING
+  eloDecayCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A', ...Platform.select({ ios: { shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
+  eloDecayHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 12 },
+  eloDecayIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F59E0B18', alignItems: 'center' as const, justifyContent: 'center' as const },
+  eloDecayTitle: { fontSize: 14, fontWeight: '700' as const, color: '#78350F' },
+  eloDecayDesc: { fontSize: 12, color: '#92400E', marginTop: 2, lineHeight: 17 },
+  eloDecayProgressTrack: { height: 6, backgroundColor: '#FDE68A', borderRadius: 3, overflow: 'hidden' as const, marginBottom: 12 },
+  eloDecayProgressFill: { height: '100%' as const, borderRadius: 3 },
+  eloDecayCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12 },
+  eloDecayCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
 });

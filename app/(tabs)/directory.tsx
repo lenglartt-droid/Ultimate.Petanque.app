@@ -1071,6 +1071,10 @@ export default function DirectoryScreen() {
             showsVerticalScrollIndicator={false}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.4}
+            removeClippedSubviews={true}
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            initialNumToRender={10}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1113,6 +1117,10 @@ export default function DirectoryScreen() {
             showsVerticalScrollIndicator={false}
             onEndReached={handleLoadMore}
             onEndReachedThreshold={0.4}
+            removeClippedSubviews={true}
+            windowSize={5}
+            maxToRenderPerBatch={10}
+            initialNumToRender={15}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
