@@ -655,6 +655,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="elo-awards" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="admin-anticheat" 
                 options={{ 
                   presentation: 'card',
