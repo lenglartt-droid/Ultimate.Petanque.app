@@ -130,8 +130,6 @@ export default function HistoryScreen() {
     if (!user?.id) return;
     const loadEloDeltas = async () => {
       try {
-        const { selfPlayer: sp } = useApp.getState ? { selfPlayer: null } : { selfPlayer: null };
-        // Fetch from all players owned by user - use selfPlayer id if available
         const supabase = getSupabaseClient();
         const { data } = await supabase
           .from('elo_history')

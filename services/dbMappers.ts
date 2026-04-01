@@ -27,6 +27,7 @@ export function mapPlayerFromDb(p: any): Player {
     boules: p.boules, handedness: p.handedness, terrainId: p.terrain_id,
     terrainName: p.terrain_name, isPublic: p.is_public ?? false,
     showContactPublic: p.show_contact_public ?? false,
+    eloRating: p.elo_rating || 1000,
     stats: p.stats || {
       matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
       tirRate: 0, pointRate: 0, carreauRate: 0,
