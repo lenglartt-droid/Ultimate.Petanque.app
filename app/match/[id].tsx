@@ -1688,7 +1688,7 @@ export default function EditMatchScreen() {
                     <View style={styles.modalItemMeta}>
                       <Text style={styles.modalItemMetaText}>{t('roles', p.role)}</Text>
                       <View style={styles.modalItemDot} />
-                      <Text style={styles.modalItemMetaText}>{t('levels', p.level)}</Text>
+                      <Text style={styles.modalItemMetaText}>{t('roles', p.role)}</Text>
                       {p.club ? (
                         <>
                           <View style={styles.modalItemDot} />

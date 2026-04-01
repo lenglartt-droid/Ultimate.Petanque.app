@@ -23,6 +23,7 @@ export function mapPlayerFromDb(p: any): Player {
   return {
     id: p.id, name: p.name, nickname: p.nickname, avatar: p.avatar,
     club: p.club, clubId: p.club_id, role: p.role, level: p.level,
+    experience: p.experience || undefined,
     location: p.location, phone: p.phone, email: p.email, country: p.country,
     boules: p.boules, handedness: p.handedness, terrainId: p.terrain_id,
     terrainName: p.terrain_name, isPublic: p.is_public ?? false,

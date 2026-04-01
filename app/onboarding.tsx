@@ -561,6 +561,14 @@ export default function OnboardingScreen() {
           ? 'Debloque des badges et entre dans le classement.'
           : 'Unlock badges and enter the leaderboard.',
       },
+      {
+        icon: 'diamond',
+        color: '#9333EA',
+        title: language === 'fr' ? 'Classement ELO dynamique' : 'Dynamic ELO ranking',
+        desc: language === 'fr'
+          ? 'Ton rang evolue a chaque match : Bronze, Argent, Or, Diamant, Maitre.'
+          : 'Your rank evolves with every match: Bronze, Silver, Gold, Diamond, Master.',
+      },
     ];
 
     return (
