@@ -23,6 +23,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useApp } from '@/contexts/AppContext';
 import QRCode from 'react-native-qrcode-svg';
 import { config } from '@/constants/config';
+import { getEloRank } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
@@ -199,7 +200,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         avatar: p.avatar || null,
         initials: p.name?.split(' ').map((n: string) => n[0]).join('') || '?',
         role: p.role,
-        level: p.level,
+        experience: p.experience || null,
+        eloRating: p.eloRating || null,
         nickname: p.nickname,
         club: clubEntity?.name || p.club || null,
         terrain: terrainEntity?.name || p.terrainName || null,
@@ -511,8 +513,9 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                           {d.nickname ? <Text style={s.detailNickname}>"{d.nickname}"</Text> : null}
                           <View style={s.detailPillsRow}>
                             <View style={[s.detailPill, { backgroundColor: typeConfig.color + '12' }]}><MaterialIcons name="sports" size={11} color={typeConfig.color} /><Text style={[s.detailPillText, { color: typeConfig.color }]}>{d.role}</Text></View>
-                            <View style={[s.detailPill, { backgroundColor: '#F59E0B12' }]}><MaterialIcons name="trending-up" size={11} color="#D97706" /><Text style={[s.detailPillText, { color: '#D97706' }]}>{d.level}</Text></View>
                             {d.handedness ? <View style={[s.detailPill, { backgroundColor: '#6366F112' }]}><MaterialIcons name={d.handedness === 'left' ? 'front-hand' : 'back-hand'} size={11} color="#6366F1" /><Text style={[s.detailPillText, { color: '#6366F1' }]}>{d.handedness === 'right' ? (fr ? 'Droitier' : 'Right') : d.handedness === 'left' ? (fr ? 'Gaucher' : 'Left') : (fr ? 'Ambidextre' : 'Ambidextrous')}</Text></View> : null}
+                            {d.experience ? <View style={[s.detailPill, { backgroundColor: '#9333EA12' }]}><MaterialIcons name="timeline" size={11} color="#9333EA" /><Text style={[s.detailPillText, { color: '#9333EA' }]}>{d.experience === 'less_than_1' ? (fr ? '< 1 an' : '< 1 year') : d.experience === '1_to_3' ? (fr ? '1-3 ans' : '1-3 years') : d.experience === '3_to_10' ? (fr ? '3-10 ans' : '3-10 years') : (fr ? '10+ ans' : '10+ years')}</Text></View> : null}
+                            {d.eloRating ? (() => { const eloR = getEloRank(d.eloRating); return <View style={[s.detailPill, { backgroundColor: eloR.color + '12' }]}><MaterialIcons name={eloR.icon as any} size={11} color={eloR.color} /><Text style={[s.detailPillText, { color: eloR.color }]}>{d.eloRating} {eloR.label[fr ? 'fr' : 'en']}</Text></View>; })() : null}
                           </View>
                         </View>
                       </View>
@@ -982,11 +985,11 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
 const s = StyleSheet.create({
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' as const },
-  sheet: { backgroundColor: '#FFF', maxHeight: '92%', borderTopLeftRadius: 20, borderTopRightRadius: 20 },
+  sheet: { backgroundColor: '#FFF', maxHeight: '92%', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' as const },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A' },
   closeBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
-  scrollView: { flexShrink: 1 },
+  scrollView: { flex: 1 },
   scrollContent: { paddingBottom: 48 },
 
   // Preview gradient
