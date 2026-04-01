@@ -206,5 +206,11 @@ export const leaderboardTranslations = {
     sortByPodiums: { fr: 'Podiums', en: 'Podiums' },
     sortByAvgScore: { fr: 'Score moyen', en: 'Avg Score' },
     sortByParticipations: { fr: 'Participations', en: 'Participations' },
+    eloLeaderboardHistory: { fr: 'Position au classement', en: 'Leaderboard Position' },
+    eloLeaderboardHistoryDesc: { fr: 'Dernieres semaines', en: 'Last weeks' },
+    eloNoLeaderboardHistory: { fr: 'Pas encore d historique de classement', en: 'No leaderboard history yet' },
+    eloNoLeaderboardHistoryDesc: { fr: 'Les positions hebdomadaires apparaitront ici apres vos prochaines semaines d activite.', en: 'Weekly positions will appear here after your next active weeks.' },
+    eloLeaderboardRank: { fr: 'Rang', en: 'Rank' },
+    eloLeaderboardWeek: { fr: 'Semaine', en: 'Week' },
   },
 };

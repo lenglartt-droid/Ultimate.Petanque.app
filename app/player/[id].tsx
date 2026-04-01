@@ -36,6 +36,8 @@ import { fetchWeeklyRankHistory } from '@/services/weeklyLeaderboardService';
 import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
+import EloSection from '@/components/feature/player/EloSection';
+import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -248,6 +250,13 @@ export default function PlayerDetailScreen() {
   }, [player?.eloRating]);
 
   const { refreshData } = useApp();
+
+  // Lazy loading: defer heavy below-fold sections for faster initial render
+  const [belowFoldReady, setBelowFoldReady] = React.useState(false);
+  React.useEffect(() => {
+    const timer = setTimeout(() => setBelowFoldReady(true), 250);
+    return () => clearTimeout(timer);
+  }, []);
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
@@ -770,7 +779,20 @@ export default function PlayerDetailScreen() {
           <View style={isTablet ? s.tabletRight : undefined}>
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
-            {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
+            {belowFoldReady ? (
+              <GamePreferencesSection
+                roleAnalysis={roleAnalysis}
+                terrainAnalysis={terrainAnalysis}
+                partnerAnalysis={partnerAnalysis}
+                preferredBoulesAnalysis={preferredBoulesAnalysis}
+                playerBoules={player.boules}
+                radarData={radarData}
+                language={language}
+                t={t}
+                screenWidth={screenWidth}
+                partnerPlayer={partnerAnalysis.totalWithPartners > 0 ? getPlayerById(partnerAnalysis.preferredPartner.id) : null}
+              />
+            ) : (roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
               <View style={s.sectionCard}>
                 <View style={s.sectionHeader}>
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
@@ -886,7 +908,20 @@ export default function PlayerDetailScreen() {
         </View>
 
         {/* ===== ELO RATING & HISTORY ===== */}
-        {(player.eloRating || eloHistory.length > 0) ? (
+        {belowFoldReady ? (
+          <EloSection
+            player={{ id: player.id, eloRating: player.eloRating, userId: (player as any)?.userId, lastMatchDate: player.lastMatchDate }}
+            eloHistory={eloHistory}
+            eloLoading={eloLoading}
+            roleElos={roleElos}
+            inactivityDecay={inactivityDecay}
+            rankHistory={rankHistory}
+            rankHistoryLoading={rankHistoryLoading}
+            language={language}
+            t={t}
+            screenWidth={screenWidth}
+          />
+        ) : (player.eloRating || eloHistory.length > 0) ? (
           <View style={s.sectionCard}>
             <View style={s.sectionHeader}>
               <View style={[s.sectionIconBox, { backgroundColor: currentEloRank.color + '15' }]}>
@@ -1086,84 +1121,10 @@ export default function PlayerDetailScreen() {
                 ))}
               </View>
             ) : null}
-            {/* Leaderboard Rank History Chart */}
-            {rankHistory.length >= 2 ? (() => {
-              const chartW = Math.max(1, screenWidth - 96);
-              const chartH = 100;
-              const ranks = rankHistory.map(h => h.rank);
-              const maxRank = Math.max(...ranks, 1);
-              const minRank = Math.min(...ranks, 1);
-              const range = Math.max(maxRank - minRank, 1);
-              const stepX = chartW / Math.max(ranks.length - 1, 1);
-              const getYR = (rank: number) => 10 + ((rank - minRank) / range) * (chartH - 20);
-              const lastPtR = { x: (ranks.length - 1) * stepX, y: getYR(ranks[ranks.length - 1]) };
-              const trendR = ranks[ranks.length - 1] <= ranks[0];
-              const lineColorR = trendR ? '#10B981' : '#EF4444';
-              return (
-                <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                    <MaterialIcons name="leaderboard" size={14} color="#D97706" />
-                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                      {t('leaderboard', 'eloLeaderboardHistory')}
-                    </Text>
-                    <Text style={{ fontSize: 10, color: theme.textMuted }}>({rankHistory.length} {t('leaderboard', 'eloLeaderboardHistoryDesc')})</Text>
-                  </View>
-                  <Svg width={chartW} height={chartH + 20}>
-                    {[minRank, Math.round((minRank + maxRank) / 2), maxRank].filter((v, i, a) => a.indexOf(v) === i).map((rank, i) => (
-                      <G key={`ref-${i}`}>
-                        <Line x1={0} y1={getYR(rank)} x2={chartW} y2={getYR(rank)} stroke={theme.border} strokeWidth={0.8} strokeDasharray="4,4" />
-                        <SvgText x={chartW - 2} y={getYR(rank) - 4} fontSize="9" fill={theme.textMuted} textAnchor="end" fontWeight="600">#{rank}</SvgText>
-                      </G>
-                    ))}
-                    <Polygon
-                      points={`0,${chartH + 5} ${ranks.map((r, i) => `${i * stepX},${getYR(r)}`).join(' ')} ${(ranks.length - 1) * stepX},${chartH + 5}`}
-                      fill={lineColorR + '10'}
-                    />
-                    {ranks.length > 1 ? (
-                      <G>
-                        {ranks.slice(1).map((r, i) => (
-                          <Line key={i} x1={i * stepX} y1={getYR(ranks[i])} x2={(i + 1) * stepX} y2={getYR(r)} stroke={lineColorR} strokeWidth={2.5} />
-                        ))}
-                      </G>
-                    ) : null}
-                    {ranks.map((r, i) => (
-                      <SvgCircle key={i} cx={i * stepX} cy={getYR(r)} r={i === ranks.length - 1 ? 5 : 3} fill={i === ranks.length - 1 ? lineColorR : lineColorR + '80'} stroke="#FFF" strokeWidth={i === ranks.length - 1 ? 2 : 1} />
-                    ))}
-                    <SvgText x={Math.min(lastPtR.x, chartW - 20)} y={lastPtR.y - 10} fontSize="12" fill={lineColorR} fontWeight="800" textAnchor="middle">
-                      #{ranks[ranks.length - 1]}
-                    </SvgText>
-                    {rankHistory.map((h, i) => {
-                      if (rankHistory.length > 6 && i % 2 !== 0 && i !== rankHistory.length - 1) return null;
-                      const d = new Date(h.weekStart);
-                      const label = `${d.getDate()}/${d.getMonth() + 1}`;
-                      return (
-                        <SvgText key={`wl-${i}`} x={i * stepX} y={chartH + 14} fontSize="8" fill={theme.textMuted} textAnchor="middle" fontWeight="500">
-                          {label}
-                        </SvgText>
-                      );
-                    })}
-                  </Svg>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                    <Text style={{ fontSize: 10, color: theme.textMuted }}>
-                      {language === 'fr' ? 'Meilleur' : 'Best'}: #{minRank}
-                    </Text>
-                    <Pressable onPress={() => router.push('/leaderboard' as any)} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '600', color: '#D97706' }}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
-                      <MaterialIcons name="chevron-right" size={12} color="#D97706" />
-                    </Pressable>
-                  </View>
-                </View>
-              );
-            })() : rankHistory.length === 0 && !rankHistoryLoading && (player as any)?.userId ? (
-              <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border, alignItems: 'center', paddingVertical: 16 }}>
-                <MaterialIcons name="leaderboard" size={24} color={theme.textMuted} />
-                <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 6 }}>{t('leaderboard', 'eloNoLeaderboardHistory')}</Text>
-                <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 3, textAlign: 'center', paddingHorizontal: 16 }}>{t('leaderboard', 'eloNoLeaderboardHistoryDesc')}</Text>
-              </View>
-            ) : null}
           </View>
         ) : null}
 
+        {belowFoldReady ? (<>
         {/* ===== MATCH STATISTICS ===== */}
         <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
@@ -1307,6 +1268,11 @@ export default function PlayerDetailScreen() {
 
         {/* Modification Logs */}
         <ModificationLogsSection itemType="player" itemId={id!} isOwner={!isSharedItem && !!user?.id} />
+        </>) : (
+          <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        )}
       </ScrollView>
 
       {player ? (
