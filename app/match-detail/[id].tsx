@@ -35,6 +35,8 @@ import {
 } from '@/services/trustScoreService';
 import { fetchAttestationsForItem } from '@/services/witnessService';
 import AttestationSection from '@/components/feature/AttestationSection';
+import { getEloRank, getEloColor, formatEloDelta, EloHistoryEntry } from '@/services/eloService';
+import { getSupabaseClient } from '@/template';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -61,9 +63,33 @@ export default function MatchDetailScreen() {
     });
   }, []);
 
+  // ELO deltas for this match
+  const [eloDeltas, setEloDeltas] = useState<Map<string, { delta: number; eloAfter: number }>>(new Map());
+
   useEffect(() => {
     if (!id) return;
     fetchAttestationsForItem('match', id).then(reqs => setWitnessRequests(reqs));
+  }, [id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const loadEloDeltas = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data } = await supabase
+          .from('elo_history')
+          .select('player_id, elo_delta, elo_after')
+          .eq('match_id', id);
+        if (data && data.length > 0) {
+          const map = new Map<string, { delta: number; eloAfter: number }>();
+          for (const row of data) {
+            map.set(row.player_id, { delta: row.elo_delta, eloAfter: row.elo_after });
+          }
+          setEloDeltas(map);
+        }
+      } catch { /* silent */ }
+    };
+    loadEloDeltas();
   }, [id]);
 
   const match: Match | undefined = useMemo(() => matches.find(m => m.id === id), [matches, id]);
@@ -286,6 +312,36 @@ export default function MatchDetailScreen() {
               <Text style={[s.teamNames, { textAlign: 'right' }]} numberOfLines={2}>{match.teamB.playerNames.join(' \u2022 ')}</Text>
             </View>
           </View>
+
+          {/* ELO Deltas per player */}
+          {eloDeltas.size > 0 ? (
+            <View style={s.eloRow}>
+              {[...match.teamA.players, ...match.teamB.players].map((pid, idx) => {
+                const eloData = eloDeltas.get(pid);
+                if (!eloData) return null;
+                const isTeamA = match.teamA.players.includes(pid);
+                const playerNames = isTeamA ? match.teamA.playerNames : match.teamB.playerNames;
+                const playerIdx = isTeamA ? match.teamA.players.indexOf(pid) : match.teamB.players.indexOf(pid);
+                const pName = playerNames[playerIdx]?.split(' ')[0] || '?';
+                const eloRank = getEloRank(eloData.eloAfter);
+                return (
+                  <View key={pid} style={s.eloDeltaItem}>
+                    <Text style={s.eloDeltaName} numberOfLines={1}>{pName}</Text>
+                    <View style={[s.eloDeltaBadge, { backgroundColor: eloRank.color + '12', borderColor: eloRank.color + '30' }]}>
+                      <MaterialIcons name={eloRank.icon as any} size={9} color={eloRank.color} />
+                      <Text style={[s.eloDeltaElo, { color: eloRank.color }]}>{eloData.eloAfter}</Text>
+                    </View>
+                    <View style={[s.eloDeltaChange, { backgroundColor: eloData.delta >= 0 ? '#10B98112' : '#EF444412' }]}>
+                      <MaterialIcons name={eloData.delta >= 0 ? 'arrow-upward' : 'arrow-downward'} size={10} color={eloData.delta >= 0 ? '#10B981' : '#EF4444'} />
+                      <Text style={[s.eloDeltaChangeText, { color: eloData.delta >= 0 ? '#10B981' : '#EF4444' }]}>
+                        {eloData.delta >= 0 ? `+${eloData.delta}` : `${eloData.delta}`}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          ) : null}
 
           {/* Player roles */}
           {match.teamA.playerRoles && match.teamA.playerRoles.length > 0 ? (
@@ -717,6 +773,15 @@ const s = StyleSheet.create({
   rolesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
   roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 20 },
   roleBadgeText: { fontSize: 10, fontWeight: '600' },
+
+  // ELO deltas
+  eloRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.border },
+  eloDeltaItem: { alignItems: 'center', gap: 3, minWidth: 54 },
+  eloDeltaName: { fontSize: 10, fontWeight: '600', color: theme.textSecondary, maxWidth: 60 },
+  eloDeltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1 },
+  eloDeltaElo: { fontSize: 10, fontWeight: '800' },
+  eloDeltaChange: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 5, paddingVertical: 2, borderRadius: 8 },
+  eloDeltaChangeText: { fontSize: 10, fontWeight: '800' },
 
   // Validation
   validationRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },

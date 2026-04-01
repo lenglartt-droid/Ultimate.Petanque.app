@@ -52,6 +52,7 @@ export interface Player {
   handedness?: 'right' | 'left' | 'ambidextrous';
   isPublic?: boolean;
   showContactPublic?: boolean;
+  eloRating?: number;
   location?: {
     latitude: number;
     longitude: number;
@@ -101,6 +102,7 @@ export interface Club {
   membershipCost?: number;
   isPublic?: boolean;
   showContactPublic?: boolean;
+  eloRating?: number;
   clubCardUrl?: string;
   website?: string;
   facebookUrl?: string;
