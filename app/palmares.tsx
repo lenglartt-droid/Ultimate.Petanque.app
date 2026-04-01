@@ -548,7 +548,7 @@ export default function PalmaresScreen() {
 
                 <Text style={styles.heroTitle}>{summary.totalTournaments} {t('palmares', 'tournois')}</Text>
                 <Text style={styles.heroSubtitle}>
-                  {summary.totalMatches} {t('palmares', 'matchs')} \u2022 {summary.totalWins} {t('palmares', 'victoires')} \u2022 {summary.avgWinRate}% {t('palmares', 'taux')}
+                  {summary.totalMatches} {t('palmares', 'matchs')} {"\u2022"} {summary.totalWins} {t('palmares', 'victoires')} {"\u2022"} {summary.avgWinRate}% {t('palmares', 'taux')}
                 </Text>
 
                 <View style={styles.heroStatsRow}>

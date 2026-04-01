@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -361,6 +361,7 @@ export default function MapScreen() {
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const { t, language } = useLanguage();
+  const { lat: paramLat, lng: paramLng, name: paramName } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string }>();
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -818,6 +819,34 @@ export default function MapScreen() {
       if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
     };
   }, []);
+
+  // Handle navigation params: zoom to specific location from directory
+  const handledParamRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!paramLat || !paramLng) return;
+    const lat = parseFloat(paramLat);
+    const lng = parseFloat(paramLng);
+    if (isNaN(lat) || isNaN(lng)) return;
+    const paramKey = `${paramLat}-${paramLng}-${paramName}`;
+    if (handledParamRef.current === paramKey) return;
+    handledParamRef.current = paramKey;
+    // Small delay to ensure map is mounted
+    const timer = setTimeout(() => {
+      if (mapRef.current) {
+        mapRef.current.animateToRegion({
+          latitude: lat,
+          longitude: lng,
+          latitudeDelta: 0.02,
+          longitudeDelta: 0.02,
+        }, 600);
+      }
+      // Try to find and select the matching item
+      if (paramName) {
+        showToast({ message: paramName, icon: 'place', iconColor: theme.success });
+      }
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [paramLat, paramLng, paramName]);
 
   const loadManageData = useCallback(async () => {
     setLoadingManage(true);
