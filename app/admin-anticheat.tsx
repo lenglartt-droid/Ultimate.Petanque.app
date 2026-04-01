@@ -19,7 +19,7 @@ import {
   banPlayer,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
-import { recalculateAllElo } from '@/services/eloService';
+import { recalculateAllElo, ELO_RANKS, getEloRank, ELO_INITIAL, applyInactivityDecay } from '@/services/eloService';
 
 const et = extraTranslations.trustScore;
 
@@ -43,6 +43,17 @@ export default function AdminAntiCheatScreen() {
   // ELO recalculation
   const [recalculating, setRecalculating] = useState(false);
 
+  // ELO dashboard
+  const [eloDashboard, setEloDashboard] = useState<{
+    totalPlayers: number;
+    distribution: { tier: string; count: number; color: string; label: string }[];
+    avgElo: number;
+    decayCount: number;
+    topPlayer: { name: string; elo: number } | null;
+  } | null>(null);
+  const [eloLoading, setEloLoading] = useState(true);
+  const [applyingDecay, setApplyingDecay] = useState(false);
+
   // Detail modal
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
@@ -59,6 +70,44 @@ export default function AdminAntiCheatScreen() {
   }, [language]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load ELO dashboard
+  useEffect(() => {
+    (async () => {
+      setEloLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data: allPlayers } = await supabase
+          .from('players')
+          .select('id, name, elo_rating, last_match_date');
+        if (allPlayers && allPlayers.length > 0) {
+          const dist = ELO_RANKS.map(rank => {
+            const nextRank = ELO_RANKS[ELO_RANKS.indexOf(rank) - 1];
+            const max = nextRank ? nextRank.minElo : Infinity;
+            const count = allPlayers.filter(p => {
+              const elo = p.elo_rating || ELO_INITIAL;
+              return elo >= rank.minElo && elo < max;
+            }).length;
+            return { tier: rank.tier, count, color: rank.color, label: rank.label[isFr ? 'fr' : 'en'] };
+          }).reverse();
+          const totalElo = allPlayers.reduce((s, p) => s + (p.elo_rating || ELO_INITIAL), 0);
+          const avgElo = Math.round(totalElo / allPlayers.length);
+          const cutoff = new Date();
+          cutoff.setDate(cutoff.getDate() - 30);
+          const decayCount = allPlayers.filter(p => p.last_match_date && new Date(p.last_match_date) < cutoff && (p.elo_rating || ELO_INITIAL) > 800).length;
+          const top = allPlayers.reduce((best, p) => (p.elo_rating || 0) > (best?.elo_rating || 0) ? p : best, allPlayers[0]);
+          setEloDashboard({
+            totalPlayers: allPlayers.length,
+            distribution: dist,
+            avgElo,
+            decayCount,
+            topPlayer: top ? { name: top.name, elo: top.elo_rating || ELO_INITIAL } : null,
+          });
+        }
+      } catch { }
+      setEloLoading(false);
+    })();
+  }, [isFr]);
 
   // Summary statistics
   const summaryStats = React.useMemo(() => {
@@ -248,6 +297,93 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.scanBtnText}>{scanning ? ((et.adminScanning as any)?.[language] || 'Scanning...') : ((et.adminRunFullScan as any)?.[language] || 'Scan')}</Text>
         </Pressable>
       </View>
+
+      {/* ============ ELO Dashboard ============ */}
+      {!eloLoading && eloDashboard ? (
+        <View style={st.eloDashSection}>
+          <View style={st.eloDashHeader}>
+            <View style={[st.eloDashIcon, { backgroundColor: '#9333EA15' }]}>
+              <MaterialIcons name="diamond" size={18} color="#9333EA" />
+            </View>
+            <Text style={st.eloDashTitle}>{isFr ? 'Tableau de bord ELO' : 'ELO Dashboard'}</Text>
+          </View>
+
+          {/* Top stats */}
+          <View style={st.eloDashStatsRow}>
+            <View style={st.eloDashStat}>
+              <Text style={[st.eloDashStatValue, { color: '#9333EA' }]}>{eloDashboard.totalPlayers}</Text>
+              <Text style={st.eloDashStatLabel}>{isFr ? 'Joueurs' : 'Players'}</Text>
+            </View>
+            <View style={st.eloDashStat}>
+              <Text style={[st.eloDashStatValue, { color: getEloRank(eloDashboard.avgElo).color }]}>{eloDashboard.avgElo}</Text>
+              <Text style={st.eloDashStatLabel}>{isFr ? 'ELO moyen' : 'Avg ELO'}</Text>
+            </View>
+            <View style={st.eloDashStat}>
+              <Text style={[st.eloDashStatValue, { color: '#F59E0B' }]}>{eloDashboard.decayCount}</Text>
+              <Text style={st.eloDashStatLabel}>{isFr ? 'En decay' : 'Decaying'}</Text>
+            </View>
+            {eloDashboard.topPlayer ? (
+              <View style={st.eloDashStat}>
+                <Text style={[st.eloDashStatValue, { color: getEloRank(eloDashboard.topPlayer.elo).color, fontSize: 14 }]}>{eloDashboard.topPlayer.elo}</Text>
+                <Text style={st.eloDashStatLabel} numberOfLines={1}>{eloDashboard.topPlayer.name.split(' ')[0]}</Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Rank distribution bar */}
+          <View style={st.eloDashDistRow}>
+            {eloDashboard.distribution.map(d => {
+              const pct = eloDashboard.totalPlayers > 0 ? Math.round((d.count / eloDashboard.totalPlayers) * 100) : 0;
+              return (
+                <View key={d.tier} style={st.eloDashDistItem}>
+                  <View style={st.eloDashDistBarTrack}>
+                    <View style={[st.eloDashDistBarFill, { height: `${Math.max(pct, 4)}%`, backgroundColor: d.color }]} />
+                  </View>
+                  <Text style={[st.eloDashDistPct, { color: d.color }]}>{pct}%</Text>
+                  <Text style={st.eloDashDistLabel} numberOfLines={1}>{d.label}</Text>
+                  <Text style={[st.eloDashDistCount, { color: d.color }]}>{d.count}</Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Action buttons */}
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            <Pressable
+              style={[st.eloDashActionBtn, { backgroundColor: '#F59E0B15', borderColor: '#F59E0B30' }, applyingDecay && { opacity: 0.6 }]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setApplyingDecay(true);
+                const { playersDecayed } = await applyInactivityDecay();
+                setApplyingDecay(false);
+                showAlert(isFr ? `Decay applique a ${playersDecayed} joueurs` : `Decay applied to ${playersDecayed} players`);
+              }}
+              disabled={applyingDecay}
+            >
+              {applyingDecay ? <ActivityIndicator size="small" color="#F59E0B" /> : <MaterialIcons name="timer-off" size={14} color="#F59E0B" />}
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#F59E0B' }}>{isFr ? 'Appliquer decay' : 'Apply decay'}</Text>
+            </Pressable>
+            <Pressable
+              style={[st.eloDashActionBtn, { backgroundColor: '#7C3AED15', borderColor: '#7C3AED30' }, recalculating && { opacity: 0.6 }]}
+              onPress={async () => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                setRecalculating(true);
+                const { success, error, playersUpdated } = await recalculateAllElo();
+                setRecalculating(false);
+                if (success) {
+                  showAlert(t('leaderboard', 'eloRecalculated').replace('{count}', String(playersUpdated)));
+                } else {
+                  showAlert('Error', error || 'Unknown');
+                }
+              }}
+              disabled={recalculating}
+            >
+              {recalculating ? <ActivityIndicator size="small" color="#7C3AED" /> : <MaterialIcons name="calculate" size={14} color="#7C3AED" />}
+              <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{recalculating ? '...' : (isFr ? 'Recalculer ELO' : 'Recalc ELO')}</Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {/* Summary Statistics Dashboard */}
       {!loading && players.length > 0 ? (
@@ -663,4 +799,22 @@ const st = StyleSheet.create({
   distCount: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
   batchDismissBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#22C55E12', borderRadius: 12, paddingVertical: 12, borderWidth: 1, borderColor: '#22C55E30' },
   batchDismissBtnText: { fontSize: 13, fontWeight: '600', color: '#22C55E' },
+
+  // ELO Dashboard
+  eloDashSection: { marginHorizontal: 16, marginBottom: 10, backgroundColor: theme.surface, borderRadius: 16, padding: 14, ...theme.shadows.card, borderWidth: 1, borderColor: '#9333EA' + '15' },
+  eloDashHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  eloDashIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  eloDashTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  eloDashStatsRow: { flexDirection: 'row' as const, gap: 8, marginBottom: 10 },
+  eloDashStat: { flex: 1, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 4 },
+  eloDashStatValue: { fontSize: 18, fontWeight: '900' as const },
+  eloDashStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600' as const, textAlign: 'center' as const },
+  eloDashDistRow: { flexDirection: 'row' as const, gap: 4 },
+  eloDashDistItem: { flex: 1, alignItems: 'center' as const, gap: 3 },
+  eloDashDistBarTrack: { width: '100%' as const, height: 44, backgroundColor: theme.backgroundSecondary, borderRadius: 6, overflow: 'hidden' as const, justifyContent: 'flex-end' as const },
+  eloDashDistBarFill: { width: '100%' as const, borderRadius: 6 },
+  eloDashDistPct: { fontSize: 10, fontWeight: '800' as const },
+  eloDashDistLabel: { fontSize: 7, color: theme.textMuted, fontWeight: '600' as const, textAlign: 'center' as const },
+  eloDashDistCount: { fontSize: 10, fontWeight: '700' as const },
+  eloDashActionBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
 });

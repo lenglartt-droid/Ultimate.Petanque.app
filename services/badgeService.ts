@@ -35,6 +35,10 @@ export interface BadgeContext {
   trustScore: number | null;
   witnessAttestationsGiven: number;
   profileCompleteness: number; // 0-100 percent
+  eloRating: number;
+  eloTireur: number;
+  eloPointeur: number;
+  eloMilieu: number;
 }
 
 // ============================================
@@ -188,6 +192,28 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 30,
     condition: (ctx) => ctx.profileCompleteness >= 100,
   },
+  // ELO Achievement Badges
+  {
+    id: 'premier_diamant',
+    icon: 'diamond',
+    color: '#06B6D4',
+    xpReward: 100,
+    condition: (ctx) => ctx.eloRating >= 1500,
+  },
+  {
+    id: 'maitre_petanque',
+    icon: 'auto-awesome',
+    color: '#9333EA',
+    xpReward: 150,
+    condition: (ctx) => ctx.eloRating >= 1800,
+  },
+  {
+    id: 'specialiste',
+    icon: 'psychology',
+    color: '#F59E0B',
+    xpReward: 75,
+    condition: (ctx) => ctx.eloTireur >= 1300 || ctx.eloPointeur >= 1300 || ctx.eloMilieu >= 1300,
+  },
 ];
 
 // ============================================
@@ -209,6 +235,9 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     verifie: { fr: 'Verifie', en: 'Verified' },
     temoin_fiable: { fr: 'Temoin Fiable', en: 'Trusted Witness' },
     profil_complet: { fr: 'Profil Complet', en: 'Complete Profile' },
+    premier_diamant: { fr: 'Premier Diamant', en: 'First Diamond' },
+    maitre_petanque: { fr: 'Maitre de la Petanque', en: 'Petanque Master' },
+    specialiste: { fr: 'Specialiste', en: 'Specialist' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -229,6 +258,9 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     verifie: { fr: 'Score de confiance 80+ (Verifie)', en: 'Trust score 80+ (Verified)' },
     temoin_fiable: { fr: 'Attester 10 matchs ou defis en tant que temoin', en: 'Attest 10 matches or challenges as a witness' },
     profil_complet: { fr: 'Completer 100% du profil (photo, club, terrain, localisation, boules, carte federation)', en: 'Complete 100% of profile (photo, club, court, location, boules, federation card)' },
+    premier_diamant: { fr: 'Atteindre 1500 ELO (rang Diamant)', en: 'Reach 1500 ELO (Diamond rank)' },
+    maitre_petanque: { fr: 'Atteindre 1800 ELO (rang Maitre)', en: 'Reach 1800 ELO (Master rank)' },
+    specialiste: { fr: 'Avoir un ELO de role superieur a 1300', en: 'Have a role-specific ELO above 1300' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -332,6 +364,10 @@ export function buildBadgeContext(params: {
     trustScore: null, // Will be set by caller if available
     witnessAttestationsGiven: 0, // Will be set by caller from witnessService
     profileCompleteness: 0, // Will be set by caller
+    eloRating: 1000,
+    eloTireur: 1000,
+    eloPointeur: 1000,
+    eloMilieu: 1000,
   };
 }
 

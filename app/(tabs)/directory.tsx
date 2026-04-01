@@ -32,7 +32,7 @@ import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventSer
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
-import { getEloRank, getEloColor } from '@/services/eloService';
+import { getEloRank, getEloColor, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import { useAuth, useAlert } from '@/template';
@@ -199,7 +199,7 @@ export default function DirectoryScreen() {
 
   // All filters state
   const [filters, setFilters] = useState<{
-    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string;
+    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string;
     clubCity: string; clubCountry: string;
     terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
@@ -211,6 +211,7 @@ export default function DirectoryScreen() {
     playerCountry: 'all',
     playerLevel: 'all',
     playerRole: 'all',
+    playerEloRank: 'all',
     // Club filters
     clubCity: 'all',
     clubCountry: 'all',
@@ -325,7 +326,7 @@ export default function DirectoryScreen() {
 
   // Active filter counts
   const activeFilterCounts = useMemo(() => ({
-    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole].filter(f => f !== 'all').length,
+    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
     terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
@@ -380,8 +381,19 @@ export default function DirectoryScreen() {
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
       const matchesLevel = filters.playerLevel === 'all' || p.level === filters.playerLevel;
       const matchesRole = filters.playerRole === 'all' || p.role === filters.playerRole;
+      const matchesEloRank = filters.playerEloRank === 'all' || (() => {
+        const elo = p.eloRating || ELO_INITIAL;
+        switch (filters.playerEloRank) {
+          case 'bronze': return elo < 1000;
+          case 'silver': return elo >= 1000 && elo < 1200;
+          case 'gold': return elo >= 1200 && elo < 1500;
+          case 'diamond': return elo >= 1500 && elo < 1800;
+          case 'master': return elo >= 1800;
+          default: return true;
+        }
+      })();
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesRealUser;
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesRealUser;
     });
     
     // Put selfPlayer at top
@@ -481,7 +493,7 @@ export default function DirectoryScreen() {
 
   const clearFilters = useCallback(() => {
     if (activeTab === 'players') {
-      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all' }));
+      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all', playerEloRank: 'all' }));
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
     } else if (activeTab === 'terrains') {
@@ -925,6 +937,15 @@ export default function DirectoryScreen() {
               allLabel={t('directory', 'allLabel')}
             />
             <FilterSection
+              title={language === 'fr' ? 'Rang ELO' : 'ELO Rank'}
+              options={['all', 'bronze', 'silver', 'gold', 'diamond', 'master']}
+              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1000)', silver: language === 'fr' ? 'Argent (1000+)' : 'Silver (1000+)', gold: language === 'fr' ? 'Or (1200+)' : 'Gold (1200+)', diamond: language === 'fr' ? 'Diamant (1500+)' : 'Diamond (1500+)', master: language === 'fr' ? 'Maitre (1800+)' : 'Master (1800+)' }}
+              value={filters.playerEloRank}
+              onChange={(v) => setFilters(f => ({ ...f, playerEloRank: v }))}
+              icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'auto-awesome' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
               title={t('directory', 'level')}
               options={uniqueValues.playerLevels}
               value={filters.playerLevel}
@@ -1317,6 +1338,7 @@ export default function DirectoryScreen() {
             {activeTab === 'players' && (
               <>
                 {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
+                {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
                 {filters.playerLevel !== 'all' && <ActiveFilterChip label={t('levels', filters.playerLevel)} onRemove={() => setFilters(f => ({ ...f, playerLevel: 'all' }))} />}
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
                 {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}

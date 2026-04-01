@@ -342,6 +342,7 @@ export default function LeaderboardScreen() {
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterTrustLevel, setFilterTrustLevel] = useState<string>('all');
+  const [filterEloRank, setFilterEloRank] = useState<string>('all');
   const [filterClub, setFilterClub] = useState<string>('all');
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterTerrain, setFilterTerrain] = useState<string>('all');
@@ -672,10 +673,10 @@ export default function LeaderboardScreen() {
 
   // Active filter count
   const activeFilterCount = useMemo(() => {
-    return [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel].filter(f => f !== 'all').length
+    return [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, filterEloRank].filter(f => f !== 'all').length
       + (geoScope !== 'world' && geoValue ? 1 : 0)
       + (periodFilter !== 'all' ? 1 : 0);
-  }, [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, geoScope, geoValue, periodFilter]);
+  }, [filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, filterEloRank, geoScope, geoValue, periodFilter]);
 
   // Trust level distribution stats
   const trustLevelStats = useMemo(() => {
@@ -721,6 +722,20 @@ export default function LeaderboardScreen() {
     else if (geoScope === 'continent' && geoValue) {
       result = result.filter(p => p.country ? getContinent(p.country) === geoValue : false);
     }
+    // ELO rank filter
+    if (filterEloRank !== 'all') {
+      result = result.filter(p => {
+        const elo = p.eloRating || 1000;
+        switch (filterEloRank) {
+          case 'bronze': return elo < 1000;
+          case 'silver': return elo >= 1000 && elo < 1200;
+          case 'gold': return elo >= 1200 && elo < 1500;
+          case 'diamond': return elo >= 1500 && elo < 1800;
+          case 'master': return elo >= 1800;
+          default: return true;
+        }
+      });
+    }
     // Trust level filter
     if (filterTrustLevel !== 'all') {
       result = result.filter(p => {
@@ -737,13 +752,13 @@ export default function LeaderboardScreen() {
     if (filterTerrain !== 'all') result = result.filter(p => p.terrainName === filterTerrain);
 
     return sortLeaderboard(result, sortBy);
-  }, [allPlayers, search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy, geoScope, geoValue]);
+  }, [allPlayers, search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, filterEloRank, sortBy, geoScope, geoValue]);
 
   const paginatedData = useMemo(() => filteredSorted.slice(0, visibleCount), [filteredSorted, visibleCount]);
   const hasMore = filteredSorted.length > visibleCount;
 
   // Reset pagination on filter/search change
-  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, sortBy, geoScope, geoValue, periodFilter]);
+  useEffect(() => { setVisibleCount(PAGE_SIZE); }, [search, filterRole, filterLevel, filterClub, filterBrand, filterTerrain, filterTrustLevel, filterEloRank, sortBy, geoScope, geoValue, periodFilter]);
 
   const handleLoadMore = useCallback(() => {
     if (hasMore) setVisibleCount(prev => prev + PAGE_SIZE);
@@ -763,6 +778,7 @@ export default function LeaderboardScreen() {
     setFilterBrand('all');
     setFilterTerrain('all');
     setFilterTrustLevel('all');
+    setFilterEloRank('all');
     setSearch('');
     setPeriodFilter('all');
     updateGeoScope('world', '');
@@ -874,6 +890,13 @@ export default function LeaderboardScreen() {
                   <MaterialIcons name="date-range" size={11} color="#F59E0B" />
                   <Text style={s.headerFilterChipText}>{t('leaderboard', `period${periodFilter.charAt(0).toUpperCase() + periodFilter.slice(1)}` as any) || periodFilter}</Text>
                   <Pressable onPress={() => handlePeriodChange('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
+                </Pressable>
+              ) : null}
+              {filterEloRank !== 'all' ? (
+                <Pressable style={s.headerFilterChip} onPress={() => setShowFilterModal(true)}>
+                  <MaterialIcons name="diamond" size={11} color="#F59E0B" />
+                  <Text style={s.headerFilterChipText}>{t('leaderboard', `eloFilter${filterEloRank.charAt(0).toUpperCase() + filterEloRank.slice(1)}` as any)}</Text>
+                  <Pressable onPress={() => setFilterEloRank('all')} hitSlop={6}><MaterialIcons name="close" size={12} color="#F59E0B" /></Pressable>
                 </Pressable>
               ) : null}
               {filterTrustLevel !== 'all' ? (
@@ -1805,6 +1828,34 @@ export default function LeaderboardScreen() {
                 ))}
               </View>
             </View>
+
+            {/* ELO Rank Filter (players tab) */}
+            {activeTab === 'players' ? (
+              <View style={s.fmSection}>
+                <View style={s.fmSectionHeader}>
+                  <View style={[s.fmSectionIcon, { backgroundColor: '#9333EA18' }]}><MaterialIcons name="diamond" size={16} color="#9333EA" /></View>
+                  <Text style={s.fmSectionTitle}>{t('leaderboard', 'eloRankFilter')}</Text>
+                </View>
+                <View style={s.fmChipGrid}>
+                  {[
+                    { id: 'all', label: t('leaderboard', 'eloAllRanks'), color: theme.textSecondary, icon: 'people' },
+                    { id: 'bronze', label: t('leaderboard', 'eloFilterBronze'), color: '#CD7F32', icon: 'shield' },
+                    { id: 'silver', label: t('leaderboard', 'eloFilterSilver'), color: '#94A3B8', icon: 'workspace-premium' },
+                    { id: 'gold', label: t('leaderboard', 'eloFilterGold'), color: '#F59E0B', icon: 'emoji-events' },
+                    { id: 'diamond', label: t('leaderboard', 'eloFilterDiamond'), color: '#06B6D4', icon: 'diamond' },
+                    { id: 'master', label: t('leaderboard', 'eloFilterMaster'), color: '#9333EA', icon: 'auto-awesome' },
+                  ].map(chip => {
+                    const isActive = filterEloRank === chip.id;
+                    return (
+                      <Pressable key={chip.id} style={[s.fmChip, isActive && { backgroundColor: chip.color + '15', borderColor: chip.color + '60' }]} onPress={() => { Haptics.selectionAsync(); setFilterEloRank(chip.id); }}>
+                        <MaterialIcons name={chip.icon as any} size={14} color={isActive ? chip.color : theme.textSecondary} />
+                        <Text style={[s.fmChipText, isActive && { color: chip.color, fontWeight: '700' }]}>{chip.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </View>
+            ) : null}
 
             {/* Trust Level (players tab) */}
             {activeTab === 'players' ? (
