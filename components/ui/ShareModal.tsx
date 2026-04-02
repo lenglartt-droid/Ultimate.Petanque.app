@@ -749,7 +749,16 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
               <View>
                 {/* Contact visibility toggle (auto-detected for player/club) */}
                 {showContactToggle && isOwnItem ? (
-                  <Animated.View entering={FadeInDown.duration(250)} style={s.contactToggleCard}>
+                  <Pressable
+                    style={s.contactToggleCard}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const newVal = !contactVisible;
+                      setContactVisible(newVal);
+                      if (itemType === 'player') updatePlayer(itemId, { showContactPublic: newVal });
+                      else if (itemType === 'club') updateClub(itemId, { showContactPublic: newVal } as any);
+                    }}
+                  >
                     <View style={[s.contactToggleIcon, { backgroundColor: (contactVisible ? '#10B981' : '#94A3B8') + '15' }]}>
                       <MaterialIcons name={contactVisible ? 'contact-phone' : 'phone-disabled'} size={18} color={contactVisible ? '#10B981' : '#94A3B8'} />
                     </View>
@@ -757,19 +766,10 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       <Text style={s.contactToggleLabel}>{fr ? 'Contacts visibles' : 'Contacts visible'}</Text>
                       <Text style={s.contactToggleDesc}>{contactVisible ? (fr ? 'Email et telephone visibles pour le destinataire' : 'Email and phone visible to recipient') : (fr ? 'Contacts masques pour le destinataire' : 'Contacts hidden from recipient')}</Text>
                     </View>
-                    <Switch
-                      value={contactVisible}
-                      onValueChange={(v) => {
-                        Haptics.selectionAsync();
-                        setContactVisible(v);
-                        // Persist immediately
-                        if (itemType === 'player') updatePlayer(itemId, { showContactPublic: v });
-                        else if (itemType === 'club') updateClub(itemId, { showContactPublic: v } as any);
-                      }}
-                      trackColor={{ false: '#E2E8F0', true: '#10B98160' }}
-                      thumbColor={contactVisible ? '#10B981' : '#94A3B8'}
-                    />
-                  </Animated.View>
+                    <View style={[s.customToggleTrack, contactVisible && s.customToggleTrackActive]}>
+                      <View style={[s.customToggleThumb, contactVisible && s.customToggleThumbActive]} />
+                    </View>
+                  </Pressable>
                 ) : null}
 
                 {/* Share options */}
@@ -1112,6 +1112,10 @@ const s = StyleSheet.create({
   contactToggleIcon: { width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   contactToggleLabel: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
   contactToggleDesc: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  customToggleTrack: { width: 48, height: 28, borderRadius: 14, backgroundColor: '#E2E8F0', justifyContent: 'center', paddingHorizontal: 3 },
+  customToggleTrackActive: { backgroundColor: '#10B98160' },
+  customToggleThumb: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#94A3B8' },
+  customToggleThumbActive: { backgroundColor: '#10B981', alignSelf: 'flex-end' as const },
 
   // Options list
   optionsList: { paddingHorizontal: 16, paddingTop: 16, gap: 8 },
