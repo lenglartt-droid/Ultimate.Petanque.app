@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,46 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getSupabaseClient } from '@/template';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
+
+// ============================================
+// ANIMATED COUNTER
+// ============================================
+function AnimatedCounter({ target, duration = 1800, suffix = '' }: { target: number; duration?: number; suffix?: string }) {
+  const [display, setDisplay] = useState(0);
+  const startTimeRef = useRef<number | null>(null);
+  const rafRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (target <= 0) { setDisplay(0); return; }
+    startTimeRef.current = null;
+
+    const step = (timestamp: number) => {
+      if (!startTimeRef.current) startTimeRef.current = timestamp;
+      const elapsed = timestamp - startTimeRef.current;
+      const progress = Math.min(elapsed / duration, 1);
+      // Ease out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setDisplay(Math.round(eased * target));
+      if (progress < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+    return () => { if (rafRef.current) cancelAnimationFrame(rafRef.current); };
+  }, [target, duration]);
+
+  const formatted = display >= 1000 ? `${(display / 1000).toFixed(display >= 10000 ? 0 : 1)}k` : `${display}`;
+  return <Text style={st.counterValue}>{formatted}{suffix}</Text>;
+}
+
+interface CommunityStats {
+  players: number;
+  matches: number;
+  terrains: number;
+}
 
 function getTestimonials(fr: boolean) {
   return [
@@ -70,6 +108,22 @@ export default function CreatorNoteScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
   const fr = language === 'fr';
+  const [stats, setStats] = useState<CommunityStats>({ players: 0, matches: 0, terrains: 0 });
+  const [statsLoaded, setStatsLoaded] = useState(false);
+
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    supabase.rpc('get_community_stats').then(({ data, error }: any) => {
+      if (!error && data) {
+        setStats({
+          players: Number(data.players) || 0,
+          matches: Number(data.matches) || 0,
+          terrains: Number(data.terrains) || 0,
+        });
+      }
+      setStatsLoaded(true);
+    }).catch(() => setStatsLoaded(true));
+  }, []);
 
   return (
     <SafeAreaView edges={['top']} style={st.container}>
@@ -107,6 +161,51 @@ export default function CreatorNoteScreen() {
               : '"Just the game, and the truth of the court."'}
           </Text>
         </LinearGradient>
+
+        {/* Community Stats Counter */}
+        {statsLoaded ? (
+          <View style={st.statsCard}>
+            <View style={st.statsHeader}>
+              <View style={st.statsSectionIcon}>
+                <MaterialIcons name="public" size={18} color="#2563EB" />
+              </View>
+              <Text style={st.statsTitle}>
+                {fr ? 'La communaute en chiffres' : 'The community in numbers'}
+              </Text>
+            </View>
+            <View style={st.statsRow}>
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#2563EB12' }]}>
+                  <MaterialIcons name="people" size={22} color="#2563EB" />
+                </View>
+                <AnimatedCounter target={stats.players} />
+                <Text style={st.statLabel}>{fr ? 'Joueurs' : 'Players'}</Text>
+              </View>
+              <View style={st.statDivider} />
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#10B98112' }]}>
+                  <MaterialIcons name="sports" size={22} color="#10B981" />
+                </View>
+                <AnimatedCounter target={stats.matches} />
+                <Text style={st.statLabel}>{fr ? 'Matchs' : 'Matches'}</Text>
+              </View>
+              <View style={st.statDivider} />
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#F59E0B12' }]}>
+                  <MaterialIcons name="place" size={22} color="#F59E0B" />
+                </View>
+                <AnimatedCounter target={stats.terrains} />
+                <Text style={st.statLabel}>{fr ? 'Terrains' : 'Courts'}</Text>
+              </View>
+            </View>
+            <View style={st.statsFooter}>
+              <MaterialIcons name="auto-awesome" size={12} color="#94A3B8" />
+              <Text style={st.statsFooterText}>
+                {fr ? 'Donnees en temps reel' : 'Real-time data'}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Section 1: Identity */}
         <View style={st.card}>
@@ -417,4 +516,18 @@ const st = StyleSheet.create({
   testimonialContent: { flex: 1 },
   testimonialQuote: { fontSize: 14, color: '#334155', lineHeight: 21, fontStyle: 'italic' },
   testimonialAuthor: { fontSize: 12, color: '#94A3B8', fontWeight: '600', marginTop: 4 },
+
+  // Stats counter
+  statsCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  statsHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16 },
+  statsSectionIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#2563EB10', alignItems: 'center', justifyContent: 'center' },
+  statsTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A', letterSpacing: 0.2 },
+  statsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around' },
+  statItem: { alignItems: 'center', flex: 1, gap: 6 },
+  statIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
+  counterValue: { fontSize: 28, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
+  statLabel: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  statDivider: { width: 1, height: 40, backgroundColor: '#F1F5F9' },
+  statsFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  statsFooterText: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
 });
