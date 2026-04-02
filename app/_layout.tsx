@@ -200,6 +200,9 @@ function LayoutInner() {
           case 'witness_attested':
             if (data.matchId) router.push(`/match/${data.matchId}` as any);
             break;
+          case 'club_claim':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'claims' } } as any);
+            break;
           default:
             break;
         }
@@ -730,6 +733,13 @@ function LayoutInner() {
                   headerShown: false,
                   presentation: 'modal',
                   animation: 'slide_from_bottom',
+                }} 
+              />
+              <Stack.Screen 
+                name="roadmap" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
                 }} 
               />
             </Stack>
