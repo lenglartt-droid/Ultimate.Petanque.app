@@ -444,6 +444,30 @@ export default function CreatorNoteScreen() {
           </Text>
         </View>
 
+        {/* Roadmap V2 CTA */}
+        <Pressable
+          style={({ pressed }) => [st.roadmapCta, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+          onPress={() => router.push('/roadmap' as any)}
+        >
+          <LinearGradient
+            colors={['#2563EB', '#7C3AED']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={st.roadmapCtaGradient}
+          >
+            <MaterialIcons name="rocket-launch" size={22} color="#FFF" />
+            <View style={st.roadmapCtaTextWrap}>
+              <Text style={st.roadmapCtaTitle}>
+                {fr ? 'Roadmap V2 — Votez !' : 'Roadmap V2 — Vote!'}
+              </Text>
+              <Text style={st.roadmapCtaSub}>
+                {fr ? 'Orientez les prochaines fonctionnalites' : 'Shape the next features'}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="rgba(255,255,255,0.7)" />
+          </LinearGradient>
+        </Pressable>
+
         {/* Contact */}
         <View style={st.contactCard}>
           <View style={st.contactIconWrap}>
@@ -539,6 +563,13 @@ const st = StyleSheet.create({
   contactSub: { fontSize: 13, color: '#94A3B8', marginBottom: 16 },
   contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
   contactBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+
+  // Roadmap CTA
+  roadmapCta: { marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
+  roadmapCtaGradient: { flexDirection: 'row', alignItems: 'center', padding: 18, gap: 14 },
+  roadmapCtaTextWrap: { flex: 1 },
+  roadmapCtaTitle: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  roadmapCtaSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
 
   // Testimonials
   testimonialsList: { gap: 14 },
