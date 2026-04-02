@@ -16,6 +16,56 @@ import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
 
+function getTestimonials(fr: boolean) {
+  return [
+    {
+      initials: 'TM',
+      name: fr ? 'Thierry M.' : 'Thierry M.',
+      location: fr ? 'Marseille' : 'Marseille, FR',
+      color: '#2563EB',
+      quote: fr
+        ? "Enfin un outil qui me permet de voir ou j'en suis vraiment. Mes stats de tir m'ont ouvert les yeux."
+        : "Finally a tool that lets me see where I really stand. My shot stats were an eye-opener.",
+    },
+    {
+      initials: 'SL',
+      name: fr ? 'Sophie L.' : 'Sophie L.',
+      location: fr ? 'Lyon' : 'Lyon, FR',
+      color: '#10B981',
+      quote: fr
+        ? "On a trouve 3 terrains a 10 min de chez nous grace a la carte. On joue deux fois plus maintenant !"
+        : "We found 3 courts within 10 min of home thanks to the map. We play twice as much now!",
+    },
+    {
+      initials: 'JD',
+      name: fr ? 'Jean-Pierre D.' : 'Jean-Pierre D.',
+      location: fr ? 'Toulouse' : 'Toulouse, FR',
+      color: '#F59E0B',
+      quote: fr
+        ? "Le classement ELO motive tout le club. On se challenge entre nous et on progresse ensemble."
+        : "The ELO ranking motivates the whole club. We challenge each other and improve together.",
+    },
+    {
+      initials: 'MC',
+      name: fr ? 'Marc C.' : 'Marc C.',
+      location: fr ? 'Bruxelles' : 'Brussels, BE',
+      color: '#EC4899',
+      quote: fr
+        ? "En vacances en Espagne, j'ai trouve des joueurs locaux en 5 minutes. Meilleure partie de mon ete."
+        : "On holiday in Spain, I found local players in 5 minutes. Best game of my summer.",
+    },
+    {
+      initials: 'NR',
+      name: fr ? 'Nadia R.' : 'Nadia R.',
+      location: fr ? 'Montreal' : 'Montreal, CA',
+      color: '#7C3AED',
+      quote: fr
+        ? "Je debute et les conseils bases sur mes stats m'aident enormement. Simple et efficace."
+        : "I am a beginner and the advice based on my stats helps me enormously. Simple and effective.",
+    },
+  ];
+}
+
 export default function CreatorNoteScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
@@ -196,7 +246,30 @@ export default function CreatorNoteScreen() {
           </Text>
         </View>
 
-        {/* Section 8: Free + support */}
+        {/* Section 8: Testimonials */}
+        <View style={st.card}>
+          <View style={st.sectionIcon}>
+            <MaterialIcons name="format-quote" size={20} color="#7C3AED" />
+          </View>
+          <Text style={st.sectionLabel}>
+            {fr ? 'Ils jouent, ils partagent' : 'They play, they share'}
+          </Text>
+          <View style={st.testimonialsList}>
+            {getTestimonials(fr).map((item, i) => (
+              <View key={i} style={st.testimonialRow}>
+                <View style={[st.testimonialAvatar, { backgroundColor: item.color + '18' }]}> 
+                  <Text style={[st.testimonialInitial, { color: item.color }]}>{item.initials}</Text>
+                </View>
+                <View style={st.testimonialContent}>
+                  <Text style={st.testimonialQuote}>"{item.quote}"</Text>
+                  <Text style={st.testimonialAuthor}>{item.name} {"\u2022"} {item.location}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+
+        {/* Section 9: Free + support */}
         <View style={[st.card, st.supportCard]}>
           <View style={st.sectionIcon}>
             <MaterialIcons name="volunteer-activism" size={20} color="#F59E0B" />
@@ -224,6 +297,14 @@ export default function CreatorNoteScreen() {
 
         {/* Section 9: Thank you */}
         <View style={st.thanksCard}>
+          <MaterialIcons name="public" size={18} color="#2563EB" />
+          <Text style={st.thanksSubText}>
+            {fr
+              ? 'Nous sommes 12 millions de joueurs sur la planete.'
+              : 'We are 12 million players on the planet.'}
+          </Text>
+        </View>
+        <View style={[st.thanksCard, { marginTop: -4 }]}>
           <MaterialIcons name="favorite" size={20} color="#F87171" />
           <Text style={st.thanksText}>
             {fr
@@ -241,7 +322,7 @@ export default function CreatorNoteScreen() {
             {fr ? "Besoin d'aide ou une idee ?" : 'Need help or have an idea?'}
           </Text>
           <Text style={st.contactSub}>
-            {fr ? 'Notre equipe repond sous 24h' : 'Our team responds within 24h'}
+            {fr ? 'Je ferai mon possible pour vous repondre au plus vite' : 'I will do my best to respond as quickly as possible'}
           </Text>
           <Pressable
             style={({ pressed }) => [st.contactBtn, pressed && { opacity: 0.85 }]}
@@ -318,6 +399,7 @@ const st = StyleSheet.create({
   // Thanks
   thanksCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 24, marginBottom: 12 },
   thanksText: { fontSize: 16, fontWeight: '700', color: '#0F172A', fontStyle: 'italic' },
+  thanksSubText: { fontSize: 14, fontWeight: '600', color: '#334155' },
 
   // Contact
   contactCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
@@ -326,4 +408,13 @@ const st = StyleSheet.create({
   contactSub: { fontSize: 13, color: '#94A3B8', marginBottom: 16 },
   contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
   contactBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
+
+  // Testimonials
+  testimonialsList: { gap: 14 },
+  testimonialRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  testimonialAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
+  testimonialInitial: { fontSize: 14, fontWeight: '800' },
+  testimonialContent: { flex: 1 },
+  testimonialQuote: { fontSize: 14, color: '#334155', lineHeight: 21, fontStyle: 'italic' },
+  testimonialAuthor: { fontSize: 12, color: '#94A3B8', fontWeight: '600', marginTop: 4 },
 });
