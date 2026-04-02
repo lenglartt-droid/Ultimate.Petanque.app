@@ -21,6 +21,7 @@ export const BOULES_BRANDS = [
   'LA FRANC',
   'MARATHON',
   'GEOLOGIC',
+  'TORO PETANK',
 ] as const;
 
 export const BOULES_DATABASE: BoulesModel[] = [
@@ -80,6 +81,12 @@ export const BOULES_DATABASE: BoulesModel[] = [
   // GEOLOGIC
   { brand: 'GEOLOGIC', model: 'Delta', material: 'Acier carbone', hardness: 'Dure', targetUsage: 'Débutant / Pointeur', particularities: 'Accessible' },
   { brand: 'GEOLOGIC', model: 'Alpha', material: 'Acier carbone', hardness: 'Tendre', targetUsage: 'Tireur', particularities: 'Entrée de gamme tireur' },
+
+  // TORO PETANK
+  { brand: 'TORO PETANK', model: 'Toro Carbone', material: 'Acier carbone', hardness: 'Demi-tendre (~120kg)', targetUsage: 'Polyvalente', particularities: 'Disponible lisse ou striée' },
+  { brand: 'TORO PETANK', model: 'Toro Inox', material: 'Acier inox', hardness: 'Demi-dure (~125kg)', targetUsage: 'Milieu', particularities: 'Faible entretien, lisse ou striée' },
+  { brand: 'TORO PETANK', model: 'Toro 119', material: 'Acier carbone', hardness: 'Demi-tendre (~120kg)', targetUsage: 'Polyvalente', particularities: 'Modèle classique, finition lisse' },
+  { brand: 'TORO PETANK', model: 'Toro 119+', material: 'Acier carbone', hardness: 'Tendre (~115kg)', targetUsage: 'Tireur', particularities: 'Stries spécifiques, meilleur amorti' },
 ];
 
 // Brand visual identities for leaderboard/widget and brand picker
@@ -93,6 +100,7 @@ export const BOULES_BRAND_IMAGES: Record<string, { uri: string }> = {
   'LA FRANC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/j3ATX9KiArNeGMTbYooSta/La-franc-Logo-recadre.png' },
   'MARATHON': { uri: 'https://cdn-ai.onspace.ai/onspace/files/ZaEayyuTQmXnHt9HiFHXWC/marathon.png' },
   'GEOLOGIC': { uri: 'https://cdn-ai.onspace.ai/onspace/files/7tedt8XwQQXgPcrFmj5Ma5/geologic.png' },
+  'TORO PETANK': { uri: 'https://cdn-ai.onspace.ai/onspace/files/eZJMF8rKcHRFfZd94gQ74J/TOro_Petank.jpg' },
 };
 
 export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abbr: string }> = {
@@ -105,6 +113,7 @@ export const BOULES_BRAND_COLORS: Record<string, { bg: string; text: string; abb
   'LA FRANC': { bg: '#00838F', text: '#FFFFFF', abbr: 'LF' },
   'MARATHON': { bg: '#4E342E', text: '#FFFFFF', abbr: 'MA' },
   'GEOLOGIC': { bg: '#37474F', text: '#FFFFFF', abbr: 'GE' },
+  'TORO PETANK': { bg: '#B91C1C', text: '#FFFFFF', abbr: 'TP' },
 };
 
 export function getBrandImage(brand: string): { uri: string } | null {
