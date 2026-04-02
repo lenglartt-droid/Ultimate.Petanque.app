@@ -933,6 +933,37 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // CLUB_CLAIM: Notify club owner about a new ownership claim
+    // ============================================================
+    else if (type === 'club_claim') {
+      const { ownerUserId, requesterName, clubName, clubId } = payload || {};
+      if (!ownerUserId || !clubId) {
+        return new Response(JSON.stringify({ error: 'Missing ownerUserId/clubId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', ownerUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F3E2} Revendication de club`,
+          `${requesterName || 'Un utilisateur'} souhaite revendiquer la propriete de "${clubName || 'votre club'}". Consultez la demande.`,
+          { type: 'club_claim', clubId },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

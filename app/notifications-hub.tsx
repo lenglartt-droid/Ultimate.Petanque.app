@@ -46,12 +46,19 @@ import {
   respondToMeetup,
   PendingInvitation,
 } from '@/services/meetupService';
+import {
+  getReceivedClaims,
+  acceptClubClaim,
+  declineClubClaim,
+  ClubClaimRequest,
+} from '@/services/clubClaimService';
 
-type TabKey = 'invitations' | 'witness' | 'tournaments' | 'preferences';
+type TabKey = 'invitations' | 'witness' | 'claims' | 'tournaments' | 'preferences';
 
 const TABS: { key: TabKey; labelFr: string; labelEn: string; icon: string; color: string }[] = [
   { key: 'invitations', labelFr: 'Invitations', labelEn: 'Invitations', icon: 'mail', color: theme.primary },
   { key: 'witness', labelFr: 'Attestations', labelEn: 'Witness', icon: 'visibility', color: '#7C3AED' },
+  { key: 'claims', labelFr: 'Clubs', labelEn: 'Claims', icon: 'verified-user', color: '#2563EB' },
   { key: 'tournaments', labelFr: 'Tournois', labelEn: 'Tournaments', icon: 'emoji-events', color: theme.carreauColor },
   { key: 'preferences', labelFr: 'Réglages', labelEn: 'Settings', icon: 'tune', color: '#64748B' },
 ];
@@ -109,6 +116,11 @@ export default function NotificationsHubScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
+  // Claims state
+  const [clubClaims, setClubClaims] = useState<ClubClaimRequest[]>([]);
+  const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
+  const [claimFilter, setClaimFilter] = useState('all');
+
   // Filter state
   const [invFilter, setInvFilter] = useState('all');
   const [witnessFilter, setWitnessFilter] = useState('all');
@@ -118,9 +130,11 @@ export default function NotificationsHubScreen() {
   const pendingMatchCount = matchRequests.filter(r => r.status === 'pending').length;
   const pendingMeetupCount = meetupInvitations.length;
   const pendingWitnessCount = witnessInvitations.filter(i => i.status === 'pending').length;
+  const pendingClaimCount = clubClaims.filter(c => c.status === 'pending').length;
   const tabBadges: Record<TabKey, number> = {
     invitations: pendingMatchCount + pendingMeetupCount,
     witness: pendingWitnessCount,
+    claims: pendingClaimCount,
     tournaments: 0,
     preferences: 0,
   };
@@ -130,6 +144,7 @@ export default function NotificationsHubScreen() {
     setActiveTab(key);
     setInvFilter('all');
     setWitnessFilter('all');
+    setClaimFilter('all');
     setTournamentFilter('all');
   }, []);
 
@@ -219,6 +234,10 @@ export default function NotificationsHubScreen() {
       const scheduled = await getAllScheduledNotifications();
       setScheduledCount(scheduled.length);
 
+      // Load club claims
+      const { claims: claimsData } = await getReceivedClaims();
+      setClubClaims(claimsData);
+
       const prefs = await loadNotificationPreferences();
       setNotifPrefs(prefs);
       setPrefsLoaded(true);
@@ -295,6 +314,39 @@ export default function NotificationsHubScreen() {
     Haptics.selectionAsync();
     setNotifPrefs(prev => { const u = { ...prev, [key]: !prev[key] }; saveNotificationPreferences(u).catch(() => {}); return u; });
   }, []);
+
+  // Claims handlers
+  const handleAcceptClaim = useCallback(async (claimId: string) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setProcessingClaimId(claimId);
+    const { error } = await acceptClubClaim(claimId);
+    setProcessingClaimId(null);
+    if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+    setClubClaims(prev => prev.map(c => c.id === claimId ? { ...c, status: 'accepted' as const } : c));
+    showAlert(fr ? 'Succes' : 'Success', fr ? 'Propriete transferee avec succes. Badge Contributeur obtenu.' : 'Ownership transferred successfully. Contributor badge earned.');
+  }, [fr, showAlert]);
+
+  const handleDeclineClaim = useCallback(async (claimId: string) => {
+    Alert.alert(fr ? 'Refuser la revendication ?' : 'Decline this claim?', '', [
+      { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+      { text: fr ? 'Refuser' : 'Decline', style: 'destructive', onPress: async () => {
+        setProcessingClaimId(claimId);
+        const { error } = await declineClubClaim(claimId);
+        setProcessingClaimId(null);
+        if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+        setClubClaims(prev => prev.map(c => c.id === claimId ? { ...c, status: 'declined' as const } : c));
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }},
+    ]);
+  }, [fr, showAlert]);
+
+  const filteredClaims = useMemo(() => {
+    let items = clubClaims;
+    if (claimFilter === 'pending') items = items.filter(c => c.status === 'pending');
+    if (claimFilter === 'accepted') items = items.filter(c => c.status === 'accepted');
+    if (claimFilter === 'declined') items = items.filter(c => c.status === 'declined');
+    return items;
+  }, [clubClaims, claimFilter]);
 
   const enabledPrefCount = Object.values(notifPrefs).filter(Boolean).length;
 
@@ -649,6 +701,83 @@ export default function NotificationsHubScreen() {
           </View>
         ) : null}
 
+        {/* ========== CLAIMS TAB ========== */}
+        {activeTab === 'claims' ? (
+          <View>
+            {renderFilterChips([
+              { key: 'all', labelFr: 'Tout', labelEn: 'All', icon: 'list' },
+              { key: 'pending', labelFr: 'En attente', labelEn: 'Pending', icon: 'schedule' },
+              { key: 'accepted', labelFr: 'Acceptees', labelEn: 'Accepted', icon: 'check-circle' },
+              { key: 'declined', labelFr: 'Refusees', labelEn: 'Declined', icon: 'cancel' },
+            ], claimFilter, setClaimFilter)}
+
+            <View style={s.tipBanner}>
+              <View style={[s.tipIcon, { backgroundColor: '#DBEAFE' }]}><MaterialIcons name="info-outline" size={16} color="#2563EB" /></View>
+              <Text style={[s.tipText, { color: '#1D4ED8' }]}>{fr ? 'Les demandes de revendication de vos clubs apparaissent ici. Acceptez pour transferer la propriete et obtenir le badge Contributeur.' : 'Ownership claims for your clubs appear here. Accept to transfer ownership and earn the Contributor badge.'}</Text>
+            </View>
+
+            {filteredClaims.filter(c => c.status === 'pending').length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#F59E0B' }]} /><Text style={s.sectionLabel}>{fr ? 'En attente' : 'Pending'}</Text><Text style={s.sectionCount}>{filteredClaims.filter(c => c.status === 'pending').length}</Text></View>
+                {filteredClaims.filter(c => c.status === 'pending').map((claim, idx) => (
+                  <Animated.View key={claim.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
+                    <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: '#F59E0B' }]}>
+                      <View style={s.cardRow}>
+                        <View style={[s.cardIconBg, { backgroundColor: '#F59E0B12' }]}><MaterialIcons name="verified-user" size={20} color="#F59E0B" /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.cardTitle} numberOfLines={1}>{claim.requesterName || claim.requesterEmail || (fr ? 'Utilisateur' : 'User')}</Text>
+                          <Text style={s.cardMeta}>{claim.requesterEmail || ''}</Text>
+                          <Text style={s.cardMetaSub}>{new Date(claim.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                        </View>
+                        <Pressable onPress={() => router.push(`/club/${claim.clubId}` as any)} hitSlop={8}>
+                          <MaterialIcons name="open-in-new" size={16} color={theme.primary} />
+                        </Pressable>
+                      </View>
+                      {claim.message ? (
+                        <View style={{ flexDirection: 'row', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <MaterialIcons name="format-quote" size={14} color="#94A3B8" />
+                          <Text style={{ flex: 1, fontSize: 12, color: '#64748B', lineHeight: 18, fontStyle: 'italic' }}>{claim.message}</Text>
+                        </View>
+                      ) : null}
+                      <View style={s.actionRow}>
+                        <Pressable style={s.declineBtn} onPress={() => handleDeclineClaim(claim.id)} disabled={processingClaimId === claim.id}><MaterialIcons name="close" size={16} color={theme.error} /><Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text></Pressable>
+                        <Pressable style={[s.acceptBtn, { backgroundColor: '#10B981' }]} onPress={() => handleAcceptClaim(claim.id)} disabled={processingClaimId === claim.id}>
+                          {processingClaimId === claim.id ? <ActivityIndicator size="small" color="#FFF" /> : <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Accepter le transfert' : 'Accept transfer'}</Text></>}
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : null}
+
+            {filteredClaims.filter(c => c.status !== 'pending').length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: theme.textMuted }]} /><Text style={s.sectionLabel}>{fr ? 'Historique' : 'History'}</Text></View>
+                {filteredClaims.filter(c => c.status !== 'pending').map((claim, idx) => {
+                  const color = claim.status === 'accepted' ? '#22C55E' : '#EF4444';
+                  return (
+                    <Animated.View key={claim.id} entering={FadeIn.duration(200).delay(idx * 25)}>
+                      <Pressable style={[s.card, { borderLeftWidth: 3, borderLeftColor: color, opacity: 0.75 }]} onPress={() => router.push(`/club/${claim.clubId}` as any)}>
+                        <View style={s.cardRow}>
+                          <View style={[s.cardIconBg, { backgroundColor: color + '10' }]}><MaterialIcons name={claim.status === 'accepted' ? 'check-circle' : 'cancel'} size={20} color={color} /></View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.cardTitle} numberOfLines={1}>{claim.requesterName || claim.requesterEmail || (fr ? 'Utilisateur' : 'User')}</Text>
+                            <Text style={s.cardMeta}>{new Date(claim.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                          </View>
+                          <View style={[s.statusChip, { backgroundColor: color + '12' }]}><Text style={[s.statusChipText, { color }]}>{claim.status === 'accepted' ? (fr ? 'Transfere' : 'Transferred') : (fr ? 'Refuse' : 'Declined')}</Text></View>
+                        </View>
+                      </Pressable>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {filteredClaims.length === 0 ? renderEmpty('verified-user', claimFilter !== 'all') : null}
+          </View>
+        ) : null}
+
         {/* ========== TOURNAMENTS TAB ========== */}
         {activeTab === 'tournaments' ? (
           <View>
@@ -755,9 +884,9 @@ const s = StyleSheet.create({
   // Segmented tabs
   segmentWrap: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   segmentBar: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 14, padding: 3 },
-  segmentItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 12 },
+  segmentItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 2, borderRadius: 12 },
   segmentItemActive: { backgroundColor: '#0F172A' },
-  segmentLabel: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
+  segmentLabel: { fontSize: 10, fontWeight: '600', color: '#94A3B8' },
   segmentLabelActive: { color: '#FFF' },
   segmentBadge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
   segmentBadgeActive: { backgroundColor: '#FFF' },

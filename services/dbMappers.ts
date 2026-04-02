@@ -56,6 +56,7 @@ export function mapClubFromDb(c: any): Club {
     website: c.website || undefined,
     facebookUrl: c.facebook_url || undefined,
     instagramHandle: c.instagram_handle || undefined,
+    isVerified: c.is_verified ?? false,
   };
 }
 
