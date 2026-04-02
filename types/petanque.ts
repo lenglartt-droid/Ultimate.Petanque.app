@@ -117,6 +117,7 @@ export interface Club {
   website?: string;
   facebookUrl?: string;
   instagramHandle?: string;
+  isVerified?: boolean;
 }
 
 // ============================================
