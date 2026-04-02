@@ -569,6 +569,14 @@ export default function OnboardingScreen() {
           ? 'Ton rang evolue a chaque match : Bronze, Argent, Or, Diamant, Maitre.'
           : 'Your rank evolves with every match: Bronze, Silver, Gold, Diamond, Master.',
       },
+      {
+        icon: 'verified-user',
+        color: '#DC2626',
+        title: language === 'fr' ? 'Score de Confiance (TrustScore)' : 'Trust Score (TrustScore)',
+        desc: language === 'fr'
+          ? 'Un systeme anti-triche avance qui analyse, detecte les anomalies et garantit un classement fiable et equitable.'
+          : 'An advanced anti-cheat system that analyzes, detects anomalies and ensures a reliable and fair ranking.',
+      },
     ];
 
     return (
@@ -612,8 +620,8 @@ export default function OnboardingScreen() {
               <MaterialIcons name="auto-awesome" size={16} color="#FCD34D" />
               <Text style={s.featureTeaserText}>
                 {language === 'fr'
-                  ? 'Et bien plus : tournois, defis solo, score de confiance...'
-                  : 'And much more: tournaments, solo challenges, trust score...'}
+                  ? 'La fiabilite du classement repose sur 2 piliers : un classement ELO dynamique et un systeme anti-triche (Score de Confiance).'
+                  : 'Ranking reliability is built on 2 pillars: a dynamic ELO ranking and an anti-cheat system (Trust Score).'}
               </Text>
             </View>
 
@@ -643,6 +651,13 @@ export default function OnboardingScreen() {
       { icon: 'event', color: '#EC4899', label: language === 'fr' ? 'Rencontres & meetups' : 'Meetups & events' },
     ];
 
+    const communityTips = [
+      { icon: 'person', color: '#3B82F6', text: language === 'fr' ? 'Rends ta fiche joueur publique' : 'Make your player card public' },
+      { icon: 'place', color: '#10B981', text: language === 'fr' ? 'Partage tes terrains preferes avec adresse precise' : 'Share your favorite courts with exact address' },
+      { icon: 'groups', color: '#F59E0B', text: language === 'fr' ? 'Ajoute ton club avec toutes les infos' : 'Add your club with all details' },
+      { icon: 'emoji-events', color: '#9333EA', text: language === 'fr' ? 'Annonce tes tournois avec lieu et date' : 'Post your tournaments with location and date' },
+    ];
+
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
@@ -660,8 +675,8 @@ export default function OnboardingScreen() {
               </Text>
               <Text style={s.pageSubtitle}>
                 {language === 'fr'
-                  ? 'Explore la carte interactive pour trouver tout ce qu\'il te faut.'
-                  : 'Explore the interactive map to find everything you need.'}
+                  ? 'L\'application a besoin de sa communaute pour fonctionner ! Plus tu partages, plus tu trouves.'
+                  : 'The app needs its community to work! The more you share, the more you find.'}
               </Text>
             </View>
 
@@ -693,6 +708,39 @@ export default function OnboardingScreen() {
                   <Text style={s.mapFeatureLabel}>{f.label}</Text>
                 </View>
               ))}
+            </View>
+
+            {/* Community call-to-action */}
+            <View style={s.communityCallCard}>
+              <View style={s.communityCallHeader}>
+                <MaterialIcons name="volunteer-activism" size={18} color="#F59E0B" />
+                <Text style={s.communityCallTitle}>
+                  {language === 'fr' ? 'Aide la communaute a grandir' : 'Help the community grow'}
+                </Text>
+              </View>
+              <Text style={s.communityCallDesc}>
+                {language === 'fr'
+                  ? 'Pour que chacun puisse trouver des joueurs, terrains et tournois, il est fortement conseille de :'
+                  : 'So everyone can find players, courts and tournaments, it is strongly recommended to:'}
+              </Text>
+              <View style={s.communityTipsList}>
+                {communityTips.map((tip, i) => (
+                  <View key={i} style={s.communityTipRow}>
+                    <View style={[s.communityTipIcon, { backgroundColor: tip.color + '18' }]}>
+                      <MaterialIcons name={tip.icon as any} size={15} color={tip.color} />
+                    </View>
+                    <Text style={s.communityTipText}>{tip.text}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={s.communityCallNote}>
+                <MaterialIcons name="info-outline" size={14} color="#94A3B8" />
+                <Text style={s.communityCallNoteText}>
+                  {language === 'fr'
+                    ? 'Pensez a bien renseigner les adresses pour apparaitre sur la carte !'
+                    : 'Make sure to fill in addresses properly to appear on the map!'}
+                </Text>
+              </View>
             </View>
 
             <View style={s.ctaContainer}>
@@ -1479,6 +1527,72 @@ const s = StyleSheet.create({
     fontWeight: '600',
     color: '#E2E8F0',
     flex: 1,
+  },
+
+  // --- Community call ---
+  communityCallCard: {
+    width: '100%',
+    backgroundColor: '#1E293B',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#F59E0B30',
+  },
+  communityCallHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  communityCallTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#FCD34D',
+  },
+  communityCallDesc: {
+    fontSize: 12,
+    color: '#94A3B8',
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  communityTipsList: {
+    gap: 8,
+    marginBottom: 10,
+  },
+  communityTipRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  communityTipIcon: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  communityTipText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#E2E8F0',
+    flex: 1,
+  },
+  communityCallNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#0F172A40',
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  communityCallNoteText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+    flex: 1,
+    lineHeight: 16,
   },
 
   // --- Benefits (login step) ---
