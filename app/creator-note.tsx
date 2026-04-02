@@ -52,6 +52,9 @@ interface CommunityStats {
   players: number;
   matches: number;
   terrains: number;
+  tournaments: number;
+  clubs: number;
+  challenges: number;
 }
 
 function getTestimonials(fr: boolean) {
@@ -108,7 +111,7 @@ export default function CreatorNoteScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
   const fr = language === 'fr';
-  const [stats, setStats] = useState<CommunityStats>({ players: 0, matches: 0, terrains: 0 });
+  const [stats, setStats] = useState<CommunityStats>({ players: 0, matches: 0, terrains: 0, tournaments: 0, clubs: 0, challenges: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
 
   useEffect(() => {
@@ -119,6 +122,9 @@ export default function CreatorNoteScreen() {
           players: Number(data.players) || 0,
           matches: Number(data.matches) || 0,
           terrains: Number(data.terrains) || 0,
+          tournaments: Number(data.tournaments) || 0,
+          clubs: Number(data.clubs) || 0,
+          challenges: Number(data.challenges) || 0,
         });
       }
       setStatsLoaded(true);
@@ -196,6 +202,32 @@ export default function CreatorNoteScreen() {
                 </View>
                 <AnimatedCounter target={stats.terrains} />
                 <Text style={st.statLabel}>{fr ? 'Terrains' : 'Courts'}</Text>
+              </View>
+            </View>
+            <View style={st.statsRowDivider} />
+            <View style={st.statsRow}>
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#7C3AED12' }]}>
+                  <MaterialIcons name="emoji-events" size={22} color="#7C3AED" />
+                </View>
+                <AnimatedCounter target={stats.tournaments} />
+                <Text style={st.statLabel}>{fr ? 'Tournois' : 'Tournaments'}</Text>
+              </View>
+              <View style={st.statDivider} />
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#EC489912' }]}>
+                  <MaterialIcons name="groups" size={22} color="#EC4899" />
+                </View>
+                <AnimatedCounter target={stats.clubs} />
+                <Text style={st.statLabel}>{fr ? 'Clubs' : 'Clubs'}</Text>
+              </View>
+              <View style={st.statDivider} />
+              <View style={st.statItem}>
+                <View style={[st.statIconWrap, { backgroundColor: '#DC262612' }]}>
+                  <MaterialIcons name="track-changes" size={22} color="#DC2626" />
+                </View>
+                <AnimatedCounter target={stats.challenges} />
+                <Text style={st.statLabel}>{fr ? 'Defis' : 'Challenges'}</Text>
               </View>
             </View>
             <View style={st.statsFooter}>
@@ -528,6 +560,7 @@ const st = StyleSheet.create({
   counterValue: { fontSize: 28, fontWeight: '800', color: '#0F172A', letterSpacing: -0.5 },
   statLabel: { fontSize: 12, fontWeight: '600', color: '#64748B' },
   statDivider: { width: 1, height: 40, backgroundColor: '#F1F5F9' },
+  statsRowDivider: { height: 1, backgroundColor: '#F1F5F9', marginVertical: 14, marginHorizontal: 12 },
   statsFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   statsFooterText: { fontSize: 11, color: '#94A3B8', fontWeight: '500' },
 });
