@@ -11,38 +11,67 @@ import { triggerServerPush } from '@/services/pushTokenService';
 
 export interface MaintenanceStatus {
   isActive: boolean;
+  isScheduled: boolean;
   messageFr: string | null;
   messageEn: string | null;
   endTime: string | null;
   startedAt: string | null;
+  scheduledAt: string | null;
+  scheduledMessageFr: string | null;
+  scheduledMessageEn: string | null;
+  scheduledDurationMinutes: number | null;
+  scheduledSendPush: boolean;
 }
 
 /**
  * Fetch current maintenance status from app_config.
  * Uses anon-accessible RLS policy so it works for all users.
  */
+const DEFAULT_STATUS: MaintenanceStatus = {
+  isActive: false, isScheduled: false, messageFr: null, messageEn: null,
+  endTime: null, startedAt: null, scheduledAt: null,
+  scheduledMessageFr: null, scheduledMessageEn: null,
+  scheduledDurationMinutes: null, scheduledSendPush: false,
+};
+
 export async function getMaintenanceStatus(): Promise<MaintenanceStatus> {
   try {
     const supabase = getSupabaseClient();
     const { data, error } = await supabase
       .from('app_config')
-      .select('maintenance_mode, maintenance_message_fr, maintenance_message_en, maintenance_end_time, maintenance_started_at')
+      .select('*')
       .eq('id', 'main')
       .single();
 
-    if (error || !data) {
-      return { isActive: false, messageFr: null, messageEn: null, endTime: null, startedAt: null };
+    if (error || !data) return { ...DEFAULT_STATUS };
+
+    const now = Date.now();
+    const scheduledAt = data.scheduled_maintenance_at;
+    const isScheduledFuture = !!scheduledAt && new Date(scheduledAt).getTime() > now;
+    // Scheduled time passed but maintenance_mode not yet formally enabled
+    const isScheduledPast = !!scheduledAt && new Date(scheduledAt).getTime() <= now && !data.maintenance_mode;
+
+    // Compute end time for auto-activated scheduled maintenance
+    let computedEndTime = data.maintenance_end_time;
+    if (isScheduledPast && data.scheduled_duration_minutes && !computedEndTime) {
+      computedEndTime = new Date(new Date(scheduledAt).getTime() + data.scheduled_duration_minutes * 60000).toISOString();
     }
 
     return {
-      isActive: data.maintenance_mode === true,
-      messageFr: data.maintenance_message_fr,
-      messageEn: data.maintenance_message_en,
-      endTime: data.maintenance_end_time,
-      startedAt: data.maintenance_started_at,
+      isActive: data.maintenance_mode === true || isScheduledPast,
+      isScheduled: isScheduledFuture,
+      messageFr: data.maintenance_mode ? data.maintenance_message_fr : (isScheduledPast ? data.scheduled_message_fr : data.maintenance_message_fr),
+      messageEn: data.maintenance_mode ? data.maintenance_message_en : (isScheduledPast ? data.scheduled_message_en : data.maintenance_message_en),
+      endTime: computedEndTime,
+      startedAt: data.maintenance_started_at || (isScheduledPast ? scheduledAt : null),
+      scheduledAt: scheduledAt,
+      scheduledMessageFr: data.scheduled_message_fr,
+      scheduledMessageEn: data.scheduled_message_en,
+      scheduledDurationMinutes: data.scheduled_duration_minutes,
+      scheduledSendPush: data.scheduled_send_push ?? false,
     };
   } catch {
-    return { isActive: false, messageFr: null, messageEn: null, endTime: null, startedAt: null };
+    return { ...DEFAULT_STATUS };
   }
 }
 
@@ -91,9 +120,115 @@ export async function enableMaintenance(params: {
 }
 
 /**
- * Disable maintenance mode (admin only).
+ * Schedule maintenance for a future date/time (admin only).
  */
-export async function disableMaintenance(): Promise<{ error: string | null }> {
+export async function scheduleMaintenance(params: {
+  scheduledAt: string;
+  messageFr: string;
+  messageEn: string;
+  durationMinutes?: number;
+  sendPush?: boolean;
+}): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('app_config')
+      .update({
+        scheduled_maintenance_at: params.scheduledAt,
+        scheduled_message_fr: params.messageFr,
+        scheduled_message_en: params.messageEn,
+        scheduled_duration_minutes: params.durationMinutes || null,
+        scheduled_send_push: params.sendPush ?? true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 'main');
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Cancel a scheduled maintenance (admin only).
+ */
+export async function cancelScheduledMaintenance(): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('app_config')
+      .update({
+        scheduled_maintenance_at: null,
+        scheduled_message_fr: null,
+        scheduled_message_en: null,
+        scheduled_duration_minutes: null,
+        scheduled_send_push: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 'main');
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Auto-activate a scheduled maintenance that has reached its start time.
+ * Only succeeds for admin users (RLS). Silently fails for others.
+ * Copies scheduled fields to active fields, clears schedule, optionally sends push.
+ */
+export async function autoActivateScheduledMaintenance(status: MaintenanceStatus): Promise<{ pushSent?: number; pushErrors?: number }> {
+  try {
+    const supabase = getSupabaseClient();
+    const endTime = status.scheduledDurationMinutes && status.scheduledAt
+      ? new Date(new Date(status.scheduledAt).getTime() + status.scheduledDurationMinutes * 60000).toISOString()
+      : null;
+
+    const { error } = await supabase
+      .from('app_config')
+      .update({
+        maintenance_mode: true,
+        maintenance_message_fr: status.scheduledMessageFr,
+        maintenance_message_en: status.scheduledMessageEn,
+        maintenance_end_time: endTime,
+        maintenance_started_at: status.scheduledAt || new Date().toISOString(),
+        scheduled_maintenance_at: null,
+        scheduled_message_fr: null,
+        scheduled_message_en: null,
+        scheduled_duration_minutes: null,
+        scheduled_send_push: true,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', 'main');
+
+    if (error) return {}; // Silently fail (likely non-admin)
+
+    // Send push if configured
+    let pushResult = { sent: 0, errors: 0 };
+    if (status.scheduledSendPush) {
+      pushResult = await triggerServerPush('maintenance', {
+        messageFr: status.scheduledMessageFr,
+        messageEn: status.scheduledMessageEn,
+        endTime,
+      }).catch(() => ({ sent: 0, errors: 0 }));
+    }
+
+    return { pushSent: pushResult.sent, pushErrors: pushResult.errors };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Disable maintenance mode (admin only).
+ * Optionally sends a recap push notification to all users.
+ */
+export async function disableMaintenance(params?: {
+  sendRecapPush?: boolean;
+  recapMessageFr?: string;
+  recapMessageEn?: string;
+}): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
   try {
     const supabase = getSupabaseClient();
 
@@ -110,7 +245,17 @@ export async function disableMaintenance(): Promise<{ error: string | null }> {
       .eq('id', 'main');
 
     if (error) return { error: error.message };
-    return { error: null };
+
+    // Send recap push notification
+    let pushResult = { sent: 0, errors: 0 };
+    if (params?.sendRecapPush) {
+      pushResult = await triggerServerPush('maintenance_end', {
+        messageFr: params.recapMessageFr || null,
+        messageEn: params.recapMessageEn || null,
+      }).catch(() => ({ sent: 0, errors: 0 }));
+    }
+
+    return { error: null, pushSent: pushResult.sent, pushErrors: pushResult.errors };
   } catch (e: any) {
     return { error: e.message };
   }

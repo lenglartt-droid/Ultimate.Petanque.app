@@ -63,6 +63,7 @@ const ADMIN_SECTIONS: { key: string; route: string; icon: string; color: string;
   { key: 'sponsors', route: '/admin-sponsors', icon: 'handshake', color: '#7C3AED', labelFr: 'Sponsors', labelEn: 'Sponsors', descFr: 'Ambassadeurs et partenaires', descEn: 'Ambassadors and partners' },
   { key: 'promos', route: '/admin-promos', icon: 'admin-panel-settings', color: '#0EA5E9', labelFr: 'Codes promo', labelEn: 'Promo codes', descFr: 'Gestion des promotions', descEn: 'Promotion management' },
   { key: 'maintenance', route: '/admin-maintenance', icon: 'construction', color: '#D97706', labelFr: 'Maintenance', labelEn: 'Maintenance', descFr: 'Mode maintenance et push', descEn: 'Maintenance mode and push' },
+  { key: 'users', route: '/admin-users', icon: 'people', color: '#3B82F6', labelFr: 'Utilisateurs', labelEn: 'Users', descFr: 'Gestion des comptes', descEn: 'Account management', statKey: 'totalUsers' },
 ];
 
 export default function AdminDashboardScreen() {
@@ -300,7 +301,16 @@ export default function AdminDashboardScreen() {
         {/* Activity Log */}
         {activityLogs.length > 0 ? (
           <Animated.View entering={FadeInDown.duration(300).delay(130)}>
-            <Text style={s.sectionTitle}>{fr ? 'ACTIVITE RECENTE' : 'RECENT ACTIVITY'}</Text>
+            <View style={s.activityHeader}>
+              <Text style={s.sectionTitle}>{fr ? 'ACTIVITE RECENTE' : 'RECENT ACTIVITY'}</Text>
+              <Pressable
+                style={s.activityViewAllBtn}
+                onPress={() => { Haptics.selectionAsync(); router.push('/admin-activity-log' as any); }}
+              >
+                <Text style={s.activityViewAllText}>{fr ? 'Voir tout' : 'View all'}</Text>
+                <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
+              </Pressable>
+            </View>
             <View style={s.activityCard}>
               {activityLogs.slice(0, 10).map((log, idx) => {
                 const cfg = ACTION_CONFIG[log.actionType] || { iconFr: log.actionType, iconEn: log.actionType, color: '#64748B', icon: 'info' };
@@ -416,7 +426,10 @@ const s = StyleSheet.create({
   maintDot: { width: 6, height: 6, borderRadius: 3 },
 
   // Activity Log
-  activityCard: { backgroundColor: '#FFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16 },
+  activityHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 },
+  activityViewAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: '#EFF6FF' },
+  activityViewAllText: { fontSize: 11, fontWeight: '700', color: '#3B82F6' },
+  activityCard: { backgroundColor: '#FFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16, marginTop: 10 },
   activityItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 },
   activityItemBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   activityIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },

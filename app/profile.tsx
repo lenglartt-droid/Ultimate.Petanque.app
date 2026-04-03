@@ -2027,6 +2027,13 @@ export default function ProfileScreen() {
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-users' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="people" size={20} color="#3B82F6" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion utilisateurs' : 'User Management'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
                 <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-maintenance' as any); }}>
                   <View style={[styles.menuIcon, { backgroundColor: '#D97706' + '15' }]}><MaterialIcons name="construction" size={20} color="#D97706" /></View>
                   <View style={styles.menuItemContent}>
