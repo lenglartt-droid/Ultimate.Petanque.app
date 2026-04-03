@@ -131,6 +131,9 @@ export default function StatsScreen() {
               <Text style={styles.headerSubtitle}>{performanceStats.total} {t('stats', 'matches')} • {performanceStats.winRate}% {t('stats', 'victories')}</Text>
             </View>
             <View style={styles.headerButtons}>
+              <Pressable style={styles.progressionButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); router.push('/role-performance' as any); }}>
+                <MaterialIcons name="swap-horiz" size={18} color="#FFF" />
+              </Pressable>
               <Pressable style={styles.progressionButton} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setShowProgressionModal(true); }}>
                 <MaterialIcons name="trending-up" size={18} color="#FFF" />
                 <Text style={styles.progressionButtonText}>{t('stats', 'progression')}</Text>

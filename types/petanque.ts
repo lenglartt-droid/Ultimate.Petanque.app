@@ -327,6 +327,17 @@ export interface DetailedShotRecord {
   pointQuality?: 'excellent' | 'bon' | 'moyen' | 'rate' | 'crochete' | 'sorti';
 }
 
+export interface RoleSegment {
+  role: string;
+  actions: {
+    tirs: number;
+    tirsSuccess: number;
+    points: number;
+    pointsSuccess: number;
+    carreaux: number;
+  };
+}
+
 export interface PlayerAction {
   playerId: string;
   playerName: string;
@@ -339,6 +350,7 @@ export interface PlayerAction {
     carreaux: number;
   };
   detailedShots?: DetailedShotRecord[];
+  roleSegments?: RoleSegment[];
 }
 
 // ============================================

@@ -22,7 +22,8 @@ import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { PlayerAction, DetailedShotRecord } from '@/types/petanque';
+import { PlayerAction, DetailedShotRecord, RoleSegment } from '@/types/petanque';
+import { getRoleColor, getRoleIcon } from '@/services/roleAnalysisService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';
@@ -132,6 +133,7 @@ export default function EditMatchScreen() {
 
   const maxScore = config.game.maxScore;
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
+  const fr = language === 'fr';
   const isReadOnly = matchIsShared && matchPermission === 'read';
 
   const ROLE_CONFIG: Record<PlayerRole, { icon: string; color: string; labelKey: string }> = {
@@ -750,6 +752,19 @@ export default function EditMatchScreen() {
         <View style={styles.playerActionHeader}>
           <View style={[styles.playerActionDot, { backgroundColor: player.team === 'A' ? theme.primary : theme.accent }]} />
           <Text style={styles.playerActionName} numberOfLines={1}>{player.name}</Text>
+          {(() => {
+            // Show role badge from match data
+            const teamRoles = player.team === 'A' ? match?.teamA.playerRoles : match?.teamB.playerRoles;
+            const roleEntry = teamRoles?.find(r => r.playerId === player.id);
+            if (!roleEntry) return null;
+            const rc = getRoleColor(roleEntry.role as any);
+            return (
+              <View style={[styles.matchRoleBadge, { backgroundColor: rc + '15' }]}>
+                <MaterialIcons name={getRoleIcon(roleEntry.role as any) as any} size={9} color={rc} />
+                <Text style={[styles.matchRoleBadgeText, { color: rc }]}>{t('roles', roleEntry.role).substring(0, 1)}</Text>
+              </View>
+            );
+          })()}
           {detailedCount > 0 && (
             <View style={styles.detailedBadge}>
               <MaterialIcons name="playlist-add-check" size={12} color={theme.success} />
@@ -834,6 +849,66 @@ export default function EditMatchScreen() {
             </View>
           </View>
         </View>
+
+        {/* Role Segments Timeline */}
+        {(() => {
+          const segments = (pa?.roleSegments || []) as RoleSegment[];
+          if (segments.length < 2) return null;
+          return (
+            <View style={roleStyles.segmentsSection}>
+              <View style={roleStyles.segmentsHeader}>
+                <MaterialIcons name="swap-horiz" size={14} color="#7C3AED" />
+                <Text style={roleStyles.segmentsTitle}>{fr ? 'Changements de role' : 'Role Changes'}</Text>
+                <View style={roleStyles.segmentsBadge}>
+                  <Text style={roleStyles.segmentsBadgeText}>{segments.length} {fr ? 'roles' : 'roles'}</Text>
+                </View>
+              </View>
+              <View style={roleStyles.timeline}>
+                {segments.map((seg, sIdx) => {
+                  const rc = getRoleColor(seg.role as any);
+                  const totalActions = seg.actions.tirs + seg.actions.points;
+                  const tirRate = seg.actions.tirs > 0 ? Math.round((seg.actions.tirsSuccess / seg.actions.tirs) * 100) : 0;
+                  const ptRate = seg.actions.points > 0 ? Math.round((seg.actions.pointsSuccess / seg.actions.points) * 100) : 0;
+                  return (
+                    <View key={sIdx} style={roleStyles.timelineItem}>
+                      <View style={roleStyles.timelineLine}>
+                        <View style={[roleStyles.timelineDot, { backgroundColor: rc }]} />
+                        {sIdx < segments.length - 1 ? <View style={roleStyles.timelineConnector} /> : null}
+                      </View>
+                      <View style={[roleStyles.timelineCard, { borderColor: rc + '25' }]}>
+                        <View style={roleStyles.timelineCardHeader}>
+                          <View style={[roleStyles.timelineRoleBadge, { backgroundColor: rc + '15' }]}>
+                            <MaterialIcons name={getRoleIcon(seg.role as any) as any} size={12} color={rc} />
+                            <Text style={[roleStyles.timelineRoleText, { color: rc }]}>{t('roles', seg.role)}</Text>
+                          </View>
+                          <Text style={roleStyles.timelineActions}>{totalActions} {fr ? 'actions' : 'actions'}</Text>
+                        </View>
+                        <View style={roleStyles.timelineStatsRow}>
+                          <View style={roleStyles.timelineStat}>
+                            <MaterialIcons name="gps-fixed" size={10} color="#F97316" />
+                            <Text style={[roleStyles.timelineStatText, { color: '#F97316' }]}>{tirRate}%</Text>
+                            <Text style={roleStyles.timelineStatCount}>{seg.actions.tirsSuccess}/{seg.actions.tirs}</Text>
+                          </View>
+                          <View style={roleStyles.timelineStat}>
+                            <MaterialIcons name="adjust" size={10} color="#3B82F6" />
+                            <Text style={[roleStyles.timelineStatText, { color: '#3B82F6' }]}>{ptRate}%</Text>
+                            <Text style={roleStyles.timelineStatCount}>{seg.actions.pointsSuccess}/{seg.actions.points}</Text>
+                          </View>
+                          {seg.actions.carreaux > 0 ? (
+                            <View style={roleStyles.timelineStat}>
+                              <MaterialIcons name="stars" size={10} color="#D97706" />
+                              <Text style={[roleStyles.timelineStatText, { color: '#D97706' }]}>{seg.actions.carreaux}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          );
+        })()}
 
         {/* Detailed notation buttons */}
         {!isReadOnly ? (
@@ -2073,6 +2148,9 @@ const validationStyles = StyleSheet.create({
   modalItemDot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: theme.textMuted },
   modalEmpty: { alignItems: 'center', paddingVertical: 48 },
   modalEmptyText: { fontSize: 15, color: theme.textMuted, marginTop: 12 },
+  // Match role display
+  matchRoleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  matchRoleBadgeText: { fontSize: 10, fontWeight: '700' as const },
   // Terrain picker styles
   terrainAddNewBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '12', borderRadius: theme.borderRadius.sm },
   terrainAddNewBtnText: { fontSize: 12, fontWeight: '600', color: theme.primary },
@@ -2083,4 +2161,26 @@ const validationStyles = StyleSheet.create({
   terrainPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   terrainMatchBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '15', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
   terrainMatchBadgeText: { fontSize: 11, fontWeight: '700', color: theme.primary },
+});
+
+const roleStyles = StyleSheet.create({
+  segmentsSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  segmentsHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  segmentsTitle: { flex: 1, fontSize: 12, fontWeight: '700', color: '#7C3AED' },
+  segmentsBadge: { backgroundColor: '#7C3AED15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  segmentsBadgeText: { fontSize: 9, fontWeight: '700', color: '#7C3AED' },
+  timeline: { gap: 0, paddingLeft: 4 },
+  timelineItem: { flexDirection: 'row', gap: 10, minHeight: 56 },
+  timelineLine: { alignItems: 'center', width: 16, paddingTop: 2 },
+  timelineDot: { width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#FFF', zIndex: 1 },
+  timelineConnector: { width: 2, flex: 1, backgroundColor: theme.border, marginTop: -2 },
+  timelineCard: { flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 8, borderWidth: 1 },
+  timelineCardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 },
+  timelineRoleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  timelineRoleText: { fontSize: 10, fontWeight: '800' },
+  timelineActions: { fontSize: 9, fontWeight: '600', color: theme.textMuted },
+  timelineStatsRow: { flexDirection: 'row', gap: 10 },
+  timelineStat: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+  timelineStatText: { fontSize: 11, fontWeight: '800' },
+  timelineStatCount: { fontSize: 9, fontWeight: '500', color: theme.textMuted },
 });
