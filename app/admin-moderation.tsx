@@ -46,6 +46,8 @@ import {
 import { getEloRank } from '@/services/eloService';
 import { getAllAppeals, respondToAppeal, BanAppeal } from '@/services/banAppealService';
 import { logAdminAction } from '@/services/adminActivityLogService';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
+import { ModerationSkeleton } from '@/components/ui/AdminSkeleton';
 
 type FilterKey = 'all' | 'pending' | 'warned' | 'suspended' | 'banned' | 'dismissed';
 
@@ -273,12 +275,16 @@ export default function AdminModerationScreen() {
         <View style={s.header}>
           <Text style={s.headerTitle}>{fr ? 'Moderation' : 'Moderation'}</Text>
         </View>
-        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+        <AdminQuickNav currentRoute="/admin-moderation" />
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+          <ModerationSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
+    <PageErrorBoundary pageName="Moderation">
     <AdminGuard language={language} requiredPermission="moderation">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
@@ -914,6 +920,7 @@ export default function AdminModerationScreen() {
       </Modal>
     </SafeAreaView>
     </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 

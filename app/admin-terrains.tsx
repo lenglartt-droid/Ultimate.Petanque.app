@@ -46,6 +46,8 @@ import {
   DuplicateGroup,
 } from '@/services/adminTerrainService';
 import { logAdminAction } from '@/services/adminActivityLogService';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
+import { TerrainsSkeleton } from '@/components/ui/AdminSkeleton';
 
 type FilterKey = 'all' | 'public' | 'private' | 'lighting' | 'covered';
 
@@ -355,12 +357,16 @@ export default function AdminTerrainsScreen() {
         <View style={s.header}>
           <Text style={s.headerTitle}>{fr ? 'Terrains' : 'Terrains'}</Text>
         </View>
-        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+        <AdminQuickNav currentRoute="/admin-terrains" />
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+          <TerrainsSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
+    <PageErrorBoundary pageName="Terrains">
     <AdminGuard language={language} requiredPermission="terrains">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
@@ -982,6 +988,7 @@ export default function AdminTerrainsScreen() {
       </Modal>
     </SafeAreaView>
     </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 

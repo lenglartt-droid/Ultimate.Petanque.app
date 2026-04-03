@@ -40,6 +40,8 @@ import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminSearchModal from '@/components/feature/AdminSearchModal';
 import AdminGuard from '@/components/feature/AdminGuard';
 import { getOnboardingStepAnalytics, OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
+import { DashboardSkeleton } from '@/components/ui/AdminSkeleton';
 
 
 interface DashboardStats {
@@ -494,12 +496,16 @@ export default function AdminDashboardScreen() {
           <Text style={s.headerTitle}>Admin</Text>
           <View style={{ width: 40 }} />
         </View>
-        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+        <AdminQuickNav currentRoute="/admin-dashboard" />
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+          <DashboardSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
+    <PageErrorBoundary pageName="Dashboard">
     <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
@@ -1307,6 +1313,7 @@ export default function AdminDashboardScreen() {
       <AdminSearchModal visible={showSearch} onClose={() => setShowSearch(false)} language={language} />
     </SafeAreaView>
     </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 

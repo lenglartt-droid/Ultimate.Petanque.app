@@ -899,7 +899,7 @@ export default function ProfileScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
+        <Pressable style={styles.backButton} onPress={() => router.replace('/(tabs)' as any)}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('profile', 'myProfile')}</Text>
