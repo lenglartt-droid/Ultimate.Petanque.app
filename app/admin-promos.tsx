@@ -361,11 +361,7 @@ export default function AdminPromosScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
-            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-          </Pressable>
           <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={styles.emptyContainer}>
           <MaterialIcons name="lock" size={56} color={theme.textMuted} />
@@ -482,9 +478,6 @@ export default function AdminPromosScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-        </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable style={styles.actionBtn} onPress={handleExportCSV}>

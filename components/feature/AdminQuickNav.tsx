@@ -7,11 +7,12 @@
  * Auto-scrolls to the active page on mount.
  */
 
-import React, { useRef, useEffect, useCallback } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, StyleSheet, LayoutChangeEvent } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, usePathname } from 'expo-router';
 import * as Haptics from '@/services/haptics';
+import { getSupabaseClient } from '@/template';
 
 interface NavSection {
   route: string;
@@ -48,12 +49,52 @@ interface AdminQuickNavProps {
   currentRoute?: string;
 }
 
+// Badge counts type
+interface BadgeCounts {
+  moderation: number;
+  clubs: number;
+  notifications: number;
+}
+
 export default function AdminQuickNav({ currentRoute }: AdminQuickNavProps) {
   const pathname = usePathname();
   const active = currentRoute || pathname;
   const scrollRef = useRef<ScrollView>(null);
   const itemPositions = useRef<Map<string, number>>(new Map());
   const isDashboard = active === '/admin-dashboard';
+  const [badges, setBadges] = useState<BadgeCounts>({ moderation: 0, clubs: 0, notifications: 0 });
+
+  // Fetch live badge counts
+  useEffect(() => {
+    let mounted = true;
+    const fetchCounts = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const [reportsRes, clubsRes, appealsRes] = await Promise.all([
+          supabase.from('player_reports').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+          supabase.from('clubs').select('id', { count: 'exact', head: true }).eq('is_verified', false),
+          supabase.from('ban_appeals').select('id', { count: 'exact', head: true }).eq('status', 'pending'),
+        ]);
+        if (mounted) {
+          setBadges({
+            moderation: reportsRes.count || 0,
+            clubs: clubsRes.count || 0,
+            notifications: appealsRes.count || 0,
+          });
+        }
+      } catch { /* silent */ }
+    };
+    fetchCounts();
+    const interval = setInterval(fetchCounts, 30000);
+    return () => { mounted = false; clearInterval(interval); };
+  }, []);
+
+  // Map routes to badge keys
+  const routeBadgeMap: Record<string, keyof BadgeCounts> = {
+    '/admin-moderation': 'moderation',
+    '/admin-clubs': 'clubs',
+    '/admin-notifications': 'notifications',
+  };
 
   // Track item positions for accurate auto-scroll
   const handleItemLayout = useCallback((route: string, event: LayoutChangeEvent) => {
@@ -126,11 +167,24 @@ export default function AdminQuickNav({ currentRoute }: AdminQuickNavProps) {
                 }}
                 onLayout={(e) => handleItemLayout(section.route, e)}
               >
-                <MaterialIcons
-                  name={section.icon as any}
-                  size={16}
-                  color={isActive ? section.color : '#94A3B8'}
-                />
+                <View style={{ position: 'relative' }}>
+                  <MaterialIcons
+                    name={section.icon as any}
+                    size={16}
+                    color={isActive ? section.color : '#94A3B8'}
+                  />
+                  {/* Badge counter */}
+                  {(() => {
+                    const badgeKey = routeBadgeMap[section.route];
+                    const count = badgeKey ? badges[badgeKey] : 0;
+                    if (count <= 0) return null;
+                    return (
+                      <View style={s.badgeContainer}>
+                        <Text style={s.badgeText}>{count > 99 ? '99' : count}</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
                 <Text
                   style={[s.navText, isActive && { color: section.color, fontWeight: '700' }]}
                   numberOfLines={1}
@@ -217,5 +271,24 @@ const s = StyleSheet.create({
     height: 3,
     borderRadius: 1.5,
     backgroundColor: '#CBD5E1',
+  },
+  badgeContainer: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 1.5,
+    borderColor: '#FFF',
+  },
+  badgeText: {
+    fontSize: 8,
+    fontWeight: '800',
+    color: '#FFF',
   },
 });

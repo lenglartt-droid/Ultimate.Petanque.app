@@ -488,7 +488,7 @@ export default function AdminDashboardScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.back()}>
+          <Pressable style={s.backBtn} onPress={() => router.push('/profile' as any)}>
             <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
           </Pressable>
           <Text style={s.headerTitle}>Admin</Text>
@@ -503,7 +503,7 @@ export default function AdminDashboardScreen() {
     <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Pressable style={s.backBtn} onPress={() => router.push('/profile' as any)}>
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Tableau de bord' : 'Dashboard'}</Text>
