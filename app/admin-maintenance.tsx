@@ -81,6 +81,8 @@ export default function AdminMaintenanceScreen() {
   const [messageFr, setMessageFr] = useState('');
   const [messageEn, setMessageEn] = useState('');
   const [sendRecapPush, setSendRecapPush] = useState(true);
+  const [recapMessageFr, setRecapMessageFr] = useState('L\'application est de nouveau operationnelle. Merci de votre patience !');
+  const [recapMessageEn, setRecapMessageEn] = useState('The application is back online. Thank you for your patience!');
   const [selectedDuration, setSelectedDuration] = useState<number | null>(60);
   const [customHours, setCustomHours] = useState('');
   const [customMinutes, setCustomMinutes] = useState('');
@@ -375,8 +377,8 @@ export default function AdminMaintenanceScreen() {
             setSubmitting(true);
             const result = await disableMaintenance({
               sendRecapPush,
-              recapMessageFr: fr ? 'L\'application est de nouveau operationnelle. Merci de votre patience !' : undefined,
-              recapMessageEn: !fr ? 'The application is back online. Thank you for your patience!' : undefined,
+              recapMessageFr: recapMessageFr.trim() || recapMessageEn.trim() || undefined,
+              recapMessageEn: recapMessageEn.trim() || recapMessageFr.trim() || undefined,
             });
             if (result.error) {
               showAlert(fr ? 'Erreur' : 'Error', result.error);
@@ -564,6 +566,45 @@ export default function AdminMaintenanceScreen() {
                 thumbColor={sendRecapPush ? '#10B981' : theme.textMuted}
               />
             </View>
+            {/* Custom recap push messages */}
+            {sendRecapPush ? (
+              <View style={styles.recapMessagesCard}>
+                <View style={styles.fieldWrap}>
+                  <View style={styles.fieldLabel}>
+                    <Text style={styles.fieldLabelFlag}>{"\u{1F1EB}\u{1F1F7}"}</Text>
+                    <Text style={styles.fieldLabelText}>{fr ? 'Message fin (FR)' : 'End message (FR)'}</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 56 }]}
+                    placeholder={fr ? 'L\'app est de retour...' : 'App is back...'}
+                    placeholderTextColor={'#94A3B8'}
+                    value={recapMessageFr}
+                    onChangeText={setRecapMessageFr}
+                    multiline
+                    numberOfLines={2}
+                    maxLength={200}
+                  />
+                  <Text style={styles.charCount}>{recapMessageFr.length}/200</Text>
+                </View>
+                <View style={[styles.fieldWrap, { marginBottom: 0 }]}>
+                  <View style={styles.fieldLabel}>
+                    <Text style={styles.fieldLabelFlag}>{"\u{1F1EC}\u{1F1E7}"}</Text>
+                    <Text style={styles.fieldLabelText}>{fr ? 'Message fin (EN)' : 'End message (EN)'}</Text>
+                  </View>
+                  <TextInput
+                    style={[styles.textInput, { minHeight: 56 }]}
+                    placeholder="App is back online..."
+                    placeholderTextColor={'#94A3B8'}
+                    value={recapMessageEn}
+                    onChangeText={setRecapMessageEn}
+                    multiline
+                    numberOfLines={2}
+                    maxLength={200}
+                  />
+                  <Text style={styles.charCount}>{recapMessageEn.length}/200</Text>
+                </View>
+              </View>
+            ) : null}
             <Pressable
               style={({ pressed }) => [styles.disableBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
               onPress={handleDisable}
@@ -1045,6 +1086,7 @@ const styles = StyleSheet.create({
 
   // Recap push card
   recapPushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 12 },
+  recapMessagesCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#10B981' + '20', marginBottom: 12 },
 
   // Disable btn
   disableBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 16, marginBottom: 20, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },

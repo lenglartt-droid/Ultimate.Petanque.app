@@ -1004,6 +1004,68 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // MAINTENANCE_END: Notify ALL users that maintenance is over
+    // ============================================================
+    else if (type === 'maintenance_end') {
+      const { messageFr, messageEn } = payload || {};
+
+      // Verify caller is admin
+      const { data: adminProfileEnd } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminProfileEnd?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send maintenance_end notifications' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Get ALL active push tokens
+      const { data: allEndTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .eq('active', true);
+
+      if (!allEndTokens || allEndTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`[send-push] maintenance_end: sending to ${allEndTokens.length} tokens`);
+
+      const endMsgFr = messageFr || 'L\'application est de nouveau operationnelle. Merci de votre patience !';
+      const endMsgEn = messageEn || 'The application is back online. Thank you for your patience!';
+
+      const messages = allEndTokens.map((t: any) => buildPushMessage(
+        t.token,
+        `\u2705 Maintenance terminee`,
+        endMsgFr,
+        { type: 'maintenance' },
+        { channelId: 'tournament-reminders', priority: 'high' }
+      ));
+
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+        const batch = messages.slice(i, i + BATCH_SIZE);
+        const tickets = await sendPushNotifications(batch);
+        sent += tickets.filter((t: any) => t.status === 'ok').length;
+        errors += tickets.filter((t: any) => t.status === 'error').length;
+
+        for (let j = 0; j < tickets.length; j++) {
+          if (tickets[j].details?.error === 'DeviceNotRegistered') {
+            const invalidToken = batch[j]?.to;
+            if (invalidToken) {
+              await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+            }
+          }
+        }
+      }
+    }
+
+    // ============================================================
     // CLUB_CLAIM: Notify club owner about a new ownership claim
     // ============================================================
     else if (type === 'club_claim') {
