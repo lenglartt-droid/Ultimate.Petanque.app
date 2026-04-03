@@ -79,6 +79,11 @@ export default function AdminTerrainsScreen() {
   const [filter, setFilter] = useState<FilterKey>('all');
   const [search, setSearch] = useState('');
 
+  // Batch selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   // Edit modal
   const [editTerrain, setEditTerrain] = useState<AdminTerrain | null>(null);
   const [editName, setEditName] = useState('');
@@ -259,6 +264,88 @@ export default function AdminTerrainsScreen() {
     else setTerrains(prev => prev.map(t => t.id === terrain.id ? { ...t, isPublic: newPublic } : t));
   }, [fr, showAlert]);
 
+  const toggleSelection = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkDelete = useCallback(() => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    Alert.alert(
+      fr ? `Supprimer ${count} terrain(s) ?` : `Delete ${count} terrain(s)?`,
+      fr ? 'Cette action est irreversible.' : 'This action is irreversible.',
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+          setBulkProcessing(true);
+          const ids = [...selectedIds];
+          let deleted = 0;
+          for (const id of ids) {
+            const { error } = await adminDeleteTerrain(id);
+            if (!error) deleted++;
+          }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setTerrains(prev => prev.filter(t => !ids.includes(t.id)));
+          logAdminAction({ actionType: 'terrain_delete', actionDetail: `Bulk deleted ${deleted} terrains`, metadata: { terrainIds: ids, count: deleted } });
+          setSelectedIds(new Set());
+          setSelectionMode(false);
+          setBulkProcessing(false);
+        }},
+      ]
+    );
+  }, [selectedIds, fr]);
+
+  const handleBulkTogglePublic = useCallback(async (makePublic: boolean) => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    setBulkProcessing(true);
+    const ids = [...selectedIds];
+    for (const id of ids) {
+      await adminUpdateTerrain(id, { is_public: makePublic });
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTerrains(prev => prev.map(t => ids.includes(t.id) ? { ...t, isPublic: makePublic } : t));
+    logAdminAction({ actionType: 'terrain_visibility' as any, actionDetail: `Bulk ${makePublic ? 'public' : 'private'} ${count} terrains`, metadata: { terrainIds: ids, count, makePublic } });
+    setSelectedIds(new Set());
+    setSelectionMode(false);
+    setBulkProcessing(false);
+  }, [selectedIds]);
+
+  const handleBulkExport = useCallback(async () => {
+    const ids = [...selectedIds];
+    const exportTerrains = filteredTerrains.filter(t => ids.includes(t.id));
+    if (exportTerrains.length === 0) return;
+    setBulkProcessing(true);
+    try {
+      const headers = 'Name,City,Type,Public,Lighting,Covered,Courts,Owner,Created';
+      const rows = exportTerrains.map(t =>
+        `"${t.name}","${t.city}","${t.type}",${t.isPublic},${t.lighting},${t.covered},${t.courtsCount},"${t.ownerName || ''}",${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}`
+      );
+      const csv = [headers, ...rows].join('\n');
+      const filename = `terrains-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const FileSystem = require('expo-file-system');
+        const Sharing = require('expo-sharing');
+        const path = `${FileSystem.cacheDirectory}${filename}`;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv' });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) { console.log('[AdminTerrains] Export error:', e); }
+    setBulkProcessing(false);
+  }, [selectedIds, filteredTerrains]);
+
   const formatDate = (d: string) =>
     new Date(d).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
 
@@ -285,7 +372,12 @@ export default function AdminTerrainsScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Terrains' : 'Terrain Management'}</Text>
-        <View style={{ width: 40 }} />
+        <Pressable
+          style={[s.backBtn, selectionMode && { backgroundColor: '#3B82F6' }]}
+          onPress={() => { Haptics.selectionAsync(); setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds(new Set()); }}
+        >
+          <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
+        </Pressable>
       </View>
 
       <AdminQuickNav currentRoute="/admin-terrains" />
@@ -296,6 +388,32 @@ export default function AdminTerrainsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {/* Batch selection info */}
+        {selectionMode ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#DBEAFE' }}>
+            <MaterialIcons name="info-outline" size={16} color="#3B82F6" />
+            <Text style={{ flex: 1, fontSize: 12, color: '#3B82F6', fontWeight: '600' }}>
+              {selectedIds.size > 0
+                ? `${selectedIds.size} ${fr ? 'selectionne(s)' : 'selected'}`
+                : (fr ? 'Appuyez sur les terrains pour les selectionner' : 'Tap terrains to select them')}
+            </Text>
+            {filteredTerrains.length > 0 ? (
+              <Pressable
+                style={{ paddingHorizontal: 10, paddingVertical: 5, backgroundColor: '#3B82F6', borderRadius: 8 }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  if (selectedIds.size === filteredTerrains.length) setSelectedIds(new Set());
+                  else setSelectedIds(new Set(filteredTerrains.map(t => t.id)));
+                }}
+              >
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFF' }}>
+                  {selectedIds.size === filteredTerrains.length ? (fr ? 'Tout deselectionner' : 'Deselect all') : (fr ? 'Tout' : 'All')}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Stats Dashboard */}
         {stats ? (
           <Animated.View entering={FadeInDown.duration(300)}>
@@ -518,10 +636,19 @@ export default function AdminTerrainsScreen() {
         ) : (
           filteredTerrains.map((terrain, idx) => {
             const typeColor = TYPE_COLORS[terrain.type] || '#64748B';
+            const isSelected = selectedIds.has(terrain.id);
             return (
               <Animated.View key={terrain.id} entering={FadeInDown.duration(250).delay(idx * 20)}>
-                <View style={[s.terrainCard, { borderLeftColor: typeColor }]}>
+                <Pressable
+                  style={[s.terrainCard, { borderLeftColor: typeColor }, isSelected && { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' }]}
+                  onPress={selectionMode ? () => toggleSelection(terrain.id) : undefined}
+                >
                   <View style={s.terrainHeader}>
+                    {selectionMode ? (
+                      <View style={[{ width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: isSelected ? '#3B82F6' : '#CBD5E1', alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: isSelected ? '#3B82F6' : 'transparent' }]}>
+                        {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                      </View>
+                    ) : null}
                     <View style={[s.terrainTypeIcon, { backgroundColor: typeColor + '12' }]}>
                       <MaterialIcons name="sports-soccer" size={18} color={typeColor} />
                     </View>
@@ -587,6 +714,7 @@ export default function AdminTerrainsScreen() {
                   </View>
 
                   {/* Actions */}
+                  {!selectionMode ? (
                   <View style={s.terrainActions}>
                     <Pressable style={s.actionBtnView} onPress={() => router.push(`/terrain/${terrain.id}` as any)}>
                       <MaterialIcons name="open-in-new" size={14} color="#2563EB" />
@@ -600,12 +728,36 @@ export default function AdminTerrainsScreen() {
                       <MaterialIcons name="delete-outline" size={16} color="#EF4444" />
                     </Pressable>
                   </View>
-                </View>
+                  ) : null}
+                </Pressable>
               </Animated.View>
             );
           })
         )}
       </ScrollView>
+
+      {/* ===== BATCH ACTION BAR ===== */}
+      {selectionMode && selectedIds.size > 0 ? (
+        <Animated.View entering={FadeIn.duration(200)} style={[s.bulkBar, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={s.bulkBarText}>{selectedIds.size} {fr ? 'selectionne(s)' : 'selected'}</Text>
+          <View style={s.bulkActions}>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#EF4444' }]} onPress={handleBulkDelete} disabled={bulkProcessing}>
+              {bulkProcessing ? <ActivityIndicator size="small" color="#FFF" /> : (
+                <><MaterialIcons name="delete" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Supprimer' : 'Delete'}</Text></>
+              )}
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#10B981' }]} onPress={() => handleBulkTogglePublic(true)} disabled={bulkProcessing}>
+              <MaterialIcons name="public" size={16} color="#FFF" /><Text style={s.bulkBtnText}>Public</Text>
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#D97706' }]} onPress={() => handleBulkTogglePublic(false)} disabled={bulkProcessing}>
+              <MaterialIcons name="lock" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Prive' : 'Private'}</Text>
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#3B82F6' }]} onPress={handleBulkExport} disabled={bulkProcessing}>
+              <MaterialIcons name="file-download" size={16} color="#FFF" /><Text style={s.bulkBtnText}>CSV</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
 
       {/* ===== MERGE PREVIEW MODAL ===== */}
       <Modal
@@ -877,6 +1029,13 @@ const s = StyleSheet.create({
   actionBtnEdit: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 9, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
   actionBtnEditText: { fontSize: 12, fontWeight: '700', color: '#64748B' },
   actionBtnDelete: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FECACA' },
+
+  // Bulk action bar
+  bulkBar: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 8 },
+  bulkBarText: { fontSize: 13, fontWeight: '700' as const, color: '#0F172A', marginBottom: 8 },
+  bulkActions: { flexDirection: 'row' as const, gap: 8 },
+  bulkBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10, flex: 1, justifyContent: 'center' as const },
+  bulkBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#FFF' },
 
   // Empty
   emptyWrap: { alignItems: 'center', paddingVertical: 56 },
