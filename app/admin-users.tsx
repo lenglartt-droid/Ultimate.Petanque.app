@@ -1,11 +1,12 @@
 /**
  * Admin User Management Page
  *
- * Allows admins to:
+ * Features:
  * - Search users by name/email
  * - Toggle premium/admin status
- * - View user stats (matches, last connection)
- * - View user count and premium count
+ * - User detail modal (badges, ELO, trust score)
+ * - Bulk selection mode with batch actions
+ * - Activity logging for all admin changes
  */
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
@@ -20,18 +21,20 @@ import {
   RefreshControl,
   Alert,
   Switch,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
+import { getEloRank } from '@/services/eloService';
 
 interface AdminUser {
   id: string;
@@ -46,6 +49,18 @@ interface AdminUser {
   xp: number;
   createdAt: string;
   matchCount?: number;
+  eloRating?: number;
+  wins?: number;
+  losses?: number;
+}
+
+interface UserDetail extends AdminUser {
+  badges: { badgeId: string; unlockedAt: string }[];
+  trustScore: number | null;
+  trustStatus: string | null;
+  playerCount: number;
+  challengeCount: number;
+  tournamentCount: number;
 }
 
 export default function AdminUsersScreen() {
@@ -61,6 +76,15 @@ export default function AdminUsersScreen() {
   const [filterType, setFilterType] = useState<'all' | 'premium' | 'admin'>('all');
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
+  // Detail modal
+  const [detailUser, setDetailUser] = useState<UserDetail | null>(null);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+
+  // Bulk selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+
   const loadUsers = useCallback(async () => {
     try {
       const supabase = getSupabaseClient();
@@ -72,16 +96,27 @@ export default function AdminUsersScreen() {
 
       if (error) { console.log('[AdminUsers] Error:', error); return; }
 
-      // Fetch match counts per user
       const userIds = (data || []).map((u: any) => u.id);
-      let matchCounts = new Map<string, number>();
+      const matchCounts = new Map<string, number>();
+      const eloMap = new Map<string, number>();
+      const winsMap = new Map<string, number>();
+
       if (userIds.length > 0) {
         const { data: matches } = await supabase
           .from('matches')
-          .select('user_id')
+          .select('user_id, winner')
           .in('user_id', userIds);
         (matches || []).forEach((m: any) => {
           matchCounts.set(m.user_id, (matchCounts.get(m.user_id) || 0) + 1);
+          if (m.winner === 'A') winsMap.set(m.user_id, (winsMap.get(m.user_id) || 0) + 1);
+        });
+
+        const { data: playerData } = await supabase
+          .from('players')
+          .select('user_id, elo_rating')
+          .in('user_id', userIds);
+        (playerData || []).forEach((p: any) => {
+          if (p.elo_rating) eloMap.set(p.user_id, p.elo_rating);
         });
       }
 
@@ -98,6 +133,8 @@ export default function AdminUsersScreen() {
         xp: u.xp || 0,
         createdAt: u.created_at || new Date().toISOString(),
         matchCount: matchCounts.get(u.id) || 0,
+        eloRating: eloMap.get(u.id) || 1000,
+        wins: winsMap.get(u.id) || 0,
       })));
     } catch (e) {
       console.log('[AdminUsers] Load error:', e);
@@ -136,6 +173,106 @@ export default function AdminUsersScreen() {
     totalMatches: users.reduce((sum, u) => sum + (u.matchCount || 0), 0),
   }), [users]);
 
+  // Load user detail
+  const handleOpenDetail = useCallback(async (user: AdminUser) => {
+    if (selectionMode) {
+      toggleSelection(user.id);
+      return;
+    }
+    Haptics.selectionAsync();
+    setLoadingDetail(true);
+    setDetailUser({ ...user, badges: [], trustScore: null, trustStatus: null, playerCount: 0, challengeCount: 0, tournamentCount: 0 });
+
+    try {
+      const supabase = getSupabaseClient();
+      const [badgesRes, trustRes, challengeRes, tournRes] = await Promise.all([
+        supabase.from('user_badges').select('badge_id, unlocked_at').eq('user_id', user.id),
+        supabase.from('suspicious_players').select('trust_score, status').eq('user_id', user.id).limit(1),
+        supabase.from('challenges').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+        supabase.from('tournaments').select('id', { count: 'exact', head: true }).eq('user_id', user.id),
+      ]);
+
+      setDetailUser(prev => prev ? {
+        ...prev,
+        badges: (badgesRes.data || []).map((b: any) => ({ badgeId: b.badge_id, unlockedAt: b.unlocked_at })),
+        trustScore: trustRes.data?.[0]?.trust_score ?? null,
+        trustStatus: trustRes.data?.[0]?.status ?? null,
+        challengeCount: challengeRes.count || 0,
+        tournamentCount: tournRes.count || 0,
+      } : null);
+    } catch (e) {
+      console.log('[AdminUsers] Detail load error:', e);
+    } finally {
+      setLoadingDetail(false);
+    }
+  }, [selectionMode]);
+
+  const toggleSelection = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    Haptics.selectionAsync();
+    if (selectedIds.size === filteredUsers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(filteredUsers.map(u => u.id)));
+    }
+  }, [selectedIds, filteredUsers]);
+
+  const handleBulkAction = useCallback(async (action: 'premium_on' | 'premium_off' | 'admin_on' | 'admin_off') => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+
+    const labels: Record<string, { fr: string; en: string }> = {
+      premium_on: { fr: `Activer Premium pour ${count} utilisateur(s) ?`, en: `Enable Premium for ${count} user(s)?` },
+      premium_off: { fr: `Desactiver Premium pour ${count} utilisateur(s) ?`, en: `Disable Premium for ${count} user(s)?` },
+      admin_on: { fr: `Promouvoir admin ${count} utilisateur(s) ?`, en: `Promote ${count} user(s) to admin?` },
+      admin_off: { fr: `Retirer admin pour ${count} utilisateur(s) ?`, en: `Remove admin from ${count} user(s)?` },
+    };
+
+    Alert.alert(
+      fr ? 'Action en masse' : 'Bulk Action',
+      fr ? labels[action].fr : labels[action].en,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Confirmer' : 'Confirm', style: action.includes('off') ? 'destructive' : 'default', onPress: async () => {
+          setBulkProcessing(true);
+          const supabase = getSupabaseClient();
+          const ids = [...selectedIds];
+          const field = action.startsWith('premium') ? 'is_premium' : 'is_admin';
+          const value = action.endsWith('on');
+
+          const { error } = await supabase
+            .from('user_profiles')
+            .update({ [field]: value })
+            .in('id', ids);
+
+          if (error) {
+            showAlert(fr ? 'Erreur' : 'Error', error.message);
+          } else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setUsers(prev => prev.map(u => ids.includes(u.id) ? { ...u, [field === 'is_premium' ? 'isPremium' : 'isAdmin']: value } : u));
+            logAdminAction({
+              actionType: (action.startsWith('premium') ? (value ? 'user_premium_enable' : 'user_premium_disable') : (value ? 'user_admin_promote' : 'user_admin_demote')) as any,
+              actionDetail: `Bulk ${action} for ${count} users`,
+              metadata: { userIds: ids, count },
+            });
+            setSelectedIds(new Set());
+            setSelectionMode(false);
+          }
+          setBulkProcessing(false);
+        }},
+      ]
+    );
+  }, [selectedIds, fr, showAlert]);
+
   const handleTogglePremium = useCallback(async (user: AdminUser) => {
     const newVal = !user.isPremium;
     Alert.alert(
@@ -146,19 +283,17 @@ export default function AdminUsersScreen() {
         { text: fr ? 'Confirmer' : 'Confirm', onPress: async () => {
           setTogglingId(user.id);
           const supabase = getSupabaseClient();
-          const { error } = await supabase
-            .from('user_profiles')
-            .update({ is_premium: newVal })
-            .eq('id', user.id);
+          const { error } = await supabase.from('user_profiles').update({ is_premium: newVal }).eq('id', user.id);
           setTogglingId(null);
           if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); return; }
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isPremium: newVal } : u));
-          logAdminAction({ actionType: newVal ? 'user_premium_enable' : 'user_premium_disable', targetType: 'user', targetId: user.id, targetName: user.username || user.email, actionDetail: `Premium ${newVal ? 'enabled' : 'disabled'}` });
+          if (detailUser?.id === user.id) setDetailUser(prev => prev ? { ...prev, isPremium: newVal } : null);
+          logAdminAction({ actionType: (newVal ? 'user_premium_enable' : 'user_premium_disable') as any, targetType: 'user', targetId: user.id, targetName: user.username || user.email, actionDetail: `Premium ${newVal ? 'enabled' : 'disabled'}` });
         }},
       ]
     );
-  }, [fr, showAlert]);
+  }, [fr, showAlert, detailUser]);
 
   const handleToggleAdmin = useCallback(async (user: AdminUser) => {
     const newVal = !user.isAdmin;
@@ -170,19 +305,17 @@ export default function AdminUsersScreen() {
         { text: fr ? 'Confirmer' : 'Confirm', style: newVal ? 'default' : 'destructive', onPress: async () => {
           setTogglingId(user.id);
           const supabase = getSupabaseClient();
-          const { error } = await supabase
-            .from('user_profiles')
-            .update({ is_admin: newVal })
-            .eq('id', user.id);
+          const { error } = await supabase.from('user_profiles').update({ is_admin: newVal }).eq('id', user.id);
           setTogglingId(null);
           if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); return; }
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isAdmin: newVal } : u));
-          logAdminAction({ actionType: newVal ? 'user_admin_promote' : 'user_admin_demote', targetType: 'user', targetId: user.id, targetName: user.username || user.email, actionDetail: `Admin ${newVal ? 'promoted' : 'demoted'}` });
+          if (detailUser?.id === user.id) setDetailUser(prev => prev ? { ...prev, isAdmin: newVal } : null);
+          logAdminAction({ actionType: (newVal ? 'user_admin_promote' : 'user_admin_demote') as any, targetType: 'user', targetId: user.id, targetName: user.username || user.email, actionDetail: `Admin ${newVal ? 'promoted' : 'demoted'}` });
         }},
       ]
     );
-  }, [fr, showAlert]);
+  }, [fr, showAlert, detailUser]);
 
   if (loading) {
     return (
@@ -206,64 +339,49 @@ export default function AdminUsersScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Utilisateurs' : 'User Management'}</Text>
-        <View style={{ width: 40 }} />
+        <Pressable
+          style={[s.selectModeBtn, selectionMode && s.selectModeBtnActive]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            setSelectionMode(!selectionMode);
+            if (selectionMode) setSelectedIds(new Set());
+          }}
+        >
+          <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
+        </Pressable>
       </View>
 
       <ScrollView
         style={s.scroll}
-        contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: selectionMode ? insets.bottom + 120 : insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
         {/* Stats */}
         <Animated.View entering={FadeInDown.duration(300)}>
           <View style={s.statsGrid}>
-            <View style={[s.statCard, { borderColor: '#3B82F620' }]}>
-              <View style={[s.statIcon, { backgroundColor: '#DBEAFE' }]}>
-                <MaterialIcons name="people" size={18} color="#3B82F6" />
+            {[
+              { value: stats.total, label: 'Total', icon: 'people', color: '#3B82F6', bg: '#DBEAFE' },
+              { value: stats.premium, label: 'Premium', icon: 'star', color: '#D4A017', bg: '#FEF3C7' },
+              { value: stats.admin, label: 'Admins', icon: 'admin-panel-settings', color: '#DC2626', bg: '#FEF2F2' },
+              { value: stats.totalMatches, label: fr ? 'Matchs' : 'Matches', icon: 'sports', color: '#10B981', bg: '#DCFCE7' },
+            ].map((st, i) => (
+              <View key={i} style={[s.statCard, { borderColor: st.color + '20' }]}>
+                <View style={[s.statIcon, { backgroundColor: st.bg }]}>
+                  <MaterialIcons name={st.icon as any} size={18} color={st.color} />
+                </View>
+                <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
+                <Text style={s.statLabel}>{st.label}</Text>
               </View>
-              <Text style={[s.statValue, { color: '#3B82F6' }]}>{stats.total}</Text>
-              <Text style={s.statLabel}>{fr ? 'Total' : 'Total'}</Text>
-            </View>
-            <View style={[s.statCard, { borderColor: '#D4A01720' }]}>
-              <View style={[s.statIcon, { backgroundColor: '#FEF3C7' }]}>
-                <MaterialIcons name="star" size={18} color="#D4A017" />
-              </View>
-              <Text style={[s.statValue, { color: '#D4A017' }]}>{stats.premium}</Text>
-              <Text style={s.statLabel}>Premium</Text>
-            </View>
-            <View style={[s.statCard, { borderColor: '#DC262620' }]}>
-              <View style={[s.statIcon, { backgroundColor: '#FEF2F2' }]}>
-                <MaterialIcons name="admin-panel-settings" size={18} color="#DC2626" />
-              </View>
-              <Text style={[s.statValue, { color: '#DC2626' }]}>{stats.admin}</Text>
-              <Text style={s.statLabel}>Admins</Text>
-            </View>
-            <View style={[s.statCard, { borderColor: '#10B98120' }]}>
-              <View style={[s.statIcon, { backgroundColor: '#DCFCE7' }]}>
-                <MaterialIcons name="sports" size={18} color="#10B981" />
-              </View>
-              <Text style={[s.statValue, { color: '#10B981' }]}>{stats.totalMatches}</Text>
-              <Text style={s.statLabel}>{fr ? 'Matchs' : 'Matches'}</Text>
-            </View>
+            ))}
           </View>
         </Animated.View>
 
         {/* Search */}
         <View style={s.searchWrap}>
           <MaterialIcons name="search" size={18} color="#94A3B8" />
-          <TextInput
-            style={s.searchInput}
-            value={search}
-            onChangeText={setSearch}
-            placeholder={fr ? 'Rechercher nom, email, club...' : 'Search name, email, club...'}
-            placeholderTextColor="#94A3B8"
-          />
-          {search ? (
-            <Pressable onPress={() => setSearch('')} hitSlop={8}>
-              <MaterialIcons name="close" size={16} color="#94A3B8" />
-            </Pressable>
-          ) : null}
+          <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder={fr ? 'Rechercher nom, email, club...' : 'Search name, email, club...'} placeholderTextColor="#94A3B8" />
+          {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color="#94A3B8" /></Pressable> : null}
         </View>
 
         {/* Filter chips */}
@@ -275,11 +393,7 @@ export default function AdminUsersScreen() {
           ]).map(f => {
             const isActive = filterType === f.key;
             return (
-              <Pressable
-                key={f.key}
-                style={[s.filterChip, isActive && s.filterChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setFilterType(f.key); }}
-              >
+              <Pressable key={f.key} style={[s.filterChip, isActive && s.filterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterType(f.key); }}>
                 <MaterialIcons name={f.icon as any} size={13} color={isActive ? '#FFF' : '#64748B'} />
                 <Text style={[s.filterChipText, isActive && { color: '#FFF' }]}>{f.label}</Text>
                 <View style={[s.filterChipBadge, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
@@ -288,6 +402,12 @@ export default function AdminUsersScreen() {
               </Pressable>
             );
           })}
+          {selectionMode ? (
+            <Pressable style={[s.filterChip, { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]} onPress={handleSelectAll}>
+              <MaterialIcons name={selectedIds.size === filteredUsers.length ? 'deselect' : 'select-all'} size={13} color="#FFF" />
+              <Text style={[s.filterChipText, { color: '#FFF' }]}>{selectedIds.size === filteredUsers.length ? (fr ? 'Tout deselectionner' : 'Deselect all') : (fr ? 'Tout selectionner' : 'Select all')}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Users list */}
@@ -297,84 +417,216 @@ export default function AdminUsersScreen() {
             <Text style={s.emptyTitle}>{fr ? 'Aucun utilisateur' : 'No users found'}</Text>
           </View>
         ) : (
-          filteredUsers.map((user, idx) => (
-            <Animated.View key={user.id} entering={FadeInDown.duration(200).delay(Math.min(idx * 15, 300))}>
-              <View style={s.userCard}>
-                <View style={s.userHeader}>
-                  {user.avatar ? (
-                    <Image source={{ uri: user.avatar }} style={s.userAvatar} contentFit="cover" transition={200} />
-                  ) : (
-                    <View style={s.userAvatarPlaceholder}>
-                      <Text style={s.userAvatarText}>{(user.username || user.email).charAt(0).toUpperCase()}</Text>
+          filteredUsers.map((user, idx) => {
+            const isSelected = selectedIds.has(user.id);
+            const eloInfo = user.eloRating ? getEloRank(user.eloRating) : null;
+            return (
+              <Animated.View key={user.id} entering={FadeInDown.duration(200).delay(Math.min(idx * 15, 300))}>
+                <Pressable
+                  style={[s.userCard, isSelected && s.userCardSelected]}
+                  onPress={() => handleOpenDetail(user)}
+                >
+                  {selectionMode ? (
+                    <View style={[s.checkbox, isSelected && s.checkboxActive]}>
+                      {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
                     </View>
-                  )}
-                  <View style={{ flex: 1, minWidth: 0 }}>
-                    <View style={s.userNameRow}>
-                      <Text style={s.userName} numberOfLines={1}>{user.username || (fr ? 'Sans nom' : 'No name')}</Text>
-                      {user.isAdmin ? (
-                        <View style={s.adminBadge}><MaterialIcons name="shield" size={10} color="#DC2626" /></View>
-                      ) : null}
-                      {user.isPremium ? (
-                        <View style={s.premiumBadge}><MaterialIcons name="star" size={10} color="#D4A017" /></View>
-                      ) : null}
-                    </View>
-                    <Text style={s.userEmail} numberOfLines={1}>{user.email}</Text>
-                    <View style={s.userMetaRow}>
-                      {user.role ? (
+                  ) : null}
+                  <View style={s.userHeader}>
+                    {user.avatar ? (
+                      <Image source={{ uri: user.avatar }} style={s.userAvatar} contentFit="cover" transition={200} />
+                    ) : (
+                      <View style={s.userAvatarPlaceholder}>
+                        <Text style={s.userAvatarText}>{(user.username || user.email).charAt(0).toUpperCase()}</Text>
+                      </View>
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={s.userNameRow}>
+                        <Text style={s.userName} numberOfLines={1}>{user.username || (fr ? 'Sans nom' : 'No name')}</Text>
+                        {user.isAdmin ? <View style={s.adminBadge}><MaterialIcons name="shield" size={10} color="#DC2626" /></View> : null}
+                        {user.isPremium ? <View style={s.premiumBadge}><MaterialIcons name="star" size={10} color="#D4A017" /></View> : null}
+                      </View>
+                      <Text style={s.userEmail} numberOfLines={1}>{user.email}</Text>
+                      <View style={s.userMetaRow}>
+                        {eloInfo ? (
+                          <View style={[s.userMetaChip, { backgroundColor: eloInfo.color + '12' }]}>
+                            <MaterialIcons name={eloInfo.icon as any} size={9} color={eloInfo.color} />
+                            <Text style={[s.userMetaText, { color: eloInfo.color }]}>{user.eloRating}</Text>
+                          </View>
+                        ) : null}
                         <View style={s.userMetaChip}>
                           <MaterialIcons name="sports" size={9} color="#64748B" />
-                          <Text style={s.userMetaText}>{user.role}</Text>
+                          <Text style={s.userMetaText}>{user.matchCount || 0}</Text>
                         </View>
-                      ) : null}
-                      {user.club ? (
                         <View style={s.userMetaChip}>
-                          <MaterialIcons name="home" size={9} color="#64748B" />
-                          <Text style={s.userMetaText} numberOfLines={1}>{user.club}</Text>
+                          <MaterialIcons name="bolt" size={9} color="#7C3AED" />
+                          <Text style={[s.userMetaText, { color: '#7C3AED' }]}>{user.xp} XP</Text>
                         </View>
-                      ) : null}
-                      <View style={s.userMetaChip}>
-                        <MaterialIcons name="sports" size={9} color="#64748B" />
-                        <Text style={s.userMetaText}>{user.matchCount || 0} {fr ? 'matchs' : 'matches'}</Text>
-                      </View>
-                      <View style={s.userMetaChip}>
-                        <MaterialIcons name="bolt" size={9} color="#7C3AED" />
-                        <Text style={[s.userMetaText, { color: '#7C3AED' }]}>{user.xp} XP</Text>
                       </View>
                     </View>
+                    {!selectionMode ? <MaterialIcons name="chevron-right" size={18} color="#CBD5E1" /> : null}
                   </View>
-                </View>
-
-                {/* Toggle row */}
-                <View style={s.toggleRow}>
-                  <View style={s.toggleItem}>
-                    <MaterialIcons name="star" size={14} color={user.isPremium ? '#D4A017' : '#94A3B8'} />
-                    <Text style={[s.toggleLabel, user.isPremium && { color: '#D4A017' }]}>Premium</Text>
-                    <Switch
-                      value={user.isPremium}
-                      onValueChange={() => handleTogglePremium(user)}
-                      trackColor={{ false: '#E2E8F0', true: '#D4A01760' }}
-                      thumbColor={user.isPremium ? '#D4A017' : '#94A3B8'}
-                      disabled={togglingId === user.id}
-                    />
-                  </View>
-                  <View style={s.toggleDivider} />
-                  <View style={s.toggleItem}>
-                    <MaterialIcons name="admin-panel-settings" size={14} color={user.isAdmin ? '#DC2626' : '#94A3B8'} />
-                    <Text style={[s.toggleLabel, user.isAdmin && { color: '#DC2626' }]}>Admin</Text>
-                    <Switch
-                      value={user.isAdmin}
-                      onValueChange={() => handleToggleAdmin(user)}
-                      trackColor={{ false: '#E2E8F0', true: '#DC262660' }}
-                      thumbColor={user.isAdmin ? '#DC2626' : '#94A3B8'}
-                      disabled={togglingId === user.id}
-                    />
-                  </View>
-                </View>
-              </View>
-            </Animated.View>
-          ))
+                </Pressable>
+              </Animated.View>
+            );
+          })
         )}
       </ScrollView>
+
+      {/* Bulk Action Bar */}
+      {selectionMode && selectedIds.size > 0 ? (
+        <Animated.View entering={FadeIn.duration(200)} style={[s.bulkBar, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={s.bulkBarText}>{selectedIds.size} {fr ? 'selectionne(s)' : 'selected'}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.bulkActions}>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#D4A017' }]} onPress={() => handleBulkAction('premium_on')} disabled={bulkProcessing}>
+              <MaterialIcons name="star" size={14} color="#FFF" />
+              <Text style={s.bulkBtnText}>+Premium</Text>
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#94A3B8' }]} onPress={() => handleBulkAction('premium_off')} disabled={bulkProcessing}>
+              <MaterialIcons name="star-outline" size={14} color="#FFF" />
+              <Text style={s.bulkBtnText}>-Premium</Text>
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#DC2626' }]} onPress={() => handleBulkAction('admin_on')} disabled={bulkProcessing}>
+              <MaterialIcons name="shield" size={14} color="#FFF" />
+              <Text style={s.bulkBtnText}>+Admin</Text>
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#64748B' }]} onPress={() => handleBulkAction('admin_off')} disabled={bulkProcessing}>
+              <MaterialIcons name="remove-moderator" size={14} color="#FFF" />
+              <Text style={s.bulkBtnText}>-Admin</Text>
+            </Pressable>
+          </ScrollView>
+          {bulkProcessing ? <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} /> : null}
+        </Animated.View>
+      ) : null}
+
+      {/* User Detail Modal */}
+      <Modal visible={!!detailUser} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailUser(null)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setDetailUser(null)}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Detail utilisateur' : 'User Detail'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          {detailUser ? (
+            <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+              {/* Profile header */}
+              <View style={s.detailHero}>
+                {detailUser.avatar ? (
+                  <Image source={{ uri: detailUser.avatar }} style={s.detailAvatar} contentFit="cover" transition={200} />
+                ) : (
+                  <View style={s.detailAvatarPlaceholder}>
+                    <Text style={s.detailAvatarText}>{(detailUser.username || detailUser.email).charAt(0).toUpperCase()}</Text>
+                  </View>
+                )}
+                <Text style={s.detailName}>{detailUser.username || detailUser.email}</Text>
+                <Text style={s.detailEmail}>{detailUser.email}</Text>
+                <View style={s.detailBadgeRow}>
+                  {detailUser.isAdmin ? <View style={[s.detailBadge, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}><MaterialIcons name="shield" size={12} color="#DC2626" /><Text style={[s.detailBadgeText, { color: '#DC2626' }]}>Admin</Text></View> : null}
+                  {detailUser.isPremium ? <View style={[s.detailBadge, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}><MaterialIcons name="star" size={12} color="#D4A017" /><Text style={[s.detailBadgeText, { color: '#D4A017' }]}>Premium</Text></View> : null}
+                  {detailUser.role ? <View style={[s.detailBadge, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}><Text style={[s.detailBadgeText, { color: '#3B82F6' }]}>{detailUser.role}</Text></View> : null}
+                  {detailUser.level ? <View style={[s.detailBadge, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}><Text style={[s.detailBadgeText, { color: '#10B981' }]}>{detailUser.level}</Text></View> : null}
+                </View>
+              </View>
+
+              {/* Stats grid */}
+              <View style={s.detailStatsGrid}>
+                {[
+                  { value: detailUser.eloRating || 1000, label: 'ELO', color: getEloRank(detailUser.eloRating || 1000).color, icon: getEloRank(detailUser.eloRating || 1000).icon },
+                  { value: detailUser.matchCount || 0, label: fr ? 'Matchs' : 'Matches', color: '#3B82F6', icon: 'sports' },
+                  { value: detailUser.wins || 0, label: fr ? 'Victoires' : 'Wins', color: '#10B981', icon: 'emoji-events' },
+                  { value: detailUser.xp, label: 'XP', color: '#7C3AED', icon: 'bolt' },
+                ].map((st, i) => (
+                  <View key={i} style={s.detailStatItem}>
+                    <MaterialIcons name={st.icon as any} size={16} color={st.color} />
+                    <Text style={[s.detailStatValue, { color: st.color }]}>{st.value}</Text>
+                    <Text style={s.detailStatLabel}>{st.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Trust Score */}
+              {detailUser.trustScore !== null ? (
+                <View style={s.detailSection}>
+                  <Text style={s.detailSectionTitle}>{fr ? 'SCORE DE CONFIANCE' : 'TRUST SCORE'}</Text>
+                  <View style={s.trustCard}>
+                    <View style={[s.trustIcon, { backgroundColor: (detailUser.trustScore >= 70 ? '#10B981' : detailUser.trustScore >= 40 ? '#F59E0B' : '#EF4444') + '15' }]}>
+                      <MaterialIcons name="verified-user" size={20} color={detailUser.trustScore >= 70 ? '#10B981' : detailUser.trustScore >= 40 ? '#F59E0B' : '#EF4444'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.trustValue}>{detailUser.trustScore}/100</Text>
+                      <View style={s.trustBarBg}>
+                        <View style={[s.trustBarFill, { width: `${detailUser.trustScore}%`, backgroundColor: detailUser.trustScore >= 70 ? '#10B981' : detailUser.trustScore >= 40 ? '#F59E0B' : '#EF4444' }]} />
+                      </View>
+                    </View>
+                    {detailUser.trustStatus ? <View style={[s.trustStatusBadge, { backgroundColor: (detailUser.trustStatus === 'flagged' ? '#FEF2F2' : '#F8FAFC') }]}><Text style={[s.trustStatusText, { color: detailUser.trustStatus === 'flagged' ? '#EF4444' : '#64748B' }]}>{detailUser.trustStatus}</Text></View> : null}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Badges */}
+              {detailUser.badges.length > 0 ? (
+                <View style={s.detailSection}>
+                  <Text style={s.detailSectionTitle}>BADGES ({detailUser.badges.length})</Text>
+                  <View style={s.badgesGrid}>
+                    {detailUser.badges.map((b, i) => (
+                      <View key={i} style={s.badgeChip}>
+                        <MaterialIcons name="military-tech" size={14} color="#D4A017" />
+                        <Text style={s.badgeChipText} numberOfLines={1}>{b.badgeId}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Additional stats */}
+              <View style={s.detailSection}>
+                <Text style={s.detailSectionTitle}>{fr ? 'INFORMATIONS' : 'INFORMATION'}</Text>
+                <View style={s.infoCard}>
+                  {[
+                    { icon: 'home', label: 'Club', value: detailUser.club || '-', color: '#10B981' },
+                    { icon: 'sports', label: fr ? 'Defis' : 'Challenges', value: String(detailUser.challengeCount || 0), color: '#F59E0B' },
+                    { icon: 'emoji-events', label: fr ? 'Tournois' : 'Tournaments', value: String(detailUser.tournamentCount || 0), color: '#7C3AED' },
+                  ].map((info, i) => (
+                    <View key={i} style={[s.infoRow, i > 0 && s.infoRowBorder]}>
+                      <View style={[s.infoIcon, { backgroundColor: info.color + '12' }]}>
+                        <MaterialIcons name={info.icon as any} size={16} color={info.color} />
+                      </View>
+                      <Text style={s.infoLabel}>{info.label}</Text>
+                      <Text style={s.infoValue}>{info.value}</Text>
+                    </View>
+                  ))}
+                </View>
+              </View>
+
+              {/* Quick actions */}
+              <View style={s.detailSection}>
+                <Text style={s.detailSectionTitle}>{fr ? 'ACTIONS' : 'ACTIONS'}</Text>
+                <View style={s.detailActionsRow}>
+                  <Pressable style={[s.detailActionBtn, { backgroundColor: detailUser.isPremium ? '#94A3B8' : '#D4A017' }]} onPress={() => handleTogglePremium(detailUser)}>
+                    <MaterialIcons name={detailUser.isPremium ? 'star-outline' : 'star'} size={18} color="#FFF" />
+                    <Text style={s.detailActionText}>{detailUser.isPremium ? '-Premium' : '+Premium'}</Text>
+                  </Pressable>
+                  <Pressable style={[s.detailActionBtn, { backgroundColor: detailUser.isAdmin ? '#64748B' : '#DC2626' }]} onPress={() => handleToggleAdmin(detailUser)}>
+                    <MaterialIcons name={detailUser.isAdmin ? 'remove-moderator' : 'shield'} size={18} color="#FFF" />
+                    <Text style={s.detailActionText}>{detailUser.isAdmin ? '-Admin' : '+Admin'}</Text>
+                  </Pressable>
+                </View>
+                <Pressable
+                  style={s.viewPlayerBtn}
+                  onPress={() => { setDetailUser(null); router.push(`/player/${detailUser.id}` as any); }}
+                >
+                  <MaterialIcons name="badge" size={20} color="#3B82F6" />
+                  <Text style={s.viewPlayerText}>{fr ? 'Voir la fiche joueur' : 'View player card'}</Text>
+                  <MaterialIcons name="chevron-right" size={18} color="#3B82F6" />
+                </Pressable>
+              </View>
+
+              {loadingDetail ? <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 16 }} /> : null}
+            </ScrollView>
+          ) : null}
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -384,9 +636,12 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', letterSpacing: -0.3 },
+  selectModeBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  selectModeBtnActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
 
   // Stats
   statsGrid: { flexDirection: 'row', gap: 8, marginBottom: 14 },
@@ -400,7 +655,7 @@ const s = StyleSheet.create({
   searchInput: { flex: 1, fontSize: 14, color: '#0F172A', paddingVertical: 12 },
 
   // Filter
-  filterRow: { flexDirection: 'row', gap: 6, marginBottom: 16 },
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
   filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
   filterChipActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
   filterChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
@@ -409,7 +664,8 @@ const s = StyleSheet.create({
 
   // User card
   userCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 },
-  userHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  userCardSelected: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
+  userHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   userAvatar: { width: 44, height: 44, borderRadius: 12 },
   userAvatarPlaceholder: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
   userAvatarText: { fontSize: 18, fontWeight: '700', color: '#64748B' },
@@ -422,14 +678,67 @@ const s = StyleSheet.create({
   adminBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FECACA' },
   premiumBadge: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FDE68A' },
 
-  // Toggles
-  toggleRow: { flexDirection: 'row', backgroundColor: '#F8FAFC', borderRadius: 12, paddingVertical: 6, paddingHorizontal: 10, borderWidth: 1, borderColor: '#F1F5F9' },
-  toggleItem: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
-  toggleLabel: { fontSize: 11, fontWeight: '600', color: '#94A3B8', flex: 1 },
-  toggleDivider: { width: 1, height: 24, backgroundColor: '#E2E8F0', marginHorizontal: 6 },
+  // Checkbox
+  checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  checkboxActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+
+  // Bulk bar
+  bulkBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 8 },
+  bulkBarText: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
+  bulkActions: { flexDirection: 'row', gap: 8 },
+  bulkBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 10 },
+  bulkBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 
   // Empty
   emptyWrap: { alignItems: 'center', paddingVertical: 56 },
   emptyIcon: { width: 72, height: 72, borderRadius: 24, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+
+  // Detail modal
+  detailHero: { alignItems: 'center', backgroundColor: '#FFF', borderRadius: 20, padding: 24, marginBottom: 16, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 4, elevation: 1 },
+  detailAvatar: { width: 80, height: 80, borderRadius: 24, marginBottom: 12 },
+  detailAvatarPlaceholder: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  detailAvatarText: { fontSize: 28, fontWeight: '700', color: '#64748B' },
+  detailName: { fontSize: 20, fontWeight: '800', color: '#0F172A', marginBottom: 2 },
+  detailEmail: { fontSize: 13, color: '#94A3B8', marginBottom: 10 },
+  detailBadgeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  detailBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  detailBadgeText: { fontSize: 11, fontWeight: '700' },
+
+  // Detail stats
+  detailStatsGrid: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  detailStatItem: { flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 14, alignItems: 'center', gap: 4, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 },
+  detailStatValue: { fontSize: 18, fontWeight: '800' },
+  detailStatLabel: { fontSize: 9, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.3 },
+
+  // Trust
+  trustCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' },
+  trustIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  trustValue: { fontSize: 16, fontWeight: '800', color: '#0F172A', marginBottom: 6 },
+  trustBarBg: { height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' },
+  trustBarFill: { height: '100%', borderRadius: 3 },
+  trustStatusBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8 },
+  trustStatusText: { fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
+
+  // Badges
+  badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  badgeChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 7, borderWidth: 1, borderColor: '#FDE68A' },
+  badgeChipText: { fontSize: 11, fontWeight: '600', color: '#0F172A', maxWidth: 100 },
+
+  // Info
+  infoCard: { backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  infoRowBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  infoIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  infoLabel: { fontSize: 13, fontWeight: '600', color: '#64748B', flex: 1 },
+  infoValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+
+  // Actions
+  detailSection: { marginBottom: 16 },
+  detailSectionTitle: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 10, paddingHorizontal: 4 },
+  detailActionsRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+  detailActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12 },
+  detailActionText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  viewPlayerBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#BFDBFE' },
+  viewPlayerText: { flex: 1, fontSize: 14, fontWeight: '700', color: '#3B82F6' },
 });

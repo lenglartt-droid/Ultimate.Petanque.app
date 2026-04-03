@@ -1,0 +1,819 @@
+/**
+ * Admin Club Management Page
+ *
+ * Full club list with search, filters (verified/unverified/public),
+ * stats, bulk verification, and detail modal.
+ */
+
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import {
+  View,
+  Text,
+  ScrollView,
+  Pressable,
+  StyleSheet,
+  TextInput,
+  ActivityIndicator,
+  RefreshControl,
+  Alert,
+  Modal,
+  Linking,
+} from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
+import { router } from 'expo-router';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import * as Haptics from '@/services/haptics';
+import theme from '@/constants/theme';
+import { useLanguage } from '@/hooks/useLanguage';
+import { useAlert } from '@/template';
+import { getSupabaseClient } from '@/template';
+import { logAdminAction } from '@/services/adminActivityLogService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+interface AdminClub {
+  id: string;
+  userId: string;
+  name: string;
+  city: string;
+  country: string;
+  address: string | null;
+  description: string | null;
+  membersCount: number;
+  foundedYear: number | null;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  website: string | null;
+  isPublic: boolean;
+  isVerified: boolean;
+  logo: string | null;
+  facilities: string[];
+  createdAt: string;
+  ownerName?: string;
+  ownerEmail?: string;
+  coAdminCount: number;
+}
+
+export default function AdminClubsScreen() {
+  const insets = useSafeAreaInsets();
+  const { language } = useLanguage();
+  const { showAlert } = useAlert();
+  const fr = language === 'fr';
+
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [clubs, setClubs] = useState<AdminClub[]>([]);
+  const [search, setSearch] = useState('');
+  const [filterType, setFilterType] = useState<'all' | 'verified' | 'unverified' | 'public'>('all');
+  const [verifyingId, setVerifyingId] = useState<string | null>(null);
+
+  // Detail modal
+  const [detailClub, setDetailClub] = useState<AdminClub | null>(null);
+
+  // Bulk selection
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkProcessing, setBulkProcessing] = useState(false);
+  const [showStats, setShowStats] = useState(false);
+  const [clubMatchCounts, setClubMatchCounts] = useState<Map<string, number>>(new Map());
+
+  // Load match counts for enhanced verification
+  const loadClubMatchCounts = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data: matches } = await supabase.from('matches').select('user_id');
+      const { data: allPlayers } = await supabase.from('players').select('user_id, club_id');
+      const playerClubMap = new Map<string, string>();
+      (allPlayers || []).forEach((p: any) => { if (p.club_id) playerClubMap.set(p.user_id, p.club_id); });
+      const countMap = new Map<string, number>();
+      (matches || []).forEach((m: any) => {
+        const cid = playerClubMap.get(m.user_id);
+        if (cid) countMap.set(cid, (countMap.get(cid) || 0) + 1);
+      });
+      setClubMatchCounts(countMap);
+    } catch { /* silent */ }
+  }, []);
+
+  const loadClubs = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const { data, error } = await supabase
+        .from('clubs')
+        .select('*')
+        .order('name', { ascending: true })
+        .limit(500);
+
+      if (error) { console.log('[AdminClubs] Error:', error); return; }
+
+      const userIds = [...new Set((data || []).map((c: any) => c.user_id))];
+      const ownerMap = new Map<string, { name: string; email: string }>();
+      if (userIds.length > 0) {
+        const { data: profiles } = await supabase
+          .from('user_profiles')
+          .select('id, username, email')
+          .in('id', userIds);
+        (profiles || []).forEach((p: any) => {
+          ownerMap.set(p.id, { name: p.username || 'Unknown', email: p.email || '' });
+        });
+      }
+
+      setClubs((data || []).map((c: any) => ({
+        id: c.id,
+        userId: c.user_id,
+        name: c.name,
+        city: c.city || '',
+        country: c.country || 'France',
+        address: c.address,
+        description: c.description,
+        membersCount: c.members_count || 0,
+        foundedYear: c.founded_year,
+        contactEmail: c.contact_email,
+        contactPhone: c.contact_phone,
+        website: c.website,
+        isPublic: c.is_public || false,
+        isVerified: c.is_verified || false,
+        logo: c.logo,
+        facilities: c.facilities || [],
+        createdAt: c.created_at,
+        ownerName: ownerMap.get(c.user_id)?.name,
+        ownerEmail: ownerMap.get(c.user_id)?.email,
+        coAdminCount: (c.admin_user_ids || []).length,
+      })));
+    } catch (e) {
+      console.log('[AdminClubs] Load error:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { loadClubs(); loadClubMatchCounts(); }, [loadClubs, loadClubMatchCounts]);
+
+  const handleRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadClubs();
+    setRefreshing(false);
+  }, [loadClubs]);
+
+  const filteredClubs = useMemo(() => {
+    let items = clubs;
+    if (filterType === 'verified') items = items.filter(c => c.isVerified);
+    else if (filterType === 'unverified') items = items.filter(c => !c.isVerified);
+    else if (filterType === 'public') items = items.filter(c => c.isPublic);
+    if (search.trim()) {
+      const s = search.toLowerCase();
+      items = items.filter(c =>
+        c.name.toLowerCase().includes(s) ||
+        c.city.toLowerCase().includes(s) ||
+        c.ownerName?.toLowerCase().includes(s) ||
+        c.ownerEmail?.toLowerCase().includes(s)
+      );
+    }
+    return items;
+  }, [clubs, search, filterType]);
+
+  // Enhanced verification criteria helper
+  const getClubCriteria = useCallback((club: AdminClub) => {
+    const matchCount = clubMatchCounts.get(club.id) || 0;
+    return [
+      { key: 'address', met: !!club.address, label: fr ? 'Adresse' : 'Address', icon: 'place', weight: 15 },
+      { key: 'members', met: club.membersCount >= 2, label: fr ? '2+ membres' : '2+ members', icon: 'people', weight: 15 },
+      { key: 'desc', met: !!club.description, label: 'Description', icon: 'description', weight: 15 },
+      { key: 'public', met: club.isPublic, label: 'Public', icon: 'public', weight: 10 },
+      { key: 'logo', met: !!club.logo, label: 'Logo', icon: 'image', weight: 15 },
+      { key: 'matches', met: matchCount >= 5, label: fr ? `${matchCount}/5 matchs` : `${matchCount}/5 matches`, icon: 'sports', weight: 20 },
+      { key: 'contact', met: !!(club.contactEmail || club.contactPhone), label: 'Contact', icon: 'contact-phone', weight: 10 },
+    ];
+  }, [fr, clubMatchCounts]);
+
+  const getCompletenessScore = useCallback((club: AdminClub) => {
+    const criteria = getClubCriteria(club);
+    return criteria.reduce((sum, c) => sum + (c.met ? c.weight : 0), 0);
+  }, [getClubCriteria]);
+
+  // City distribution stats
+  const cityDistribution = useMemo(() => {
+    const cityMap = new Map<string, number>();
+    clubs.forEach(c => { if (c.city) cityMap.set(c.city, (cityMap.get(c.city) || 0) + 1); });
+    return [...cityMap.entries()].map(([city, count]) => ({ city, count })).sort((a, b) => b.count - a.count).slice(0, 8);
+  }, [clubs]);
+
+  // Monthly club creation
+  const monthlyCreation = useMemo(() => {
+    const monthMap = new Map<string, number>();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(); d.setMonth(d.getMonth() - i);
+      const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
+      monthMap.set(key, 0);
+    }
+    clubs.forEach(c => {
+      if (!c.createdAt) return;
+      const d = new Date(c.createdAt);
+      const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
+      if (monthMap.has(key)) monthMap.set(key, (monthMap.get(key) || 0) + 1);
+    });
+    return [...monthMap.entries()].map(([month, count]) => ({ month, count }));
+  }, [clubs, fr]);
+
+  const avgMembers = useMemo(() => {
+    if (clubs.length === 0) return 0;
+    return Math.round(clubs.reduce((sum, c) => sum + c.membersCount, 0) / clubs.length * 10) / 10;
+  }, [clubs]);
+
+  const stats = useMemo(() => ({
+    total: clubs.length,
+    verified: clubs.filter(c => c.isVerified).length,
+    unverified: clubs.filter(c => !c.isVerified).length,
+    public: clubs.filter(c => c.isPublic).length,
+    totalMembers: clubs.reduce((sum, c) => sum + c.membersCount, 0),
+  }), [clubs]);
+
+  const handleVerify = useCallback(async (club: AdminClub) => {
+    const newVal = !club.isVerified;
+    setVerifyingId(club.id);
+    Haptics.selectionAsync();
+    const supabase = getSupabaseClient();
+    const { error } = await supabase.from('clubs').update({ is_verified: newVal, updated_at: new Date().toISOString() }).eq('id', club.id);
+    setVerifyingId(null);
+    if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setClubs(prev => prev.map(c => c.id === club.id ? { ...c, isVerified: newVal } : c));
+    if (detailClub?.id === club.id) setDetailClub(prev => prev ? { ...prev, isVerified: newVal } : null);
+    logAdminAction({
+      actionType: newVal ? 'club_verify' : 'club_unverify',
+      targetType: 'club',
+      targetId: club.id,
+      targetName: club.name,
+      actionDetail: `${newVal ? 'Verified' : 'Unverified'} club: ${club.name} (${club.city})`,
+    });
+    // Send push on verify
+    if (newVal) {
+      try {
+        supabase.functions.invoke('send-push', { body: { type: 'club_verification', payload: { targetUserId: club.userId, clubName: club.name, clubId: club.id } } });
+      } catch { /* silent */ }
+    }
+  }, [fr, showAlert, detailClub]);
+
+  const toggleSelection = useCallback((id: string) => {
+    Haptics.selectionAsync();
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const handleBulkVerify = useCallback(async () => {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    Alert.alert(
+      fr ? 'Verification en masse' : 'Bulk Verify',
+      fr ? `Verifier ${count} club(s) ?` : `Verify ${count} club(s)?`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Verifier' : 'Verify', onPress: async () => {
+          setBulkProcessing(true);
+          const supabase = getSupabaseClient();
+          const ids = [...selectedIds];
+          const { error } = await supabase.from('clubs').update({ is_verified: true, updated_at: new Date().toISOString() }).in('id', ids);
+          if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); }
+          else {
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            setClubs(prev => prev.map(c => ids.includes(c.id) ? { ...c, isVerified: true } : c));
+            logAdminAction({ actionType: 'club_verify', actionDetail: `Bulk verified ${count} clubs`, metadata: { clubIds: ids, count } });
+            // Push to all owners
+            ids.forEach(cid => {
+              const club = clubs.find(c => c.id === cid);
+              if (club) {
+                try { supabase.functions.invoke('send-push', { body: { type: 'club_verification', payload: { targetUserId: club.userId, clubName: club.name, clubId: club.id } } }); } catch { /* silent */ }
+              }
+            });
+            setSelectedIds(new Set());
+            setSelectionMode(false);
+          }
+          setBulkProcessing(false);
+        }},
+      ]
+    );
+  }, [selectedIds, fr, showAlert, clubs]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+          <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView edges={['top']} style={s.container}>
+      <View style={s.header}>
+        <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+        <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
+        <Pressable
+          style={[s.selectBtn, selectionMode && s.selectBtnActive]}
+          onPress={() => { Haptics.selectionAsync(); setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds(new Set()); }}
+        >
+          <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
+        </Pressable>
+      </View>
+
+      <ScrollView
+        style={s.scroll}
+        contentContainerStyle={[s.scrollContent, { paddingBottom: selectionMode ? insets.bottom + 120 : insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
+      >
+        {/* Stats */}
+        <View style={s.statsGrid}>
+          {[
+            { value: stats.total, label: 'Total', icon: 'home', color: '#7C3AED', bg: '#EDE9FE' },
+            { value: stats.verified, label: fr ? 'Verifies' : 'Verified', icon: 'verified', color: '#2563EB', bg: '#DBEAFE' },
+            { value: stats.unverified, label: fr ? 'Non verifies' : 'Unverified', icon: 'pending', color: '#D97706', bg: '#FEF3C7' },
+            { value: stats.totalMembers, label: fr ? 'Membres' : 'Members', icon: 'people', color: '#10B981', bg: '#DCFCE7' },
+          ].map((st, i) => (
+            <View key={i} style={[s.statCard, { borderColor: st.color + '20' }]}>
+              <View style={[s.statIcon, { backgroundColor: st.bg }]}><MaterialIcons name={st.icon as any} size={16} color={st.color} /></View>
+              <Text style={[s.statValue, { color: st.color }]}>{st.value}</Text>
+              <Text style={s.statLabel}>{st.label}</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Search */}
+        <View style={s.searchWrap}>
+          <MaterialIcons name="search" size={18} color="#94A3B8" />
+          <TextInput style={s.searchInput} value={search} onChangeText={setSearch} placeholder={fr ? 'Rechercher club, ville, proprietaire...' : 'Search club, city, owner...'} placeholderTextColor="#94A3B8" />
+          {search ? <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color="#94A3B8" /></Pressable> : null}
+        </View>
+
+        {/* Filters */}
+        <View style={s.filterRow}>
+          {([
+            { key: 'all' as const, label: fr ? 'Tout' : 'All', icon: 'home', count: stats.total },
+            { key: 'verified' as const, label: fr ? 'Verifies' : 'Verified', icon: 'verified', count: stats.verified },
+            { key: 'unverified' as const, label: fr ? 'Non verifies' : 'Unverified', icon: 'pending', count: stats.unverified },
+            { key: 'public' as const, label: 'Public', icon: 'public', count: stats.public },
+          ]).map(f => {
+            const isActive = filterType === f.key;
+            return (
+              <Pressable key={f.key} style={[s.filterChip, isActive && s.filterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterType(f.key); }}>
+                <MaterialIcons name={f.icon as any} size={13} color={isActive ? '#FFF' : '#64748B'} />
+                <Text style={[s.filterChipText, isActive && { color: '#FFF' }]}>{f.label}</Text>
+                <View style={[s.filterBadge, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
+                  <Text style={[s.filterBadgeText, isActive && { color: '#FFF' }]}>{f.count}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </View>
+
+        {/* Stats Dashboard */}
+        {showStats ? (
+          <Animated.View entering={FadeInDown.duration(200)}>
+            {/* City Distribution */}
+            {cityDistribution.length > 0 ? (
+              <View style={s.statsCard}>
+                <Text style={s.statsCardTitle}>{fr ? 'DISTRIBUTION PAR VILLE' : 'CITY DISTRIBUTION'}</Text>
+                {(() => {
+                  const maxVal = Math.max(...cityDistribution.map(c => c.count), 1);
+                  return cityDistribution.map((c, idx) => (
+                    <View key={idx} style={s.chartRow}>
+                      <Text style={s.chartLabel} numberOfLines={1}>{c.city}</Text>
+                      <View style={s.chartBarBg}>
+                        <View style={[s.chartBarFill, { width: `${Math.max(3, (c.count / maxVal) * 100)}%`, backgroundColor: '#7C3AED' }]} />
+                      </View>
+                      <Text style={s.chartValue}>{c.count}</Text>
+                    </View>
+                  ));
+                })()}
+              </View>
+            ) : null}
+            {/* Monthly Creation */}
+            {monthlyCreation.length > 0 ? (
+              <View style={s.statsCard}>
+                <Text style={s.statsCardTitle}>{fr ? 'CREATION MENSUELLE' : 'MONTHLY CREATION'}</Text>
+                {(() => {
+                  const maxVal = Math.max(...monthlyCreation.map(m => m.count), 1);
+                  return monthlyCreation.map((m, idx) => (
+                    <View key={idx} style={s.chartRow}>
+                      <Text style={s.chartLabel}>{m.month}</Text>
+                      <View style={s.chartBarBg}>
+                        <View style={[s.chartBarFill, { width: `${Math.max(3, (m.count / maxVal) * 100)}%`, backgroundColor: idx === monthlyCreation.length - 1 ? '#3B82F6' : '#93C5FD' }]} />
+                      </View>
+                      <Text style={s.chartValue}>{m.count}</Text>
+                    </View>
+                  ));
+                })()}
+              </View>
+            ) : null}
+            {/* Averages */}
+            <View style={s.statsCard}>
+              <Text style={s.statsCardTitle}>{fr ? 'MOYENNES' : 'AVERAGES'}</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <View style={[s.avgCard, { borderColor: '#3B82F620' }]}>
+                  <Text style={[s.avgValue, { color: '#3B82F6' }]}>{avgMembers}</Text>
+                  <Text style={s.avgLabel}>{fr ? 'Membres/club' : 'Members/club'}</Text>
+                </View>
+                <View style={[s.avgCard, { borderColor: '#10B98120' }]}>
+                  <Text style={[s.avgValue, { color: '#10B981' }]}>{stats.verified}</Text>
+                  <Text style={s.avgLabel}>{fr ? 'Verifies' : 'Verified'}</Text>
+                </View>
+                <View style={[s.avgCard, { borderColor: '#7C3AED20' }]}>
+                  <Text style={[s.avgValue, { color: '#7C3AED' }]}>{stats.public}</Text>
+                  <Text style={s.avgLabel}>Public</Text>
+                </View>
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {/* Stats toggle */}
+        <Pressable
+          style={s.statsToggle}
+          onPress={() => { Haptics.selectionAsync(); setShowStats(!showStats); }}
+        >
+          <MaterialIcons name="bar-chart" size={16} color="#3B82F6" />
+          <Text style={s.statsToggleText}>{showStats ? (fr ? 'Masquer stats' : 'Hide stats') : (fr ? 'Voir les statistiques' : 'Show statistics')}</Text>
+          <MaterialIcons name={showStats ? 'expand-less' : 'expand-more'} size={18} color="#3B82F6" />
+        </Pressable>
+
+      {/* Club list */}
+        {filteredClubs.length === 0 ? (
+          <View style={s.emptyWrap}>
+            <View style={s.emptyIcon}><MaterialIcons name="search-off" size={40} color="#CBD5E1" /></View>
+            <Text style={s.emptyTitle}>{fr ? 'Aucun club trouve' : 'No clubs found'}</Text>
+          </View>
+        ) : (
+          filteredClubs.map((club, idx) => {
+            const isSelected = selectedIds.has(club.id);
+            const criteria = [!!club.address, club.membersCount >= 2, !!club.description, club.isPublic];
+            const metCount = criteria.filter(Boolean).length;
+            return (
+              <Animated.View key={club.id} entering={FadeInDown.duration(200).delay(Math.min(idx * 15, 300))}>
+                <Pressable
+                  style={[s.clubCard, isSelected && s.clubCardSelected]}
+                  onPress={() => {
+                    if (selectionMode) { toggleSelection(club.id); return; }
+                    Haptics.selectionAsync();
+                    setDetailClub(club);
+                  }}
+                >
+                  {selectionMode ? (
+                    <View style={[s.checkbox, isSelected && s.checkboxActive]}>
+                      {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                    </View>
+                  ) : null}
+                  <View style={s.clubHeader}>
+                    {club.logo ? (
+                      <Image source={{ uri: club.logo }} style={s.clubLogo} contentFit="cover" transition={200} />
+                    ) : (
+                      <View style={s.clubLogoPlaceholder}><MaterialIcons name="home" size={22} color="#7C3AED" /></View>
+                    )}
+                    <View style={{ flex: 1, minWidth: 0 }}>
+                      <View style={s.clubNameRow}>
+                        <Text style={s.clubName} numberOfLines={1}>{club.name}</Text>
+                        {club.isVerified ? <MaterialIcons name="verified" size={16} color="#2563EB" /> : null}
+                      </View>
+                      <Text style={s.clubCity} numberOfLines={1}>{club.city}{club.country !== 'France' ? ` \u2022 ${club.country}` : ''}</Text>
+                      <View style={s.clubMetaRow}>
+                        <View style={s.clubMeta}><MaterialIcons name="people" size={10} color="#64748B" /><Text style={s.clubMetaText}>{club.membersCount}</Text></View>
+                        {club.isPublic ? <View style={[s.clubMeta, { backgroundColor: '#DCFCE7' }]}><MaterialIcons name="public" size={10} color="#10B981" /><Text style={[s.clubMetaText, { color: '#10B981' }]}>Public</Text></View> : null}
+                        {club.coAdminCount > 0 ? <View style={s.clubMeta}><MaterialIcons name="group" size={10} color="#7C3AED" /><Text style={[s.clubMetaText, { color: '#7C3AED' }]}>{club.coAdminCount}</Text></View> : null}
+                        {(() => {
+                          const score = getCompletenessScore(club);
+                          const scoreColor = score >= 80 ? '#10B981' : score >= 50 ? '#D97706' : '#EF4444';
+                          return (
+                            <View style={[s.clubMeta, { backgroundColor: scoreColor + '15' }]}>
+                              <Text style={[s.clubMetaText, { color: scoreColor }]}>{score}%</Text>
+                            </View>
+                          );
+                        })()}
+                      </View>
+                    </View>
+                    {!selectionMode ? (
+                      <View style={{ alignItems: 'center', gap: 2 }}>
+                        <Pressable
+                          style={[s.verifyBtn, club.isVerified ? { backgroundColor: '#DCFCE7' } : { backgroundColor: '#EFF6FF' }]}
+                          onPress={() => handleVerify(club)}
+                          disabled={verifyingId === club.id}
+                        >
+                          {verifyingId === club.id ? <ActivityIndicator size="small" color="#2563EB" /> : (
+                            <MaterialIcons name={club.isVerified ? 'verified' : 'add-task'} size={18} color={club.isVerified ? '#10B981' : '#2563EB'} />
+                          )}
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                </Pressable>
+              </Animated.View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* Bulk Action Bar */}
+      {selectionMode && selectedIds.size > 0 ? (
+        <Animated.View entering={FadeIn.duration(200)} style={[s.bulkBar, { paddingBottom: insets.bottom + 12 }]}>
+          <Text style={s.bulkBarText}>{selectedIds.size} {fr ? 'selectionne(s)' : 'selected'}</Text>
+          <View style={s.bulkActions}>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#2563EB' }]} onPress={handleBulkVerify} disabled={bulkProcessing}>
+              {bulkProcessing ? <ActivityIndicator size="small" color="#FFF" /> : (
+                <><MaterialIcons name="verified" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Verifier' : 'Verify'}</Text></>
+              )}
+            </Pressable>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#64748B' }]} onPress={() => { setSelectedIds(new Set()); setSelectionMode(false); }}>
+              <MaterialIcons name="close" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Annuler' : 'Cancel'}</Text>
+            </Pressable>
+          </View>
+        </Animated.View>
+      ) : null}
+
+      {/* Detail Modal */}
+      <Modal visible={!!detailClub} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailClub(null)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setDetailClub(null)}><MaterialIcons name="close" size={24} color="#0F172A" /></Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Detail club' : 'Club Detail'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          {detailClub ? (
+            <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+              {/* Hero */}
+              <View style={s.detailHero}>
+                {detailClub.logo ? (
+                  <Image source={{ uri: detailClub.logo }} style={s.detailLogo} contentFit="cover" transition={200} />
+                ) : (
+                  <View style={s.detailLogoPlaceholder}><MaterialIcons name="home" size={36} color="#7C3AED" /></View>
+                )}
+                <View style={s.detailNameRow}>
+                  <Text style={s.detailName}>{detailClub.name}</Text>
+                  {detailClub.isVerified ? <MaterialIcons name="verified" size={20} color="#2563EB" /> : null}
+                </View>
+                <Text style={s.detailCity}>{detailClub.address ? `${detailClub.address}, ` : ''}{detailClub.city}</Text>
+                {detailClub.description ? <Text style={s.detailDesc}>{detailClub.description}</Text> : null}
+                <View style={s.detailBadges}>
+                  {detailClub.isPublic ? <View style={[s.detailBadge, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}><MaterialIcons name="public" size={12} color="#10B981" /><Text style={[s.detailBadgeText, { color: '#10B981' }]}>Public</Text></View> : null}
+                  {detailClub.isVerified ? <View style={[s.detailBadge, { backgroundColor: '#DBEAFE', borderColor: '#BFDBFE' }]}><MaterialIcons name="verified" size={12} color="#2563EB" /><Text style={[s.detailBadgeText, { color: '#2563EB' }]}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
+                  {detailClub.coAdminCount > 0 ? <View style={[s.detailBadge, { backgroundColor: '#EDE9FE', borderColor: '#DDD6FE' }]}><MaterialIcons name="group" size={12} color="#7C3AED" /><Text style={[s.detailBadgeText, { color: '#7C3AED' }]}>{detailClub.coAdminCount} co-admin(s)</Text></View> : null}
+                </View>
+              </View>
+
+              {/* Stats */}
+              <View style={s.detailStats}>
+                {[
+                  { value: detailClub.membersCount, label: fr ? 'Membres' : 'Members', icon: 'people', color: '#3B82F6' },
+                  { value: detailClub.foundedYear || '-', label: fr ? 'Fonde' : 'Founded', icon: 'event', color: '#10B981' },
+                  { value: detailClub.facilities.length, label: fr ? 'Equip.' : 'Facilities', icon: 'sports-soccer', color: '#D97706' },
+                ].map((st, i) => (
+                  <View key={i} style={s.detailStatItem}>
+                    <MaterialIcons name={st.icon as any} size={16} color={st.color} />
+                    <Text style={[s.detailStatValue, { color: st.color }]}>{st.value}</Text>
+                    <Text style={s.detailStatLabel}>{st.label}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Owner info */}
+              <View style={s.detailSection}>
+                <Text style={s.detailSectionTitle}>{fr ? 'PROPRIETAIRE' : 'OWNER'}</Text>
+                <View style={s.infoCard}>
+                  <View style={s.infoRow}>
+                    <View style={[s.infoIcon, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="person" size={16} color="#3B82F6" /></View>
+                    <Text style={s.infoLabel}>{fr ? 'Nom' : 'Name'}</Text>
+                    <Text style={s.infoValue}>{detailClub.ownerName || '-'}</Text>
+                  </View>
+                  <View style={[s.infoRow, s.infoRowBorder]}>
+                    <View style={[s.infoIcon, { backgroundColor: '#10B98112' }]}><MaterialIcons name="email" size={16} color="#10B981" /></View>
+                    <Text style={s.infoLabel}>Email</Text>
+                    <Text style={s.infoValue} numberOfLines={1}>{detailClub.ownerEmail || '-'}</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Contact info */}
+              {(detailClub.contactEmail || detailClub.contactPhone || detailClub.website) ? (
+                <View style={s.detailSection}>
+                  <Text style={s.detailSectionTitle}>CONTACT</Text>
+                  <View style={s.infoCard}>
+                    {detailClub.contactEmail ? (
+                      <Pressable style={s.infoRow} onPress={() => Linking.openURL(`mailto:${detailClub.contactEmail}`)}>
+                        <View style={[s.infoIcon, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="email" size={16} color="#3B82F6" /></View>
+                        <Text style={[s.infoValue, { color: '#3B82F6', flex: 1 }]} numberOfLines={1}>{detailClub.contactEmail}</Text>
+                        <MaterialIcons name="open-in-new" size={14} color="#3B82F6" />
+                      </Pressable>
+                    ) : null}
+                    {detailClub.contactPhone ? (
+                      <Pressable style={[s.infoRow, s.infoRowBorder]} onPress={() => Linking.openURL(`tel:${detailClub.contactPhone}`)}>
+                        <View style={[s.infoIcon, { backgroundColor: '#10B98112' }]}><MaterialIcons name="phone" size={16} color="#10B981" /></View>
+                        <Text style={[s.infoValue, { color: '#10B981', flex: 1 }]}>{detailClub.contactPhone}</Text>
+                        <MaterialIcons name="open-in-new" size={14} color="#10B981" />
+                      </Pressable>
+                    ) : null}
+                    {detailClub.website ? (
+                      <Pressable style={[s.infoRow, s.infoRowBorder]} onPress={() => { const url = detailClub.website!.startsWith('http') ? detailClub.website! : `https://${detailClub.website}`; Linking.openURL(url); }}>
+                        <View style={[s.infoIcon, { backgroundColor: '#7C3AED12' }]}><MaterialIcons name="language" size={16} color="#7C3AED" /></View>
+                        <Text style={[s.infoValue, { color: '#7C3AED', flex: 1 }]} numberOfLines={1}>{detailClub.website}</Text>
+                        <MaterialIcons name="open-in-new" size={14} color="#7C3AED" />
+                      </Pressable>
+                    ) : null}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Facilities */}
+              {detailClub.facilities.length > 0 ? (
+                <View style={s.detailSection}>
+                  <Text style={s.detailSectionTitle}>{fr ? 'EQUIPEMENTS' : 'FACILITIES'}</Text>
+                  <View style={s.facilitiesRow}>
+                    {detailClub.facilities.map((f, i) => (
+                      <View key={i} style={s.facilityChip}>
+                        <MaterialIcons name="check-circle" size={12} color="#10B981" />
+                        <Text style={s.facilityText}>{f}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Enhanced Verification Criteria */}
+              {detailClub ? (() => {
+                const criteria = getClubCriteria(detailClub);
+                const score = getCompletenessScore(detailClub);
+                const scoreColor = score >= 80 ? '#10B981' : score >= 50 ? '#D97706' : '#EF4444';
+                const suggestions = criteria.filter(c => !c.met);
+                return (
+                  <View style={s.detailSection}>
+                    <Text style={s.detailSectionTitle}>{fr ? 'SCORE DE COMPLETUDE' : 'COMPLETENESS SCORE'}</Text>
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Verification' : 'Verification'}</Text>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: scoreColor }}>{score}%</Text>
+                      </View>
+                      <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                        <View style={{ height: '100%', width: `${Math.max(3, score)}%`, backgroundColor: scoreColor, borderRadius: 4 }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                        {criteria.map(c => (
+                          <View key={c.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: c.met ? '#DCFCE7' : '#FEF2F2', borderWidth: 1, borderColor: c.met ? '#BBF7D0' : '#FECACA' }}>
+                            <MaterialIcons name={c.met ? 'check-circle' : 'cancel'} size={10} color={c.met ? '#10B981' : '#EF4444'} />
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: c.met ? '#10B981' : '#EF4444' }}>{c.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                      {suggestions.length > 0 ? (
+                        <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', marginBottom: 6, letterSpacing: 0.5 }}>{fr ? 'AMELIORATIONS' : 'IMPROVEMENTS'}</Text>
+                          {suggestions.slice(0, 3).map(s => (
+                            <View key={s.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <MaterialIcons name={s.icon as any} size={12} color="#D97706" />
+                              <Text style={{ fontSize: 11, color: '#64748B' }}>{fr ? 'Ajouter' : 'Add'} {s.label.toLowerCase()}</Text>
+                              <Text style={{ fontSize: 9, color: '#94A3B8', marginLeft: 'auto' }}>+{s.weight}%</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })() : null}
+
+              {/* Actions */}
+              <View style={s.detailSection}>
+                <Text style={s.detailSectionTitle}>ACTIONS</Text>
+                <View style={s.detailActionsRow}>
+                  <Pressable
+                    style={[s.detailActionBtn, { backgroundColor: detailClub.isVerified ? '#94A3B8' : '#2563EB' }]}
+                    onPress={() => handleVerify(detailClub)}
+                    disabled={verifyingId === detailClub.id}
+                  >
+                    {verifyingId === detailClub.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                      <><MaterialIcons name={detailClub.isVerified ? 'remove-circle' : 'verified'} size={18} color="#FFF" /><Text style={s.detailActionText}>{detailClub.isVerified ? (fr ? 'Retirer' : 'Unverify') : (fr ? 'Verifier' : 'Verify')}</Text></>
+                    )}
+                  </Pressable>
+                  <Pressable
+                    style={[s.detailActionBtn, { backgroundColor: '#10B981' }]}
+                    onPress={() => { setDetailClub(null); router.push(`/club/${detailClub.id}` as any); }}
+                  >
+                    <MaterialIcons name="open-in-new" size={18} color="#FFF" />
+                    <Text style={s.detailActionText}>{fr ? 'Voir' : 'View'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </ScrollView>
+          ) : null}
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const s = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8FAFC' },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', letterSpacing: -0.3 },
+  selectBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  selectBtnActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  scroll: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+
+  statsGrid: { flexDirection: 'row', gap: 8, marginBottom: 14 },
+  statCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 10, alignItems: 'center', borderWidth: 1 },
+  statIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  statValue: { fontSize: 18, fontWeight: '800' },
+  statLabel: { fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 1, textTransform: 'uppercase', letterSpacing: 0.3 },
+
+  searchWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 14, gap: 8, marginBottom: 12, borderWidth: 1.5, borderColor: '#E2E8F0' },
+  searchInput: { flex: 1, fontSize: 14, color: '#0F172A', paddingVertical: 12 },
+
+  filterRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 16 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  filterChipActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  filterChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  filterBadge: { minWidth: 20, height: 18, borderRadius: 9, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  filterBadgeText: { fontSize: 9, fontWeight: '800', color: '#94A3B8' },
+
+  clubCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 },
+  clubCardSelected: { borderColor: '#3B82F6', backgroundColor: '#EFF6FF' },
+  clubHeader: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  clubLogo: { width: 48, height: 48, borderRadius: 14 },
+  clubLogoPlaceholder: { width: 48, height: 48, borderRadius: 14, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
+  clubNameRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  clubName: { fontSize: 15, fontWeight: '700', color: '#0F172A', flex: 1 },
+  clubCity: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  clubMetaRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginTop: 4 },
+  clubMeta: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F8FAFC', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 },
+  clubMetaText: { fontSize: 10, fontWeight: '600', color: '#64748B' },
+  verifyBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+
+  // Stats Dashboard
+  statsToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginBottom: 12, backgroundColor: '#EFF6FF', borderRadius: 12, borderWidth: 1, borderColor: '#DBEAFE' },
+  statsToggleText: { fontSize: 12, fontWeight: '700', color: '#3B82F6' },
+  statsCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9' },
+  statsCardTitle: { fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 10 },
+  chartRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  chartLabel: { fontSize: 10, fontWeight: '600', color: '#94A3B8', width: 56 },
+  chartBarBg: { flex: 1, height: 16, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' },
+  chartBarFill: { height: '100%', borderRadius: 4 },
+  chartValue: { fontSize: 11, fontWeight: '800', color: '#0F172A', width: 24, textAlign: 'right' },
+  avgCard: { flex: 1, backgroundColor: '#FFF', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1 },
+  avgValue: { fontSize: 18, fontWeight: '800' },
+  avgLabel: { fontSize: 9, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' },
+
+  checkbox: { width: 24, height: 24, borderRadius: 7, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  checkboxActive: { backgroundColor: '#3B82F6', borderColor: '#3B82F6' },
+
+  bulkBar: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: '#FFF', borderTopWidth: 1, borderTopColor: '#E2E8F0', paddingHorizontal: 16, paddingTop: 12, shadowColor: '#000', shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.08, shadowRadius: 6, elevation: 8 },
+  bulkBarText: { fontSize: 13, fontWeight: '700', color: '#0F172A', marginBottom: 8 },
+  bulkActions: { flexDirection: 'row', gap: 8 },
+  bulkBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 10, flex: 1, justifyContent: 'center' },
+  bulkBtnText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+
+  emptyWrap: { alignItems: 'center', paddingVertical: 56 },
+  emptyIcon: { width: 72, height: 72, borderRadius: 24, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
+  emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
+
+  // Detail
+  detailHero: { alignItems: 'center', backgroundColor: '#FFF', borderRadius: 20, padding: 24, marginBottom: 16 },
+  detailLogo: { width: 80, height: 80, borderRadius: 24, marginBottom: 12 },
+  detailLogoPlaceholder: { width: 80, height: 80, borderRadius: 24, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  detailNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 },
+  detailName: { fontSize: 20, fontWeight: '800', color: '#0F172A' },
+  detailCity: { fontSize: 13, color: '#94A3B8', marginBottom: 8 },
+  detailDesc: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 19, marginBottom: 10 },
+  detailBadges: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  detailBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1 },
+  detailBadgeText: { fontSize: 11, fontWeight: '700' },
+
+  detailStats: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  detailStatItem: { flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 14, alignItems: 'center', gap: 4 },
+  detailStatValue: { fontSize: 18, fontWeight: '800' },
+  detailStatLabel: { fontSize: 9, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase' },
+
+  detailSection: { marginBottom: 16 },
+  detailSectionTitle: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 10, paddingHorizontal: 4 },
+
+  infoCard: { backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' },
+  infoRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14 },
+  infoRowBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  infoIcon: { width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
+  infoLabel: { fontSize: 13, fontWeight: '600', color: '#64748B', flex: 1 },
+  infoValue: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+
+  facilitiesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  facilityChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCFCE7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  facilityText: { fontSize: 12, fontWeight: '600', color: '#10B981' },
+
+  detailActionsRow: { flexDirection: 'row', gap: 8 },
+  detailActionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12 },
+  detailActionText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+});

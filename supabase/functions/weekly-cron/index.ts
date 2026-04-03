@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check'];
 
     const results: Record<string, any> = {};
 
@@ -716,7 +716,88 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 8: Clean up old analytics (older than 365 days)
+    // TASK 8: Appeal Deadline Check - Notify admins of overdue appeals
+    // ============================================================
+    if (tasks.includes('appeal_deadline_check')) {
+      console.log('[weekly-cron] Checking overdue ban appeals...');
+      try {
+        const threshold48h = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+        const { data: overdueAppeals } = await supabaseAdmin
+          .from('ban_appeals')
+          .select('id, created_at')
+          .eq('status', 'pending')
+          .lt('created_at', threshold48h);
+
+        const overdueCount = overdueAppeals?.length || 0;
+        if (overdueCount > 0) {
+          // Calculate oldest appeal age in days
+          const oldestDate = overdueAppeals!.reduce((min: string, a: any) => a.created_at < min ? a.created_at : min, overdueAppeals![0].created_at);
+          const oldestDays = Math.floor((Date.now() - new Date(oldestDate).getTime()) / (24 * 60 * 60 * 1000));
+
+          // Check if we already sent a reminder today
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const { data: recentReminder } = await supabaseAdmin
+            .from('ambassador_analytics')
+            .select('id')
+            .eq('event_type', 'appeal_deadline_reminder')
+            .gte('created_at', todayStart.toISOString())
+            .limit(1);
+
+          if (!recentReminder || recentReminder.length === 0) {
+            // Send push to all admins
+            const { data: adminUsers } = await supabaseAdmin
+              .from('user_profiles')
+              .select('id')
+              .eq('is_admin', true);
+
+            if (adminUsers && adminUsers.length > 0) {
+              const adminIds = adminUsers.map((a: any) => a.id);
+              const { data: adminTokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('user_id, token')
+                .in('user_id', adminIds)
+                .eq('active', true);
+
+              if (adminTokens && adminTokens.length > 0) {
+                const messages = adminTokens.map((t: any) => buildPushMessage(
+                  t.token,
+                  `\u{26A0}\u{FE0F} ${overdueCount} appel(s) de ban en retard`,
+                  `${overdueCount} appel(s) en attente depuis plus de ${oldestDays} jour(s). Action requise.`,
+                  { type: 'moderation_action', action: 'appeal_deadline' },
+                  { channelId: 'tournament-reminders', priority: 'high' }
+                ));
+                const tickets = await sendPushNotifications(messages);
+                const reminderSent = tickets.filter((t: any) => t.status === 'ok').length;
+                console.log(`[weekly-cron] Appeal deadline reminder: ${reminderSent} sent to ${adminTokens.length} admin tokens`);
+
+                // Track reminder to avoid duplicates today
+                await supabaseAdmin.from('ambassador_analytics').insert({
+                  ambassador_id: '00000000-0000-0000-0000-000000000000',
+                  event_type: 'appeal_deadline_reminder',
+                  source_page: `overdue:${overdueCount}|oldest:${oldestDays}d`,
+                  viewer_id: adminIds[0],
+                }).catch(() => {});
+
+                results.appeal_deadline_check = { overdue: overdueCount, oldestDays, reminderSent };
+              } else {
+                results.appeal_deadline_check = { overdue: overdueCount, reason: 'no_admin_tokens' };
+              }
+            }
+          } else {
+            results.appeal_deadline_check = { overdue: overdueCount, reason: 'already_reminded_today' };
+          }
+        } else {
+          results.appeal_deadline_check = { overdue: 0 };
+        }
+      } catch (appealErr: any) {
+        console.error('[weekly-cron] Appeal deadline check error:', appealErr.message);
+        results.appeal_deadline_check = { error: appealErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 9: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');

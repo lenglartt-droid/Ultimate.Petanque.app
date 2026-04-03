@@ -38,6 +38,7 @@ import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest } from '@/services/clubClaimService';
+import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
 
 
 export default function ClubDetailScreen() {
@@ -86,6 +87,16 @@ export default function ClubDetailScreen() {
   const [showProofFullscreen, setShowProofFullscreen] = React.useState<string | null>(null);
   const [pendingClaims, setPendingClaims] = React.useState<ClubClaimRequest[]>([]);
   const [processingClaimId, setProcessingClaimId] = React.useState<string | null>(null);
+
+  // Co-management state
+  const [coAdmins, setCoAdmins] = React.useState<CoAdmin[]>([]);
+  const [showCoAdminModal, setShowCoAdminModal] = React.useState(false);
+  const [coAdminEmail, setCoAdminEmail] = React.useState('');
+  const [addingCoAdmin, setAddingCoAdmin] = React.useState(false);
+  const [isCoAdmin, setIsCoAdmin] = React.useState(false);
+  const [newCoAdminPerm, setNewCoAdminPerm] = React.useState<CoAdminPermission>('edit');
+  const [updatingPermId, setUpdatingPermId] = React.useState<string | null>(null);
+
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
@@ -160,17 +171,26 @@ export default function ClubDetailScreen() {
     if (club) setIsPublicState(club.isPublic ?? false);
   }, [club?.id, club?.isPublic]);
 
-  // Check claim status & load pending claims
+  // Check claim status & load pending claims & co-admins
   React.useEffect(() => {
     if (!id || !user?.id) return;
     // Check if I have a claim
     hasExistingClaim(id, user.id).then(({ hasClaim, status }) => {
       if (hasClaim) setClaimStatus(status);
     }).catch(() => {});
-    // If I own this club, load pending claims
+    // If I own this club, load pending claims and co-admins
     if (club?.userId === user.id) {
       getReceivedClaims().then(({ claims }) => {
         setPendingClaims(claims.filter(c => c.clubId === id && c.status === 'pending'));
+      }).catch(() => {});
+      getClubCoAdmins(id).then(({ coAdmins: admins }) => {
+        setCoAdmins(admins);
+      }).catch(() => {});
+    } else {
+      // Check if I am a co-admin
+      getClubCoAdmins(id).then(({ coAdmins: admins }) => {
+        setCoAdmins(admins);
+        setIsCoAdmin(admins.some(a => a.id === user.id));
       }).catch(() => {});
     }
   }, [id, user?.id, club?.userId]);
@@ -943,6 +963,100 @@ export default function ClubDetailScreen() {
           </Animated.View>
         ) : null}
 
+        {/* Co-Admin Management - only for owner */}
+        {canEdit && !isSharedItem && club.userId === user?.id ? (
+          <Animated.View entering={FadeIn.duration(400).delay(580)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'CO-GESTION' : 'CO-MANAGEMENT'}</Text>
+            <View style={styles.coAdminCard}>
+              <View style={styles.coAdminHeader}>
+                <View style={styles.coAdminHeaderIcon}>
+                  <MaterialIcons name="group-add" size={20} color="#7C3AED" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.coAdminHeaderTitle}>{language === 'fr' ? 'Administrateurs du club' : 'Club administrators'}</Text>
+                  <Text style={styles.coAdminHeaderDesc}>{language === 'fr' ? 'Ajoutez des co-admins pour gerer ce club' : 'Add co-admins to manage this club'}</Text>
+                </View>
+                <Pressable
+                  style={styles.coAdminAddBtn}
+                  onPress={() => { Haptics.selectionAsync(); setShowCoAdminModal(true); setCoAdminEmail(''); }}
+                >
+                  <MaterialIcons name="person-add" size={18} color="#7C3AED" />
+                </Pressable>
+              </View>
+              {coAdmins.length === 0 ? (
+                <Text style={styles.coAdminEmpty}>{language === 'fr' ? 'Aucun co-admin. Vous etes le seul gestionnaire.' : 'No co-admins. You are the sole manager.'}</Text>
+              ) : (
+                coAdmins.map(ca => {
+                  const permColors: Record<string, { bg: string; color: string; label: string }> = {
+                    read: { bg: '#94A3B815', color: '#94A3B8', label: language === 'fr' ? 'Lecture' : 'Read' },
+                    edit: { bg: '#3B82F615', color: '#3B82F6', label: language === 'fr' ? 'Edition' : 'Edit' },
+                    full: { bg: '#10B98115', color: '#10B981', label: language === 'fr' ? 'Complet' : 'Full' },
+                  };
+                  const pc = permColors[ca.permission] || permColors.edit;
+                  return (
+                    <View key={ca.id} style={styles.coAdminItem}>
+                      <View style={styles.coAdminAvatar}>
+                        <Text style={styles.coAdminAvatarText}>{(ca.username || ca.email).charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.coAdminName}>{ca.username || ca.email}</Text>
+                        <Text style={styles.coAdminEmail}>{ca.email}</Text>
+                      </View>
+                      <Pressable
+                        style={[styles.coAdminPermBadge, { backgroundColor: pc.bg }]}
+                        onPress={async () => {
+                          const nextPerm: CoAdminPermission = ca.permission === 'read' ? 'edit' : ca.permission === 'edit' ? 'full' : 'read';
+                          setUpdatingPermId(ca.id);
+                          Haptics.selectionAsync();
+                          const { error } = await updateCoAdminPermission(club.id, ca.id, nextPerm);
+                          setUpdatingPermId(null);
+                          if (!error) {
+                            setCoAdmins(prev => prev.map(a => a.id === ca.id ? { ...a, permission: nextPerm } : a));
+                          }
+                        }}
+                        disabled={updatingPermId === ca.id}
+                      >
+                        {updatingPermId === ca.id ? <ActivityIndicator size="small" color={pc.color} /> : (
+                          <Text style={[styles.coAdminPermText, { color: pc.color }]}>{pc.label}</Text>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={styles.coAdminRemoveBtn}
+                        onPress={() => {
+                          Alert.alert(
+                            language === 'fr' ? 'Retirer ce co-admin ?' : 'Remove co-admin?',
+                            `${ca.username || ca.email}`,
+                            [
+                              { text: t('common', 'cancel'), style: 'cancel' },
+                              { text: language === 'fr' ? 'Retirer' : 'Remove', style: 'destructive', onPress: async () => {
+                                const { error } = await removeClubCoAdmin(club.id, ca.id);
+                                if (error) showAlert(t('common', 'error'), error);
+                                else {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  setCoAdmins(prev => prev.filter(a => a.id !== ca.id));
+                                }
+                              }},
+                            ]
+                          );
+                        }}
+                      >
+                        <MaterialIcons name="close" size={16} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          </Animated.View>
+        ) : isCoAdmin ? (
+          <Animated.View entering={FadeIn.duration(400).delay(580)} style={styles.section}>
+            <View style={styles.coAdminBadgeCard}>
+              <MaterialIcons name="admin-panel-settings" size={20} color="#7C3AED" />
+              <Text style={styles.coAdminBadgeText}>{language === 'fr' ? 'Vous etes co-administrateur de ce club' : 'You are a co-admin of this club'}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
+
         {/* Modification Logs - only visible to owner */}
         <ModificationLogsSection
           itemType="club"
@@ -1095,6 +1209,89 @@ export default function ClubDetailScreen() {
         itemId={id!}
         itemName={club.name}
       />
+
+      {/* Co-Admin Add Modal */}
+      <Modal visible={showCoAdminModal} animationType="slide" transparent onRequestClose={() => setShowCoAdminModal(false)}>
+        <View style={styles.pvOverlay}>
+          <View style={[styles.pvModal, { maxHeight: '50%' }]}>
+            <View style={styles.pvHeader}>
+              <View style={[styles.pvHeaderIcon, { backgroundColor: '#7C3AED15' }]}>
+                <MaterialIcons name="person-add" size={22} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Ajouter un co-admin' : 'Add co-admin'}</Text>
+                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Entrez l\'email du co-administrateur' : 'Enter the co-admin email address'}</Text>
+              </View>
+              <Pressable style={styles.pvCloseBtn} onPress={() => setShowCoAdminModal(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <View style={{ padding: 20 }}>
+              <View style={[styles.claimInput, { marginBottom: 12 }]}>
+                <MaterialIcons name="email" size={18} color={theme.textMuted} />
+                <View style={{ flex: 1 }}>
+                  {React.createElement(require('react-native').TextInput, {
+                    style: [styles.claimInputField, { minHeight: 20 }],
+                    placeholder: 'email@example.com',
+                    placeholderTextColor: theme.textMuted,
+                    value: coAdminEmail,
+                    onChangeText: setCoAdminEmail,
+                    keyboardType: 'email-address',
+                    autoCapitalize: 'none',
+                  })}
+                </View>
+              </View>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 }}>{language === 'fr' ? 'Niveau de permission' : 'Permission level'}</Text>
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                {([{ key: 'read' as CoAdminPermission, icon: 'visibility', label: language === 'fr' ? 'Lecture seule' : 'Read only', desc: language === 'fr' ? 'Voir le club' : 'View club', color: '#94A3B8' }, { key: 'edit' as CoAdminPermission, icon: 'edit', label: language === 'fr' ? 'Edition' : 'Edit', desc: language === 'fr' ? 'Modifier infos' : 'Edit info', color: '#3B82F6' }, { key: 'full' as CoAdminPermission, icon: 'admin-panel-settings', label: language === 'fr' ? 'Complet' : 'Full', desc: language === 'fr' ? 'Gestion totale' : 'Full control', color: '#10B981' }]).map(p => {
+                  const isActive = newCoAdminPerm === p.key;
+                  return (
+                    <Pressable key={p.key} style={[{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isActive ? p.color : theme.border, backgroundColor: isActive ? p.color + '10' : theme.backgroundSecondary }]} onPress={() => { Haptics.selectionAsync(); setNewCoAdminPerm(p.key); }}>
+                      <MaterialIcons name={p.icon as any} size={20} color={isActive ? p.color : theme.textMuted} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? p.color : theme.textSecondary, marginTop: 4 }}>{p.label}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{p.desc}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+            <View style={styles.pvActions}>
+              <Pressable style={styles.pvCancelBtn} onPress={() => setShowCoAdminModal(false)}>
+                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.pvConfirmBtn, { backgroundColor: '#7C3AED' }, (!coAdminEmail.trim() || addingCoAdmin) && { opacity: 0.5 }]}
+                onPress={async () => {
+                  if (!coAdminEmail.trim() || addingCoAdmin) return;
+                  setAddingCoAdmin(true);
+                  const { coAdmin, error } = await addClubCoAdmin(club.id, coAdminEmail.trim(), newCoAdminPerm);
+                  setAddingCoAdmin(false);
+                  if (error === 'user_not_found') {
+                    showAlert(t('common', 'error'), language === 'fr' ? 'Utilisateur introuvable avec cet email.' : 'No user found with this email.');
+                  } else if (error === 'is_owner') {
+                    showAlert(t('common', 'error'), language === 'fr' ? 'Cet utilisateur est deja proprietaire.' : 'This user is already the owner.');
+                  } else if (error === 'already_coadmin') {
+                    showAlert(t('common', 'error'), language === 'fr' ? 'Deja co-admin de ce club.' : 'Already a co-admin of this club.');
+                  } else if (error) {
+                    showAlert(t('common', 'error'), error);
+                  } else if (coAdmin) {
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    setCoAdmins(prev => [...prev, coAdmin]);
+                    setShowCoAdminModal(false);
+                    setCoAdminEmail('');
+                    setNewCoAdminPerm('edit');
+                  }
+                }}
+                disabled={!coAdminEmail.trim() || addingCoAdmin}
+              >
+                {addingCoAdmin ? <ActivityIndicator size="small" color="#FFF" /> : (
+                  <><MaterialIcons name="person-add" size={18} color="#FFF" /><Text style={styles.pvConfirmText}>{language === 'fr' ? 'Ajouter' : 'Add'}</Text></>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <MergePickerModal
         visible={showMergePicker}
@@ -2027,4 +2224,23 @@ const styles = StyleSheet.create({
   pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
   pvConfirmBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   pvConfirmText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+
+  // Co-Management
+  coAdminCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: '#7C3AED20' },
+  coAdminHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
+  coAdminHeaderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  coAdminHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
+  coAdminHeaderDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  coAdminAddBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  coAdminEmpty: { fontSize: 13, color: theme.textMuted, fontStyle: 'italic' as const, textAlign: 'center' as const, paddingVertical: 8 },
+  coAdminItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border },
+  coAdminAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#7C3AED15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  coAdminAvatarText: { fontSize: 14, fontWeight: '700' as const, color: '#7C3AED' },
+  coAdminName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
+  coAdminEmail: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
+  coAdminPermBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, marginRight: 6 },
+  coAdminPermText: { fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase' as const },
+  coAdminRemoveBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#FECACA' },
+  coAdminBadgeCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#7C3AED08', borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 1, borderColor: '#7C3AED15' },
+  coAdminBadgeText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED', flex: 1 },
 });
