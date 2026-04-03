@@ -42,7 +42,9 @@ export type ActionType =
   | 'user_premium_enable'
   | 'user_premium_disable'
   | 'user_admin_promote'
-  | 'user_admin_demote';
+  | 'user_admin_demote'
+  | 'user_permissions_update'
+  | 'club_health_alert';
 
 const ACTION_CONFIG: Record<string, { iconFr: string; iconEn: string; color: string; icon: string }> = {
   moderation_warn: { iconFr: 'Avertissement joueur', iconEn: 'Player warning', color: '#D97706', icon: 'warning-amber' },
@@ -68,6 +70,8 @@ const ACTION_CONFIG: Record<string, { iconFr: string; iconEn: string; color: str
   user_premium_disable: { iconFr: 'Premium desactive', iconEn: 'Premium disabled', color: '#94A3B8', icon: 'star-outline' },
   user_admin_promote: { iconFr: 'Promu admin', iconEn: 'Promoted to admin', color: '#DC2626', icon: 'shield' },
   user_admin_demote: { iconFr: 'Admin retire', iconEn: 'Admin removed', color: '#64748B', icon: 'remove-moderator' },
+  user_permissions_update: { iconFr: 'Permissions modifiees', iconEn: 'Permissions updated', color: '#7C3AED', icon: 'tune' },
+  club_health_alert: { iconFr: 'Alerte sante club', iconEn: 'Club health alert', color: '#EF4444', icon: 'favorite' },
 };
 
 export { ACTION_CONFIG };
