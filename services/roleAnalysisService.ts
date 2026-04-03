@@ -318,6 +318,115 @@ export function computeHeadToHeadRoleAnalysis(
 }
 
 // ============================================
+// SEASONAL ROLE EVOLUTION
+// ============================================
+
+export interface SeasonalRoleData {
+  period: string;
+  periodLabel: string;
+  startDate: Date;
+  totalMatches: number;
+  roles: { role: PlayerRoleType; count: number; pct: number }[];
+  dominantRole: PlayerRoleType;
+}
+
+export interface RoleEvolutionResult {
+  seasons: SeasonalRoleData[];
+  hasEvolution: boolean;
+  migrationPath: PlayerRoleType[];
+  migrationSummary: string;
+}
+
+/**
+ * Analyze how a player's preferred role has evolved over time.
+ * Groups matches into periods (quarters, semesters, or years depending on data span)
+ * and tracks the dominant role per period.
+ */
+export function computeSeasonalRoleEvolution(
+  playerId: string,
+  matches: Match[],
+  language: string = 'fr'
+): RoleEvolutionResult | null {
+  const fr = language === 'fr';
+
+  // Collect matches with role data
+  const matchesWithRoles: { date: Date; role: PlayerRoleType }[] = [];
+  for (const match of matches) {
+    let playerRole: PlayerRoleType | null = null;
+    const aEntry = match.teamA.playerRoles?.find(r => r.playerId === playerId);
+    const bEntry = match.teamB.playerRoles?.find(r => r.playerId === playerId);
+    if (aEntry) playerRole = aEntry.role as PlayerRoleType;
+    else if (bEntry) playerRole = bEntry.role as PlayerRoleType;
+    if (!playerRole) continue;
+    matchesWithRoles.push({ date: new Date(match.date), role: playerRole });
+  }
+
+  if (matchesWithRoles.length < 3) return null;
+
+  matchesWithRoles.sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  const firstDate = matchesWithRoles[0].date;
+  const lastDate = matchesWithRoles[matchesWithRoles.length - 1].date;
+  const spanMonths = (lastDate.getTime() - firstDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+
+  // Determine granularity
+  let periodMonths: number;
+  if (spanMonths > 24) periodMonths = 12;
+  else if (spanMonths > 12) periodMonths = 6;
+  else periodMonths = 3;
+
+  // Generate period buckets
+  const periods: { start: Date; end: Date; label: string; key: string }[] = [];
+  let cursor = new Date(firstDate.getFullYear(), Math.floor(firstDate.getMonth() / periodMonths) * periodMonths, 1);
+  while (cursor <= lastDate) {
+    const end = new Date(cursor);
+    end.setMonth(end.getMonth() + periodMonths);
+    let label: string;
+    if (periodMonths === 12) {
+      label = `${cursor.getFullYear()}`;
+    } else if (periodMonths === 6) {
+      label = `${cursor.getMonth() < 6 ? 'S1' : 'S2'} ${cursor.getFullYear().toString().slice(-2)}`;
+    } else {
+      label = `Q${Math.floor(cursor.getMonth() / 3) + 1} ${cursor.getFullYear().toString().slice(-2)}`;
+    }
+    periods.push({ start: new Date(cursor), end, label, key: `${cursor.getFullYear()}-${cursor.getMonth()}` });
+    cursor = new Date(end);
+  }
+
+  // Aggregate per period
+  const seasons: SeasonalRoleData[] = [];
+  for (const period of periods) {
+    const pm = matchesWithRoles.filter(m => m.date >= period.start && m.date < period.end);
+    if (pm.length === 0) continue;
+    const rc: Record<PlayerRoleType, number> = { Pointeur: 0, Milieu: 0, Tireur: 0 };
+    pm.forEach(m => { rc[m.role]++; });
+    const total = pm.length;
+    const roles = (['Tireur', 'Pointeur', 'Milieu'] as PlayerRoleType[]).map(role => ({
+      role, count: rc[role], pct: Math.round((rc[role] / total) * 100),
+    }));
+    const dominant = roles.reduce((a, b) => b.count > a.count ? b : a).role;
+    seasons.push({ period: period.key, periodLabel: period.label, startDate: period.start, totalMatches: total, roles, dominantRole: dominant });
+  }
+
+  if (seasons.length < 2) return null;
+
+  // Detect migration path (only when dominant role changes)
+  const migrationPath: PlayerRoleType[] = [seasons[0].dominantRole];
+  for (let i = 1; i < seasons.length; i++) {
+    if (seasons[i].dominantRole !== migrationPath[migrationPath.length - 1]) {
+      migrationPath.push(seasons[i].dominantRole);
+    }
+  }
+
+  const hasEvolution = migrationPath.length > 1;
+  const migrationSummary = hasEvolution
+    ? migrationPath.join(' \u2192 ')
+    : (fr ? 'Role stable : ' + migrationPath[0] : 'Stable role: ' + migrationPath[0]);
+
+  return { seasons, hasEvolution, migrationPath, migrationSummary };
+}
+
+// ============================================
 // ROLE PERFORMANCE EXPORT DATA
 // ============================================
 
