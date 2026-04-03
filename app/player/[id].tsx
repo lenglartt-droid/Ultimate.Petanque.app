@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Platform,
 } from 'react-native';
 import * as Haptics from '@/services/haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -33,12 +34,12 @@ import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrust
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL, fetchPlayerRoleElos, calculateInactivityDecay } from '@/services/eloService';
 import { fetchWeeklyRankHistory } from '@/services/weeklyLeaderboardService';
-import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G } from 'react-native-svg';
+import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G, Rect } from 'react-native-svg';
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
 import EloSection from '@/components/feature/player/EloSection';
 import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
-import { computeHeadToHeadRoleAnalysis, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
+import { computeHeadToHeadRoleAnalysis, computeSeasonalRoleEvolution, generateRoleEvolutionPdfHtml, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -179,6 +180,7 @@ export default function PlayerDetailScreen() {
   }, [id, player]);
   const { updatePlayer: updatePlayerFn } = useApp();
   const [refreshing, setRefreshing] = React.useState(false);
+  const [exportingRoleEvo, setExportingRoleEvo] = React.useState(false);
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }) => setScreenDims(window));
@@ -775,6 +777,112 @@ export default function PlayerDetailScreen() {
                   </View>
                 );
               })}
+            </View>
+          );
+        })()}
+
+        {/* ===== SEASONAL ROLE EVOLUTION ===== */}
+        {(() => {
+          if (!player) return null;
+          const evo = computeSeasonalRoleEvolution(id!, matches, language);
+          if (!evo || evo.seasons.length < 2) return null;
+          const chartW = Math.max(1, screenWidth - 80);
+          const barH = 24;
+          const barGap = 6;
+          const labelW = 42;
+          const chartAreaW = chartW - labelW;
+          const chartH = evo.seasons.length * (barH + barGap) + 10;
+          const roleOrder = ['Tireur', 'Pointeur', 'Milieu'] as const;
+          return (
+            <View style={s.sectionCard}>
+              <View style={[s.sectionHeader, { justifyContent: 'space-between' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View style={[s.sectionIconBox, { backgroundColor: '#6366F115' }]}><MaterialIcons name="timeline" size={18} color="#6366F1" /></View>
+                  <Text style={s.sectionTitle}>{language === 'fr' ? 'Evolution du role' : 'Role Evolution'}</Text>
+                </View>
+                <Pressable
+                  style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#6366F110', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#6366F120' }}
+                  onPress={async () => {
+                    if (exportingRoleEvo) return;
+                    setExportingRoleEvo(true);
+                    Haptics.selectionAsync();
+                    try {
+                      const fullHtml = generateRoleEvolutionPdfHtml(player.name, evo, language);
+                      const fileName = `role_evolution_${player.name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+                      if (Platform.OS === 'web') {
+                        const pw = window.open('', '_blank');
+                        if (pw) { pw.document.write(fullHtml); pw.document.close(); pw.print(); }
+                      } else {
+                        const PrintModule = require('expo-print');
+                        const FSModule = require('expo-file-system');
+                        const SharingModule = require('expo-sharing');
+                        const { uri } = await PrintModule.printToFileAsync({ html: fullHtml });
+                        const newUri = `${FSModule.cacheDirectory}${fileName}`;
+                        await FSModule.moveAsync({ from: uri, to: newUri });
+                        if (await SharingModule.isAvailableAsync()) {
+                          await SharingModule.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+                        }
+                      }
+                    } catch (e) {
+                      console.log('Role evolution PDF export error:', e);
+                    } finally {
+                      setExportingRoleEvo(false);
+                    }
+                  }}
+                  disabled={exportingRoleEvo}
+                >
+                  {exportingRoleEvo ? <ActivityIndicator size="small" color="#6366F1" /> : <MaterialIcons name="picture-as-pdf" size={16} color="#6366F1" />}
+                </Pressable>
+              </View>
+              {/* Migration summary */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14, backgroundColor: evo.hasEvolution ? '#6366F108' : theme.backgroundSecondary, borderRadius: 12, padding: 10, borderWidth: 1, borderColor: evo.hasEvolution ? '#6366F120' : theme.border }}>
+                <MaterialIcons name={evo.hasEvolution ? 'trending-flat' : 'check-circle'} size={16} color={evo.hasEvolution ? '#6366F1' : theme.success} />
+                <Text style={{ flex: 1, fontSize: 12, fontWeight: '700', color: evo.hasEvolution ? '#6366F1' : theme.success }}>{evo.migrationSummary}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted }}>{evo.seasons.length} {language === 'fr' ? 'periodes' : 'periods'}</Text>
+              </View>
+              {/* Stacked bar chart */}
+              <View style={{ alignItems: 'center', marginBottom: 12 }}>
+                <Svg width={chartW} height={chartH}>
+                  {evo.seasons.map((season, sIdx) => {
+                    const y = sIdx * (barH + barGap);
+                    let xOffset = labelW;
+                    const segments: React.ReactNode[] = [];
+                    roleOrder.forEach((role, rIdx) => {
+                      const rd = season.roles.find(r => r.role === role);
+                      if (!rd || rd.count === 0) return;
+                      const w = Math.max(2, (rd.pct / 100) * chartAreaW);
+                      const rc = getRoleColorService(role);
+                      const isFirst = xOffset === labelW;
+                      const isLast = rIdx === roleOrder.length - 1 || roleOrder.slice(rIdx + 1).every(r2 => (season.roles.find(r3 => r3.role === r2)?.count || 0) === 0);
+                      segments.push(
+                        <Rect key={`${sIdx}-${role}`} x={xOffset} y={y} width={w} height={barH} rx={isFirst && isLast ? 6 : isFirst ? 6 : isLast ? 6 : 0} fill={rc} opacity={season.dominantRole === role ? 1 : 0.55} />
+                      );
+                      if (rd.pct >= 18) {
+                        segments.push(
+                          <SvgText key={`t-${sIdx}-${role}`} x={xOffset + w / 2} y={y + barH / 2 + 4} fontSize="9" fill="#FFF" fontWeight="700" textAnchor="middle">{rd.pct}%</SvgText>
+                        );
+                      }
+                      xOffset += w;
+                    });
+                    return (
+                      <G key={sIdx}>
+                        <SvgText x={0} y={y + barH / 2 + 4} fontSize="9" fill={theme.textMuted} fontWeight="600">{season.periodLabel}</SvgText>
+                        {segments}
+                        <SvgText x={chartW - 2} y={y + barH / 2 + 4} fontSize="8" fill={theme.textMuted} fontWeight="500" textAnchor="end">{season.totalMatches}</SvgText>
+                      </G>
+                    );
+                  })}
+                </Svg>
+              </View>
+              {/* Legend */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16 }}>
+                {roleOrder.map(role => (
+                  <View key={role} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: getRoleColorService(role) }} />
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textSecondary }}>{t('roles', role)}</Text>
+                  </View>
+                ))}
+              </View>
             </View>
           );
         })()}
