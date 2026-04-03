@@ -140,6 +140,15 @@ export default function AdminQuickNav({ currentRoute }: AdminQuickNavProps) {
           }}
         >
           <MaterialIcons name="dashboard" size={18} color={isDashboard ? '#FFF' : '#0F172A'} />
+          {(() => {
+            const total = badges.moderation + badges.clubs + badges.notifications;
+            if (total <= 0) return null;
+            return (
+              <View style={s.homeBadge}>
+                <Text style={s.homeBadgeText}>{total > 99 ? '99' : total}</Text>
+              </View>
+            );
+          })()}
         </Pressable>
 
         <View style={s.homeSeparator} />
@@ -228,6 +237,25 @@ const s = StyleSheet.create({
   homeBtnActive: {
     backgroundColor: '#0F172A',
     borderColor: '#0F172A',
+  },
+  homeBadge: {
+    position: 'absolute',
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  homeBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+    color: '#FFF',
   },
   homeSeparator: {
     width: 1,
