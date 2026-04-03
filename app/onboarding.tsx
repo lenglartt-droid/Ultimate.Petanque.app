@@ -97,21 +97,28 @@ export default function OnboardingScreen() {
     }).catch(() => setSponsorLoaded(true));
   }, []);
 
-  // Splash timer
+  // Splash timer — skip splash if user is already logged in (returning from login)
   useEffect(() => {
+    if (user) {
+      setSplashDone(true);
+      return;
+    }
     const timer = setTimeout(() => setSplashDone(true), 2500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Auto-advance from splash to language picker
+  // Auto-advance from splash to language picker (or to step 7 if user is logged in)
   useEffect(() => {
     if (splashDone && step === 0) {
-      setStep(1);
+      if (user) {
+        setStep(7 as Step);
+      } else {
+        setStep(1);
+      }
     }
-  }, [splashDone]);
+  }, [splashDone, user]);
 
-  // If user is already logged in (returned from /login after account creation),
-  // skip directly to Express Profile (step 7)
+  // If user logs in while on an earlier step, skip directly to Express Profile (step 7)
   useEffect(() => {
     if (user && step >= 1 && step < 7) {
       setStep(7 as Step);
@@ -213,6 +220,7 @@ export default function OnboardingScreen() {
         .eq('id', user?.id);
       if (profileError) throw profileError;
 
+      // Update player row (created by handle_new_user trigger)
       const { error: playerError } = await supabase
         .from('players')
         .update({
@@ -222,14 +230,20 @@ export default function OnboardingScreen() {
           updated_at: new Date().toISOString(),
         })
         .eq('id', user?.id);
-      if (playerError) throw playerError;
+      // Player update is non-blocking — may fail if context not yet loaded
+      if (playerError) console.log('[Onboarding] Player update warning:', playerError.message);
 
-      if (user?.id) {
-        await updatePlayer(user.id, {
-          name: username.trim(),
-          role: role || 'Milieu',
-          level: 'Intermédiaire',
-        });
+      // Update local context (non-blocking, context may not have loaded player data yet)
+      try {
+        if (user?.id) {
+          await updatePlayer(user.id, {
+            name: username.trim(),
+            role: role || 'Milieu',
+            level: 'Intermédiaire',
+          });
+        }
+      } catch (ctxErr) {
+        console.log('[Onboarding] Context update skipped:', ctxErr);
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

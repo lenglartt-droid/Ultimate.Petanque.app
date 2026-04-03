@@ -25,6 +25,7 @@ import { trackReferral } from '@/services/ambassadorService';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
+type ResetStep = 'email' | 'otp' | 'done';
 
 export default function LoginScreen() {
   const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading } = useAuth();
@@ -41,6 +42,12 @@ export default function LoginScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [showReferralField, setShowReferralField] = useState(false);
+  const [showResetFlow, setShowResetFlow] = useState(false);
+  const [resetStep, setResetStep] = useState<ResetStep>('email');
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetOtp, setResetOtp] = useState('');
+  const [resetNewPassword, setResetNewPassword] = useState('');
+  const [resetConfirmPassword, setResetConfirmPassword] = useState('');
 
   const resetForm = () => {
     setEmail('');
@@ -51,6 +58,12 @@ export default function LoginScreen() {
     setShowPassword(false);
     setReferralCode('');
     setShowReferralField(false);
+    setShowResetFlow(false);
+    setResetStep('email');
+    setResetEmail('');
+    setResetOtp('');
+    setResetNewPassword('');
+    setResetConfirmPassword('');
   };
 
   const handleModeSwitch = (newMode: AuthMode) => {
@@ -75,9 +88,50 @@ export default function LoginScreen() {
     if (error) {
       showAlert(t('login', 'loginError'), error);
     } else {
-      // Navigate to index so AuthRouter/ProfileChecker can handle routing
       router.replace('/');
     }
+  };
+
+  const handleResetSendOTP = async () => {
+    if (!resetEmail.trim()) {
+      showAlert(t('common', 'error'), t('login', 'enterEmail'));
+      return;
+    }
+    const { error } = await sendOTP(resetEmail.trim());
+    if (error) {
+      showAlert(t('common', 'error'), error);
+      return;
+    }
+    setResetStep('otp');
+    showAlert(
+      language === 'fr' ? 'Code envoye' : 'Code sent',
+      language === 'fr' ? 'Verifiez votre email pour le code de verification.' : 'Check your email for the verification code.'
+    );
+  };
+
+  const handleResetVerifyAndSetPassword = async () => {
+    if (!resetOtp.trim() || resetOtp.length < 4) {
+      showAlert(t('common', 'error'), t('login', 'enterCode'));
+      return;
+    }
+    if (!resetNewPassword.trim() || resetNewPassword.length < 6) {
+      showAlert(t('common', 'error'), t('login', 'passwordTooShort'));
+      return;
+    }
+    if (resetNewPassword !== resetConfirmPassword) {
+      showAlert(t('common', 'error'), t('login', 'passwordMismatch'));
+      return;
+    }
+    const { error } = await verifyOTPAndLogin(resetEmail.trim(), resetOtp.trim(), { password: resetNewPassword });
+    if (error) {
+      showAlert(t('common', 'error'), error);
+      return;
+    }
+    showAlert(
+      language === 'fr' ? 'Mot de passe reinitialise' : 'Password reset',
+      language === 'fr' ? 'Votre mot de passe a ete mis a jour.' : 'Your password has been updated.'
+    );
+    router.replace('/');
   };
 
   const handleSendOTP = async () => {
@@ -257,6 +311,12 @@ export default function LoginScreen() {
                 )}
               </Pressable>
 
+              <Pressable style={styles.forgotButton} onPress={() => { setShowResetFlow(true); setResetEmail(email); }}>
+                <Text style={styles.forgotButtonText}>
+                  {language === 'fr' ? 'Mot de passe oublie ?' : 'Forgot password?'}
+                </Text>
+              </Pressable>
+
               {/* Divider */}
               <View style={styles.dividerContainer}>
                 <View style={styles.dividerLine} />
@@ -424,6 +484,110 @@ export default function LoginScreen() {
               </Pressable>
             </Animated.View>
           )}
+
+          {/* Password Reset Flow */}
+          {showResetFlow ? (
+            <Animated.View entering={FadeIn.duration(300)} style={styles.form}>
+              <View style={styles.resetHeader}>
+                <Pressable onPress={() => { setShowResetFlow(false); setResetStep('email'); }} hitSlop={8}>
+                  <MaterialIcons name="arrow-back" size={22} color={theme.textSecondary} />
+                </Pressable>
+                <Text style={styles.resetTitle}>
+                  {language === 'fr' ? 'Reinitialiser le mot de passe' : 'Reset Password'}
+                </Text>
+              </View>
+
+              {resetStep === 'email' ? (
+                <>
+                  <Text style={styles.resetSubtitle}>
+                    {language === 'fr'
+                      ? 'Entrez votre email. Nous vous enverrons un code de verification.'
+                      : 'Enter your email. We will send you a verification code.'}
+                  </Text>
+                  <View style={styles.inputContainer}>
+                    <MaterialIcons name="email" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={t('login', 'email')}
+                      placeholderTextColor={theme.textMuted}
+                      value={resetEmail}
+                      onChangeText={setResetEmail}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  <Pressable
+                    style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                    onPress={handleResetSendOTP}
+                    disabled={operationLoading}
+                  >
+                    {operationLoading ? <ActivityIndicator color="#FFF" /> : (
+                      <><MaterialIcons name="send" size={20} color="#FFF" /><Text style={styles.submitButtonText}>{language === 'fr' ? 'Envoyer le code' : 'Send code'}</Text></>
+                    )}
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <View style={styles.otpInfo}>
+                    <MaterialIcons name="mark-email-read" size={40} color={theme.primary} />
+                    <Text style={styles.otpInfoTitle}>{language === 'fr' ? 'Verification' : 'Verification'}</Text>
+                    <Text style={styles.otpInfoText}>{language === 'fr' ? 'Code envoye a' : 'Code sent to'} {resetEmail}</Text>
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <MaterialIcons name="pin" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={[styles.input, styles.otpInput]}
+                      placeholder={t('login', 'verificationCode')}
+                      placeholderTextColor={theme.textMuted}
+                      value={resetOtp}
+                      onChangeText={setResetOtp}
+                      keyboardType="number-pad"
+                      maxLength={4}
+                    />
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <MaterialIcons name="lock" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={language === 'fr' ? 'Nouveau mot de passe (6+ car.)' : 'New password (6+ chars)'}
+                      placeholderTextColor={theme.textMuted}
+                      value={resetNewPassword}
+                      onChangeText={setResetNewPassword}
+                      secureTextEntry={!showPassword}
+                    />
+                    <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeButton}>
+                      <MaterialIcons name={showPassword ? 'visibility' : 'visibility-off'} size={20} color={theme.textMuted} />
+                    </Pressable>
+                  </View>
+                  <View style={styles.inputContainer}>
+                    <MaterialIcons name="lock-outline" size={20} color={theme.textSecondary} style={styles.inputIcon} />
+                    <TextInput
+                      style={styles.input}
+                      placeholder={language === 'fr' ? 'Confirmer le mot de passe' : 'Confirm password'}
+                      placeholderTextColor={theme.textMuted}
+                      value={resetConfirmPassword}
+                      onChangeText={setResetConfirmPassword}
+                      secureTextEntry={!showPassword}
+                    />
+                  </View>
+                  <Pressable
+                    style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                    onPress={handleResetVerifyAndSetPassword}
+                    disabled={operationLoading}
+                  >
+                    {operationLoading ? <ActivityIndicator color="#FFF" /> : (
+                      <><MaterialIcons name="check" size={20} color="#FFF" /><Text style={styles.submitButtonText}>{language === 'fr' ? 'Reinitialiser' : 'Reset Password'}</Text></>
+                    )}
+                  </Pressable>
+                  <Pressable style={styles.backButton} onPress={() => setResetStep('email')}>
+                    <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
+                    <Text style={styles.backButtonText}>{t('login', 'editEmail')}</Text>
+                  </Pressable>
+                </>
+              )}
+            </Animated.View>
+          ) : null}
 
           {/* Footer */}
           <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
@@ -635,6 +799,34 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: theme.textMuted,
     paddingHorizontal: 16,
+  },
+  // Forgot password
+  forgotButton: {
+    alignItems: 'center',
+    paddingVertical: 10,
+  },
+  forgotButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.primary,
+  },
+  // Reset flow
+  resetHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 8,
+  },
+  resetTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: theme.textPrimary,
+  },
+  resetSubtitle: {
+    fontSize: 14,
+    color: theme.textSecondary,
+    lineHeight: 20,
+    marginBottom: 12,
   },
   // Google button styles
   googleButton: {

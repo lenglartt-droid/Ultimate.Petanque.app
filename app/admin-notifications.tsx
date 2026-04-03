@@ -23,8 +23,10 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
-import { getAllAppeals, BanAppeal } from '@/services/banAppealService';
+import { useAlert } from '@/template';
+import { getAllAppeals, BanAppeal, respondToAppeal } from '@/services/banAppealService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logAdminAction } from '@/services/adminActivityLogService';
 
 interface AdminNotification {
   id: string;
@@ -52,6 +54,8 @@ export default function AdminNotificationsScreen() {
   const [notifications, setNotifications] = useState<AdminNotification[]>([]);
   const [readIds, setReadIds] = useState<Set<string>>(new Set());
   const [filterType, setFilterType] = useState<'all' | 'unread' | 'critical' | 'appeals' | 'reports'>('all');
+  const { showAlert } = useAlert();
+  const [processingAction, setProcessingAction] = useState<string | null>(null);
 
   // Load read IDs from storage
   useEffect(() => {
@@ -354,6 +358,85 @@ export default function AdminNotificationsScreen() {
                   </View>
                   {notif.route ? <MaterialIcons name="chevron-right" size={18} color={notif.isRead ? '#CBD5E1' : notif.color} /> : null}
                 </Pressable>
+                {/* Quick Actions */}
+                {notif.type === 'appeal' && notif.severity === 'critical' ? (
+                  <View style={s.quickActions}>
+                    <Pressable
+                      style={[s.quickActionBtn, { backgroundColor: '#DCFCE7' }]}
+                      disabled={processingAction === notif.id}
+                      onPress={async () => {
+                        const appealId = notif.id.replace('appeal-', '');
+                        setProcessingAction(notif.id);
+                        try {
+                          await respondToAppeal(appealId, 'accepted', fr ? 'Approuve depuis le centre de notifications' : 'Approved from notification center');
+                          markAsRead(notif.id);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          showAlert(fr ? 'Appel accepte' : 'Appeal accepted', fr ? 'Le joueur a ete debanni.' : 'Player has been unbanned.');
+                          logAdminAction({ actionType: 'appeal_accept', targetType: 'appeal', targetId: appealId, actionDetail: 'Quick accept from notification center' });
+                          loadNotifications();
+                        } catch { /* silent */ }
+                        setProcessingAction(null);
+                      }}
+                    >
+                      {processingAction === notif.id ? <ActivityIndicator size="small" color="#10B981" /> : (
+                        <><MaterialIcons name="check" size={14} color="#10B981" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>{fr ? 'Accepter' : 'Accept'}</Text></>
+                      )}
+                    </Pressable>
+                    <Pressable
+                      style={[s.quickActionBtn, { backgroundColor: '#FEF2F2' }]}
+                      disabled={processingAction === notif.id}
+                      onPress={async () => {
+                        const appealId = notif.id.replace('appeal-', '');
+                        setProcessingAction(notif.id);
+                        try {
+                          await respondToAppeal(appealId, 'rejected', fr ? 'Rejete depuis le centre de notifications' : 'Rejected from notification center');
+                          markAsRead(notif.id);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                          logAdminAction({ actionType: 'appeal_reject', targetType: 'appeal', targetId: appealId, actionDetail: 'Quick reject from notification center' });
+                          loadNotifications();
+                        } catch { /* silent */ }
+                        setProcessingAction(null);
+                      }}
+                    >
+                      <MaterialIcons name="close" size={14} color="#EF4444" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>{fr ? 'Rejeter' : 'Reject'}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+                {notif.type === 'report' ? (
+                  <View style={s.quickActions}>
+                    <Pressable
+                      style={[s.quickActionBtn, { backgroundColor: '#FEF3C7' }]}
+                      disabled={processingAction === notif.id}
+                      onPress={async () => {
+                        const reportId = notif.id.replace('report-', '');
+                        setProcessingAction(notif.id);
+                        try {
+                          const supabase = getSupabaseClient();
+                          await supabase.from('player_reports').update({ status: 'dismissed', updated_at: new Date().toISOString() }).eq('id', reportId);
+                          markAsRead(notif.id);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          logAdminAction({ actionType: 'moderation_dismiss', targetType: 'report', targetId: reportId, actionDetail: 'Quick dismiss from notification center' });
+                          loadNotifications();
+                        } catch { /* silent */ }
+                        setProcessingAction(null);
+                      }}
+                    >
+                      {processingAction === notif.id ? <ActivityIndicator size="small" color="#D97706" /> : (
+                        <><MaterialIcons name="remove-circle-outline" size={14} color="#D97706" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706' }}>{fr ? 'Rejeter' : 'Dismiss'}</Text></>
+                      )}
+                    </Pressable>
+                  </View>
+                ) : null}
+                {notif.type === 'club' ? (
+                  <View style={s.quickActions}>
+                    <Pressable
+                      style={[s.quickActionBtn, { backgroundColor: '#DBEAFE' }]}
+                      onPress={() => { Haptics.selectionAsync(); markAsRead(notif.id); router.push('/admin-clubs' as any); }}
+                    >
+                      <MaterialIcons name="verified" size={14} color="#2563EB" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifier' : 'Verify'}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
               </Animated.View>
             );
           })
@@ -392,6 +475,9 @@ const s = StyleSheet.create({
   unreadDot: { width: 8, height: 8, borderRadius: 4 },
   criticalBadge: { backgroundColor: '#DC2626', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 },
   criticalBadgeText: { fontSize: 7, fontWeight: '900', color: '#FFF', letterSpacing: 0.5 },
+
+  quickActions: { flexDirection: 'row', gap: 6, marginLeft: 52, marginTop: -4, marginBottom: 8 },
+  quickActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 10 },
 
   emptyWrap: { alignItems: 'center', paddingVertical: 56 },
   emptyIcon: { width: 72, height: 72, borderRadius: 24, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
