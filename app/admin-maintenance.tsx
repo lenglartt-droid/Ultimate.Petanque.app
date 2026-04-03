@@ -425,11 +425,7 @@ export default function AdminMaintenanceScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-          </Pressable>
           <Text style={styles.headerTitle}>Maintenance</Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={styles.center}>
           <ActivityIndicator size="large" color={theme.primary} />
@@ -447,12 +443,10 @@ export default function AdminMaintenanceScreen() {
     <SafeAreaView edges={['top']} style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-        </Pressable>
         <Text style={styles.headerTitle}>Maintenance</Text>
-        <View style={{ width: 40 }} />
       </View>
+
+      <AdminQuickNav currentRoute="/admin-maintenance" />
 
       <ScrollView
         style={styles.scroll}

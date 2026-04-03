@@ -615,9 +615,7 @@ export default function AdminClubsScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
           <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
       </SafeAreaView>
@@ -628,7 +626,6 @@ export default function AdminClubsScreen() {
     <AdminGuard language={language} requiredPermission="clubs">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
         <Pressable
           style={[s.selectBtn, selectionMode && s.selectBtnActive]}
