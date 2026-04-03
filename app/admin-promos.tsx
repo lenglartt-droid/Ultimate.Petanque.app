@@ -361,7 +361,7 @@ export default function AdminPromosScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.header}>
-          <Pressable style={styles.backBtn} onPress={() => router.back()}>
+          <Pressable style={styles.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
             <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
           </Pressable>
           <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>
@@ -482,7 +482,7 @@ export default function AdminPromosScreen() {
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
       <View style={styles.header}>
-        <Pressable style={styles.backBtn} onPress={() => router.back()}>
+        <Pressable style={styles.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{fr ? 'Codes promo' : 'Promo Codes'}</Text>

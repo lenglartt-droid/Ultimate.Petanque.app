@@ -292,12 +292,12 @@ export default function ProfileScreen() {
   // Profile completeness
   const profileCompleteness = useMemo(() => {
     const fields = [
-      { id: 'avatar', label: language === 'fr' ? 'Photo de profil' : 'Profile photo', filled: !!avatarUrl, icon: 'camera-alt', color: theme.primary, tip: language === 'fr' ? 'Ajoutez une photo pour etre reconnu' : 'Add a photo to be recognized', action: showPhotoOptions },
+      { id: 'avatar', label: language === 'fr' ? 'Photo de profil' : 'Profile photo', filled: !!avatarUrl, icon: 'camera-alt', color: theme.primary, tip: language === 'fr' ? 'Ajoutez une photo pour etre reconnu' : 'Add a photo to be recognized', action: () => showPhotoOptions() },
       { id: 'club', label: 'Club', filled: !!club, icon: 'location-city', color: theme.success, tip: language === 'fr' ? 'Rejoignez un club pour le classement' : 'Join a club for rankings', action: () => setIsEditing(true) },
       { id: 'terrain', label: language === 'fr' ? 'Terrain favori' : 'Favorite court', filled: !!terrainId, icon: 'sports-soccer', color: theme.carreauColor, tip: language === 'fr' ? 'Selectionnez votre terrain habituel' : 'Select your usual court', action: () => setIsEditing(true) },
       { id: 'location', label: language === 'fr' ? 'Localisation' : 'Location', filled: !!(location.latitude && location.longitude), icon: 'place', color: '#8B5CF6', tip: language === 'fr' ? 'Apparaissez sur la carte' : 'Appear on the map', action: () => setIsEditing(true) },
       { id: 'boules', label: language === 'fr' ? 'Boules' : 'Boules set', filled: boulesSets.length > 0 || !!(selfPlayer?.boules?.name), icon: 'sports-baseball', color: theme.accent, tip: language === 'fr' ? 'Comparez par equipement' : 'Compare by equipment', action: () => router.push('/equipment') },
-      { id: 'federation', label: language === 'fr' ? 'Carte federation' : 'Federation card', filled: !!federationCardUrl, icon: 'badge', color: '#0EA5E9', tip: language === 'fr' ? 'Boostez votre confiance' : 'Boost trust score', action: showFederationUploadOptions },
+      { id: 'federation', label: language === 'fr' ? 'Carte federation' : 'Federation card', filled: !!federationCardUrl, icon: 'badge', color: '#0EA5E9', tip: language === 'fr' ? 'Boostez votre confiance' : 'Boost trust score', action: () => showFederationUploadOptions() },
     ];
     const filledCount = fields.filter(f => f.filled).length;
     const percent = Math.round((filledCount / fields.length) * 100);

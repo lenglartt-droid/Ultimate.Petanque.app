@@ -34,8 +34,7 @@ import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { detectDuplicateClubs, pickBestClub, getClubMergePreview, mergeClubs, getClubMergeHistory, getClubHealthTrends, ClubDuplicateGroup } from '@/services/adminClubService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+
 import { Platform } from 'react-native';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
@@ -410,10 +409,12 @@ export default function AdminClubsScreen() {
         a.download = `clubs-export-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
         URL.revokeObjectURL(url);
       } else {
-        const path = `${FileSystem.cacheDirectory}clubs-export-${new Date().toISOString().slice(0, 10)}.csv`;
-        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter clubs' : 'Export clubs' });
+        const FS = require('expo-file-system');
+        const SharingMod = require('expo-sharing');
+        const path = `${FS.cacheDirectory}clubs-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+        const canShare = await SharingMod.isAvailableAsync();
+        if (canShare) await SharingMod.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter clubs' : 'Export clubs' });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) { console.log('[AdminClubs] Export error:', e); }
@@ -614,7 +615,7 @@ export default function AdminClubsScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
           <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -627,7 +628,7 @@ export default function AdminClubsScreen() {
     <AdminGuard language={language} requiredPermission="clubs">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
         <Pressable
           style={[s.selectBtn, selectionMode && s.selectBtnActive]}
@@ -1179,10 +1180,12 @@ export default function AdminClubsScreen() {
                           a.download = `club-comparison-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
                           URL.revokeObjectURL(url);
                         } else {
-                          const path = `${FileSystem.cacheDirectory}club-comparison-${new Date().toISOString().slice(0, 10)}.csv`;
-                          await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-                          const canShare = await Sharing.isAvailableAsync();
-                          if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv' });
+                          const FS2 = require('expo-file-system');
+                          const SharingMod2 = require('expo-sharing');
+                          const path = `${FS2.cacheDirectory}club-comparison-${new Date().toISOString().slice(0, 10)}.csv`;
+                          await FS2.writeAsStringAsync(path, csv, { encoding: FS2.EncodingType.UTF8 });
+                          const canShare = await SharingMod2.isAvailableAsync();
+                          if (canShare) await SharingMod2.shareAsync(path, { mimeType: 'text/csv' });
                         }
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                       } catch { /* silent */ }

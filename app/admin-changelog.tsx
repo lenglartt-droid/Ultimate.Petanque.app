@@ -199,7 +199,7 @@ export default function AdminChangelogScreen() {
   return (
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Journal des versions' : 'Changelog'}</Text>
