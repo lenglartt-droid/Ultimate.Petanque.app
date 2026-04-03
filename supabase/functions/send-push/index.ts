@@ -1004,6 +1004,143 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // ANNOUNCEMENT: Admin sends targeted announcement push
+    // ============================================================
+    else if (type === 'announcement') {
+      const { titleFr, titleEn, messageFr, messageEn, targetType, targetValue } = payload || {};
+      if (!titleFr && !titleEn) {
+        return new Response(JSON.stringify({ error: 'Missing title' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is admin
+      const { data: adminAnn } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminAnn?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send announcements' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Get ALL active push tokens first
+      const { data: allAnnTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .eq('active', true);
+
+      if (!allAnnTokens || allAnnTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      let targetTokens = allAnnTokens;
+
+      // Apply targeting filter
+      if (targetType && targetType !== 'all' && targetValue) {
+        const allUserIds = [...new Set(allAnnTokens.map((t: any) => t.user_id))];
+        let matchedUserIds = new Set<string>();
+
+        if (targetType === 'level') {
+          // Filter by player level
+          const { data: levelPlayers } = await supabaseAdmin
+            .from('players')
+            .select('user_id')
+            .eq('level', targetValue)
+            .in('user_id', allUserIds);
+          (levelPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+        } else if (targetType === 'city') {
+          // Filter by city from players location, terrains, or clubs
+          const cityLower = targetValue.toLowerCase();
+          for (const uid of allUserIds) {
+            // Check player location
+            const { data: pLoc } = await supabaseAdmin
+              .from('players')
+              .select('location')
+              .eq('user_id', uid)
+              .limit(1)
+              .maybeSingle();
+            if (pLoc?.location?.city?.toLowerCase() === cityLower) {
+              matchedUserIds.add(uid);
+              continue;
+            }
+            // Check terrains
+            const { data: tCities } = await supabaseAdmin
+              .from('terrains')
+              .select('city')
+              .eq('user_id', uid)
+              .limit(5);
+            if ((tCities || []).some((t: any) => t.city?.toLowerCase() === cityLower)) {
+              matchedUserIds.add(uid);
+              continue;
+            }
+            // Check clubs
+            const { data: cCities } = await supabaseAdmin
+              .from('clubs')
+              .select('city')
+              .eq('user_id', uid)
+              .limit(5);
+            if ((cCities || []).some((c: any) => c.city?.toLowerCase() === cityLower)) {
+              matchedUserIds.add(uid);
+            }
+          }
+        } else if (targetType === 'club') {
+          // Filter by club name
+          const clubLower = targetValue.toLowerCase();
+          const { data: clubPlayers } = await supabaseAdmin
+            .from('players')
+            .select('user_id, club')
+            .in('user_id', allUserIds);
+          (clubPlayers || []).forEach((p: any) => {
+            if (p.club?.toLowerCase() === clubLower) matchedUserIds.add(p.user_id);
+          });
+        }
+
+        console.log(`[send-push] announcement: ${targetType}=${targetValue}, matched ${matchedUserIds.size} users`);
+        targetTokens = allAnnTokens.filter((t: any) => matchedUserIds.has(t.user_id));
+      }
+
+      if (targetTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_matching_users' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`[send-push] announcement: sending to ${targetTokens.length} tokens`);
+
+      const annTitle = titleFr || titleEn;
+      const annBody = messageFr || messageEn;
+
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < targetTokens.length; i += BATCH_SIZE) {
+        const batch = targetTokens.slice(i, i + BATCH_SIZE).map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F4E2} ${annTitle}`,
+          annBody,
+          { type: 'announcement' },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(batch);
+        sent += tickets.filter((t: any) => t.status === 'ok').length;
+        errors += tickets.filter((t: any) => t.status === 'error').length;
+
+        for (let j = 0; j < tickets.length; j++) {
+          if (tickets[j].details?.error === 'DeviceNotRegistered') {
+            const invalidToken = batch[j]?.to;
+            if (invalidToken) {
+              await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+            }
+          }
+        }
+      }
+    }
+
+    // ============================================================
     // MAINTENANCE_END: Notify ALL users that maintenance is over
     // ============================================================
     else if (type === 'maintenance_end') {
