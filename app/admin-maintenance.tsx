@@ -158,15 +158,17 @@ export default function AdminMaintenanceScreen() {
           onPress: async () => {
             setSubmitting(true);
             const endTime = getEndTime();
-            const { error } = await enableMaintenance({
+            const result = await enableMaintenance({
               messageFr: messageFr.trim() || messageEn.trim(),
               messageEn: messageEn.trim() || messageFr.trim(),
               endTime,
               sendPush,
             });
-            if (error) {
-              showAlert(fr ? 'Erreur' : 'Error', error);
+            if (result.error) {
+              showAlert(fr ? 'Erreur' : 'Error', result.error);
             } else {
+              const sentCount = result.pushSent || 0;
+              const errorCount = result.pushErrors || 0;
               await logMaintenanceAction({
                 action: 'enabled',
                 adminName: user?.username || user?.email || 'Admin',
@@ -174,11 +176,15 @@ export default function AdminMaintenanceScreen() {
                 messageEn: messageEn.trim(),
                 endTime,
                 pushSent: sendPush,
+                pushSentCount: sentCount,
+                pushErrorCount: errorCount,
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               showAlert(
                 fr ? 'Maintenance activee' : 'Maintenance enabled',
-                sendPush ? (fr ? 'Push envoye a tous les utilisateurs' : 'Push sent to all users') : undefined
+                sendPush
+                  ? (fr ? `Push envoye : ${sentCount} succes, ${errorCount} erreur(s)` : `Push sent: ${sentCount} success, ${errorCount} error(s)`)
+                  : undefined
               );
               await loadData();
             }
@@ -591,6 +597,11 @@ export default function AdminMaintenanceScreen() {
                           <View style={styles.historyPushBadge}>
                             <MaterialIcons name="notifications" size={10} color={theme.primary} />
                             <Text style={styles.historyPushText}>Push</Text>
+                            {(log.pushSentCount > 0 || log.pushErrorCount > 0) ? (
+                              <View style={styles.historyPushStats}>
+                                <Text style={styles.historyPushStatsText}>{log.pushSentCount}<Text style={{ color: '#94A3B8' }}>/</Text>{log.pushSentCount + log.pushErrorCount}</Text>
+                              </View>
+                            ) : null}
                           </View>
                         ) : null}
                       </View>
@@ -616,6 +627,20 @@ export default function AdminMaintenanceScreen() {
                           <Text style={styles.historyEndText}>
                             {fr ? 'Fin estimee' : 'Est. end'}: {formatDate(log.endTime)}
                           </Text>
+                        </View>
+                      ) : null}
+                      {log.pushSent && (log.pushSentCount > 0 || log.pushErrorCount > 0) ? (
+                        <View style={styles.historyPushDetail}>
+                          <View style={styles.historyPushDetailItem}>
+                            <MaterialIcons name="check-circle" size={11} color="#10B981" />
+                            <Text style={[styles.historyPushDetailText, { color: '#10B981' }]}>{log.pushSentCount} {fr ? 'envoyes' : 'sent'}</Text>
+                          </View>
+                          {log.pushErrorCount > 0 ? (
+                            <View style={styles.historyPushDetailItem}>
+                              <MaterialIcons name="error-outline" size={11} color="#EF4444" />
+                              <Text style={[styles.historyPushDetailText, { color: '#EF4444' }]}>{log.pushErrorCount} {fr ? 'erreurs' : 'errors'}</Text>
+                            </View>
+                          ) : null}
                         </View>
                       ) : null}
                       <Text style={styles.historyAdmin}>
@@ -732,5 +757,10 @@ const styles = StyleSheet.create({
   historyMsgText: { flex: 1, fontSize: 12, color: '#64748B', lineHeight: 17 },
   historyEndRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
   historyEndText: { fontSize: 11, color: '#94A3B8' },
+  historyPushStats: { backgroundColor: '#EFF6FF', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, marginLeft: 2 },
+  historyPushStatsText: { fontSize: 9, fontWeight: '700', color: theme.primary },
+  historyPushDetail: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  historyPushDetailItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  historyPushDetailText: { fontSize: 11, fontWeight: '600' },
   historyAdmin: { fontSize: 10, color: '#CBD5E1', marginTop: 6, fontWeight: '500' },
 });

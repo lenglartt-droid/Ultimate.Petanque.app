@@ -100,6 +100,13 @@ export default function NotificationsHubScreen() {
   const { tournaments, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabKey>((params.tab as TabKey) || 'invitations');
+
+  // Sync tab from navigation params
+  useEffect(() => {
+    if (params.tab && TABS.some(t => t.key === params.tab)) {
+      setActiveTab(params.tab as TabKey);
+    }
+  }, [params.tab]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 

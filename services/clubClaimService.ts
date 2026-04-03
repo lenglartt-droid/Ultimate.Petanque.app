@@ -68,6 +68,28 @@ export async function submitClubClaim(params: {
     return { error: error.message };
   }
 
+  // Send push notification to club owner
+  try {
+    // Get club name for the notification
+    const { data: clubData } = await supabase
+      .from('clubs')
+      .select('name')
+      .eq('id', params.clubId)
+      .single();
+
+    await supabase.functions.invoke('send-push', {
+      body: {
+        type: 'club_claim',
+        payload: {
+          ownerUserId: params.currentOwnerId,
+          requesterName: params.requesterName || 'Un utilisateur',
+          clubName: clubData?.name || 'votre club',
+          clubId: params.clubId,
+        },
+      },
+    });
+  } catch { /* push failure non-blocking */ }
+
   return { error: null };
 }
 

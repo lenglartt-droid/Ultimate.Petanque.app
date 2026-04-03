@@ -55,7 +55,7 @@ export async function enableMaintenance(params: {
   messageEn: string;
   endTime?: string;
   sendPush?: boolean;
-}): Promise<{ error: string | null }> {
+}): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
   try {
     const supabase = getSupabaseClient();
     const now = new Date().toISOString();
@@ -75,15 +75,16 @@ export async function enableMaintenance(params: {
     if (error) return { error: error.message };
 
     // Send push notification to all users
+    let pushResult = { sent: 0, errors: 0 };
     if (params.sendPush) {
-      await triggerServerPush('maintenance', {
+      pushResult = await triggerServerPush('maintenance', {
         messageFr: params.messageFr,
         messageEn: params.messageEn,
         endTime: params.endTime || null,
-      }).catch(() => {});
+      }).catch(() => ({ sent: 0, errors: 0 }));
     }
 
-    return { error: null };
+    return { error: null, pushSent: pushResult.sent, pushErrors: pushResult.errors };
   } catch (e: any) {
     return { error: e.message };
   }
@@ -128,6 +129,8 @@ export interface MaintenanceLogEntry {
   messageEn: string | null;
   endTime: string | null;
   pushSent: boolean;
+  pushSentCount: number;
+  pushErrorCount: number;
   createdAt: string;
 }
 
@@ -141,6 +144,8 @@ export async function logMaintenanceAction(params: {
   messageEn?: string;
   endTime?: string;
   pushSent?: boolean;
+  pushSentCount?: number;
+  pushErrorCount?: number;
 }): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseClient();
@@ -155,6 +160,8 @@ export async function logMaintenanceAction(params: {
       message_en: params.messageEn || null,
       end_time: params.endTime || null,
       push_sent: params.pushSent ?? false,
+      push_sent_count: params.pushSentCount ?? 0,
+      push_error_count: params.pushErrorCount ?? 0,
     });
 
     if (error) return { error: error.message };
@@ -187,6 +194,8 @@ export async function getMaintenanceHistory(limit = 20): Promise<{ logs: Mainten
       messageEn: row.message_en,
       endTime: row.end_time,
       pushSent: row.push_sent,
+      pushSentCount: row.push_sent_count || 0,
+      pushErrorCount: row.push_error_count || 0,
       createdAt: row.created_at,
     }));
 
