@@ -264,7 +264,7 @@ export default function AdminAntiCheatScreen() {
   return (
     <SafeAreaView edges={['top']} style={st.container}>
       <View style={st.header}>
-        <Pressable style={st.backBtn} onPress={() => router.back()}>
+        <Pressable style={st.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <View style={{ flex: 1 }}>

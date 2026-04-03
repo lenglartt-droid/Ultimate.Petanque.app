@@ -13,6 +13,7 @@ import {
   Platform,
   Modal,
   Switch,
+  TextInput,
 } from 'react-native';
 import * as Haptics from '@/services/haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1230,15 +1231,15 @@ export default function ClubDetailScreen() {
               <View style={[styles.claimInput, { marginBottom: 12 }]}>
                 <MaterialIcons name="email" size={18} color={theme.textMuted} />
                 <View style={{ flex: 1 }}>
-                  {React.createElement(require('react-native').TextInput, {
-                    style: [styles.claimInputField, { minHeight: 20 }],
-                    placeholder: 'email@example.com',
-                    placeholderTextColor: theme.textMuted,
-                    value: coAdminEmail,
-                    onChangeText: setCoAdminEmail,
-                    keyboardType: 'email-address',
-                    autoCapitalize: 'none',
-                  })}
+                  <TextInput
+                    style={[styles.claimInputField, { minHeight: 20 }]}
+                    placeholder="email@example.com"
+                    placeholderTextColor={theme.textMuted}
+                    value={coAdminEmail}
+                    onChangeText={setCoAdminEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
                 </View>
               </View>
               <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 }}>{language === 'fr' ? 'Niveau de permission' : 'Permission level'}</Text>
@@ -1322,16 +1323,16 @@ export default function ClubDetailScreen() {
                 <View style={styles.claimInput}>
                   <MaterialIcons name="message" size={18} color={theme.textMuted} style={{ marginTop: 2 }} />
                   <View style={{ flex: 1 }}>
-                    {React.createElement(require('react-native').TextInput, {
-                      style: styles.claimInputField,
-                      placeholder: t('club', 'claimMessagePlaceholder'),
-                      placeholderTextColor: theme.textMuted,
-                      multiline: true,
-                      numberOfLines: 4,
-                      value: claimMessage,
-                      onChangeText: setClaimMessage,
-                      maxLength: 500,
-                    })}
+                    <TextInput
+                      style={styles.claimInputField}
+                      placeholder={t('club', 'claimMessagePlaceholder')}
+                      placeholderTextColor={theme.textMuted}
+                      multiline
+                      numberOfLines={4}
+                      value={claimMessage}
+                      onChangeText={setClaimMessage}
+                      maxLength={500}
+                    />
                   </View>
                 </View>
                 <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'right', marginTop: 4 }}>{claimMessage.length}/500</Text>
