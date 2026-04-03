@@ -934,6 +934,76 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // MAINTENANCE: Notify ALL users about upcoming/active maintenance
+    // ============================================================
+    else if (type === 'maintenance') {
+      const { messageFr, messageEn, endTime } = payload || {};
+      if (!messageFr && !messageEn) {
+        return new Response(JSON.stringify({ error: 'Missing messageFr or messageEn' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is admin
+      const { data: adminProfile } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminProfile?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send maintenance notifications' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Get ALL active push tokens
+      const { data: allTokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .eq('active', true);
+
+      if (!allTokens || allTokens.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_tokens' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      console.log(`[send-push] maintenance: sending to ${allTokens.length} tokens`);
+
+      const endTimeStr = endTime
+        ? new Date(endTime).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+        : '';
+
+      const messages = allTokens.map((t: any) => buildPushMessage(
+        t.token,
+        `\u{1F6A7} Maintenance programmee`,
+        `${messageFr || messageEn}${endTimeStr ? ` Fin estimee : ${endTimeStr}.` : ''}`,
+        { type: 'maintenance' },
+        { channelId: 'tournament-reminders', priority: 'high' }
+      ));
+
+      // Send in batches of 100 to avoid Expo API limits
+      const BATCH_SIZE = 100;
+      for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+        const batch = messages.slice(i, i + BATCH_SIZE);
+        const tickets = await sendPushNotifications(batch);
+        sent += tickets.filter((t: any) => t.status === 'ok').length;
+        errors += tickets.filter((t: any) => t.status === 'error').length;
+
+        // Deactivate invalid tokens
+        for (let j = 0; j < tickets.length; j++) {
+          if (tickets[j].details?.error === 'DeviceNotRegistered') {
+            const invalidToken = batch[j]?.to;
+            if (invalidToken) {
+              await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+            }
+          }
+        }
+      }
+    }
+
+    // ============================================================
     // CLUB_CLAIM: Notify club owner about a new ownership claim
     // ============================================================
     else if (type === 'club_claim') {
