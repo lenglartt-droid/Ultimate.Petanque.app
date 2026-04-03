@@ -13,6 +13,8 @@ import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
 import { isATTPromptNeeded } from '@/services/trackingService';
+import { checkUserBanStatus, BanInfo } from '@/services/banCheckService';
+import BanScreen from '@/components/ui/BanScreen';
 import { initSentry } from '@/services/sentryService';
 import { addNotificationResponseListener } from '@/services/notificationService';
 import { registerPushToken } from '@/services/pushTokenService';
@@ -104,10 +106,23 @@ export default function RootLayout() {
 function LayoutInner() {
   const { currentConflict, conflictRemaining, resolveConflict } = useApp();
   const [showATT, setShowATT] = React.useState(false);
+  const [banInfo, setBanInfo] = React.useState<BanInfo | null>(null);
 
   // Initialize Sentry crash reporting
   React.useEffect(() => {
     try { initSentry(); } catch (e) { console.log('[Sentry] Init error:', e); }
+  }, []);
+
+  // Check ban status on mount and periodically
+  React.useEffect(() => {
+    const checkBan = async () => {
+      const result = await checkUserBanStatus();
+      if (result.isBanned) setBanInfo(result);
+      else setBanInfo(null);
+    };
+    checkBan();
+    const interval = setInterval(checkBan, 60000); // Check every 60s
+    return () => clearInterval(interval);
   }, []);
 
   React.useEffect(() => {
@@ -214,6 +229,11 @@ function LayoutInner() {
     });
     return () => sub.remove();
   }, []);
+  // Show ban screen if user is banned
+  if (banInfo?.isBanned) {
+    return <BanScreen banInfo={banInfo} language="fr" />;
+  }
+
   return (
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
@@ -763,6 +783,20 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="admin-moderation" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-terrains" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-dashboard" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',

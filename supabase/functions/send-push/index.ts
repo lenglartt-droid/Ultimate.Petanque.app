@@ -1141,6 +1141,66 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // MODERATION_ACTION: Notify reported player of admin action
+    // ============================================================
+    else if (type === 'moderation_action') {
+      const { targetUserId, action, reason } = payload || {};
+      if (!targetUserId || !action) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/action' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is admin
+      const { data: adminMod } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminMod?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send moderation notifications' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const actionLabels: Record<string, { title: string; body: string }> = {
+          warned: {
+            title: '\u26A0\uFE0F Avertissement de moderation',
+            body: 'Votre compte a recu un avertissement suite a un signalement. Veuillez respecter les regles de la communaute.',
+          },
+          suspended: {
+            title: '\u{1F6D1} Compte suspendu',
+            body: 'Votre compte a ete temporairement suspendu suite a un signalement. Contactez le support si necessaire.',
+          },
+          banned: {
+            title: '\u{274C} Compte banni',
+            body: 'Votre compte a ete banni pour non-respect des regles de la communaute.',
+          },
+        };
+        const labels = actionLabels[action] || actionLabels.warned;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          labels.title,
+          labels.body,
+          { type: 'moderation_action', action, reason },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // MAINTENANCE_END: Notify ALL users that maintenance is over
     // ============================================================
     else if (type === 'maintenance_end') {
