@@ -28,6 +28,7 @@ import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { trackOnboardingStep } from '@/services/onboardingAnalyticsService';
 
 // ============================================
 // TYPES
@@ -83,6 +84,9 @@ export default function OnboardingScreen() {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [referralLoading, setReferralLoading] = useState(false);
 
+  // Onboarding tracking session
+  const [trackingSessionId] = useState(() => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
       const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
@@ -124,6 +128,21 @@ export default function OnboardingScreen() {
       setStep(7 as Step);
     }
   }, [user]);
+
+  // Track step transitions for analytics
+  useEffect(() => {
+    const names: Record<number, string> = {
+      0: 'splash', 1: 'language', 2: 'promise', 3: 'sponsor',
+      4: 'features', 5: 'map', 6: 'login_cta', 7: 'profile', 8: 'referral',
+    };
+    trackOnboardingStep({
+      sessionId: trackingSessionId,
+      userId: user?.id,
+      stepNumber: step,
+      stepName: names[step] || `step_${step}`,
+      action: 'enter',
+    });
+  }, [step, trackingSessionId]);
 
   // Load referral code when reaching step 8
   useEffect(() => {
@@ -184,6 +203,18 @@ export default function OnboardingScreen() {
   // ============================================
   const goNext = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    // Track step completion
+    const names: Record<number, string> = {
+      0: 'splash', 1: 'language', 2: 'promise', 3: 'sponsor',
+      4: 'features', 5: 'map', 6: 'login_cta', 7: 'profile', 8: 'referral',
+    };
+    trackOnboardingStep({
+      sessionId: trackingSessionId,
+      userId: user?.id,
+      stepNumber: step,
+      stepName: names[step] || `step_${step}`,
+      action: 'complete',
+    });
     if (step === 2 && !goldSponsor && !eliteAmbassador) {
       setStep(4 as Step);
       return;

@@ -332,30 +332,35 @@ export default function AdminUsersScreen() {
   const handleSavePermissions = useCallback(async () => {
     if (!permUser) return;
     setSavingPerms(true);
-    const perms = [...permSelections] as PermissionKey[];
-    const { error } = await setUserPermissions(permUser.id, perms);
+    const newPerms = [...permSelections] as PermissionKey[];
+    // Capture old permissions before saving
+    const oldPerms = userPermsMap.get(permUser.id) || [];
+    const { error } = await setUserPermissions(permUser.id, newPerms);
     if (error) {
       showAlert(fr ? 'Erreur' : 'Error', error);
     } else {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setUserPermsMap(prev => {
         const next = new Map(prev);
-        next.set(permUser.id, perms);
+        next.set(permUser.id, newPerms);
         return next;
       });
-      setUsers(prev => prev.map(u => u.id === permUser.id ? { ...u, permissions: perms } : u));
+      setUsers(prev => prev.map(u => u.id === permUser.id ? { ...u, permissions: newPerms } : u));
+      // Compute added/removed for audit
+      const added = newPerms.filter(p => !oldPerms.includes(p));
+      const removed = oldPerms.filter(p => !newPerms.includes(p));
       logAdminAction({
         actionType: 'user_permissions_update' as any,
         targetType: 'user',
         targetId: permUser.id,
         targetName: permUser.username || permUser.email,
-        actionDetail: `Permissions: ${perms.join(', ') || 'none'}`,
-        metadata: { permissions: perms },
+        actionDetail: `Permissions: ${newPerms.join(', ') || 'none'}${added.length > 0 ? ` | +${added.join(', ')}` : ''}${removed.length > 0 ? ` | -${removed.join(', ')}` : ''}`,
+        metadata: { oldPermissions: oldPerms, newPermissions: newPerms, added, removed },
       });
       setShowPermissions(false);
     }
     setSavingPerms(false);
-  }, [permUser, permSelections, fr, showAlert]);
+  }, [permUser, permSelections, userPermsMap, fr, showAlert]);
 
   const togglePermission = useCallback((perm: PermissionKey) => {
     Haptics.selectionAsync();
@@ -416,7 +421,7 @@ export default function AdminUsersScreen() {
   }
 
   return (
-    <AdminGuard language={language}>
+    <AdminGuard language={language} requiredPermission="users">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>

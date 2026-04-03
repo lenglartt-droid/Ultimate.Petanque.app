@@ -24,317 +24,691 @@ import { useLanguage } from '@/hooks/useLanguage';
 interface FAQQuestion { id: string; q: string; a: string }
 interface FAQCategory { id: string; category: string; icon: string; color: string; description: string; questions: FAQQuestion[] }
 
-type AudienceTab = 'joueur' | 'ambassadeur' | 'partenaire';
+type AudienceTab = 'joueur' | 'club' | 'ambassadeur' | 'partenaire';
 
 // ============================================
-// FAQ DATA — Organized by audience
+// FAQ DATA — Joueur (Player)
+// Focus: Real game situations, practical use
 // ============================================
-
 function getPlayerFaq(fr: boolean): FAQCategory[] {
   return [
     {
-      id: 'getting_started',
-      category: fr ? 'Premiers pas' : 'Getting Started',
-      icon: 'rocket-launch',
-      color: '#2563EB',
-      description: fr ? 'Tout ce qu\'il faut savoir pour bien demarrer' : 'Everything you need to know to get started',
-      questions: [
-        { id: 'gs1', q: fr ? 'Comment creer mon profil joueur ?' : 'How do I create my player profile?', a: fr ? 'Apres l\'inscription, completez votre profil avec votre pseudo, role (Pointeur, Tireur, Milieu), niveau et club. Plus votre profil est complet, plus votre score de confiance sera eleve. Activez votre profil public pour apparaitre sur la carte et les classements.' : 'After registration, complete your profile with your nickname, role (Pointer, Shooter, Middle), level and club. The more complete your profile, the higher your trust score. Enable your public profile to appear on the map and rankings.' },
-        { id: 'gs2', q: fr ? 'A quoi sert le QR code personnel ?' : 'What is the personal QR code for?', a: fr ? 'Appuyez sur l\'icone QR en haut de l\'accueil pour afficher votre QR code personnel. Les autres joueurs peuvent le scanner pour voir votre profil, vos stats et votre palmares. Ideal pour echanger rapidement lors d\'un tournoi ou d\'une rencontre. Vous pouvez aussi scanner les QR des terrains, RDV et evenements sponsorises.' : 'Tap the QR icon at top of home to show your personal QR code. Other players can scan it to see your profile, stats and honors. Ideal for quick exchanges at tournaments. You can also scan QR codes for courts, meetups and sponsored events.' },
-        { id: 'gs3', q: fr ? 'Comment changer la langue de l\'application ?' : 'How do I change the app language?', a: fr ? 'Depuis le profil, appuyez sur le drapeau (FR/EN) en haut a droite. L\'application est entierement disponible en francais et en anglais. Le changement est instantane.' : 'From profile, tap the flag (FR/EN) at top right. The app is fully available in French and English. The change is instant.' },
-      ],
-    },
-    {
-      id: 'training',
-      category: fr ? 'Matchs & Entrainement' : 'Matches & Training',
-      icon: 'fitness-center',
+      id: 'on_the_terrain',
+      category: fr ? 'Sur le terrain' : 'On the Court',
+      icon: 'sports',
       color: '#059669',
-      description: fr ? 'Enregistrer et analyser vos parties' : 'Record and analyze your games',
+      description: fr ? 'Enregistrer matchs, defis et series pendant que vous jouez' : 'Record matches, challenges and series while you play',
       questions: [
-        { id: 'tr1', q: fr ? 'Comment enregistrer un match ?' : 'How do I record a match?', a: fr ? 'Depuis l\'accueil, appuyez sur "Match". Selectionnez le mode (Entrainement ou Tournoi), le format (Tete-a-tete, Doublette, Triplette), ajoutez les joueurs, puis notez le score mene par mene. Vous pouvez aussi noter les actions detaillees de chaque joueur (tirs, points, carreaux).' : 'From home, tap "Match". Select mode (Training or Tournament), format (Singles, Doubles, Triples), add players, then record score end by end. You can also note detailed per-player actions (shots, points, carreaux).' },
-        { id: 'tr2', q: fr ? 'Comment lancer un defi (10 tirs, precision, 1v1) ?' : 'How do I start a challenge (10 shots, precision, 1v1)?', a: fr ? 'Appuyez sur "Defi" depuis l\'accueil. Choisissez le type : "10 Tirs" (classique ou sautee), "Precision" (5 ateliers : boule seule, derriere le but, entre 2 boules, sautee, tir au but), ou activez le mode "1 vs 1" pour defier un adversaire. L\'app compare automatiquement les resultats avec un graphique radar.' : 'Tap "Challenge" from home. Choose type: "10 Shots" (classic or lob), "Precision" (5 workshops), or enable "1v1" mode to challenge an opponent. The app automatically compares results with a radar chart.' },
-        { id: 'tr3', q: fr ? 'Comment jouer un Best of 3 (serie de matchs) ?' : 'How do I play a Best of 3?', a: fr ? 'Lors de la creation d\'un match, activez l\'option "Serie Best of 3". L\'app chainera automatiquement les matchs, comptera les victoires et declarera le vainqueur. Chaque match reste consultable individuellement dans l\'historique.' : 'When creating a match, enable "Best of 3 Series". The app chains matches automatically, counts wins and declares the winner. Each match remains viewable in history.' },
-        { id: 'tr4', q: fr ? 'Comment associer mes boules a un match ou un defi ?' : 'How do I link my boules to a match?', a: fr ? 'Lors de la creation, selectionnez vos boules dans l\'option "Boules". Cela permet ensuite de comparer vos stats par equipement dans Stats > Performance : lesquelles vous conviennent le mieux au tir ? Au point ?' : 'When creating, select your boules in the "Boules" option. This lets you compare per-equipment stats in Stats > Performance: which suits you best for shooting vs. pointing?' },
-        { id: 'tr5', q: fr ? 'Comment partager un match avec mes partenaires ?' : 'How do I share a match with my partners?', a: fr ? 'Ouvrez le detail d un match, appuyez sur "Partager". La page de partage plein ecran s ouvre avec un apercu detaille (equipes, score, format). Choisissez parmi 4 options : partager via WhatsApp/SMS/email, copier le code, copier l invitation complete ou generer un QR code. Vous pouvez definir une expiration. Les joueurs acceptant verront la partie dans leur historique et leurs stats se mettent a jour automatiquement.' : 'Open match detail, tap "Share". A full-screen share page opens with a detailed preview (teams, score, format). Choose from 4 options: share via WhatsApp/SMS/email, copy the code, copy the full invitation or generate a QR code. You can set an expiration. Players who accept see the match in their history with auto-updated stats.' },
+        {
+          id: 'ot1',
+          q: fr ? 'Comment enregistrer un match en cours de partie ?' : 'How do I record a match while playing?',
+          a: fr
+            ? 'Appuyez sur "Match" depuis l\'accueil. Choisissez le mode (Entrainement ou Tournoi), le format (Tete-a-tete, Doublette, Triplette), puis ajoutez les joueurs des deux equipes. Notez le score mene par mene en un tap. Si vous le souhaitez, detaillez les actions de chaque joueur (tir reussi, point, carreau, raté) pour alimenter vos statistiques detaillees.'
+            : 'Tap "Match" from home. Choose mode (Training or Tournament), format (Singles, Doubles, Triples), then add players for both teams. Record the score end by end with a single tap. Optionally detail each player\'s actions (successful shot, point, carreau, miss) to feed your detailed statistics.',
+        },
+        {
+          id: 'ot2',
+          q: fr ? 'Comment lancer un defi de tir (10 tirs, precision, 1v1) ?' : 'How do I start a shooting challenge (10 shots, precision, 1v1)?',
+          a: fr
+            ? 'Depuis l\'accueil > "Defi". Trois types : "10 Tirs" (classique ou sautee) pour mesurer votre regularite, "Precision" (5 ateliers : boule seule, derriere le but, entre 2 boules, sautee, tir au but) pour travailler les situations de jeu, ou "1 vs 1" pour defier un adversaire en face-a-face. L\'app calcule les resultats et genere un graphique radar comparatif.'
+            : 'From home > "Challenge". Three types: "10 Shots" (classic or lob) to measure consistency, "Precision" (5 workshops: single boule, behind jack, between 2 boules, lob, jack shot) to practice game situations, or "1v1" to challenge an opponent head-to-head. The app calculates results and generates a comparative radar chart.',
+        },
+        {
+          id: 'ot3',
+          q: fr ? 'Comment jouer un Best of 3 ?' : 'How do I play a Best of 3?',
+          a: fr
+            ? 'Lors de la creation du match, activez "Serie Best of 3". L\'app enchaine les matchs automatiquement, comptabilise les victoires et declare le vainqueur de la serie. Chaque match reste consultable individuellement dans l\'historique.'
+            : 'When creating a match, enable "Best of 3 Series". The app chains matches automatically, counts wins and declares the series winner. Each match remains individually viewable in history.',
+        },
+        {
+          id: 'ot4',
+          q: fr ? 'Comment associer mes boules a un match ?' : 'How do I link my boules to a match?',
+          a: fr
+            ? 'Lors de la creation, selectionnez vos boules dans l\'option "Boules". Cela permet ensuite de comparer vos stats par equipement dans Stats > Performance : quelles boules vous conviennent le mieux au tir ? Au point ? Au carreau ?'
+            : 'When creating, select your boules in the "Boules" option. This lets you compare per-equipment stats in Stats > Performance: which boules suit you best for shooting? Pointing? Carreaux?',
+        },
+        {
+          id: 'ot5',
+          q: fr ? 'Comment faire attester un resultat par un temoin present ?' : 'How do I get a result attested by a present witness?',
+          a: fr
+            ? 'Apres un match ou un defi, ouvrez le detail et appuyez sur "Attestation par temoins". Invitez un joueur present (max 2 temoins). Il recoit une notification et voit un snapshot fige de vos resultats. S\'il confirme, le poids du resultat passe a 2.0x dans le classement et votre score de confiance augmente. Fonctionne pour les matchs, defis solo et 1v1.'
+            : 'After a match or challenge, open the detail and tap "Witness Attestation". Invite a present player (max 2 witnesses). They receive a notification and see a frozen snapshot of your results. If they confirm, the result weight goes to 2.0x in rankings and your trust score increases. Works for matches, solo challenges and 1v1.',
+        },
+        {
+          id: 'ot6',
+          q: fr ? 'Comment partager un match avec mes partenaires de jeu ?' : 'How do I share a match with my playing partners?',
+          a: fr
+            ? 'Ouvrez le detail d\'un match > "Partager". Choisissez parmi 4 options : partage WhatsApp/SMS/email, copie du code, copie de l\'invitation complete ou QR code. Definissez une expiration si souhaite. Quand votre partenaire accepte, le match apparait dans son historique et ses stats se mettent a jour automatiquement. En 1v1, l\'adversaire qui accepte genere aussi une attestation automatique.'
+            : 'Open match detail > "Share". Choose from 4 options: WhatsApp/SMS/email share, copy code, copy full invitation or QR code. Set an expiration if desired. When your partner accepts, the match appears in their history and stats auto-update. In 1v1, the accepting opponent also generates an automatic attestation.',
+        },
       ],
     },
     {
-      id: 'tournament',
+      id: 'tournaments_honors',
       category: fr ? 'Tournois & Palmares' : 'Tournaments & Honors',
       icon: 'emoji-events',
       color: '#B45309',
-      description: fr ? 'Suivre votre parcours en competition' : 'Track your competition journey',
+      description: fr ? 'Suivre vos competitions et construire votre palmares' : 'Track your competitions and build your honors',
       questions: [
-        { id: 'to1', q: fr ? 'Comment suivre mon parcours dans un tournoi ?' : 'How do I track my tournament journey?', a: fr ? 'Creez un tournoi (Accueil > Tournoi) avec le nom, la date, le lieu, le format et le type. Pour chaque match, selectionnez ce tournoi comme contexte et la phase (Poules, 1/8e, Quart, Demi, Finale). L\'app compile automatiquement votre parcours et votre resultat final.' : 'Create a tournament (Home > Tournament) with name, date, location, format and type. For each match, select this tournament as context and phase (Pool, Round of 16, Quarter, Semi, Final). The app compiles your journey and final result.' },
-        { id: 'to2', q: fr ? 'Ou voir mon palmares ?' : 'Where is my honors page?', a: fr ? 'Depuis le profil, appuyez sur "Palmares". Tous vos tournois sont classes par resultat : podiums (1er, 2eme, 3eme), demi-finales, etc. Filtrez par periode, format ou type pour analyser votre progression.' : 'From profile, tap "Honors". All tournaments sorted by result: podiums (1st, 2nd, 3rd), semi-finals, etc. Filter by period, format or type to analyze progress.' },
-        { id: 'to3', q: fr ? 'Comment noter les frais et gains de tournois ?' : 'How do I record tournament fees and winnings?', a: fr ? 'Dans la fiche tournoi, renseignez le "Cout d\'inscription" et le "Gain obtenu". Ces donnees sont compilees dans "Bilan financier" (profil), affichant votre rentabilite : total depense, total gagne et solde net sur la saison.' : 'In the tournament form, enter "Registration cost" and "Prize won". This data is compiled in "Financial Report" (profile), showing profitability: total spent, won, and net balance.' },
+        {
+          id: 'th1',
+          q: fr ? 'Comment suivre mon parcours dans un tournoi ?' : 'How do I track my tournament journey?',
+          a: fr
+            ? 'Creez un tournoi (Accueil > Tournoi) avec nom, date, lieu, format et type. Pour chaque match du tournoi, selectionnez-le comme contexte et precisez la phase (Poules, 1/8e, Quart, Demi, Finale). L\'app compile automatiquement votre parcours, resultat final et gain eventuel.'
+            : 'Create a tournament (Home > Tournament) with name, date, location, format and type. For each tournament match, select it as context and specify the phase (Pool, Round of 16, Quarter, Semi, Final). The app automatically compiles your journey, final result and prize if any.',
+        },
+        {
+          id: 'th2',
+          q: fr ? 'Ou voir tous mes podiums et resultats ?' : 'Where can I see all my podiums and results?',
+          a: fr
+            ? 'Profil > "Palmares". Tous vos tournois sont classes par resultat : 1er, 2eme, 3eme, demi-finale, etc. Filtrez par periode, format (Doublette, Triplette, Tete-a-tete) ou type pour analyser votre progression.'
+            : 'Profile > "Honors". All tournaments sorted by result: 1st, 2nd, 3rd, semi-final, etc. Filter by period, format (Doubles, Triples, Singles) or type to analyze progress.',
+        },
+        {
+          id: 'th3',
+          q: fr ? 'Comment suivre mes frais et gains de tournois ?' : 'How do I track tournament fees and winnings?',
+          a: fr
+            ? 'Dans chaque fiche tournoi, renseignez le "Cout d\'inscription" et le "Gain obtenu". Le "Bilan financier" (accessible depuis le profil) compile automatiquement : total depense, total gagne, solde net sur la saison. Indispensable pour les joueurs qui enchament les concours.'
+            : 'In each tournament form, enter "Registration cost" and "Prize won". The "Financial Report" (from profile) automatically compiles: total spent, total won, net balance for the season. Essential for players doing many competitions.',
+        },
       ],
     },
     {
-      id: 'map_social',
-      category: fr ? 'Carte, RDV & Communaute' : 'Map, Meetups & Community',
-      icon: 'map',
-      color: '#0369A1',
-      description: fr ? 'Trouver terrains et joueurs, organiser des rencontres' : 'Find courts and players, organize meetups',
-      questions: [
-        { id: 'ms1', q: fr ? 'Comment trouver un terrain de petanque pres de moi ?' : 'How do I find a nearby court?', a: fr ? 'Ouvrez l\'onglet "Carte". Tous les terrains publics sont affiches avec leur type (gravier, sable, bitume...), equipements (eclairage, couvert) et acces (public ou club). Les partenaires apparaissent avec un marqueur personnalise a leur couleur de marque.' : 'Open the "Map" tab. All public courts show with type (gravel, sand, asphalt...), facilities (lighting, covered) and access (public or club). Partners appear with a custom marker in their brand color.' },
-        { id: 'ms2', q: fr ? 'Comment organiser un RDV petanque ?' : 'How do I organize a petanque meetup?', a: fr ? 'Depuis "A Venir" sur l\'accueil, appuyez sur "+ RDV". Choisissez terrain, date/heure, nombre max de participants. Un code unique et un QR code sont generes. Partagez-les ou invitez directement depuis l\'annuaire. Suivez les confirmations en temps reel.' : 'From "Upcoming" on home, tap "+ Meetup". Choose court, date/time, max participants. A unique code and QR code are generated. Share them or invite from directory. Track confirmations in real time.' },
-        { id: 'ms3', q: fr ? 'Comment rejoindre un RDV ou un evenement sponsorise ?' : 'How do I join a meetup or sponsored event?', a: fr ? 'Trois methodes : (1) Entrez le code dans le champ dedie. (2) Scannez le QR code avec le scanner (icone en haut de l\'accueil). (3) Acceptez une invitation recue dans vos notifications. Pour les evenements sponsorises, vous pouvez aussi les trouver dans la liste publique.' : 'Three methods: (1) Enter the code in the dedicated field. (2) Scan the QR code with the scanner (icon at top of home). (3) Accept an invitation in notifications. For sponsored events, also find them in the public list.' },
-        { id: 'ms4', q: fr ? 'Comment rendre mon profil visible sur la carte ?' : 'How do I make my profile visible on the map?', a: fr ? 'Depuis votre fiche joueur ou la page detail d un club/terrain, activez la visibilite publique via le toggle "Visibilite". Seuls les elements geolocalises apparaitront sur la carte. Vous pouvez aussi controler la visibilite de vos contacts (email, telephone) independamment.' : 'From your player card or club/terrain detail page, enable public visibility via the "Visibility" toggle. Only geolocated items will appear on the map. You can also control contact visibility (email, phone) independently.' },
-        { id: 'ms5', q: fr ? 'Comment utiliser les filtres avances de la carte ?' : 'How do I use the advanced map filters?', a: fr ? 'La carte propose des sous-filtres dynamiques selon la categorie selectionnee. Joueurs : filtrez par rang ELO (Bronze, Argent, Or, Diamant, Maitre) et score de confiance (Verifie, Fiable, Non verifie). Terrains : filtrez par type de surface (Stabilise, Graviers, Sable, Cailloux, Terre battue) et environnement (Interieur, Exterieur). Tournois : filtrez par format (Doublette, Triplette, Tete-a-tete) et statut (A venir, En cours). Seuls les tournois a venir ou en cours apparaissent.' : 'The map offers dynamic sub-filters based on the selected category. Players: filter by ELO rank (Bronze, Silver, Gold, Diamond, Master) and trust score (Verified, Reliable, Unverified). Terrains: filter by surface type (Stabilized, Gravel, Sand, Stone, Clay) and environment (Indoor, Outdoor). Tournaments: filter by format (Doubles, Triples, Singles) and status (Upcoming, In Progress). Only upcoming or in-progress tournaments are shown.' },
-      ],
-    },
-    {
-      id: 'stats_analysis',
-      category: fr ? 'Stats, Classement & Progression' : 'Stats, Ranking & Progression',
+      id: 'stats_ranking',
+      category: fr ? 'Stats & Classement' : 'Stats & Ranking',
       icon: 'bar-chart',
       color: '#7C3AED',
-      description: fr ? 'Comprendre vos forces et progresser' : 'Understand your strengths and improve',
+      description: fr ? 'Comprendre vos forces, corriger vos faiblesses, monter au classement' : 'Understand strengths, fix weaknesses, climb the ranking',
       questions: [
-        { id: 'sa1', q: fr ? 'Comment analyser mes stats de tir par technique ?' : 'How do I analyze my shot stats by technique?', a: fr ? 'Stats > Tir : detail par technique (tir tendu, en cloche, en rafle, court-ramasse) avec nombre de tentatives, taux de reussite, et tableau croise avec l\'impact (point gagne, decisif, sans effet, negatif).' : 'Stats > Shot: breakdown by technique (flat, lob, running, pick-up) with attempts, success rate, and cross-reference with impact (point gained, decisive, neutral, negative).' },
-        { id: 'sa2', q: fr ? 'Comment voir ma progression sur plusieurs mois ?' : 'How do I see my progression over months?', a: fr ? 'Appuyez sur "Progression" en haut de la page Stats. Choisissez la periode (4 semaines a 25 ans). Des graphiques interactifs montrent l\'evolution de votre taux de victoire, tir, point et carreaux.' : 'Tap "Progression" at top of Stats page. Choose period (4 weeks to 25 years). Interactive charts show evolution of win rate, shot, point and carreau rates.' },
-        { id: 'sa3', q: fr ? 'Comment apparaitre dans le classement communautaire ?' : 'How do I appear in the community leaderboard?', a: fr ? 'Activez votre profil public et jouez au minimum 3 matchs publics. Le classement peut etre filtre par zone geographique (monde, continent, pays, ville), periode et critere. Chaque lundi, le classement hebdomadaire est reinitialise.' : 'Enable your public profile and play at least 3 public matches. Rankings can be filtered by zone (world, continent, country, city), period and criteria. Weekly leaderboard resets every Monday.' },
-        { id: 'sa6', q: fr ? 'Comment fonctionne le classement ?' : 'How does the ranking system work?', a: fr ? 'Notre classement repose sur un systeme inspire du Elo rating system, utilise dans les environnements competitifs pour evaluer precisement le niveau des joueurs. Chaque resultat est analyse en tenant compte du niveau des adversaires, du contexte du match et de la coherence globale des performances. 5 rangs de progression : Bronze, Argent, Or, Diamant et Maitre. Le classement par role (Tireur, Pointeur, Milieu) est egalement disponible. Le systeme s ameliore en continu pour s adapter aux comportements reels et offrir une experience toujours plus juste et competitive.' : 'Our ranking is based on a system inspired by the Elo rating system, used in competitive environments to precisely evaluate player skill levels. Each result is analyzed taking into account opponent level, match context, and overall performance consistency. 5 progression ranks: Bronze, Silver, Gold, Diamond and Master. Role-specific ranking (Shooter, Pointer, Middle) is also available. The system continuously improves to adapt to real behaviors and offer an ever fairer and more competitive experience.' },
-        { id: 'sa7', q: fr ? 'Quelle est la difference entre Classement et Experience ?' : 'What is the difference between Ranking and Experience?', a: fr ? 'Le classement est un indicateur dynamique de competence qui evolue a chaque match en fonction de vos resultats et du niveau de vos adversaires. L Experience est un indicateur independant base sur vos annees de pratique : moins d 1 an, 1-3 ans, 3-10 ans, 10+ ans. Les deux sont affiches sur votre profil et dans les partages, mais mesurent des choses differentes : le classement reflete votre niveau actuel, l Experience votre vecu.' : 'The ranking is a dynamic skill indicator that evolves with each match based on your results and your opponents level. Experience is an independent indicator based on your years of practice: less than 1 year, 1-3 years, 3-10 years, 10+ years. Both are displayed on your profile and in shares, but measure different things: ranking reflects your current skill level, Experience reflects your background.' },
-        { id: 'sa4', q: fr ? 'Comment le classement est-il protege contre la triche ?' : 'How is the ranking protected against cheating?', a: fr ? 'Pour garantir l equite, nous avons developpe un systeme interne de fiabilite (Trust Score) qui analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l impact des matchs si necessaire. Les activites suspectes peuvent etre limitees, reclassees ou invisibilisees, de maniere automatique et continue. Seuls les resultats juges fiables influencent reellement le classement, garantissant une progression basee sur le merite, des matchs plus equilibres et un classement representatif du niveau reel.' : 'To ensure fairness, we have developed an internal reliability system (Trust Score) that analyzes gameplay behaviors, automatically detects anomalies and adjusts match impact if necessary. Suspicious activities can be limited, reclassified or hidden, automatically and continuously. Only results deemed reliable actually influence the ranking, ensuring merit-based progression, more balanced matches and a ranking representative of actual skill level.' },
-        { id: 'sa5', q: fr ? 'Comment analyser mes erreurs ?' : 'How do I analyze my errors?', a: fr ? 'Stats > Erreurs : analyse par duree de match (fatigue), format, entrainement vs tournoi, erreurs consecutives. Pour le tir, l\'app identifie si vous manquez court/droite, long, etc. Chaque type d\'erreur est accompagne d\'un conseil technique.' : 'Stats > Errors: analysis by match duration (fatigue), format, training vs tournament, consecutive errors. For shots, the app identifies miss direction. Each error type includes a coaching tip.' },
+        {
+          id: 'sr1',
+          q: fr ? 'Comment analyser mes stats de tir par technique ?' : 'How do I analyze shot stats by technique?',
+          a: fr
+            ? 'Stats > Tir : detail par technique (tir tendu, en cloche, en rafle, court-ramasse) avec nombre de tentatives, taux de reussite, et tableau croise avec l\'impact (point gagne, decisif, sans effet, negatif). Vous voyez immediatement ou progresser.'
+            : 'Stats > Shot: breakdown by technique (flat, lob, running, pick-up) with attempts, success rate, and cross-reference with impact (point gained, decisive, neutral, negative). You see immediately where to improve.',
+        },
+        {
+          id: 'sr2',
+          q: fr ? 'Comment voir ma progression sur plusieurs mois ?' : 'How do I track my progression over months?',
+          a: fr
+            ? 'Appuyez sur "Progression" en haut de la page Stats. Choisissez la periode (4 semaines a 25 ans). Des graphiques interactifs montrent l\'evolution de votre taux de victoire, tir, point et carreaux dans le temps.'
+            : 'Tap "Progression" at top of Stats. Choose period (4 weeks to 25 years). Interactive charts show the evolution of your win rate, shot, point and carreau rates over time.',
+        },
+        {
+          id: 'sr3',
+          q: fr ? 'Comment analyser mes erreurs pour progresser ?' : 'How do I analyze my errors to improve?',
+          a: fr
+            ? 'Stats > Erreurs : analyse par duree de match (fatigue en fin de partie ?), format, entrainement vs tournoi, erreurs consecutives. Pour le tir, l\'app identifie si vous manquez plutot court, long, a droite ou a gauche. Chaque type d\'erreur est accompagne d\'un conseil technique concret.'
+            : 'Stats > Errors: analysis by match duration (fatigue late in games?), format, training vs tournament, consecutive errors. For shots, the app identifies if you miss short, long, right or left. Each error type includes a concrete coaching tip.',
+        },
+        {
+          id: 'sr4',
+          q: fr ? 'Comment fonctionne le classement ELO ?' : 'How does the ELO ranking work?',
+          a: fr
+            ? 'Le classement repose sur un systeme inspire du ELO, utilise dans les sports competitifs. Chaque resultat est analyse en tenant compte du niveau des adversaires et du contexte. 5 rangs : Bronze, Argent, Or, Diamant, Maitre. Le classement par role (Tireur, Pointeur, Milieu) est aussi disponible. Plus vous jouez contre des adversaires forts et gagnez, plus vous progressez vite.'
+            : 'The ranking is based on an ELO-inspired system used in competitive sports. Each result factors in opponent level and context. 5 ranks: Bronze, Silver, Gold, Diamond, Master. Role-specific ranking (Shooter, Pointer, Middle) is also available. The more you win against strong opponents, the faster you climb.',
+        },
+        {
+          id: 'sr5',
+          q: fr ? 'Quelle difference entre Classement et Experience ?' : 'What is the difference between Ranking and Experience?',
+          a: fr
+            ? 'Le classement est dynamique : il monte ou baisse a chaque match selon vos performances et le niveau adverse. L\'Experience est fixe : elle reflete vos annees de pratique (moins d\'1 an, 1-3 ans, 3-10 ans, 10+ ans). L\'un mesure votre niveau actuel, l\'autre votre vecu. Les deux sont visibles sur votre profil.'
+            : 'Ranking is dynamic: it goes up or down with each match based on performance and opponent level. Experience is fixed: it reflects your years of practice (under 1 year, 1-3, 3-10, 10+). One measures current skill, the other your background. Both are visible on your profile.',
+        },
+        {
+          id: 'sr6',
+          q: fr ? 'Comment apparaitre dans le classement communautaire ?' : 'How do I appear in the community leaderboard?',
+          a: fr
+            ? 'Activez votre profil public et jouez au minimum 3 matchs publics. Filtrez le classement par zone (monde, continent, pays, ville), periode et critere. Le classement hebdomadaire est reinitialise chaque lundi.'
+            : 'Enable your public profile and play at least 3 public matches. Filter the leaderboard by zone (world, continent, country, city), period and criteria. Weekly leaderboard resets every Monday.',
+        },
+        {
+          id: 'sr7',
+          q: fr ? 'Comment le classement est-il protege contre la triche ?' : 'How is the ranking protected from cheating?',
+          a: fr
+            ? 'Un systeme interne de fiabilite (Trust Score) analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l\'impact des matchs si necessaire. Les activites suspectes sont limitees ou invisibilisees. Seuls les resultats fiables influencent le classement, garantissant une progression basee sur le merite.'
+            : 'An internal reliability system (Trust Score) analyzes gameplay behaviors, detects anomalies automatically and adjusts match impact if needed. Suspicious activities are limited or hidden. Only reliable results influence ranking, ensuring merit-based progression.',
+        },
       ],
     },
     {
-      id: 'events_witness',
-      category: fr ? 'Evenements sponsorises & Attestation' : 'Sponsored Events & Attestation',
-      icon: 'campaign',
-      color: '#DC2626',
-      description: fr ? 'Participer aux defis officiels de la communaute' : 'Participate in official community challenges',
+      id: 'map_meetups',
+      category: fr ? 'Carte, RDV & Rencontres' : 'Map, Meetups & Encounters',
+      icon: 'map',
+      color: '#0369A1',
+      description: fr ? 'Trouver des terrains, organiser des parties, rencontrer des joueurs' : 'Find courts, organize games, meet players',
       questions: [
-        { id: 'ev1', q: fr ? 'Comment participer a un evenement sponsorise ?' : 'How do I join a sponsored event?', a: fr ? 'Rejoignez via le code de l\'evenement, la liste publique (page Defis), ou le QR code. Chaque evenement est organise par un ambassadeur avec une date/heure precise, un type de defi et un nombre max de participants. Realisez votre defi pendant le creneau prevu.' : 'Join via event code, public list (Challenges page), or QR code. Each event is organized by an ambassador with a specific date/time, challenge type and max participants. Complete your challenge during the scheduled slot.' },
-        { id: 'ev2', q: fr ? 'Comment fonctionne l\'attestation par temoins ?' : 'How does witness attestation work?', a: fr ? 'Apres un match ou un defi, invitez un joueur present comme temoin depuis la section "Attestation par temoins" dans le detail du match ou du defi. Le temoin recoit une notification push et peut confirmer ou refuser. Maximum 2 temoins par match/defi. Une attestation fait passer le poids du match/defi a 2.0x dans le classement et ameliore votre score de confiance.' : 'After a match or challenge, invite a present player as witness from the "Witness Attestation" section in match or challenge detail. The witness receives a push notification and can confirm or decline. Maximum 2 witnesses per match/challenge. An attestation upgrades the match/challenge weight to 2.0x in the leaderboard and improves your trust score.' },
-        { id: 'ev3', q: fr ? 'Puis-je demander une attestation pour un defi solo ou 1v1 ?' : 'Can I request attestation for a solo or 1v1 challenge?', a: fr ? 'Oui ! L\'attestation est disponible pour tous les matchs et defis (solo, 1v1, entrainement, tournoi). Pour les defis solo, c\'est particulierement important car il n\'y a pas d\'adversaire pour verifier. Le temoin voit un snapshot fige de vos resultats au moment de la demande.' : 'Yes! Attestation is available for all matches and challenges (solo, 1v1, training, tournament). For solo challenges, it is particularly important since there is no opponent to verify. The witness sees a frozen snapshot of your results at the time of the request.' },
-        { id: 'ev4', q: fr ? 'Comment devenir temoin pour un autre joueur ?' : 'How do I become a witness for another player?', a: fr ? 'Vous recevrez une notification push quand un joueur vous invite a attester. Rendez-vous dans le Hub Notifications > onglet Temoins, ou dans la page dediee "Attestations de temoin" (Profil > Notifications). Vous verrez le snapshot du match avec 2 options : Confirmer ou Refuser.' : 'You will receive a push notification when a player invites you to attest. Go to Notification Hub > Witnesses tab, or the dedicated "Witness Attestations" page (Profile > Notifications). You will see the match snapshot with 2 options: Confirm or Decline.' },
-        { id: 'ev5', q: fr ? 'Comment fonctionne la confirmation automatique par l adversaire ?' : 'How does automatic opponent confirmation work?', a: fr ? 'Quand vous partagez un match ou un defi 1v1 avec votre adversaire (via le systeme de partage cross-joueur) et que celui-ci accepte, une demande de confirmation lui est automatiquement envoyee. Sa confirmation compte comme une attestation de type "adversaire" avec le meme poids 2.0x. C est le moyen le plus simple de faire attester un resultat.' : 'When you share a match or 1v1 challenge with your opponent (via the cross-player sharing system) and they accept, a confirmation request is automatically sent. Their confirmation counts as an "opponent" type attestation with the same 2.0x weight. This is the simplest way to get a result attested.' },
-        { id: 'ev6', q: fr ? 'Y a-t-il des protections contre les abus d attestation ?' : 'Are there protections against attestation abuse?', a: fr ? 'Oui, 3 protections : (1) Cooldown d une heure entre les demandes au meme temoin. (2) Maximum 5 attestations par semaine entre la meme paire de joueurs. (3) L algorithme anti-triche detecte les attestations mutuelles suspectes (2 joueurs qui s attestent systematiquement) et penalise le score de confiance.' : 'Yes, 3 protections: (1) One-hour cooldown between requests to the same witness. (2) Maximum 5 attestations per week between the same pair of players. (3) The anti-cheat algorithm detects suspicious mutual attestations (2 players systematically attesting each other) and penalizes the trust score.' },
+        {
+          id: 'mm1',
+          q: fr ? 'Comment trouver un terrain pres de chez moi ?' : 'How do I find a court near me?',
+          a: fr
+            ? 'Ouvrez l\'onglet "Carte". Tous les terrains publics sont affiches avec leur type de surface (gravier, sable, bitume, terre battue...), equipements (eclairage, couvert) et acces. Utilisez les sous-filtres pour affiner par type de surface ou environnement (interieur/exterieur).'
+            : 'Open the "Map" tab. All public courts are shown with surface type (gravel, sand, asphalt, clay...), facilities (lighting, covered) and access. Use sub-filters to refine by surface type or environment (indoor/outdoor).',
+        },
+        {
+          id: 'mm2',
+          q: fr ? 'Comment organiser un RDV petanque ?' : 'How do I organize a petanque meetup?',
+          a: fr
+            ? 'Depuis "A Venir" sur l\'accueil > "+ RDV". Choisissez terrain, date/heure, nombre max de participants. Un code unique et un QR code sont generes automatiquement. Partagez-les ou invitez directement depuis l\'annuaire des joueurs. Suivez les confirmations en temps reel.'
+            : 'From "Upcoming" on home > "+ Meetup". Choose court, date/time, max participants. A unique code and QR code are auto-generated. Share them or invite directly from the player directory. Track confirmations in real time.',
+        },
+        {
+          id: 'mm3',
+          q: fr ? 'Comment rejoindre un RDV ou un evenement ?' : 'How do I join a meetup or event?',
+          a: fr
+            ? 'Trois methodes : (1) Entrez le code dans le champ dedie. (2) Scannez le QR code avec le scanner en haut de l\'accueil. (3) Acceptez l\'invitation recue dans vos notifications. Pour les evenements sponsorises, consultez aussi la liste publique.'
+            : 'Three methods: (1) Enter the code in the dedicated field. (2) Scan the QR code with the scanner at top of home. (3) Accept the invitation in your notifications. For sponsored events, also check the public list.',
+        },
+        {
+          id: 'mm4',
+          q: fr ? 'Comment filtrer la carte par joueurs, rang ELO ou tournois ?' : 'How do I filter the map by players, ELO rank or tournaments?',
+          a: fr
+            ? 'La carte propose des sous-filtres dynamiques selon la categorie. Joueurs : filtrez par rang ELO (Bronze a Maitre) et score de confiance. Terrains : par type de surface et environnement. Tournois : par format et statut (A venir, En cours). Seuls les elements geolocalises et publics apparaissent.'
+            : 'The map offers dynamic sub-filters per category. Players: filter by ELO rank (Bronze to Master) and trust score. Terrains: by surface type and environment. Tournaments: by format and status (Upcoming, In Progress). Only geolocated public items appear.',
+        },
       ],
     },
     {
-      id: 'badges_gamification',
+      id: 'badges_xp',
       category: fr ? 'Badges, XP & Progression' : 'Badges, XP & Progression',
       icon: 'military-tech',
       color: '#F59E0B',
-      description: fr ? 'Debloquer des badges et progresser en XP' : 'Unlock badges and progress in XP',
+      description: fr ? 'Debloquer des badges grace a vos performances reelles' : 'Unlock badges through your real performances',
       questions: [
-        { id: 'bg1', q: fr ? 'Comment fonctionnent les badges ?' : 'How do badges work?', a: fr ? 'Il y a 13 badges a debloquer, chacun avec une condition specifique : Premier Lancer (1 match), Statisticien (5 matchs), Oeil de Lynx (70% tir sur 10+ matchs), Roi du Carreau (10 carreaux), Social Player (1 partage accepte), Recruteur (3 joueurs invites), Explorateur (5 terrains differents), Classe (top 100), En Feu (7 jours consecutifs), Ambassadeur, Fiable (score 65+), Verifie (score 80+), Temoin Fiable (10 attestations). Chaque badge rapporte 30 a 100 XP.' : 'There are 13 badges to unlock, each with a specific condition: First Throw (1 match), Statistician (5 matches), Eagle Eye (70% shot on 10+ matches), Carreau King (10 carreaux), Social Player (1 accepted share), Recruiter (3 invited players), Explorer (5 different courts), Ranked (top 100), On Fire (7 consecutive days), Ambassador, Trusted (score 65+), Verified (score 80+), Trusted Witness (10 attestations). Each badge gives 30 to 100 XP.' },
-        { id: 'bg2', q: fr ? 'Comment voir ma progression vers un badge ?' : 'How do I see my progress toward a badge?', a: fr ? 'Dans la page Badges (Profil > Badges & Progression), chaque badge non debloque affiche une barre de progression avec le pourcentage d avancement et un detail (ex: "6/10 attestations donnees" ou "3/5 terrains"). Quand la barre atteint 75%, le pourcentage s affiche dans la couleur du badge pour vous encourager.' : 'In the Badges page (Profile > Badges & Progress), each locked badge shows a progress bar with percentage and a detail (e.g., "6/10 attestations given" or "3/5 courts"). When the bar reaches 75%, the percentage displays in the badge color to encourage you.' },
-        { id: 'bg3', q: fr ? 'Comment gagner des XP ?' : 'How do I earn XP?', a: fr ? '4 sources d XP : matchs joues (+10 XP chacun), carreaux reussis (+5 XP chacun), partages de matchs acceptes (+15 XP chacun), et badges debloques (+50 XP chacun). L XP determine votre niveau : Debutant (0), Intermediaire (50), Confirme (200), Expert (500). La page Badges affiche le detail complet.' : '4 XP sources: matches played (+10 XP each), successful carreaux (+5 XP each), accepted match shares (+15 XP each), and unlocked badges (+50 XP each). XP determines your level: Beginner (0), Intermediate (50), Advanced (200), Expert (500). The Badges page shows full breakdown.' },
-        { id: 'bg4', q: fr ? 'Comment debloquer le badge Temoin Fiable ?' : 'How do I unlock the Trusted Witness badge?', a: fr ? 'Attestez 10 matchs ou defis d autres joueurs en tant que temoin. Rendez-vous dans le Hub Notifications > onglet Temoins pour voir les demandes en attente. Chaque attestation vous rapproche du badge (visible dans la barre de progression). Le badge rapporte 50 XP et affiche un icone violet sur votre profil.' : 'Attest 10 matches or challenges of other players as a witness. Go to Notification Hub > Witnesses tab to see pending requests. Each attestation brings you closer to the badge (visible in the progress bar). The badge gives 50 XP and shows a purple icon on your profile.' },
+        {
+          id: 'bx1',
+          q: fr ? 'Quels badges puis-je debloquer et comment ?' : 'What badges can I unlock and how?',
+          a: fr
+            ? '13 badges bases sur des actions reelles : Premier Lancer (1 match), Statisticien (5 matchs), Oeil de Lynx (70% tir sur 10+ matchs), Roi du Carreau (10 carreaux), Social Player (1 partage accepte), Recruteur (3 joueurs invites), Explorateur (5 terrains differents), Classe (top 100), En Feu (7 jours consecutifs), Ambassadeur, Fiable (trust 65+), Verifie (trust 80+), Temoin Fiable (10 attestations). Chaque badge rapporte 30 a 100 XP.'
+            : '13 badges based on real actions: First Throw (1 match), Statistician (5 matches), Eagle Eye (70% shot on 10+ matches), Carreau King (10 carreaux), Social Player (1 accepted share), Recruiter (3 invited players), Explorer (5 different courts), Ranked (top 100), On Fire (7 consecutive days), Ambassador, Trusted (trust 65+), Verified (trust 80+), Trusted Witness (10 attestations). Each gives 30 to 100 XP.',
+        },
+        {
+          id: 'bx2',
+          q: fr ? 'Comment gagner des XP ?' : 'How do I earn XP?',
+          a: fr
+            ? '4 sources : matchs joues (+10 XP), carreaux reussis (+5 XP), partages acceptes (+15 XP), badges debloques (+50 XP). L\'XP determine votre niveau : Debutant (0), Intermediaire (50), Confirme (200), Expert (500). La page Badges affiche la progression detaillee de chaque badge.'
+            : '4 sources: matches played (+10 XP), successful carreaux (+5 XP), accepted shares (+15 XP), unlocked badges (+50 XP). XP determines your level: Beginner (0), Intermediate (50), Advanced (200), Expert (500). The Badges page shows detailed progress for each badge.',
+        },
       ],
     },
     {
-      id: 'sharing_features',
-      category: fr ? 'Partage & Visibilite' : 'Sharing & Visibility',
-      icon: 'share',
-      color: '#10B981',
-      description: fr ? 'Partager vos fiches et controler la visibilite' : 'Share your cards and control visibility',
-      questions: [
-        { id: 'sh1', q: fr ? 'Comment fonctionne le partage de fiches ?' : 'How does card sharing work?', a: fr ? 'Appuyez sur l icone "Partager" en haut de n importe quelle fiche (joueur, club, terrain, tournoi, match, defi). Une page plein ecran s ouvre avec un apercu detaille de l item, incluant stats, localisation et contacts. Choisissez parmi 4 modes : partage natif (WhatsApp, SMS, email), copie du code, copie de l invitation complete ou QR code. Le destinataire peut consulter la fiche en lecture seule.' : 'Tap the "Share" icon at the top of any card (player, club, terrain, tournament, match, challenge). A full-screen page opens with a detailed preview including stats, location and contacts. Choose from 4 modes: native share (WhatsApp, SMS, email), copy code, copy full invitation or QR code. The recipient can view the card in read-only mode.' },
-        { id: 'sh2', q: fr ? 'Comment controler la visibilite de mes contacts lors du partage ?' : 'How do I control contact visibility when sharing?', a: fr ? 'Sur la page de partage de votre fiche joueur ou de vos clubs, un toggle "Contacts visibles" apparait si vous etes le proprietaire et que des contacts existent. Activez-le pour que le destinataire voie votre email et telephone. Desactivez-le pour masquer ces informations. L apercu se met a jour en temps reel : contacts affiches en clair ou masques avec des points. Ce reglage se synchronise avec la page de l item.' : 'On the share page of your player card or clubs, a "Contacts visible" toggle appears if you are the owner and contacts exist. Enable it for the recipient to see your email and phone. Disable it to hide this information. The preview updates in real time: contacts shown in plain text or masked with dots. This setting syncs with the item page.' },
-        { id: 'sh3', q: fr ? 'Comment inclure mon club ou terrain dans le partage ?' : 'How do I include my club or terrain in the share?', a: fr ? 'Lors du partage de votre fiche joueur, si un club ou terrain est associe a votre profil, une etape supplementaire vous propose de les inclure. Cochez les items a partager. Le destinataire recevra les liens vers ces fiches en plus de votre profil.' : 'When sharing your player card, if a club or terrain is linked to your profile, an additional step lets you include them. Check the items to share. The recipient will receive links to these cards alongside your profile.' },
-        { id: 'sh4', q: fr ? 'Comment definir une expiration pour un partage ?' : 'How do I set an expiration for a share?', a: fr ? 'Apres avoir choisi vos options, une etape vous propose de definir la duree de validite du code : illimite, 1 jour, 1 semaine ou 1 mois. Un compteur affiche le temps restant sur la page de resultat. Passe l expiration, le code ne fonctionnera plus.' : 'After choosing your options, a step lets you set the code validity: unlimited, 1 day, 1 week or 1 month. A countdown shows remaining time on the result page. After expiration, the code will no longer work.' },
-      ],
-    },
-    {
-      id: 'terrain_clubs',
-      category: fr ? 'Terrains & Clubs' : 'Terrains & Clubs',
-      icon: 'landscape',
-      color: '#059669',
-      description: fr ? 'Gerer vos terrains et associations club-terrain' : 'Manage your terrains and club-terrain links',
-      questions: [
-        { id: 'tc1', q: fr ? 'Plusieurs clubs peuvent-ils utiliser le meme terrain ?' : 'Can multiple clubs use the same terrain?', a: fr ? 'Oui ! Plusieurs clubs peuvent referencer le meme terrain. Sur la page detail d un terrain, tous les clubs qui l utilisent sont affiches dans la section "Clubs utilisant ce terrain". Cela permet de decouvrir les infrastructures partagees et les differents clubs actifs sur un meme site.' : 'Yes! Multiple clubs can reference the same terrain. On a terrain detail page, all clubs using it are displayed in the "Clubs using this terrain" section. This helps discover shared infrastructure and different clubs active at the same site.' },
-        { id: 'tc2', q: fr ? 'Comment voir un terrain ou un club sur la carte ?' : 'How do I view a terrain or club on the map?', a: fr ? 'Sur chaque fiche detail (joueur, club, terrain, tournoi), un bouton "Voir sur la carte" vous redirige vers l onglet Carte avec un zoom automatique sur la localisation. Les terrains geolocalises apparaissent aussi automatiquement si vous les avez rendus publics.' : 'On each detail card (player, club, terrain, tournament), a "View on map" button redirects you to the Map tab with automatic zoom to the location. Geolocated terrains also appear automatically if you made them public.' },
-        { id: 'tc3', q: fr ? 'Comment revendiquer un club existant ?' : 'How do I claim an existing club?', a: fr ? 'Si un joueur a cree la fiche de votre club avant vous, rendez-vous sur la fiche du club et cliquez sur "Revendiquer ce club". Le proprietaire actuel recevra votre demande et pourra accepter le transfert. Vous obtiendrez le badge Verifie et l ancien proprietaire conservera un badge Contributeur.' : 'If a player created your club card before you, go to the club card and click "Claim this club". The current owner will receive your request and can accept the transfer. You will get the Verified badge and the original owner keeps a Contributor badge.' },
-      ],
-    },
-    {
-      id: 'equipment_boules',
+      id: 'equipment',
       category: fr ? 'Equipement & Boules' : 'Equipment & Boules',
       icon: 'sports-baseball',
       color: '#D97706',
-      description: fr ? 'Gerer et comparer vos jeux de boules' : 'Manage and compare your boules sets',
+      description: fr ? 'Gerer vos jeux de boules et comparer les performances' : 'Manage your boules sets and compare performance',
       questions: [
-        { id: 'eq1', q: fr ? 'Comment enregistrer mes boules ?' : 'How do I register my boules?', a: fr ? 'Depuis le profil > Equipement. Ajoutez nom, marque, diametre, poids, durete, numero de serie, photo et prix d\'achat. Definissez un equipement "principal" pour qu\'il soit pre-selectionne a la creation de matchs.' : 'From profile > Equipment. Add name, brand, diameter, weight, hardness, serial number, photo and purchase price. Set one as "primary" for pre-selection when creating matches.' },
-        { id: 'eq2', q: fr ? 'Comment voir le classement des boules par marque ?' : 'How do I see the boules ranking by brand?', a: fr ? 'Page Classement > onglet Boules : stats de tous les joueurs publics compilees par marque et modele (taux de victoire, tir, carreau, popularite). Filtrez par role pour des comparaisons pertinentes.' : 'Leaderboard > Boules tab: all public player stats compiled by brand and model (win rate, shot, carreau, popularity). Filter by role for relevant comparisons.' },
+        {
+          id: 'eq1',
+          q: fr ? 'Comment enregistrer et comparer mes boules ?' : 'How do I register and compare my boules?',
+          a: fr
+            ? 'Profil > Equipement. Ajoutez nom, marque, diametre, poids, durete, numero de serie, photo et prix d\'achat. Definissez un equipement "principal" (pre-selectionne a la creation de matchs). Apres plusieurs matchs avec differentes boules, comparez les stats par equipement : taux de reussite au tir, au point, au carreau.'
+            : 'Profile > Equipment. Add name, brand, diameter, weight, hardness, serial number, photo and purchase price. Set one as "primary" (pre-selected when creating matches). After several matches with different boules, compare per-equipment stats: shot, point and carreau success rates.',
+        },
+        {
+          id: 'eq2',
+          q: fr ? 'Comment voir le classement des boules par marque ?' : 'How do I see boules ranking by brand?',
+          a: fr
+            ? 'Classement > onglet Boules : les stats de tous les joueurs publics sont compilees par marque et modele (taux de victoire, tir, carreau, popularite). Filtrez par role (Tireur, Pointeur) pour des comparaisons pertinentes avant un achat.'
+            : 'Leaderboard > Boules tab: all public player stats compiled by brand and model (win rate, shot, carreau, popularity). Filter by role (Shooter, Pointer) for relevant comparisons before a purchase.',
+        },
       ],
     },
     {
-      id: 'account_settings',
-      category: fr ? 'Compte & Parametres' : 'Account & Settings',
+      id: 'profile_sharing',
+      category: fr ? 'Profil, Partage & Visibilite' : 'Profile, Sharing & Visibility',
+      icon: 'share',
+      color: '#10B981',
+      description: fr ? 'Gerer votre profil public, QR code et options de partage' : 'Manage your public profile, QR code and sharing options',
+      questions: [
+        {
+          id: 'ps1',
+          q: fr ? 'A quoi sert le QR code personnel ?' : 'What is the personal QR code for?',
+          a: fr
+            ? 'Appuyez sur l\'icone QR en haut de l\'accueil. Les autres joueurs le scannent pour voir votre profil, stats et palmares. Ideal pour echanger rapidement lors d\'un tournoi. Vous pouvez aussi scanner les QR des terrains, RDV et evenements sponsorises.'
+            : 'Tap the QR icon at top of home. Other players scan it to see your profile, stats and honors. Ideal for quick exchanges at tournaments. You can also scan QR codes for courts, meetups and sponsored events.',
+        },
+        {
+          id: 'ps2',
+          q: fr ? 'Comment rendre mon profil visible sur la carte et les classements ?' : 'How do I make my profile visible on the map and rankings?',
+          a: fr
+            ? 'Depuis votre fiche joueur, activez "Visibilite publique". Vous apparaitrez sur la carte (si geolocalise) et dans les classements (apres 3 matchs publics). Vous pouvez controler la visibilite de vos contacts (email, telephone) independamment.'
+            : 'From your player card, enable "Public Visibility". You will appear on the map (if geolocated) and in rankings (after 3 public matches). You can control contact visibility (email, phone) independently.',
+        },
+        {
+          id: 'ps3',
+          q: fr ? 'Comment partager une fiche (joueur, club, terrain, tournoi) ?' : 'How do I share a card (player, club, terrain, tournament)?',
+          a: fr
+            ? 'Appuyez sur "Partager" en haut de n\'importe quelle fiche. Une page plein ecran affiche un apercu detaille. 4 modes : partage natif (WhatsApp, SMS, email), copie du code, copie de l\'invitation ou QR code. Definissez une expiration (illimitee, 1 jour, 1 semaine, 1 mois).'
+            : 'Tap "Share" at top of any card. A full-screen page shows a detailed preview. 4 modes: native share (WhatsApp, SMS, email), copy code, copy invitation or QR code. Set expiration (unlimited, 1 day, 1 week, 1 month).',
+        },
+      ],
+    },
+    {
+      id: 'account',
+      category: fr ? 'Compte & Donnees' : 'Account & Data',
       icon: 'settings',
       color: '#64748B',
-      description: fr ? 'Gerer votre profil, notifications et donnees' : 'Manage your profile, notifications and data',
+      description: fr ? 'Parametres, export, notifications, mode hors-ligne' : 'Settings, export, notifications, offline mode',
       questions: [
-        { id: 'ac1', q: fr ? 'Comment gerer mes notifications ?' : 'How do I manage notifications?', a: fr ? 'Profil > Preferences de notifications. Activez/desactivez individuellement : invitations RDV, demandes de partage, evenements sponsorises, changements de classement, rappels d\'evenements.' : 'Profile > Notification preferences. Enable/disable individually: meetup invitations, share requests, sponsored events, ranking changes, event reminders.' },
-        { id: 'ac2', q: fr ? 'Comment exporter mes donnees ?' : 'How do I export my data?', a: fr ? 'Profil > Exporter les donnees. Choisissez CSV ou JSON et les donnees a exporter (matchs, defis, joueurs, clubs, terrains, tournois). Le CSV est compatible Excel et Google Sheets.' : 'Profile > Export data. Choose CSV or JSON and data to export (matches, challenges, players, clubs, courts, tournaments). CSV is compatible with Excel and Google Sheets.' },
-        { id: 'ac3', q: fr ? 'Comment supprimer les publicites ?' : 'How do I remove ads?', a: fr ? 'Profil > Supprimer les publicites. C\'est un achat unique qui retire toutes les bannieres. L\'achat est lie a votre compte Apple/Google et peut etre restaure. Une partie des revenus finance le developpement de l\'application (voir l\'option de don).' : 'Profile > Remove ads. One-time purchase removing all banners. Linked to your Apple/Google account and restorable. Part of the revenue funds app development (see donation option).' },
-        { id: 'ac4', q: fr ? 'Comment supprimer mon compte et mes donnees ?' : 'How do I delete my account?', a: fr ? 'Profil > Mot de passe et securite > Supprimer mon compte. Action irreversible : toutes vos donnees (matchs, defis, joueurs, tournois, stats, partages) sont definitivement supprimees. Les elements partages sont retires de la vue des autres joueurs.' : 'Profile > Password and security > Delete my account. Irreversible: all data (matches, challenges, players, tournaments, stats, shares) permanently deleted. Shared items removed from other players view.' },
-        { id: 'ac5', q: fr ? 'Comment gerer les doublons dans mon annuaire ?' : 'How do I manage duplicates?', a: fr ? 'L\'app detecte automatiquement les doublons (noms similaires). Une banniere jaune apparait dans l\'annuaire. Pour les doublons a 90%+, "Fusion rapide" fusionne automatiquement. Sinon, choisissez champ par champ. Reversible 24h.' : 'The app detects duplicates automatically (similar names). A yellow banner appears in the directory. For 90%+ duplicates, "Quick Merge" merges automatically. Otherwise, choose field by field. Reversible for 24h.' },
-        { id: 'ac6', q: fr ? 'Est-ce que l\'application marche hors-ligne ?' : 'Does the app work offline?', a: fr ? 'Oui ! L\'app dispose d\'un cache local et d\'une queue offline. Vos matchs et defis sont sauvegardes localement et synchronises automatiquement a la reconnexion. Un mode economie de batterie est egalement disponible. Si un conflit est detecte entre vos donnees et le serveur, une fenetre de resolution apparait.' : 'Yes! The app has local cache and an offline queue. Your matches and challenges are saved locally and automatically synced on reconnection. A battery saver mode is also available. If a conflict is detected between your data and the server, a resolution window appears.' },
+        {
+          id: 'ac1',
+          q: fr ? 'Comment changer la langue ?' : 'How do I change language?',
+          a: fr
+            ? 'Depuis le profil, appuyez sur le drapeau (FR/EN) en haut a droite. Le changement est instantane. L\'application est entierement disponible en francais et en anglais.'
+            : 'From profile, tap the flag (FR/EN) at top right. Change is instant. The app is fully available in French and English.',
+        },
+        {
+          id: 'ac2',
+          q: fr ? 'Comment exporter mes donnees ?' : 'How do I export my data?',
+          a: fr
+            ? 'Profil > Exporter les donnees. Choisissez CSV ou JSON et les categories (matchs, defis, joueurs, clubs, terrains, tournois). Le CSV est compatible Excel et Google Sheets. Utile pour garder une trace de toute votre saison.'
+            : 'Profile > Export data. Choose CSV or JSON and categories (matches, challenges, players, clubs, courts, tournaments). CSV works with Excel and Google Sheets. Useful for keeping a full season record.',
+        },
+        {
+          id: 'ac3',
+          q: fr ? 'L\'application fonctionne-t-elle hors-ligne ?' : 'Does the app work offline?',
+          a: fr
+            ? 'Oui. L\'app dispose d\'un cache local et d\'une queue offline. Matchs et defis sont sauvegardes localement et synchronises a la reconnexion. Si un conflit est detecte entre vos donnees et le serveur, une fenetre de resolution apparait.'
+            : 'Yes. The app has local cache and offline queue. Matches and challenges are saved locally and synced on reconnection. If a conflict is detected between your data and the server, a resolution window appears.',
+        },
+        {
+          id: 'ac4',
+          q: fr ? 'Comment gerer mes notifications ?' : 'How do I manage notifications?',
+          a: fr
+            ? 'Profil > Preferences de notifications. Activez/desactivez individuellement : invitations RDV, demandes de partage, evenements sponsorises, changements de classement, rappels.'
+            : 'Profile > Notification preferences. Toggle individually: meetup invitations, share requests, sponsored events, ranking changes, reminders.',
+        },
+        {
+          id: 'ac5',
+          q: fr ? 'Comment supprimer les publicites ?' : 'How do I remove ads?',
+          a: fr
+            ? 'Profil > Supprimer les publicites. Achat unique qui retire toutes les bannieres. Lie a votre compte Apple/Google et restaurable.'
+            : 'Profile > Remove ads. One-time purchase removing all banners. Linked to your Apple/Google account and restorable.',
+        },
+        {
+          id: 'ac6',
+          q: fr ? 'Comment supprimer mon compte ?' : 'How do I delete my account?',
+          a: fr
+            ? 'Profil > Mot de passe et securite > Supprimer mon compte. Action irreversible : toutes vos donnees sont definitivement supprimees. Les elements partages sont retires de la vue des autres joueurs.'
+            : 'Profile > Password & security > Delete my account. Irreversible: all data permanently deleted. Shared items removed from other players\' view.',
+        },
+        {
+          id: 'ac7',
+          q: fr ? 'Comment gerer les doublons dans mon annuaire ?' : 'How do I manage duplicates in my directory?',
+          a: fr
+            ? 'L\'app detecte automatiquement les doublons (noms similaires). Une banniere jaune apparait. Pour les doublons a 90%+, "Fusion rapide" fusionne automatiquement. Sinon, choisissez champ par champ. Reversible pendant 24h.'
+            : 'The app detects duplicates automatically (similar names). A yellow banner appears. For 90%+ duplicates, "Quick Merge" merges automatically. Otherwise, choose field by field. Reversible for 24h.',
+        },
       ],
     },
     {
-      id: 'club_claims',
-      category: fr ? 'Revendication de club' : 'Club Claims',
-      icon: 'verified-user',
-      color: '#2563EB',
-      description: fr ? 'Recuperer la gestion de votre club officiel' : 'Reclaim management of your official club',
-      questions: [
-        { id: 'cc1', q: fr ? 'Pourquoi un club peut-il deja exister dans l\'application ?' : 'Why might a club already exist in the app?', a: fr ? 'N\'importe quel joueur peut creer une fiche club pour renseigner son appartenance a un club. Cela signifie qu\'un joueur a pu creer la fiche de votre club avant que vous ne vous inscriviez. C\'est une bonne chose : cela enrichit la communaute. Mais si vous etes le representant officiel du club, vous pouvez en reprendre le controle.' : 'Any player can create a club card to indicate their club membership. This means a player may have created your club card before you signed up. This is positive: it enriches the community. But if you are the official club representative, you can reclaim control.' },
-        { id: 'cc2', q: fr ? 'Comment revendiquer mon club ?' : 'How do I claim my club?', a: fr ? 'Rendez-vous sur la fiche du club existant. En bas de la page, un bouton "Revendiquer ce club" apparait si vous n\'etes pas le proprietaire. Cliquez dessus, expliquez votre lien avec le club dans le message (optionnel), puis envoyez la demande. Le proprietaire actuel recevra une notification et pourra accepter ou refuser le transfert.' : 'Go to the existing club card. At the bottom of the page, a "Claim this club" button appears if you are not the owner. Click it, explain your connection to the club in the message (optional), then submit. The current owner will receive a notification and can accept or decline the transfer.' },
-        { id: 'cc3', q: fr ? 'Que se passe-t-il quand le proprietaire accepte ?' : 'What happens when the owner accepts?', a: fr ? 'Le transfert est immediat : vous devenez le proprietaire officiel du club. Le club obtient automatiquement un badge "Verifie" (icone bleu) visible par tous les utilisateurs. L\'ancien proprietaire conserve un badge "Contributeur" en reconnaissance de sa contribution initiale a la communaute.' : 'The transfer is immediate: you become the official club owner. The club automatically gets a "Verified" badge (blue icon) visible to all users. The original owner keeps a "Contributor" badge in recognition of their initial community contribution.' },
-        { id: 'cc4', q: fr ? 'Ou voir les demandes de revendication recues ?' : 'Where do I see received claim requests?', a: fr ? 'Deux endroits : (1) Directement sur la page de votre club, dans la section "Revendications en attente" visible uniquement par vous. (2) Dans le Hub Notifications, onglet "Clubs", qui centralise toutes les demandes recues avec des filtres par statut. Vous pouvez accepter ou refuser depuis les deux endroits.' : 'Two places: (1) Directly on your club page, in the "Pending Claims" section visible only to you. (2) In the Notification Hub, "Claims" tab, which centralizes all received requests with status filters. You can accept or decline from both places.' },
-        { id: 'cc5', q: fr ? 'Que signifie le badge "Verifie" sur un club ?' : 'What does the "Verified" badge on a club mean?', a: fr ? 'Le badge bleu "Verifie" indique que le club est gere par son representant officiel, suite a une revendication acceptee. Cela rassure les joueurs : les informations (horaires, contact, equipements) sont fiables et a jour.' : 'The blue "Verified" badge indicates the club is managed by its official representative, following an accepted claim. This reassures players: information (hours, contact, facilities) is reliable and up to date.' },
-      ],
-    },
-    {
-      id: 'roadmap_v2',
+      id: 'roadmap',
       category: fr ? 'Roadmap V2' : 'V2 Roadmap',
       icon: 'rocket-launch',
       color: '#7C3AED',
-      description: fr ? 'Les futures fonctionnalites et comment voter' : 'Upcoming features and how to vote',
+      description: fr ? 'Fonctionnalites a venir et comment voter' : 'Upcoming features and how to vote',
       questions: [
-        { id: 'rm1', q: fr ? 'Qu\'est-ce que la Roadmap V2 ?' : 'What is the V2 Roadmap?', a: fr ? 'La Roadmap V2 presente les 8 fonctionnalites majeures envisagees pour la prochaine version de l\'application : Coach IA, Mode Match Live, Feed Social, Gestion Tournois avancee, Messagerie integree, Programmes d\'entrainement, Ligues saisonnieres et Analyse video. Vous pouvez voter pour orienter les priorites de developpement.' : 'The V2 Roadmap presents 8 major features planned for the next version: AI Coach, Live Match Mode, Social Feed, Advanced Tournament Management, Integrated Messaging, Training Programs, Seasonal Leagues and Video Analysis. You can vote to influence development priorities.' },
-        { id: 'rm2', q: fr ? 'Comment voter pour une fonctionnalite ?' : 'How do I vote for a feature?', a: fr ? 'Depuis la page Roadmap (accessible via la Note du Createur ou le Profil), appuyez sur le pouce bleu a cote de la fonctionnalite souhaitee. Votre vote est enregistre instantanement. Vous ne pouvez voter qu\'une fois par fonctionnalite, mais vous pouvez voter pour plusieurs fonctionnalites. Les resultats sont affiches en temps reel et classes par popularite.' : 'From the Roadmap page (accessible via Creator Note or Profile), tap the blue thumb next to the desired feature. Your vote is recorded instantly. You can only vote once per feature but can vote for multiple features. Results are displayed in real time and sorted by popularity.' },
-        { id: 'rm3', q: fr ? 'Quand la V2 sera-t-elle lancee ?' : 'When will V2 launch?', a: fr ? 'Le developpement de la V2 debutera a partir de 1000 joueurs actifs. La jauge de progression en haut de la page Roadmap affiche le nombre de joueurs actuels. Plus nous grandissons, plus vite la V2 arrivera. Les compteurs en temps reel sont aussi disponibles sur la page Note du Createur.' : 'V2 development will begin at 1000 active players. The progress bar at the top of the Roadmap page shows the current player count. The faster we grow, the sooner V2 arrives. Real-time counters are also available on the Creator Note page.' },
-        { id: 'rm4', q: fr ? 'Comment acceder a la page Roadmap ?' : 'How do I access the Roadmap page?', a: fr ? 'Deux acces : (1) Depuis la page Note du Createur, un bouton "Roadmap V2" est disponible sous les compteurs communautaires. (2) Depuis votre Profil, dans la section "A propos".' : 'Two access points: (1) From the Creator Note page, a "V2 Roadmap" button is available below the community counters. (2) From your Profile, in the "About" section.' },
+        {
+          id: 'rm1',
+          q: fr ? 'Quelles fonctionnalites arrivent dans la V2 ?' : 'What features are coming in V2?',
+          a: fr
+            ? '8 fonctionnalites majeures : Coach IA, Mode Match Live, Feed Social, Gestion Tournois avancee, Messagerie integree, Programmes d\'entrainement, Ligues saisonnieres et Analyse video. Votez depuis la page Roadmap (Profil > A propos) pour orienter les priorites.'
+            : '8 major features: AI Coach, Live Match Mode, Social Feed, Advanced Tournament Management, Messaging, Training Programs, Seasonal Leagues and Video Analysis. Vote from the Roadmap page (Profile > About) to influence priorities.',
+        },
+        {
+          id: 'rm2',
+          q: fr ? 'Quand la V2 sera-t-elle lancee ?' : 'When will V2 launch?',
+          a: fr
+            ? 'Le developpement debutera a partir de 1000 joueurs actifs. La jauge de progression est visible sur la page Roadmap. Plus la communaute grandit, plus vite la V2 arrivera.'
+            : 'Development begins at 1000 active players. The progress gauge is visible on the Roadmap page. The faster the community grows, the sooner V2 arrives.',
+        },
       ],
     },
   ];
-
 }
 
+// ============================================
+// FAQ DATA — Club
+// Focus: Managing a club, members, terrain, verification
+// ============================================
+function getClubFaq(fr: boolean): FAQCategory[] {
+  return [
+    {
+      id: 'club_basics',
+      category: fr ? 'Creer & Gerer un club' : 'Create & Manage a Club',
+      icon: 'home',
+      color: '#7C3AED',
+      description: fr ? 'Creer votre fiche club, ajouter des informations et des membres' : 'Create your club card, add information and members',
+      questions: [
+        {
+          id: 'cb1',
+          q: fr ? 'Comment creer la fiche de mon club ?' : 'How do I create my club card?',
+          a: fr
+            ? 'Depuis l\'annuaire > onglet Clubs > "+ Club". Renseignez nom, ville, adresse, description, equipements, contact et logo. Plus la fiche est complete, plus votre score de completude sera eleve, ce qui facilite la verification.'
+            : 'From directory > Clubs tab > "+ Club". Enter name, city, address, description, facilities, contact and logo. The more complete the card, the higher your completeness score, which facilitates verification.',
+        },
+        {
+          id: 'cb2',
+          q: fr ? 'Comment associer un terrain a mon club ?' : 'How do I link a terrain to my club?',
+          a: fr
+            ? 'Lors de la creation ou de la modification du club, selectionnez un terrain existant dans le champ "Terrain". Plusieurs clubs peuvent partager le meme terrain. Sur la page du terrain, tous les clubs qui l\'utilisent sont affiches.'
+            : 'When creating or editing the club, select an existing terrain in the "Terrain" field. Multiple clubs can share the same terrain. On the terrain page, all clubs using it are displayed.',
+        },
+        {
+          id: 'cb3',
+          q: fr ? 'Comment ajouter des co-administrateurs ?' : 'How do I add co-administrators?',
+          a: fr
+            ? 'Sur la page de votre club > "Gerer les co-admins". Recherchez un joueur par nom ou email et ajoutez-le. Les co-admins peuvent modifier les informations du club, gerer les membres et les equipements selon les permissions que vous leur accordez.'
+            : 'On your club page > "Manage co-admins". Search a player by name or email and add them. Co-admins can edit club info, manage members and facilities based on the permissions you grant.',
+        },
+      ],
+    },
+    {
+      id: 'club_verification',
+      category: fr ? 'Verification & Badge Verifie' : 'Verification & Verified Badge',
+      icon: 'verified',
+      color: '#2563EB',
+      description: fr ? 'Obtenir le badge bleu pour votre club' : 'Get the blue badge for your club',
+      questions: [
+        {
+          id: 'cv1',
+          q: fr ? 'Comment obtenir le badge "Verifie" ?' : 'How do I get the "Verified" badge?',
+          a: fr
+            ? 'Le badge bleu est attribue de deux manieres : (1) Remplissez les criteres de completude (adresse, 2+ membres, description, contact, logo, 5+ matchs) et l\'equipe admin validera. (2) Revendiquez un club existant : si un joueur a cree votre fiche club avant vous, appuyez sur "Revendiquer ce club" en bas de la page. Le proprietaire recoit la demande et peut accepter le transfert.'
+            : 'The blue badge is awarded in two ways: (1) Meet completeness criteria (address, 2+ members, description, contact, logo, 5+ matches) and the admin team will validate. (2) Claim an existing club: if a player created your club card before you, tap "Claim this club" at bottom of the page. The owner receives the request and can accept the transfer.',
+        },
+        {
+          id: 'cv2',
+          q: fr ? 'Que signifie le badge "Verifie" pour les joueurs ?' : 'What does "Verified" mean for players?',
+          a: fr
+            ? 'Le badge bleu garantit aux joueurs que le club est gere par son representant officiel. Les informations (horaires, contact, equipements, localisation) sont fiables et a jour. Les clubs verifies apparaissent en priorite sur la carte avec un marqueur distinctif.'
+            : 'The blue badge guarantees players the club is managed by its official representative. Information (hours, contact, facilities, location) is reliable and up to date. Verified clubs appear as a priority on the map with a distinctive marker.',
+        },
+        {
+          id: 'cv3',
+          q: fr ? 'Ou voir les demandes de revendication recues ?' : 'Where do I see received claim requests?',
+          a: fr
+            ? 'Deux endroits : (1) Sur la page de votre club > section "Revendications en attente". (2) Dans le Hub Notifications > onglet "Clubs". Vous pouvez accepter ou refuser depuis les deux. L\'ancien proprietaire conserve un badge Contributeur.'
+            : 'Two places: (1) On your club page > "Pending Claims" section. (2) In Notification Hub > "Claims" tab. You can accept or decline from both. The original owner keeps a Contributor badge.',
+        },
+      ],
+    },
+    {
+      id: 'club_visibility',
+      category: fr ? 'Visibilite & Carte' : 'Visibility & Map',
+      icon: 'public',
+      color: '#10B981',
+      description: fr ? 'Rendre votre club visible et attirer des joueurs' : 'Make your club visible and attract players',
+      questions: [
+        {
+          id: 'cvis1',
+          q: fr ? 'Comment rendre mon club visible sur la carte ?' : 'How do I make my club visible on the map?',
+          a: fr
+            ? 'Activez "Public" dans les parametres du club et assurez-vous qu\'il est geolocalise (adresse renseignee). Les clubs publics apparaissent sur la carte avec un marqueur dont la couleur reflete le score de sante (vert = actif, orange = modere, rouge = faible). Les clubs verifies ont un badge bleu supplementaire.'
+            : 'Enable "Public" in club settings and ensure it is geolocated (address filled). Public clubs appear on the map with a marker whose color reflects health score (green = active, orange = moderate, red = low). Verified clubs have an additional blue badge.',
+        },
+        {
+          id: 'cvis2',
+          q: fr ? 'Comment controler quelles informations sont visibles ?' : 'How do I control which information is visible?',
+          a: fr
+            ? 'Deux toggles independants : "Public" rend la fiche du club visible sur la carte et dans l\'annuaire. "Contacts visibles" controle si votre email et telephone apparaissent dans la fiche publique et les partages. Vous pouvez etre public sans exposer vos contacts.'
+            : 'Two independent toggles: "Public" makes the club card visible on the map and directory. "Contacts visible" controls whether email and phone appear in the public card and shares. You can be public without exposing contacts.',
+        },
+        {
+          id: 'cvis3',
+          q: fr ? 'Comment partager la fiche de mon club ?' : 'How do I share my club card?',
+          a: fr
+            ? 'Depuis la fiche du club > "Partager". Une page plein ecran affiche l\'apercu (logo, nom, ville, membres, equipements). 4 modes de partage : natif (WhatsApp, SMS), code, invitation complete ou QR code. Ideal pour recruter de nouveaux membres.'
+            : 'From club card > "Share". A full-screen page shows the preview (logo, name, city, members, facilities). 4 sharing modes: native (WhatsApp, SMS), code, full invitation or QR code. Ideal for recruiting new members.',
+        },
+      ],
+    },
+    {
+      id: 'club_activity',
+      category: fr ? 'Activite & Score de sante' : 'Activity & Health Score',
+      icon: 'favorite',
+      color: '#EF4444',
+      description: fr ? 'Comprendre et ameliorer l\'activite de votre club' : 'Understand and improve your club\'s activity',
+      questions: [
+        {
+          id: 'ca1',
+          q: fr ? 'Qu\'est-ce que le score de sante du club ?' : 'What is the club health score?',
+          a: fr
+            ? 'Un indicateur de 0 a 100 calcule sur les 30 derniers jours, base sur : nombre de matchs joues par les membres, tournois organises, nombre de membres actifs et anciennete du club. Les clubs actifs (70+) apparaissent en vert sur la carte, moderes (40-69) en orange, faibles (15-39) en rouge, inactifs (-15) en gris.'
+            : 'A 0-100 indicator calculated over the last 30 days, based on: matches played by members, tournaments organized, active member count and club age. Active clubs (70+) appear green on the map, moderate (40-69) orange, low (15-39) red, inactive (-15) gray.',
+        },
+        {
+          id: 'ca2',
+          q: fr ? 'Comment ameliorer le score de sante ?' : 'How do I improve the health score?',
+          a: fr
+            ? 'Encouragez vos membres a enregistrer leurs matchs dans l\'app (+3 points par match). Organisez des tournois (+10 points par tournoi). Augmentez le nombre de membres actifs. Plus l\'activite est reguliere, meilleur est le score.'
+            : 'Encourage members to record matches in the app (+3 points per match). Organize tournaments (+10 points per tournament). Increase active member count. The more regular the activity, the better the score.',
+        },
+      ],
+    },
+  ];
+}
+
+// ============================================
+// FAQ DATA — Ambassadeur
+// ============================================
 function getAmbassadorFaq(fr: boolean): FAQCategory[] {
   return [
     {
       id: 'amb_program',
-      category: fr ? 'Programme Ambassadeur' : 'Ambassador Program',
+      category: fr ? 'Devenir Ambassadeur' : 'Becoming an Ambassador',
       icon: 'stars',
       color: '#7C3AED',
-      description: fr ? 'Niveaux, criteres et avantages' : 'Levels, criteria and benefits',
+      description: fr ? 'Representer la communaute et progresser' : 'Represent the community and progress',
       questions: [
-        { id: 'ap1', q: fr ? 'Comment devenir ambassadeur ?' : 'How do I become an ambassador?', a: fr ? 'Contactez notre equipe via la page ambassadeurs ou par email. Le programme comporte 3 niveaux progressifs : Decouverte, Confirme et Elite. Chaque niveau debloquer de nouveaux avantages et une visibilite accrue.' : 'Contact our team via the ambassadors page or email. The program has 3 progressive levels: Discovery, Confirmed and Elite. Each level unlocks new benefits and increased visibility.' },
-        { id: 'ap2', q: fr ? 'Quels sont les 3 niveaux ambassadeur ?' : 'What are the 3 ambassador levels?', a: fr ? 'Decouverte : profil public, code parrainage, badge ambassadeur, 2 defis sponsorises/mois. Confirme (50+ parrainages, 3+ defis, 500+ impressions) : banniere rotative accueil, dashboard analytics complet, defis illimites, badge violet. Elite (100+ parrainages, 10+ defis, 2000+ impressions) : banniere rotative avec accent dore, section onboarding, push illimites, analytics avances avec export, badge dore, priorite classements, acces anticipe nouvelles fonctionnalites.' : 'Discovery: public profile, referral code, badge, 2 sponsored challenges/month. Confirmed (50+ referrals, 3+ challenges, 500+ impressions): rotating home banner, full analytics dashboard, unlimited challenges, purple badge. Elite (100+ referrals, 10+ challenges, 2000+ impressions): rotating banner with gold accent, onboarding section, unlimited push, advanced analytics with export, gold badge, ranking priority, early feature access.' },
-        { id: 'ap3', q: fr ? 'La promotion est-elle automatique ?' : 'Is promotion automatic?', a: fr ? 'Oui ! Des que vous atteignez les criteres du niveau superieur, votre badge est automatiquement mis a jour et vous debloquez les nouveaux avantages sans interruption.' : 'Yes! As soon as you meet the criteria for the next level, your badge auto-updates and new benefits unlock seamlessly.' },
-        { id: 'ap4', q: fr ? 'Quelle est la difference avec les partenaires/sponsors ?' : 'What is the difference with partners/sponsors?', a: fr ? 'Les ambassadeurs sont des joueurs passionnes qui representent benevolement la communaute. Les partenaires sont des marques ou structures beneficiant d\'une visibilite business avec des outils de communication avances (push notifications, A/B testing, heatmap, CRM).' : 'Ambassadors are passionate players voluntarily representing the community. Partners are brands or organizations with business visibility and advanced communication tools (push notifications, A/B testing, heatmap, CRM).' },
+        {
+          id: 'ap1',
+          q: fr ? 'Comment devenir ambassadeur ?' : 'How do I become an ambassador?',
+          a: fr
+            ? 'Contactez l\'equipe via la page ambassadeurs ou par email. Le programme comporte 3 niveaux progressifs : Decouverte (debut), Confirme (50+ parrainages, 3+ defis, 500+ impressions) et Elite (100+ parrainages, 10+ defis, 2000+ impressions). La promotion est automatique des que les criteres sont atteints.'
+            : 'Contact the team via the ambassadors page or email. The program has 3 progressive levels: Discovery (start), Confirmed (50+ referrals, 3+ challenges, 500+ impressions) and Elite (100+ referrals, 10+ challenges, 2000+ impressions). Promotion is automatic when criteria are met.',
+        },
+        {
+          id: 'ap2',
+          q: fr ? 'Quels avantages par niveau ?' : 'What benefits per level?',
+          a: fr
+            ? 'Decouverte : profil public, code parrainage, badge, 2 defis sponsorises/mois. Confirme : + banniere rotative accueil, dashboard analytics complet, defis illimites, badge violet. Elite : + banniere avec accent dore, section onboarding, push illimites, analytics avances avec export, badge dore, acces anticipe aux nouveautés.'
+            : 'Discovery: public profile, referral code, badge, 2 sponsored challenges/month. Confirmed: + rotating home banner, full analytics dashboard, unlimited challenges, purple badge. Elite: + gold accent banner, onboarding section, unlimited push, advanced analytics with export, gold badge, early feature access.',
+        },
+        {
+          id: 'ap3',
+          q: fr ? 'Quelle difference avec un partenaire ?' : 'What is the difference from a partner?',
+          a: fr
+            ? 'Les ambassadeurs sont des joueurs passionnes qui representent benevolement la communaute. Les partenaires sont des marques ou structures avec une visibilite business et des outils avances (A/B testing, CRM, heatmap).'
+            : 'Ambassadors are passionate players voluntarily representing the community. Partners are brands with business visibility and advanced tools (A/B testing, CRM, heatmap).',
+        },
       ],
     },
     {
-      id: 'amb_referral',
-      category: fr ? 'Parrainage & XP' : 'Referral & XP',
+      id: 'amb_actions',
+      category: fr ? 'Parrainer & Organiser des defis' : 'Referral & Organizing Challenges',
       icon: 'person-add',
       color: '#10B981',
-      description: fr ? 'Gagnez des XP et progressez' : 'Earn XP and level up',
+      description: fr ? 'Gagner des XP et animer la communaute' : 'Earn XP and engage the community',
       questions: [
-        { id: 'ar1', q: fr ? 'Comment fonctionne le parrainage ?' : 'How does referral work?', a: fr ? 'Partagez votre code unique (visible dans le portail). Quand un nouveau joueur s\'inscrit avec votre code, vous gagnez 50 XP et votre compteur augmente. Atteignez 50 parrainages pour Confirme, 100 pour Elite.' : 'Share your unique code (visible in portal). When a new player signs up with your code, you earn 50 XP and your counter increases. Reach 50 referrals for Confirmed, 100 for Elite.' },
-        { id: 'ar2', q: fr ? 'Comment gagner des XP ?' : 'How do I earn XP?', a: fr ? 'Parrainage valide : +50 XP. Defi sponsorise cree : +25 XP. 100 impressions cumulees : +10 XP. Les XP contribuent a votre progression globale et au deblocage de badges.' : 'Valid referral: +50 XP. Sponsored challenge created: +25 XP. 100 cumulative impressions: +10 XP. XP contributes to your overall progression and badge unlocks.' },
+        {
+          id: 'aa1',
+          q: fr ? 'Comment fonctionne le parrainage ?' : 'How does referral work?',
+          a: fr
+            ? 'Partagez votre code unique (visible dans le portail). Quand un joueur s\'inscrit avec votre code, vous gagnez 50 XP. Atteignez 50 parrainages pour le niveau Confirme, 100 pour Elite.'
+            : 'Share your unique code (visible in portal). When a player signs up with your code, you earn 50 XP. Reach 50 referrals for Confirmed, 100 for Elite.',
+        },
+        {
+          id: 'aa2',
+          q: fr ? 'Comment creer un evenement sponsorise ?' : 'How do I create a sponsored event?',
+          a: fr
+            ? 'Depuis le portail ambassadeur ou la page Defis. Choisissez type de defi, date, terrain, nombre max de participants. Un code et QR code sont generes. Les participants rejoignent via code, liste publique ou QR. Les resultats sont valides par des temoins presents.'
+            : 'From ambassador portal or Challenges page. Choose challenge type, date, court, max participants. A code and QR code are generated. Participants join via code, public list or QR. Results are validated by present witnesses.',
+        },
+        {
+          id: 'aa3',
+          q: fr ? 'Quelles sources d\'XP pour un ambassadeur ?' : 'What XP sources for an ambassador?',
+          a: fr
+            ? 'Parrainage valide : +50 XP. Defi sponsorise cree : +25 XP. 100 impressions cumulees : +10 XP. S\'ajoutent aux sources classiques (matchs, carreaux, badges).'
+            : 'Valid referral: +50 XP. Sponsored challenge created: +25 XP. 100 cumulative impressions: +10 XP. Added to classic sources (matches, carreaux, badges).',
+        },
       ],
     },
     {
       id: 'amb_portal',
-      category: fr ? 'Portail Ambassadeur' : 'Ambassador Portal',
+      category: fr ? 'Portail & Analytics' : 'Portal & Analytics',
       icon: 'dashboard',
       color: '#2563EB',
-      description: fr ? 'Votre tableau de bord complet' : 'Your complete dashboard',
+      description: fr ? 'Suivre vos performances et votre visibilite' : 'Track your performance and visibility',
       questions: [
-        { id: 'pt1', q: fr ? 'Que contient le portail ambassadeur ?' : 'What does the ambassador portal contain?', a: fr ? 'Le portail (Profil > Communaute > Portail Ambassadeurs) affiche vos stats en temps reel : impressions, clics, parrainages, evenements. Vous pouvez creer des defis sponsorises, suivre votre progression vers le niveau superieur, et voir votre code parrainage. Les niveaux Confirme et Elite ont acces au dashboard analytics complet.' : 'The portal (Profile > Community > Ambassador Portal) shows real-time stats: impressions, clicks, referrals, events. You can create sponsored challenges, track progression to next level, and see your referral code. Confirmed and Elite levels have full analytics dashboard access.' },
-        { id: 'pt2', q: fr ? 'Comment creer un evenement sponsorise ?' : 'How do I create a sponsored event?', a: fr ? 'Depuis le portail ou la page Defis, creez un evenement sponsorise. Choisissez le type de defi, la date, le terrain, le nombre max de participants. Un code unique et un QR code sont generes. Les participants rejoignent via le code, la liste publique ou le QR. Les resultats sont valides par des temoins.' : 'From portal or Challenges page, create a sponsored event. Choose challenge type, date, court, max participants. A unique code and QR code are generated. Participants join via code, public list or QR. Results are validated by witnesses.' },
-        { id: 'pt3', q: fr ? 'Comment acceder a mes analytics ?' : 'How do I access my analytics?', a: fr ? 'Confirme/Elite : le portail affiche un dashboard complet avec impressions, clics, CTR, portee geographique, evolution temporelle. Les Elite peuvent exporter leurs statistiques en CSV/PDF pour des rapports detailles.' : 'Confirmed/Elite: the portal shows a full dashboard with impressions, clicks, CTR, geographic reach, time evolution. Elite members can export stats as CSV/PDF for detailed reports.' },
-      ],
-    },
-    {
-      id: 'amb_visibility',
-      category: fr ? 'Visibilite & Banniere' : 'Visibility & Banner',
-      icon: 'visibility',
-      color: '#F59E0B',
-      description: fr ? 'Ou et comment vous apparaissez' : 'Where and how you appear',
-      questions: [
-        { id: 'av1', q: fr ? 'Comment fonctionne la banniere ambassadeur sur l\'accueil ?' : 'How does the home ambassador banner work?', a: fr ? 'Confirme : apparition dans le carrousel rotatif de l\'accueil (rotation toutes les 5 secondes) avec badge violet. Elite : apparition dans le carrousel rotatif avec accent dore et gradient premium, toujours mis en avant. Votre profil, stats et reseaux sociaux sont affiches. Chaque affichage est comptabilise comme une impression.' : 'Confirmed: appears in the rotating home carousel (5s rotation) with purple badge. Elite: appears in the rotating carousel with gold accent and premium gradient, always highlighted. Your profile, stats and social media are displayed. Each display counts as an impression.' },
-        { id: 'av2', q: fr ? 'Ou suis-je visible dans l\'app ?' : 'Where am I visible in the app?', a: fr ? 'Page "Nos Ambassadeurs" (profil complet avec reseaux sociaux), banniere rotative accueil (Confirme/Elite), page de parrainage, QR code du profil, liste des evenements sponsorises. Les Elite apparaissent aussi dans la section onboarding des nouveaux joueurs.' : 'Our Ambassadors page (full profile with social media), rotating home banner (Confirmed/Elite), referral page, profile QR code, sponsored events list. Elite also appear in new player onboarding section.' },
+        {
+          id: 'pt1',
+          q: fr ? 'Que contient le portail ambassadeur ?' : 'What does the ambassador portal contain?',
+          a: fr
+            ? 'Stats en temps reel : impressions, clics, parrainages, evenements. Creation de defis sponsorises, progression vers le niveau superieur, code parrainage. Les niveaux Confirme et Elite ont le dashboard analytics complet avec filtres par periode.'
+            : 'Real-time stats: impressions, clicks, referrals, events. Create sponsored challenges, track level progression, referral code. Confirmed and Elite levels have full analytics dashboard with period filters.',
+        },
+        {
+          id: 'pt2',
+          q: fr ? 'Ou suis-je visible dans l\'app ?' : 'Where am I visible in the app?',
+          a: fr
+            ? 'Page "Nos Ambassadeurs" (profil complet avec reseaux sociaux), banniere rotative accueil (Confirme/Elite), page de parrainage, QR code du profil, liste des evenements sponsorises. Les Elite apparaissent aussi dans l\'onboarding des nouveaux joueurs.'
+            : '"Our Ambassadors" page (full profile with social media), rotating home banner (Confirmed/Elite), referral page, profile QR code, sponsored events list. Elite also appear in new player onboarding.',
+        },
       ],
     },
   ];
 }
 
+// ============================================
+// FAQ DATA — Partenaire (Partner)
+// ============================================
 function getPartnerFaq(fr: boolean): FAQCategory[] {
   return [
     {
       id: 'par_program',
-      category: fr ? 'Programme Partenaire' : 'Partner Program',
+      category: fr ? 'Devenir Partenaire' : 'Becoming a Partner',
       icon: 'handshake',
       color: '#D4A017',
-      description: fr ? 'Niveaux, tarifs et avantages business' : 'Levels, pricing and business benefits',
+      description: fr ? 'Niveaux, avantages et mise en place' : 'Levels, benefits and setup',
       questions: [
-        { id: 'pp1', q: fr ? 'Comment devenir partenaire ?' : 'How do I become a partner?', a: fr ? 'Consultez la page "Programme Partenaire" (Nos Partenaires > lien en haut). Contactez-nous par email avec votre projet et le niveau souhaite. Nous repondons sous 48h avec une proposition personnalisee.' : 'Check the "Partner Program" page (Our Partners > top link). Contact us by email with your project and desired level. We respond within 48h with a personalized proposal.' },
-        { id: 'pp2', q: fr ? 'Quels sont les 3 niveaux partenaire ?' : 'What are the 3 partner levels?', a: fr ? 'Bronze (sur devis) : fiche partenaire, badge, lien site web, stats de base, marqueur carte. Argent (sur devis) : + banniere rotative accueil, 1 push/mois, dashboard analytics complet, templates push, programmation envois, export CSV/PDF. Or (sur devis) : + banniere permanente, section onboarding, push illimites avec A/B testing, heatmap, calculateur ROI, objectifs mensuels, CRM, kit de marque, digest hebdomadaire.' : 'Bronze (on quote): partner card, badge, website link, basic stats, map marker. Silver (on quote): + rotating home banner, 1 push/month, full analytics dashboard, push templates, scheduling, CSV/PDF export. Gold (on quote): + permanent banner, onboarding section, unlimited push with A/B testing, heatmap, ROI calculator, monthly goals, CRM, brand kit, weekly digest.' },
-        { id: 'pp3', q: fr ? 'Puis-je changer de niveau ?' : 'Can I change my level?', a: fr ? 'Oui, passage au niveau superieur a tout moment, sans interruption de service. Vous conservez tout votre historique et vos donnees analytiques.' : 'Yes, upgrade at any time with no service interruption. You keep all history and analytics data.' },
-        { id: 'pp4', q: fr ? 'Ma page partenaire publique, c\'est quoi ?' : 'What is my public partner page?', a: fr ? 'Chaque partenaire a une page dediee (partner/[id]) avec votre logo agrandi, badge de niveau, couleur de marque en gradient, compteurs animes (impressions, clics, CTR, portee), timeline d\'activite recente, liens sociaux, liste d\'evenements, code parrainage avec bouton copier, QR code pour marketing, et lien vers votre site web.' : 'Each partner has a dedicated page (partner/[id]) with enlarged logo, tier badge, brand color gradient, animated counters (impressions, clicks, CTR, reach), recent activity timeline, social links, events list, referral code with copy button, marketing QR code, and website link.' },
+        {
+          id: 'pp1',
+          q: fr ? 'Comment devenir partenaire ?' : 'How do I become a partner?',
+          a: fr
+            ? 'Consultez la page "Programme Partenaire" (Nos Partenaires > lien en haut). Contactez-nous par email avec votre projet. Nous repondons sous 48h avec une proposition personnalisee.'
+            : 'Check "Partner Program" page (Our Partners > top link). Contact us by email with your project. We respond within 48h with a personalized proposal.',
+        },
+        {
+          id: 'pp2',
+          q: fr ? 'Quels sont les 3 niveaux ?' : 'What are the 3 levels?',
+          a: fr
+            ? 'Bronze (sur devis) : fiche partenaire, badge, lien site, stats de base, marqueur carte a votre couleur de marque. Argent : + banniere rotative accueil, 1 push/mois, dashboard analytics, templates push, export CSV/PDF. Or : + banniere permanente, section onboarding, push illimites avec A/B testing, heatmap, calculateur ROI, CRM, kit de marque, digest hebdomadaire.'
+            : 'Bronze (on quote): partner card, badge, website link, basic stats, map marker in your brand color. Silver: + rotating home banner, 1 push/month, analytics dashboard, push templates, CSV/PDF export. Gold: + permanent banner, onboarding section, unlimited push with A/B testing, heatmap, ROI calculator, CRM, brand kit, weekly digest.',
+        },
       ],
     },
     {
       id: 'par_portal',
-      category: fr ? 'Portail Partenaires' : 'Partner Portal',
+      category: fr ? 'Portail & Outils Business' : 'Portal & Business Tools',
       icon: 'dashboard',
       color: '#2563EB',
-      description: fr ? 'Votre centre de controle business' : 'Your business control center',
+      description: fr ? 'ROI, branding, push, CRM' : 'ROI, branding, push, CRM',
       questions: [
-        { id: 'po1', q: fr ? 'Que contient le portail partenaires ?' : 'What does the partner portal contain?', a: fr ? 'Le portail (Profil > Communaute > Portail Partenaires) offre 6 onglets : ROI (impressions, clics, CTR, benchmark, objectifs, calculateur), Placement (vos emplacements dans l\'app), Branding (logo, couleur de marque, apercu banniere et carte), Push (composer, templates, A/B test, programmer), Events (defis sponsorises), CRM (parrainages avec suivi et export CSV).' : 'The portal (Profile > Community > Partner Portal) has 6 tabs: ROI (impressions, clicks, CTR, benchmark, goals, calculator), Placement (your app placements), Branding (logo, brand color, banner and map preview), Push (compose, templates, A/B test, schedule), Events (sponsored challenges), CRM (referrals with tracking and CSV export).' },
-        { id: 'po2', q: fr ? 'Comment suivre mon ROI et mes objectifs ?' : 'How do I track my ROI and goals?', a: fr ? 'Onglet ROI : KPIs en temps reel. Definissez des objectifs mensuels (impressions, clics, CTR) avec des anneaux de progression et notifications d\'atteinte. Renseignez votre budget pour calculer CPM, CPC et ROI. Le benchmark compare vos performances avec les partenaires de votre tier.' : 'ROI tab: real-time KPIs. Set monthly goals (impressions, clicks, CTR) with progress rings and achievement notifications. Enter budget to calculate CPM, CPC and ROI. Benchmark compares your performance with same-tier partners.' },
-        { id: 'po3', q: fr ? 'Comment personnaliser mon branding dans l\'app ?' : 'How do I customize my branding?', a: fr ? 'Onglet Branding : uploadez votre logo (affiche en 80-96px selon le tier), choisissez votre couleur de marque. L\'apercu en temps reel montre votre banniere et votre marqueur carte. Votre page partenaire publique utilise votre couleur en gradient hero.' : 'Branding tab: upload your logo (displayed at 80-96px by tier), choose your brand color. Real-time preview shows your banner and map marker. Your public partner page uses your color as hero gradient.' },
+        {
+          id: 'po1',
+          q: fr ? 'Que contient le portail partenaires ?' : 'What does the partner portal contain?',
+          a: fr
+            ? '6 onglets : ROI (impressions, clics, CTR, benchmark, objectifs, calculateur), Placement (vos emplacements dans l\'app), Branding (logo, couleur de marque, apercu banniere et carte), Push (composer, templates, A/B test, programmer), Events (defis sponsorises), CRM (parrainages avec suivi et export).'
+            : '6 tabs: ROI (impressions, clicks, CTR, benchmark, goals, calculator), Placement (your app placements), Branding (logo, brand color, banner and map preview), Push (compose, templates, A/B test, schedule), Events (sponsored challenges), CRM (referrals with tracking and export).',
+        },
+        {
+          id: 'po2',
+          q: fr ? 'Comment personnaliser mon branding ?' : 'How do I customize my branding?',
+          a: fr
+            ? 'Onglet Branding : uploadez votre logo (80-96px selon le tier), choisissez votre couleur de marque. Apercu en temps reel de votre banniere et marqueur carte. Votre page partenaire publique utilise votre couleur en gradient.'
+            : 'Branding tab: upload your logo (80-96px by tier), choose your brand color. Real-time preview of your banner and map marker. Your public partner page uses your color as gradient.',
+        },
+        {
+          id: 'po3',
+          q: fr ? 'Comment suivre mon ROI ?' : 'How do I track my ROI?',
+          a: fr
+            ? 'Onglet ROI : KPIs en temps reel. Definissez des objectifs mensuels avec anneaux de progression. Renseignez votre budget pour calculer CPM, CPC et ROI. Le benchmark compare vos performances avec les partenaires de votre tier.'
+            : 'ROI tab: real-time KPIs. Set monthly goals with progress rings. Enter budget to calculate CPM, CPC and ROI. Benchmark compares performance with same-tier partners.',
+        },
       ],
     },
     {
       id: 'par_push',
-      category: fr ? 'Push Notifications & A/B Testing' : 'Push Notifications & A/B Testing',
+      category: fr ? 'Push & Communication' : 'Push & Communication',
       icon: 'notifications-active',
       color: '#DC2626',
-      description: fr ? 'Communiquer directement avec les joueurs' : 'Communicate directly with players',
+      description: fr ? 'Envoyer des messages cibles aux joueurs' : 'Send targeted messages to players',
       questions: [
-        { id: 'pn1', q: fr ? 'Comment envoyer une push notification ?' : 'How do I send a push notification?', a: fr ? 'Onglet Push du portail. Composez votre message (titre + corps), choisissez la cible (tous les joueurs ou filtre geographique). Argent : 1 push/mois. Or : illimite. Vous pouvez programmer l\'envoi avec des creneaux predefinis (matin, midi, soir) ou une date/heure personnalisee. Un apercu iOS/Android realiste est affiche.' : 'Push tab in portal. Compose your message (title + body), choose target (all players or geographic filter). Silver: 1 push/month. Gold: unlimited. Schedule with predefined slots (morning, noon, evening) or custom date/time. A realistic iOS/Android preview is shown.' },
-        { id: 'pn2', q: fr ? 'Comment fonctionne le A/B testing des push ?' : 'How does push A/B testing work?', a: fr ? 'Or uniquement. Activez le toggle A/B, redigez 2 variantes (titre + message). 50% recoit chaque variante. Les resultats apparaissent dans "Insights A/B" : taux d\'ouverture par variante, niveau de confiance statistique, taille d\'echantillon recommandee, et historique complet des tests. Identifiez quel message fonctionne le mieux pour optimiser vos futures campagnes.' : 'Gold only. Enable A/B toggle, write 2 variants (title + message). 50% receives each. Results in "A/B Insights": open rate per variant, statistical confidence, recommended sample size, and full test history. Identify which message works best to optimize future campaigns.' },
-        { id: 'pn3', q: fr ? 'Quels templates push sont disponibles ?' : 'What push templates are available?', a: fr ? '7 categories de templates pre-redigees en FR/EN : Promo, Evenement, Rappel, Saisonnier, Partenariat, Lancement produit, Communaute. Chaque categorie contient 2+ messages prets a l\'emploi que vous pouvez personnaliser avant envoi.' : '7 pre-written template categories in FR/EN: Promo, Event, Reminder, Seasonal, Partnership, Product Launch, Community. Each category has 2+ ready-to-use messages you can customize before sending.' },
-        { id: 'pn4', q: fr ? 'Comment programmer l\'envoi d\'un push ?' : 'How do I schedule a push?', a: fr ? 'Lors de la composition, activez "Programmer". Choisissez une date avec les boutons rapides (Aujourd\'hui, Demain, Vendredi, Lundi), puis un creneau horaire (Matin 9h, Midi 12h, Apres-midi 14h, Soir 18h, Nuit 21h) ou une heure personnalisee. Une heatmap des heures optimales est affichee pour maximiser les ouvertures.' : 'When composing, enable "Schedule". Choose date with quick buttons (Today, Tomorrow, Friday, Monday), then time slot (Morning 9am, Noon 12pm, Afternoon 2pm, Evening 6pm, Night 9pm) or custom time. An optimal hours heatmap is shown to maximize opens.' },
+        {
+          id: 'pn1',
+          q: fr ? 'Comment envoyer une push notification ?' : 'How do I send a push notification?',
+          a: fr
+            ? 'Onglet Push. Composez titre + message, choisissez la cible (tous ou filtre geographique). Programmez avec creneaux predefinis (matin, midi, soir) ou date personnalisee. Apercu iOS/Android realiste. Argent : 1 push/mois. Or : illimite.'
+            : 'Push tab. Compose title + message, choose target (all or geographic filter). Schedule with predefined slots (morning, noon, evening) or custom date. Realistic iOS/Android preview. Silver: 1 push/month. Gold: unlimited.',
+        },
+        {
+          id: 'pn2',
+          q: fr ? 'Comment fonctionne le A/B testing ?' : 'How does A/B testing work?',
+          a: fr
+            ? 'Or uniquement. Redigez 2 variantes du meme message. 50% des destinataires recoit chaque variante. Les resultats montrent le taux d\'ouverture par variante, le niveau de confiance statistique et l\'historique complet. Optimisez vos futures campagnes.'
+            : 'Gold only. Write 2 variants of the same message. 50% of recipients get each. Results show open rate per variant, statistical confidence and full history. Optimize future campaigns.',
+        },
+        {
+          id: 'pn3',
+          q: fr ? 'Quels templates push sont disponibles ?' : 'What push templates are available?',
+          a: fr
+            ? '7 categories de templates en FR/EN : Promo, Evenement, Rappel, Saisonnier, Partenariat, Lancement produit, Communaute. Chacune contient 2+ messages prets a personnaliser.'
+            : '7 template categories in FR/EN: Promo, Event, Reminder, Seasonal, Partnership, Product Launch, Community. Each has 2+ ready-to-customize messages.',
+        },
       ],
     },
     {
-      id: 'par_analytics',
-      category: fr ? 'Analytics & Digest' : 'Analytics & Digest',
-      icon: 'insights',
-      color: '#7C3AED',
-      description: fr ? 'Mesurer et exporter vos performances' : 'Measure and export your performance',
-      questions: [
-        { id: 'pa1', q: fr ? 'Comment sont mesurees les impressions et les clics ?' : 'How are impressions and clicks measured?', a: fr ? 'Chaque affichage de votre banniere, marqueur carte ou fiche partenaire compte comme une impression. Les clics sur votre profil ou lien sont traces. Tout est visible dans le dashboard en temps reel avec filtres par periode.' : 'Each display of your banner, map marker or partner card counts as an impression. Clicks on your profile or link are tracked. Everything visible in real-time dashboard with period filters.' },
-        { id: 'pa2', q: fr ? 'Qu\'est-ce que le digest hebdomadaire ?' : 'What is the weekly digest?', a: fr ? 'Or uniquement. Chaque lundi, un recap automatique resume vos performances : impressions, clics, CTR, push envoyes, comparaison avec la semaine precedente. Accessible dans le portail > ROI. Exportable en PDF et partageable par email.' : 'Gold only. Every Monday, an automatic recap summarizes performance: impressions, clicks, CTR, pushes sent, comparison with previous week. Accessible in portal > ROI. Exportable as PDF and shareable by email.' },
-        { id: 'pa3', q: fr ? 'Comment exporter mes statistiques ?' : 'How do I export my statistics?', a: fr ? 'Argent/Or : export CSV/PDF depuis le portail. Le PDF inclut logo, impressions, clics, CTR et portee. L\'export est egalement disponible depuis la page partenaire publique (page landing) pour generer un rapport marketing rapide.' : 'Silver/Gold: CSV/PDF export from portal. PDF includes logo, impressions, clicks, CTR and reach. Export also available from public partner page (landing page) to generate a quick marketing report.' },
-        { id: 'pa4', q: fr ? 'Comment fonctionne le calculateur ROI ?' : 'How does the ROI calculator work?', a: fr ? 'Or uniquement. Renseignez votre investissement mensuel et le portail calcule automatiquement : CPM (cout pour 1000 impressions), CPC (cout par clic), ROI avec projections annuelles basees sur vos tendances actuelles.' : 'Gold only. Enter your monthly investment and the portal calculates: CPM (cost per 1000 impressions), CPC (cost per click), ROI with annual projections based on current trends.' },
-      ],
-    },
-    {
-      id: 'par_landing_qr',
-      category: fr ? 'Page Partenaire & QR Code' : 'Partner Page & QR Code',
+      id: 'par_page',
+      category: fr ? 'Page Partenaire & Marketing' : 'Partner Page & Marketing',
       icon: 'qr-code',
       color: '#059669',
-      description: fr ? 'Votre vitrine publique et outils marketing' : 'Your public showcase and marketing tools',
+      description: fr ? 'Votre vitrine publique et QR code marketing' : 'Your public showcase and marketing QR code',
       questions: [
-        { id: 'pl1', q: fr ? 'A quoi sert ma page partenaire publique ?' : 'What is my public partner page for?', a: fr ? 'C\'est votre vitrine dans l\'app : hero section avec avatar agrandi et couleur de marque, compteurs animes, timeline d\'activite, evenements, code parrainage, liens sociaux et bouton vers votre site. Les joueurs y accedent via la page "Nos Partenaires" ou en scannant votre QR code.' : 'It is your showcase in the app: hero section with enlarged avatar and brand color, animated counters, activity timeline, events, referral code, social links and website button. Players access it via "Our Partners" page or by scanning your QR code.' },
-        { id: 'pl2', q: fr ? 'Comment utiliser le QR code pour le marketing ?' : 'How do I use the QR code for marketing?', a: fr ? 'Votre page partenaire inclut un QR code personnalise aux couleurs de votre marque. Les boutons "Partager" et "Copier le lien" permettent de l\'integrer a vos supports marketing. Imprimez-le sur vos flyers, cartes de visite ou stands de tournois pour diriger les joueurs vers votre profil dans l\'app.' : 'Your partner page includes a QR code in your brand colors. "Share" and "Copy Link" buttons let you integrate it into marketing materials. Print it on flyers, business cards or tournament stands to direct players to your app profile.' },
+        {
+          id: 'pl1',
+          q: fr ? 'A quoi ressemble ma page partenaire publique ?' : 'What does my public partner page look like?',
+          a: fr
+            ? 'Hero section avec avatar agrandi et couleur de marque, compteurs animes (impressions, clics, CTR, portee), timeline d\'activite, evenements, code parrainage, liens sociaux et lien vers votre site. Les joueurs y accedent via "Nos Partenaires" ou en scannant votre QR.'
+            : 'Hero section with enlarged avatar and brand color, animated counters (impressions, clicks, CTR, reach), activity timeline, events, referral code, social links and website link. Players access via "Our Partners" or scanning your QR.',
+        },
+        {
+          id: 'pl2',
+          q: fr ? 'Comment utiliser le QR code pour le marketing ?' : 'How do I use QR code for marketing?',
+          a: fr
+            ? 'Votre page partenaire inclut un QR code personnalise aux couleurs de votre marque. Imprimez-le sur flyers, cartes de visite ou stands de tournois pour diriger les joueurs vers votre profil. Boutons "Partager" et "Copier le lien" disponibles.'
+            : 'Your partner page includes a QR code in your brand colors. Print it on flyers, business cards or tournament stands to direct players to your profile. "Share" and "Copy Link" buttons available.',
+        },
+        {
+          id: 'pl3',
+          q: fr ? 'Qu\'est-ce que le digest hebdomadaire ?' : 'What is the weekly digest?',
+          a: fr
+            ? 'Or uniquement. Chaque lundi, un recap resume vos performances : impressions, clics, CTR, push envoyes, comparaison avec la semaine precedente. Exportable en PDF.'
+            : 'Gold only. Every Monday, a recap summarizes performance: impressions, clicks, CTR, pushes sent, comparison with previous week. Exportable as PDF.',
+        },
       ],
     },
   ];
 }
 
 // ============================================
-// AUDIENCE TABS CONFIG
+// AUDIENCE TABS
 // ============================================
 const AUDIENCE_TABS: { id: AudienceTab; iconFr: string; iconEn: string; icon: string; color: string; gradientColors: [string, string] }[] = [
   { id: 'joueur', iconFr: 'Joueur', iconEn: 'Player', icon: 'sports', color: '#2563EB', gradientColors: ['#2563EB', '#1D4ED8'] },
-  { id: 'ambassadeur', iconFr: 'Ambassadeur', iconEn: 'Ambassador', icon: 'stars', color: '#7C3AED', gradientColors: ['#7C3AED', '#6D28D9'] },
+  { id: 'club', iconFr: 'Club', iconEn: 'Club', icon: 'home', color: '#7C3AED', gradientColors: ['#7C3AED', '#6D28D9'] },
+  { id: 'ambassadeur', iconFr: 'Ambassadeur', iconEn: 'Ambassador', icon: 'stars', color: '#10B981', gradientColors: ['#059669', '#047857'] },
   { id: 'partenaire', iconFr: 'Partenaire', iconEn: 'Partner', icon: 'handshake', color: '#D4A017', gradientColors: ['#D4A017', '#B8860B'] },
 ];
 
@@ -347,7 +721,7 @@ function getQuickActions(language: string) {
     { id: 'match', title: fr ? 'Enregistrer un match' : 'Record a match', icon: 'sports', color: '#2563EB', route: '/match/new',
       steps: fr ? ['Choisissez Entrainement ou Tournoi', 'Selectionnez le format', 'Ajoutez joueurs et adversaires', 'Notez le score mene par mene'] : ['Choose Training or Tournament', 'Select format', 'Add players and opponents', 'Record score end by end'] },
     { id: 'challenge', title: fr ? 'Lancer un defi' : 'Start a challenge', icon: 'track-changes', color: '#D97706', route: '/challenge/new',
-      steps: fr ? ['Choisissez 10 Tirs, Sautee ou Precision', 'Selectionnez le joueur et ses boules', 'Notez chaque tir', 'Mode 1v1 : defier un adversaire'] : ['Choose 10 Shots, Lob or Precision', 'Select player and their boules', 'Record each shot', '1v1 mode: challenge an opponent'] },
+      steps: fr ? ['Choisissez 10 Tirs, Sautee ou Precision', 'Selectionnez joueur et boules', 'Notez chaque tir', 'Mode 1v1 : defier un adversaire'] : ['Choose 10 Shots, Lob or Precision', 'Select player and boules', 'Record each shot', '1v1 mode: challenge an opponent'] },
     { id: 'meetup', title: fr ? 'Organiser un RDV' : 'Organize a meetup', icon: 'event', color: '#0369A1', route: '/meetup/new',
       steps: fr ? ['Choisissez terrain et date', 'Definissez le nombre max', 'Partagez le code ou QR', 'Suivez les confirmations'] : ['Choose court and date', 'Set max participants', 'Share code or QR', 'Track confirmations'] },
     { id: 'tournament', title: fr ? 'Suivre un tournoi' : 'Track a tournament', icon: 'emoji-events', color: '#B45309', route: '/tournament/new',
@@ -430,6 +804,7 @@ export default function FAQScreen() {
   const faqData = useMemo(() => {
     switch (activeTab) {
       case 'joueur': return getPlayerFaq(fr);
+      case 'club': return getClubFaq(fr);
       case 'ambassadeur': return getAmbassadorFaq(fr);
       case 'partenaire': return getPartnerFaq(fr);
     }
@@ -509,8 +884,8 @@ export default function FAQScreen() {
                 style={[st.audienceTab, isActive && { backgroundColor: tab.color, borderColor: tab.color }]}
                 onPress={() => handleTabChange(tab.id)}
               >
-                <MaterialIcons name={tab.icon as any} size={16} color={isActive ? '#FFF' : tab.color} />
-                <Text style={[st.audienceTabText, isActive && { color: '#FFF' }]}>
+                <MaterialIcons name={tab.icon as any} size={15} color={isActive ? '#FFF' : tab.color} />
+                <Text style={[st.audienceTabText, isActive && { color: '#FFF' }]} numberOfLines={1}>
                   {fr ? tab.iconFr : tab.iconEn}
                 </Text>
               </Pressable>
@@ -544,37 +919,49 @@ export default function FAQScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Ambassador quick links */}
-        {activeTab === 'ambassadeur' && !isSearching ? (
+        {/* Club quick links */}
+        {activeTab === 'club' && !isSearching ? (
           <View style={{ gap: 8, marginBottom: 16 }}>
-            <Pressable
-              style={[st.quickLink, { borderColor: '#7C3AED30' }]}
-              onPress={() => router.push('/ambassador-program' as any)}
-            >
+            <Pressable style={[st.quickLink, { borderColor: '#7C3AED30' }]} onPress={() => router.push('/club/new' as any)}>
               <LinearGradient colors={['#7C3AED10', '#7C3AED05']} style={st.quickLinkInner}>
                 <View style={[st.quickLinkIcon, { backgroundColor: '#7C3AED15' }]}>
-                  <MaterialIcons name="stars" size={20} color="#7C3AED" />
+                  <MaterialIcons name="add-home" size={20} color="#7C3AED" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={st.quickLinkTitle}>{fr ? 'Programme Ambassadeur' : 'Ambassador Program'}</Text>
-                  <Text style={st.quickLinkSub}>{fr ? 'Voir les niveaux et avantages complets' : 'See full levels and benefits'}</Text>
+                  <Text style={st.quickLinkTitle}>{fr ? 'Creer un club' : 'Create a club'}</Text>
+                  <Text style={st.quickLinkSub}>{fr ? 'Commencer a gerer votre association' : 'Start managing your association'}</Text>
                 </View>
                 <MaterialIcons name="arrow-forward-ios" size={14} color="#7C3AED" />
               </LinearGradient>
             </Pressable>
-            <Pressable
-              style={[st.quickLink, { borderColor: '#7C3AED30' }]}
-              onPress={() => router.push('/ambassador-dashboard' as any)}
-            >
-              <LinearGradient colors={['#7C3AED10', '#7C3AED05']} style={st.quickLinkInner}>
-                <View style={[st.quickLinkIcon, { backgroundColor: '#7C3AED15' }]}>
-                  <MaterialIcons name="dashboard" size={20} color="#7C3AED" />
+          </View>
+        ) : null}
+
+        {/* Ambassador quick links */}
+        {activeTab === 'ambassadeur' && !isSearching ? (
+          <View style={{ gap: 8, marginBottom: 16 }}>
+            <Pressable style={[st.quickLink, { borderColor: '#10B98130' }]} onPress={() => router.push('/ambassador-program' as any)}>
+              <LinearGradient colors={['#10B98110', '#10B98105']} style={st.quickLinkInner}>
+                <View style={[st.quickLinkIcon, { backgroundColor: '#10B98115' }]}>
+                  <MaterialIcons name="stars" size={20} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.quickLinkTitle}>{fr ? 'Programme Ambassadeur' : 'Ambassador Program'}</Text>
+                  <Text style={st.quickLinkSub}>{fr ? 'Niveaux et avantages complets' : 'Full levels and benefits'}</Text>
+                </View>
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#10B981" />
+              </LinearGradient>
+            </Pressable>
+            <Pressable style={[st.quickLink, { borderColor: '#10B98130' }]} onPress={() => router.push('/ambassador-dashboard' as any)}>
+              <LinearGradient colors={['#10B98110', '#10B98105']} style={st.quickLinkInner}>
+                <View style={[st.quickLinkIcon, { backgroundColor: '#10B98115' }]}>
+                  <MaterialIcons name="dashboard" size={20} color="#10B981" />
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={st.quickLinkTitle}>{fr ? 'Portail Ambassadeur' : 'Ambassador Portal'}</Text>
                   <Text style={st.quickLinkSub}>{fr ? 'Dashboard, stats, defis et parrainages' : 'Dashboard, stats, challenges and referrals'}</Text>
                 </View>
-                <MaterialIcons name="arrow-forward-ios" size={14} color="#7C3AED" />
+                <MaterialIcons name="arrow-forward-ios" size={14} color="#10B981" />
               </LinearGradient>
             </Pressable>
           </View>
@@ -583,10 +970,7 @@ export default function FAQScreen() {
         {/* Partner quick links */}
         {activeTab === 'partenaire' && !isSearching ? (
           <View style={{ gap: 8, marginBottom: 16 }}>
-            <Pressable
-              style={[st.quickLink, { borderColor: '#D4A01730' }]}
-              onPress={() => router.push('/partner-program' as any)}
-            >
+            <Pressable style={[st.quickLink, { borderColor: '#D4A01730' }]} onPress={() => router.push('/partner-program' as any)}>
               <LinearGradient colors={['#D4A01710', '#D4A01705']} style={st.quickLinkInner}>
                 <View style={[st.quickLinkIcon, { backgroundColor: '#D4A01715' }]}>
                   <MaterialIcons name="handshake" size={20} color="#D4A017" />
@@ -598,10 +982,7 @@ export default function FAQScreen() {
                 <MaterialIcons name="arrow-forward-ios" size={14} color="#D4A017" />
               </LinearGradient>
             </Pressable>
-            <Pressable
-              style={[st.quickLink, { borderColor: '#2563EB30' }]}
-              onPress={() => router.push('/sponsor-portal' as any)}
-            >
+            <Pressable style={[st.quickLink, { borderColor: '#2563EB30' }]} onPress={() => router.push('/sponsor-portal' as any)}>
               <LinearGradient colors={['#2563EB10', '#2563EB05']} style={st.quickLinkInner}>
                 <View style={[st.quickLinkIcon, { backgroundColor: '#2563EB15' }]}>
                   <MaterialIcons name="dashboard" size={20} color="#2563EB" />
@@ -732,11 +1113,11 @@ const st = StyleSheet.create({
   heroSearch: { flexDirection: 'row', alignItems: 'center', width: '100%', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, gap: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   heroSearchInput: { flex: 1, fontSize: 15, color: '#FFF', padding: 0 },
   // Audience Tabs
-  audienceTabsContainer: { flexDirection: 'row', gap: 8, marginBottom: 16, paddingHorizontal: 4 },
-  audienceTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
-  audienceTabText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
+  audienceTabsContainer: { flexDirection: 'row', gap: 6, marginBottom: 16, paddingHorizontal: 4 },
+  audienceTab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 11, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  audienceTabText: { fontSize: 12, fontWeight: '700', color: theme.textSecondary },
   // Quick links
-  quickLink: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, marginBottom: 8 },
+  quickLink: { borderRadius: 14, overflow: 'hidden', borderWidth: 1, marginBottom: 0 },
   quickLinkInner: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   quickLinkIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   quickLinkTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
