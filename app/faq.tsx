@@ -62,6 +62,13 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
         },
         {
           id: 'ot4',
+          q: fr ? 'Comment changer de role en plein match ?' : 'How do I change roles during a match?',
+          a: fr
+            ? 'Lors de la notation d\'un match, chaque joueur a un role attribue (Pointeur, Milieu, Tireur). Pour changer de role en cours de partie, appuyez sur l\'icone de role a cote du nom du joueur et selectionnez le nouveau role. L\'app cree automatiquement un "segment de role" : les actions avant et apres le changement sont comptabilisees separement. Cela permet d\'analyser precisement vos performances dans chaque role au sein d\'un meme match.'
+            : 'When recording a match, each player has an assigned role (Pointer, Middle, Shooter). To change roles mid-match, tap the role icon next to the player name and select the new role. The app automatically creates a "role segment": actions before and after the switch are tracked separately. This allows precise analysis of your performance in each role within the same match.',
+        },
+        {
+          id: 'ot4b',
           q: fr ? 'Comment associer mes boules a un match ?' : 'How do I link my boules to a match?',
           a: fr
             ? 'Lors de la creation, selectionnez vos boules dans l\'option "Boules". Cela permet ensuite de comparer vos stats par equipement dans Stats > Performance : quelles boules vous conviennent le mieux au tir ? Au point ? Au carreau ?'
@@ -145,8 +152,15 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'sr4',
           q: fr ? 'Comment fonctionne le classement ELO ?' : 'How does the ELO ranking work?',
           a: fr
-            ? 'Le classement repose sur un systeme inspire du ELO, utilise dans les sports competitifs. Chaque resultat est analyse en tenant compte du niveau des adversaires et du contexte. 5 rangs : Bronze, Argent, Or, Diamant, Maitre. Le classement par role (Tireur, Pointeur, Milieu) est aussi disponible. Plus vous jouez contre des adversaires forts et gagnez, plus vous progressez vite.'
-            : 'The ranking is based on an ELO-inspired system used in competitive sports. Each result factors in opponent level and context. 5 ranks: Bronze, Silver, Gold, Diamond, Master. Role-specific ranking (Shooter, Pointer, Middle) is also available. The more you win against strong opponents, the faster you climb.',
+            ? 'Le classement repose sur un systeme inspire du ELO, utilise dans les sports competitifs. Chaque resultat est analyse en tenant compte du niveau des adversaires, de l\'ecart de score et du contexte (match atteste, nombre de participants). 5 rangs : Bronze, Argent, Or, Diamant, Maitre. L\'ELO evolue plus vite en phase de placement (10 premiers matchs). En cas d\'inactivite (30+ jours), un declin progressif s\'applique (plancher a 800). Chaque janvier, une compression saisonniere rapproche les ELO de 1000 pour relancer la competition.'
+            : 'The ranking is based on an ELO-inspired system used in competitive sports. Each result factors in opponent level, score margin and context (attested match, participant count). 5 ranks: Bronze, Silver, Gold, Diamond, Master. ELO moves faster in placement phase (first 10 matches). After 30+ days of inactivity, a gradual decay applies (floor at 800). Each January, a seasonal compression brings ELOs closer to 1000 to restart competition.',
+        },
+        {
+          id: 'sr4b',
+          q: fr ? 'Comment fonctionne l\'ELO par role (Tireur, Pointeur, Milieu) ?' : 'How does role-specific ELO (Shooter, Pointer, Middle) work?',
+          a: fr
+            ? 'En plus de votre ELO global, l\'app calcule un ELO separe pour chaque role : Tireur, Pointeur et Milieu. Lorsque vous jouez un match avec un role attribue, l\'ELO de ce role est mis a jour en fonction du resultat. Si vous changez de role en cours de match (segments de role), c\'est le role dans lequel vous avez le plus joue qui est pris en compte. Les 3 ELO par role sont visibles dans la section ELO de votre profil joueur, chacun avec son propre rang (Bronze a Maitre). Cela vous permet de voir dans quel role vous etes le plus competitif.'
+            : 'In addition to your global ELO, the app calculates a separate ELO for each role: Shooter, Pointer and Middle. When you play a match with an assigned role, that role\'s ELO is updated based on the result. If you switch roles mid-match (role segments), the role with the most actions is used. All 3 role ELOs are visible in the ELO section of your player profile, each with its own rank (Bronze to Master). This lets you see which role you are most competitive in.',
         },
         {
           id: 'sr5',
@@ -168,6 +182,27 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           a: fr
             ? 'Un systeme interne de fiabilite (Trust Score) analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l\'impact des matchs si necessaire. Les activites suspectes sont limitees ou invisibilisees. Seuls les resultats fiables influencent le classement, garantissant une progression basee sur le merite.'
             : 'An internal reliability system (Trust Score) analyzes gameplay behaviors, detects anomalies automatically and adjusts match impact if needed. Suspicious activities are limited or hidden. Only reliable results influence ranking, ensuring merit-based progression.',
+        },
+        {
+          id: 'sr8',
+          q: fr ? 'Comment analyser mes performances par role (Tireur, Pointeur, Milieu) ?' : 'How do I analyze my performance by role (Shooter, Pointer, Middle)?',
+          a: fr
+            ? 'Depuis Stats > "Performance par Role". Un graphique radar compare vos taux de reussite au tir, au point, au carreau et votre taux de victoire pour chacun des 3 roles. Filtrez par periode (3 mois, 6 mois, 1 an, tout) et par format (Doublette, Triplette). L\'app identifie automatiquement votre meilleur role. Selectionnez un role individuel pour voir son radar detaille. La repartition des matchs par role est affichee en barre de distribution en bas de page. Un bouton d\'export CSV permet de telecharger toutes les stats par role.'
+            : 'From Stats > "Role Performance". A radar chart compares your shot rate, point rate, carreau rate and win rate for each of the 3 roles. Filter by period (3 months, 6 months, 1 year, all) and format (Doubles, Triples). The app automatically identifies your best role. Select an individual role to see its detailed radar. Match distribution by role is shown as a bar at the bottom. A CSV export button lets you download all role stats.',
+        },
+        {
+          id: 'sr9',
+          q: fr ? 'Comment voir l\'evolution de mon role prefere dans le temps ?' : 'How do I see how my preferred role has evolved over time?',
+          a: fr
+            ? 'Sur votre profil joueur, la section "Evolution du role" affiche un graphique a barres empilees montrant la repartition Tireur/Pointeur/Milieu par periode (trimestre, semestre ou annee selon la quantite de donnees). L\'app detecte automatiquement si vous avez migre d\'un role a un autre (ex: Pointeur → Milieu → Tireur) et affiche le chemin de migration. Un bouton PDF permet d\'exporter le graphique, le chemin de migration et le tableau detaille par periode pour l\'imprimer ou le partager.'
+            : 'On your player profile, the "Role Evolution" section shows a stacked bar chart displaying the Shooter/Pointer/Middle distribution per period (quarter, semester or year depending on data volume). The app automatically detects if you migrated from one role to another (e.g., Pointer → Middle → Shooter) and displays the migration path. A PDF button lets you export the chart, migration path and detailed per-period table for printing or sharing.',
+        },
+        {
+          id: 'sr10',
+          q: fr ? 'Comment comparer mes stats face-a-face avec un autre joueur ?' : 'How do I compare my stats head-to-head with another player?',
+          a: fr
+            ? 'Ouvrez le profil d\'un joueur contre qui vous avez joue. La section "Face-a-face par role" compare automatiquement vos performances respectives sur les matchs partages : taux de tir, taux de point, carreaux, pour chaque role (Tireur, Pointeur, Milieu). Le meilleur joueur dans chaque role est mis en evidence. Une recommandation d\'alignement optimal est proposee en bas de chaque comparaison de role.'
+            : 'Open the profile of a player you have played against. The "Head-to-Head by Role" section automatically compares your respective performances on shared matches: shot rate, point rate, carreaux, for each role (Shooter, Pointer, Middle). The better player in each role is highlighted. An optimal alignment recommendation is suggested at the bottom of each role comparison.',
         },
       ],
     },
@@ -302,8 +337,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'ac2',
           q: fr ? 'Comment exporter mes donnees ?' : 'How do I export my data?',
           a: fr
-            ? 'Profil > Exporter les donnees. Choisissez CSV ou JSON et les categories (matchs, defis, joueurs, clubs, terrains, tournois). Le CSV est compatible Excel et Google Sheets. Utile pour garder une trace de toute votre saison.'
-            : 'Profile > Export data. Choose CSV or JSON and categories (matches, challenges, players, clubs, courts, tournaments). CSV works with Excel and Google Sheets. Useful for keeping a full season record.',
+            ? 'Plusieurs options d\'export : (1) Profil > Exporter les donnees : choisissez CSV ou PDF pour matchs, defis, statistiques, avec presets (tournoi, saison, comparatif, joueur). (2) Page Performance par Role : export CSV des stats detaillees par role (taux de tir, point, carreau, victoires). (3) Section Evolution du Role (profil joueur) : export PDF avec graphique de tendance saisonniere, chemin de migration et tableau detaille. Tous les CSV sont compatibles Excel et Google Sheets.'
+            : 'Multiple export options: (1) Profile > Export data: choose CSV or PDF for matches, challenges, statistics, with presets (tournament, season, comparative, player). (2) Role Performance page: CSV export of detailed per-role stats (shot, point, carreau rates, wins). (3) Role Evolution section (player profile): PDF export with seasonal trend chart, migration path and detailed table. All CSVs are compatible with Excel and Google Sheets.',
         },
         {
           id: 'ac3',
