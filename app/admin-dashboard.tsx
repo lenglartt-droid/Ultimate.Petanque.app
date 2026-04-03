@@ -28,18 +28,17 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
-import { getMaintenanceStatus } from '@/services/maintenanceService';
-import { getRecentActivityLogs, AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
-import { getAllAppeals, BanAppeal } from '@/services/banAppealService';
+import { AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
 import { getEloRank } from '@/services/eloService';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { useAlert } from '@/template';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminSearchModal from '@/components/feature/AdminSearchModal';
 import AdminGuard from '@/components/feature/AdminGuard';
-import { getOnboardingStepAnalytics, OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
+import { OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { DashboardSkeleton } from '@/components/ui/AdminSkeleton';
 
@@ -218,245 +217,117 @@ export default function AdminDashboardScreen() {
     try {
       const supabase = getSupabaseClient();
 
-      const [
-        usersRes, playersRes, terrainsRes, clubsRes, matchesRes,
-        reportsRes, announcementsRes, suspiciousRes, maintenanceRes,
-        activityRes, appealsRes, weeklyMatchesRes, eloPlayersRes,
-        clubsFullRes, userGrowthRes, pushLogsRes,
-      ] = await Promise.all([
-        supabase.from('user_profiles').select('id, is_premium', { count: 'exact', head: false }),
-        supabase.from('players').select('id', { count: 'exact', head: true }),
-        supabase.from('terrains').select('id', { count: 'exact', head: true }),
-        supabase.from('clubs').select('id', { count: 'exact', head: true }),
-        supabase.from('matches').select('id', { count: 'exact', head: true }),
-        supabase.from('player_reports').select('status'),
-        supabase.from('announcements').select('id', { count: 'exact', head: true }),
-        supabase.from('suspicious_players').select('id, status'),
-        getMaintenanceStatus(),
-        getRecentActivityLogs(20),
-        getAllAppeals(50),
-        // Weekly matches for last 8 weeks
-        supabase.from('matches').select('date').gte('date', new Date(Date.now() - 56 * 24 * 60 * 60 * 1000).toISOString()),
-        // ELO distribution
-        supabase.from('players').select('elo_rating'),
-        // Clubs with verification status
-        supabase.from('clubs').select('id, name, city, members_count, description, address, contact_email, is_public, is_verified'),
-        // User growth - monthly registrations (last 6 months)
-        supabase.from('user_profiles').select('created_at, consent_date').order('created_at', { ascending: true }),
-        // Push notification logs from announcements
-        supabase.from('announcements').select('push_sent_count, push_error_count, target_type, created_at').order('created_at', { ascending: false }).limit(50),
-      ]);
+      // ── Single edge function call replaces 16+ parallel queries ──
+      const { data, error } = await supabase.functions.invoke('admin-stats', { body: {} });
 
-      // Process weekly matches
-      const weekMap = new Map<string, number>();
-      const now = new Date();
-      for (let i = 7; i >= 0; i--) {
-        const d = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000);
-        const key = `S${52 - i}`;
-        weekMap.set(key, 0);
-      }
-      (weeklyMatchesRes.data || []).forEach((m: any) => {
-        const d = new Date(m.date);
-        const weeksAgo = Math.floor((now.getTime() - d.getTime()) / (7 * 24 * 60 * 60 * 1000));
-        if (weeksAgo >= 0 && weeksAgo <= 7) {
-          const key = `S${52 - (7 - weeksAgo)}`;
-          // Find matching key by index
-          const keys = [...weekMap.keys()];
-          const idx = 7 - weeksAgo;
-          if (idx >= 0 && idx < keys.length) {
-            const k = keys[idx];
-            weekMap.set(k, (weekMap.get(k) || 0) + 1);
-          }
+      if (error) {
+        let errorMessage = error.message;
+        if (error instanceof FunctionsHttpError) {
+          try {
+            const textContent = await error.context?.text();
+            errorMessage = textContent || error.message;
+          } catch { /* silent */ }
         }
-      });
-      const wkLabels = [...weekMap.keys()].map((_, i) => {
-        const d = new Date(now.getTime() - (7 - i) * 7 * 24 * 60 * 60 * 1000);
-        return d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
-      });
-      setWeeklyMatches([...weekMap.entries()].map(([k, v], i) => ({ week: wkLabels[i] || k, count: v })));
-
-      // Process ELO distribution
-      const eloBuckets = { bronze: 0, silver: 0, gold: 0, diamond: 0, master: 0 };
-      (eloPlayersRes.data || []).forEach((p: any) => {
-        const elo = p.elo_rating || 1000;
-        if (elo >= 1800) eloBuckets.master++;
-        else if (elo >= 1500) eloBuckets.diamond++;
-        else if (elo >= 1200) eloBuckets.gold++;
-        else if (elo >= 1000) eloBuckets.silver++;
-        else eloBuckets.bronze++;
-      });
-      // Process monthly user growth (last 6 months)
-      const monthMap = new Map<string, number>();
-      for (let i = 5; i >= 0; i--) {
-        const d = new Date();
-        d.setMonth(d.getMonth() - i);
-        const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
-        monthMap.set(key, 0);
-      }
-      (userGrowthRes.data || []).forEach((u: any) => {
-        const dateStr = u.created_at || u.consent_date;
-        if (!dateStr) return;
-        const d = new Date(dateStr);
-        const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
-        if (monthMap.has(key)) monthMap.set(key, (monthMap.get(key) || 0) + 1);
-      });
-      const monthlyArr = [...monthMap.entries()].map(([month, count]) => ({ month, count }));
-      setMonthlyGrowth(monthlyArr);
-      if (monthlyArr.length >= 2) {
-        const curr = monthlyArr[monthlyArr.length - 1].count;
-        const prev = monthlyArr[monthlyArr.length - 2].count;
-        setGrowthDelta(prev > 0 ? Math.round(((curr - prev) / prev) * 100) : curr > 0 ? 100 : 0);
+        console.log('[AdminDashboard] Edge function error:', errorMessage);
+        return;
       }
 
-      // Process clubs for verification
-      const allClubs = clubsFullRes.data || [];
-      const unverified = allClubs.filter((c: any) => !c.is_verified).map((c: any) => ({
-        id: c.id, name: c.name, city: c.city, membersCount: c.members_count || 0,
-        description: c.description, address: c.address, contactEmail: c.contact_email,
-        isPublic: c.is_public || false,
-      }));
-      setUnverifiedClubs(unverified);
-
-      // Process push analytics
-      const pushData = pushLogsRes.data || [];
-      const totalPushSent = pushData.reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0);
-      const totalPushErrors = pushData.reduce((s: number, a: any) => s + (a.push_error_count || 0), 0);
-      const pushByType: Record<string, number> = {};
-      pushData.forEach((a: any) => {
-        const t = a.target_type || 'all';
-        pushByType[t] = (pushByType[t] || 0) + (a.push_sent_count || 0);
-      });
-      setPushStats({ sent: totalPushSent, types: pushByType });
-
-      // Process onboarding analytics
-      const allUsers = userGrowthRes.data || [];
-      const totalUsersCount = allUsers.length;
-      const usersWithProfile = allUsers.filter((u: any) => u.consent_date).length;
-      const usersWithConsent = allUsers.filter((u: any) => u.consent_date).length;
-      const profileCompletion = totalUsersCount > 0 ? Math.round((usersWithConsent / totalUsersCount) * 100) : 0;
-      setOnboardingStats({
-        total: totalUsersCount,
-        withProfile: usersWithProfile,
-        withConsent: usersWithConsent,
-        withRole: 0,
-        conversionRate: profileCompletion,
-        avgDaysToProfile: 0,
-      });
-
-      // Load step-level onboarding analytics
-      try {
-        const stepData = await getOnboardingStepAnalytics();
-        setStepAnalytics(stepData);
-      } catch { /* silent */ }
-
-      // Compute declining clubs for health alerts widget
-      try {
-        const allClubsList = clubsFullRes.data || [];
-        const { data: allPlayersForHealth } = await supabase.from('players').select('user_id, club_id');
-        const playerClubMap = new Map<string, string>();
-        (allPlayersForHealth || []).forEach((p: any) => { if (p.club_id) playerClubMap.set(p.user_id, p.club_id); });
-        const thirtyDaysAgo2 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const sixtyDaysAgo2 = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: recentM } = await supabase.from('matches').select('user_id, date').gte('date', sixtyDaysAgo2);
-        const declining: typeof decliningClubs = [];
-        allClubsList.forEach((c: any) => {
-          const cid = c.id;
-          let recentCount = 0;
-          let prevCount = 0;
-          (recentM || []).forEach((m: any) => {
-            const pcid = playerClubMap.get(m.user_id);
-            if (pcid !== cid) return;
-            const md = new Date(m.date);
-            if (md.toISOString() >= thirtyDaysAgo2) recentCount++;
-            else prevCount++;
-          });
-          const members = c.members_count || 0;
-          const currentScore = Math.min(100, Math.round(recentCount * 3 + Math.min(members * 2, 30)));
-          const prevScore = Math.min(100, Math.round(prevCount * 3 + Math.min(members * 2, 30)));
-          const delta = currentScore - prevScore;
-          if (delta < -5 || (currentScore < 20 && prevScore > currentScore)) {
-            const color = currentScore >= 40 ? '#D97706' : currentScore >= 15 ? '#EF4444' : '#94A3B8';
-            declining.push({ id: cid, name: c.name, city: c.city || '', score: currentScore, prevScore, delta, color });
-          }
-        });
-        declining.sort((a, b) => a.delta - b.delta);
-        setDecliningClubs(declining.slice(0, 10));
-      } catch { /* silent */ }
-
-      setEloDistribution([
-        { tier: 'master', count: eloBuckets.master, color: '#F59E0B', label: fr ? 'Maitre' : 'Master' },
-        { tier: 'diamond', count: eloBuckets.diamond, color: '#8B5CF6', label: fr ? 'Diamant' : 'Diamond' },
-        { tier: 'gold', count: eloBuckets.gold, color: '#D4A017', label: fr ? 'Or' : 'Gold' },
-        { tier: 'silver', count: eloBuckets.silver, color: '#94A3B8', label: fr ? 'Argent' : 'Silver' },
-        { tier: 'bronze', count: eloBuckets.bronze, color: '#CD7F32', label: 'Bronze' },
-      ]);
-
-      // Recent signups (last 7 days)
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-      const recentUsers = (userGrowthRes.data || []).filter((u: any) => {
-        const d = u.created_at || u.consent_date;
-        return d && d >= sevenDaysAgo;
-      });
-      setRecentSignups(recentUsers.length);
-
-      setActivityLogs(activityRes.logs || []);
-
-      const users = usersRes.data || [];
-      const reports = reportsRes.data || [];
-      const suspicious = suspiciousRes.data || [];
-
-      const pendingAppealsList = (appealsRes.appeals || []).filter((a: any) => a.status === 'pending');
-      const overdueThreshold = Date.now() - 48 * 60 * 60 * 1000;
-      const overdueCount = pendingAppealsList.filter((a: any) => new Date(a.createdAt || a.created_at).getTime() < overdueThreshold).length;
-
-      // Smart alert detection
-      const detectedAlerts: typeof smartAlerts = [];
-      const pendingCount = reports.filter((r: any) => r.status === 'pending').length;
-      if (pendingCount >= 5) detectedAlerts.push({ id: 'report_spike', severity: 'critical', title: fr ? 'Pic de signalements' : 'Report spike', message: fr ? `${pendingCount} signalements en attente. Intervention recommandee.` : `${pendingCount} pending reports. Action recommended.`, icon: 'warning', color: '#DC2626', route: '/admin-moderation' });
-      else if (pendingCount >= 3) detectedAlerts.push({ id: 'reports_pending', severity: 'warning', title: fr ? 'Signalements en attente' : 'Pending reports', message: fr ? `${pendingCount} signalement(s) a traiter.` : `${pendingCount} report(s) to review.`, icon: 'gavel', color: '#D97706', route: '/admin-moderation' });
-      const weeklyArr2 = [...weekMap.values()];
-      if (weeklyArr2.length >= 2) {
-        const thisW = weeklyArr2[weeklyArr2.length - 1] || 0;
-        const lastW = weeklyArr2[weeklyArr2.length - 2] || 0;
-        if (lastW > 0 && thisW < lastW * 0.7) detectedAlerts.push({ id: 'match_decline', severity: 'warning', title: fr ? 'Baisse d\'activite matchs' : 'Match activity decline', message: fr ? `${thisW} matchs cette semaine vs ${lastW} la semaine derniere (-${Math.round((1 - thisW / lastW) * 100)}%)` : `${thisW} matches this week vs ${lastW} last week (-${Math.round((1 - thisW / lastW) * 100)}%)`, icon: 'trending-down', color: '#EF4444' });
+      if (!data) {
+        console.log('[AdminDashboard] No data returned from admin-stats');
+        return;
       }
-      const inactiveClubsPct = unverified.length > 0 && allClubs.length > 0 ? Math.round((unverified.length / allClubs.length) * 100) : 0;
-      if (inactiveClubsPct > 50) detectedAlerts.push({ id: 'unverified_clubs', severity: 'info', title: fr ? 'Clubs non verifies' : 'Unverified clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies.` : `${inactiveClubsPct}% of clubs are not verified.`, icon: 'pending', color: '#D97706', route: '/admin-clubs' });
-      if (recentUsers.length === 0) detectedAlerts.push({ id: 'no_signups', severity: 'info', title: fr ? 'Aucune inscription recente' : 'No recent signups', message: fr ? 'Aucun nouvel utilisateur cette semaine.' : 'No new users this week.', icon: 'person-off', color: '#94A3B8' });
-      if (overdueCount > 0) detectedAlerts.push({ id: 'overdue_appeals', severity: 'critical', title: fr ? 'Appels en retard' : 'Overdue appeals', message: fr ? `${overdueCount} appel(s) en attente depuis +48h.` : `${overdueCount} appeal(s) pending for 48h+.`, icon: 'timer-off', color: '#DC2626', route: '/admin-moderation' });
-      // Declining clubs detection
-      const decliningClubCount = allClubs.filter((c: any) => {
-        const hs = (() => {
-          const cPlayers = (eloPlayersRes.data || []).filter((p: any) => p.club_id === c.id);
-          return cPlayers.length;
-        })();
-        return c.is_verified && !c.is_public;
-      }).length;
-      if (unverified.length > 5) {
-        const pctUnverified = Math.round((unverified.length / allClubs.length) * 100);
-        if (pctUnverified > 60) detectedAlerts.push({ id: 'declining_clubs', severity: 'warning', title: fr ? 'Clubs a risque' : 'At-risk clubs', message: fr ? `${pctUnverified}% des clubs ne sont pas verifies. Examinez les tendances de sante.` : `${pctUnverified}% of clubs are unverified. Review health trends.`, icon: 'trending-down', color: '#D97706', route: '/admin-clubs' });
-      }
-      setSmartAlerts(detectedAlerts);
-      setAdminNotifCount(detectedAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length + pendingAppealsList.length + pendingCount);
+
+      // ── Map server response to local state ──
+      const res = data as any;
+      const serverStats = res.stats;
 
       setStats({
-        totalUsers: usersRes.count || users.length,
-        premiumUsers: users.filter((u: any) => u.is_premium).length,
-        totalPlayers: playersRes.count || 0,
-        totalTerrains: terrainsRes.count || 0,
-        totalClubs: clubsRes.count || 0,
-        verifiedClubs: (clubsFullRes.data || []).filter((c: any) => c.is_verified).length,
-        totalMatches: matchesRes.count || 0,
-        pendingReports: reports.filter((r: any) => r.status === 'pending').length,
-        activeWarnings: reports.filter((r: any) => r.status === 'warned').length,
-        activeBans: reports.filter((r: any) => r.status === 'banned').length,
-        totalAnnouncements: announcementsRes.count || 0,
-        flaggedPlayers: suspicious.filter((s: any) => s.status === 'flagged').length,
-        maintenanceActive: maintenanceRes.isActive,
-        maintenanceScheduled: maintenanceRes.isScheduled,
-        pendingAppeals: pendingAppealsList.length,
-        overdueAppeals: overdueCount,
+        totalUsers: serverStats.totalUsers || 0,
+        premiumUsers: serverStats.premiumUsers || 0,
+        totalPlayers: serverStats.totalPlayers || 0,
+        totalTerrains: serverStats.totalTerrains || 0,
+        totalClubs: serverStats.totalClubs || 0,
+        verifiedClubs: serverStats.verifiedClubs || 0,
+        totalMatches: serverStats.totalMatches || 0,
+        pendingReports: serverStats.pendingReports || 0,
+        activeWarnings: serverStats.activeWarnings || 0,
+        activeBans: serverStats.activeBans || 0,
+        totalAnnouncements: serverStats.totalAnnouncements || 0,
+        flaggedPlayers: serverStats.flaggedPlayers || 0,
+        maintenanceActive: serverStats.maintenanceActive || false,
+        maintenanceScheduled: serverStats.maintenanceScheduled || false,
+        pendingAppeals: serverStats.pendingAppeals || 0,
+        overdueAppeals: serverStats.overdueAppeals || 0,
       });
+
+      // Weekly matches (server returns en-US labels; re-localize if fr)
+      const wm = (res.weeklyMatches || []) as { week: string; count: number }[];
+      setWeeklyMatches(wm);
+
+      // ELO distribution
+      const elo = res.eloDistribution || { bronze: 0, silver: 0, gold: 0, diamond: 0, master: 0 };
+      setEloDistribution([
+        { tier: 'master', count: elo.master, color: '#F59E0B', label: fr ? 'Maitre' : 'Master' },
+        { tier: 'diamond', count: elo.diamond, color: '#8B5CF6', label: fr ? 'Diamant' : 'Diamond' },
+        { tier: 'gold', count: elo.gold, color: '#D4A017', label: fr ? 'Or' : 'Gold' },
+        { tier: 'silver', count: elo.silver, color: '#94A3B8', label: fr ? 'Argent' : 'Silver' },
+        { tier: 'bronze', count: elo.bronze, color: '#CD7F32', label: 'Bronze' },
+      ]);
+
+      // Monthly growth
+      setMonthlyGrowth(res.monthlyGrowth || []);
+      setGrowthDelta(res.growthDelta || 0);
+      setRecentSignups(res.recentSignups || 0);
+
+      // Unverified clubs
+      setUnverifiedClubs((res.unverifiedClubs || []).map((c: any) => ({
+        id: c.id, name: c.name, city: c.city, membersCount: c.membersCount || 0,
+        description: c.description || null, address: c.address || null,
+        contactEmail: c.contactEmail || null, isPublic: c.isPublic || false,
+      })));
+
+      // Push analytics
+      setPushStats(res.pushAnalytics || { sent: 0, types: {} });
+
+      // Activity logs
+      setActivityLogs((res.activityLogs || []).map((l: any) => ({
+        id: l.id, adminUserId: l.adminUserId, adminName: l.adminName,
+        actionType: l.actionType, actionDetail: l.actionDetail,
+        targetType: l.targetType, targetId: l.targetId, targetName: l.targetName,
+        metadata: l.metadata || {}, createdAt: l.createdAt,
+      })));
+
+      // Declining clubs
+      setDecliningClubs(res.decliningClubs || []);
+
+      // Onboarding
+      if (res.onboardingStats) setOnboardingStats(res.onboardingStats);
+      if (res.onboardingAnalytics) setStepAnalytics(res.onboardingAnalytics);
+
+      // ── Smart alerts (computed client-side from server data) ──
+      const detectedAlerts: typeof smartAlerts = [];
+      const pendingCount = serverStats.pendingReports || 0;
+      if (pendingCount >= 5) detectedAlerts.push({ id: 'report_spike', severity: 'critical', title: fr ? 'Pic de signalements' : 'Report spike', message: fr ? `${pendingCount} signalements en attente. Intervention recommandee.` : `${pendingCount} pending reports. Action recommended.`, icon: 'warning', color: '#DC2626', route: '/admin-moderation' });
+      else if (pendingCount >= 3) detectedAlerts.push({ id: 'reports_pending', severity: 'warning', title: fr ? 'Signalements en attente' : 'Pending reports', message: fr ? `${pendingCount} signalement(s) a traiter.` : `${pendingCount} report(s) to review.`, icon: 'gavel', color: '#D97706', route: '/admin-moderation' });
+
+      if (wm.length >= 2) {
+        const thisW = wm[wm.length - 1]?.count || 0;
+        const lastW = wm[wm.length - 2]?.count || 0;
+        if (lastW > 0 && thisW < lastW * 0.7) detectedAlerts.push({ id: 'match_decline', severity: 'warning', title: fr ? 'Baisse d\'activite matchs' : 'Match activity decline', message: fr ? `${thisW} matchs cette semaine vs ${lastW} la semaine derniere (-${Math.round((1 - thisW / lastW) * 100)}%)` : `${thisW} matches this week vs ${lastW} last week (-${Math.round((1 - thisW / lastW) * 100)}%)`, icon: 'trending-down', color: '#EF4444' });
+      }
+
+      const unverifiedCount = (res.unverifiedClubs || []).length;
+      const totalClubsCount = serverStats.totalClubs || 1;
+      const inactiveClubsPct = totalClubsCount > 0 ? Math.round((unverifiedCount / totalClubsCount) * 100) : 0;
+      if (inactiveClubsPct > 50) detectedAlerts.push({ id: 'unverified_clubs', severity: 'info', title: fr ? 'Clubs non verifies' : 'Unverified clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies.` : `${inactiveClubsPct}% of clubs are not verified.`, icon: 'pending', color: '#D97706', route: '/admin-clubs' });
+      if ((res.recentSignups || 0) === 0) detectedAlerts.push({ id: 'no_signups', severity: 'info', title: fr ? 'Aucune inscription recente' : 'No recent signups', message: fr ? 'Aucun nouvel utilisateur cette semaine.' : 'No new users this week.', icon: 'person-off', color: '#94A3B8' });
+      const overdueCount = serverStats.overdueAppeals || 0;
+      if (overdueCount > 0) detectedAlerts.push({ id: 'overdue_appeals', severity: 'critical', title: fr ? 'Appels en retard' : 'Overdue appeals', message: fr ? `${overdueCount} appel(s) en attente depuis +48h.` : `${overdueCount} appeal(s) pending for 48h+.`, icon: 'timer-off', color: '#DC2626', route: '/admin-moderation' });
+      if (unverifiedCount > 5 && inactiveClubsPct > 60) detectedAlerts.push({ id: 'declining_clubs', severity: 'warning', title: fr ? 'Clubs a risque' : 'At-risk clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies. Examinez les tendances de sante.` : `${inactiveClubsPct}% of clubs are unverified. Review health trends.`, icon: 'trending-down', color: '#D97706', route: '/admin-clubs' });
+
+      setSmartAlerts(detectedAlerts);
+      setAdminNotifCount(detectedAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length + (serverStats.pendingAppeals || 0) + pendingCount);
+
     } catch (e) {
       console.log('[AdminDashboard] Error loading stats:', e);
     } finally {

@@ -38,6 +38,8 @@ import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { getEloRank } from '@/services/eloService';
 import { ADMIN_PERMISSIONS, PermissionKey, getUserPermissions, setUserPermissions, getBulkUserPermissions } from '@/services/adminPermissionService';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
+import { UsersSkeleton } from '@/components/ui/AdminSkeleton';
 
 interface AdminUser {
   id: string;
@@ -411,12 +413,16 @@ export default function AdminUsersScreen() {
         <View style={s.header}>
           <Text style={s.headerTitle}>{fr ? 'Utilisateurs' : 'Users'}</Text>
         </View>
-        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+        <AdminQuickNav currentRoute="/admin-users" />
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+          <UsersSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
+    <PageErrorBoundary pageName="Users">
     <AdminGuard language={language} requiredPermission="users">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
@@ -869,6 +875,7 @@ export default function AdminUsersScreen() {
       </Modal>
     </SafeAreaView>
     </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 
