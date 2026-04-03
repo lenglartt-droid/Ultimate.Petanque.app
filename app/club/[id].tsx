@@ -37,6 +37,7 @@ import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/se
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
+import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest } from '@/services/clubClaimService';
 
 
 export default function ClubDetailScreen() {
@@ -72,6 +73,19 @@ export default function ClubDetailScreen() {
   const [showMergePicker, setShowMergePicker] = React.useState(false);
   const [showPublicPreview, setShowPublicPreview] = React.useState(false);
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
+
+  // Claim system state
+  const [showClaimModal, setShowClaimModal] = React.useState(false);
+  const [claimMessage, setClaimMessage] = React.useState('');
+  const [claimStatus, setClaimStatus] = React.useState<string | null>(null);
+  const [submittingClaim, setSubmittingClaim] = React.useState(false);
+  const [claimProofUri, setClaimProofUri] = React.useState<string | null>(null);
+  const [claimProofUrl, setClaimProofUrl] = React.useState<string | null>(null);
+  const [claimProofType, setClaimProofType] = React.useState<'image' | 'pdf'>('image');
+  const [uploadingProof, setUploadingProof] = React.useState(false);
+  const [showProofFullscreen, setShowProofFullscreen] = React.useState<string | null>(null);
+  const [pendingClaims, setPendingClaims] = React.useState<ClubClaimRequest[]>([]);
+  const [processingClaimId, setProcessingClaimId] = React.useState<string | null>(null);
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
@@ -145,6 +159,21 @@ export default function ClubDetailScreen() {
   React.useEffect(() => {
     if (club) setIsPublicState(club.isPublic ?? false);
   }, [club?.id, club?.isPublic]);
+
+  // Check claim status & load pending claims
+  React.useEffect(() => {
+    if (!id || !user?.id) return;
+    // Check if I have a claim
+    hasExistingClaim(id, user.id).then(({ hasClaim, status }) => {
+      if (hasClaim) setClaimStatus(status);
+    }).catch(() => {});
+    // If I own this club, load pending claims
+    if (club?.userId === user.id) {
+      getReceivedClaims().then(({ claims }) => {
+        setPendingClaims(claims.filter(c => c.clubId === id && c.status === 'pending'));
+      }).catch(() => {});
+    }
+  }, [id, user?.id, club?.userId]);
 
   // Load club card URL
   React.useEffect(() => {
@@ -329,6 +358,18 @@ export default function ClubDetailScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('club', 'clubLabel')}</Text>
         <View style={styles.headerActions}>
+          {/* Pending claims notification badge for owner */}
+          {canEdit && !isSharedItem && pendingClaims.length > 0 ? (
+            <Pressable
+              style={styles.claimNotifBtn}
+              onPress={() => router.push({ pathname: '/notifications-hub', params: { tab: 'claims' } } as any)}
+            >
+              <MaterialIcons name="verified-user" size={20} color="#F59E0B" />
+              <View style={styles.claimNotifBadge}>
+                <Text style={styles.claimNotifBadgeText}>{pendingClaims.length > 9 ? '9+' : pendingClaims.length}</Text>
+              </View>
+            </Pressable>
+          ) : null}
           {isShared && (
             <Pressable
               style={[styles.saveButton, isSaving && { opacity: 0.6 }]}
@@ -423,7 +464,14 @@ export default function ClubDetailScreen() {
               </View>
             )}
           </Pressable>
-          <Text style={styles.clubName}>{club.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+            <Text style={[styles.clubName, { marginBottom: 0 }]}>{club.name}</Text>
+            {club.isVerified ? (
+              <View style={styles.verifiedBadge}>
+                <MaterialIcons name="verified" size={18} color="#2563EB" />
+              </View>
+            ) : null}
+          </View>
           {sharedPermission ? (
             <View style={{ marginBottom: 8 }}>
               <SharedBadge permission={sharedPermission} />
@@ -746,6 +794,155 @@ export default function ClubDetailScreen() {
           </Animated.View>
         )}
 
+        {/* Pending Claims - only for owner */}
+        {canEdit && !isSharedItem && pendingClaims.length > 0 ? (
+          <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{t('club', 'pendingClaims').toUpperCase()}</Text>
+            {pendingClaims.map(claim => (
+              <View key={claim.id} style={styles.claimCard}>
+                <View style={styles.claimCardHeader}>
+                  <View style={styles.claimAvatar}>
+                    <MaterialIcons name="person" size={20} color="#FFF" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.claimName}>{claim.requesterName || claim.requesterEmail || (language === 'fr' ? 'Utilisateur' : 'User')}</Text>
+                    {claim.requesterEmail ? <Text style={styles.claimEmail}>{claim.requesterEmail}</Text> : null}
+                    <Text style={styles.claimDate}>{new Date(claim.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                  </View>
+                </View>
+                {claim.message ? (
+                  <View style={styles.claimMessageBox}>
+                    <MaterialIcons name="format-quote" size={14} color={theme.textMuted} />
+                    <Text style={styles.claimMessageText}>{claim.message}</Text>
+                  </View>
+                ) : null}
+                {claim.proofUrl ? (
+                  <Pressable
+                    style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 12, borderWidth: 1, borderColor: '#2563EB25' }}
+                    onPress={() => claim.proofUrl!.toLowerCase().endsWith('.pdf') ? Linking.openURL(claim.proofUrl!) : setShowProofFullscreen(claim.proofUrl!)}
+                  >
+                    {claim.proofUrl.toLowerCase().endsWith('.pdf') ? (
+                      <View style={{ width: '100%', height: 80, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', gap: 4 }}>
+                        <MaterialIcons name="picture-as-pdf" size={32} color={theme.error} />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textPrimary }}>{t('club', 'claimProofPdf')}</Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: claim.proofUrl }} style={{ width: '100%', height: 120 }} contentFit="cover" transition={200} />
+                    )}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, padding: 8, backgroundColor: '#EFF6FF' }}>
+                      <MaterialIcons name={claim.proofUrl.toLowerCase().endsWith('.pdf') ? 'open-in-new' : 'photo'} size={14} color="#2563EB" />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#2563EB' }}>{t('club', 'claimProofView')}</Text>
+                    </View>
+                  </Pressable>
+                ) : null}
+                <View style={styles.claimActions}>
+                  <Pressable
+                    style={styles.claimDeclineBtn}
+                    onPress={() => {
+                      Alert.alert(
+                        t('club', 'declineClaim'),
+                        t('club', 'declineClaimConfirm'),
+                        [
+                          { text: t('common', 'cancel'), style: 'cancel' },
+                          { text: t('club', 'declineClaim'), style: 'destructive', onPress: async () => {
+                            setProcessingClaimId(claim.id);
+                            const { error } = await declineClubClaim(claim.id);
+                            setProcessingClaimId(null);
+                            if (!error) {
+                              setPendingClaims(prev => prev.filter(c => c.id !== claim.id));
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            } else {
+                              showAlert(t('common', 'error'), error);
+                            }
+                          }},
+                        ]
+                      );
+                    }}
+                    disabled={processingClaimId === claim.id}
+                  >
+                    <MaterialIcons name="close" size={16} color={theme.error} />
+                    <Text style={styles.claimDeclineText}>{t('club', 'declineClaim')}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={styles.claimAcceptBtn}
+                    onPress={() => {
+                      Alert.alert(
+                        t('club', 'acceptClaim'),
+                        t('club', 'acceptClaimConfirm'),
+                        [
+                          { text: t('common', 'cancel'), style: 'cancel' },
+                          { text: t('club', 'acceptClaim'), onPress: async () => {
+                            setProcessingClaimId(claim.id);
+                            const { error } = await acceptClubClaim(claim.id);
+                            setProcessingClaimId(null);
+                            if (!error) {
+                              setPendingClaims(prev => prev.filter(c => c.id !== claim.id));
+                              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                              showAlert(t('common', 'success'), t('club', 'claimTransferred') + '\n' + t('club', 'contributorBadge'));
+                            } else {
+                              showAlert(t('common', 'error'), error);
+                            }
+                          }},
+                        ]
+                      );
+                    }}
+                    disabled={processingClaimId === claim.id}
+                  >
+                    {processingClaimId === claim.id ? (
+                      <ActivityIndicator size="small" color="#FFF" />
+                    ) : (
+                      <>
+                        <MaterialIcons name="check" size={16} color="#FFF" />
+                        <Text style={styles.claimAcceptText}>{t('club', 'acceptClaim')}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+          </Animated.View>
+        ) : null}
+
+        {/* Claim Club Button - for non-owners */}
+        {user?.id && club.userId && club.userId !== user.id && !isSharedItem ? (
+          <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
+            {claimStatus === 'pending' ? (
+              <View style={styles.claimStatusCard}>
+                <View style={[styles.claimStatusIcon, { backgroundColor: '#F59E0B15' }]}>
+                  <MaterialIcons name="schedule" size={22} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.claimStatusTitle}>{t('club', 'claimPending')}</Text>
+                  <Text style={styles.claimStatusDesc}>{t('club', 'claimPendingDesc')}</Text>
+                </View>
+              </View>
+            ) : claimStatus === 'accepted' ? (
+              <View style={styles.claimStatusCard}>
+                <View style={[styles.claimStatusIcon, { backgroundColor: '#10B98115' }]}>
+                  <MaterialIcons name="check-circle" size={22} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.claimStatusTitle, { color: '#10B981' }]}>{t('club', 'claimAccepted')}</Text>
+                </View>
+              </View>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [styles.claimButton, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                onPress={() => setShowClaimModal(true)}
+              >
+                <View style={styles.claimButtonIcon}>
+                  <MaterialIcons name="verified-user" size={22} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.claimButtonTitle}>{t('club', 'claimThisClub')}</Text>
+                  <Text style={styles.claimButtonDesc}>{t('club', 'claimDesc')}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+            )}
+          </Animated.View>
+        ) : null}
+
         {/* Modification Logs - only visible to owner */}
         <ModificationLogsSection
           itemType="club"
@@ -906,6 +1103,236 @@ export default function ClubDetailScreen() {
         currentItemId={id!}
       />
 
+      {/* Claim Modal */}
+      <Modal visible={showClaimModal} animationType="slide" transparent>
+        <View style={styles.pvOverlay}>
+          <View style={styles.pvModal}>
+            <View style={styles.pvHeader}>
+              <View style={[styles.pvHeaderIcon, { backgroundColor: '#2563EB15' }]}>
+                <MaterialIcons name="verified-user" size={22} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.pvHeaderTitle}>{t('club', 'claimThisClub')}</Text>
+                <Text style={styles.pvHeaderSub}>{t('club', 'claimDesc')}</Text>
+              </View>
+              <Pressable style={styles.pvCloseBtn} onPress={() => setShowClaimModal(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+              <View style={styles.pvCard}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 8 }}>{t('club', 'claimMessage')}</Text>
+                <View style={styles.claimInput}>
+                  <MaterialIcons name="message" size={18} color={theme.textMuted} style={{ marginTop: 2 }} />
+                  <View style={{ flex: 1 }}>
+                    {React.createElement(require('react-native').TextInput, {
+                      style: styles.claimInputField,
+                      placeholder: t('club', 'claimMessagePlaceholder'),
+                      placeholderTextColor: theme.textMuted,
+                      multiline: true,
+                      numberOfLines: 4,
+                      value: claimMessage,
+                      onChangeText: setClaimMessage,
+                      maxLength: 500,
+                    })}
+                  </View>
+                </View>
+                <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'right', marginTop: 4 }}>{claimMessage.length}/500</Text>
+              </View>
+
+              {/* Proof upload section */}
+              <View style={styles.pvCard}>
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 }}>{t('club', 'claimProofLabel')}</Text>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 12 }}>{t('club', 'claimProofDesc')}</Text>
+                {claimProofUri ? (
+                  <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.border }}>
+                    <Pressable onPress={() => claimProofType === 'pdf' ? Linking.openURL(claimProofUrl || claimProofUri) : setShowProofFullscreen(claimProofUri)}>
+                      {claimProofType === 'pdf' ? (
+                        <View style={{ width: '100%', height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 6 }}>
+                          <MaterialIcons name="picture-as-pdf" size={40} color={theme.error} />
+                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{t('club', 'claimProofPdf')}</Text>
+                          <Text style={{ fontSize: 11, color: theme.textSecondary }}>{t('club', 'claimProofTapToOpen')}</Text>
+                        </View>
+                      ) : (
+                        <Image source={{ uri: claimProofUri }} style={{ width: '100%', height: 160 }} contentFit="cover" transition={200} />
+                      )}
+                    </Pressable>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8, backgroundColor: '#F0FDF4', borderTopWidth: 1, borderTopColor: theme.border }}>
+                      <MaterialIcons name="check-circle" size={16} color={theme.success} />
+                      <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: theme.success }}>{t('club', 'claimProofUploaded')}</Text>
+                      <Pressable
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: theme.error + '10', borderRadius: 8 }}
+                        onPress={() => { setClaimProofUri(null); setClaimProofUrl(null); setClaimProofType('image'); }}
+                      >
+                        <MaterialIcons name="close" size={14} color={theme.error} />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{t('club', 'claimProofRemove')}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : uploadingProof ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 32, backgroundColor: theme.backgroundSecondary, borderRadius: 12 }}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8 }}>{t('club', 'claimProofUploading')}</Text>
+                  </View>
+                ) : (
+                  <Pressable
+                    style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.backgroundSecondary, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#2563EB30', gap: 8 }}
+                    onPress={() => {
+                      Alert.alert(
+                        t('club', 'claimProofLabel'),
+                        t('club', 'claimProofDesc'),
+                        [
+                          { text: t('player', 'fromCamera'), onPress: async () => {
+                            const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                            if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
+                            const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
+                            if (!result.canceled && result.assets[0]) {
+                              setUploadingProof(true);
+                              const uri = result.assets[0].uri;
+                              const url = await uploadImageToStorage('club-cards', `claims/${user?.id}/${Date.now()}`, uri);
+                              setUploadingProof(false);
+                              if (url) { setClaimProofUri(uri); setClaimProofUrl(url); setClaimProofType('image'); }
+                              else { showAlert(t('common', 'error'), t('club', 'errorUploadClubCard')); }
+                            }
+                          }},
+                          { text: t('player', 'fromGallery'), onPress: async () => {
+                            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                            if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
+                            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
+                            if (!result.canceled && result.assets[0]) {
+                              setUploadingProof(true);
+                              const uri = result.assets[0].uri;
+                              const url = await uploadImageToStorage('club-cards', `claims/${user?.id}/${Date.now()}`, uri);
+                              setUploadingProof(false);
+                              if (url) { setClaimProofUri(uri); setClaimProofUrl(url); setClaimProofType('image'); }
+                              else { showAlert(t('common', 'error'), t('club', 'errorUploadClubCard')); }
+                            }
+                          }},
+                          { text: t('player', 'fromFiles'), onPress: async () => {
+                            try {
+                              const DocumentPicker = require('expo-document-picker');
+                              const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+                              if (!result.canceled && result.assets && result.assets[0]) {
+                                setUploadingProof(true);
+                                const asset = result.assets[0];
+                                const isPdf = asset.mimeType === 'application/pdf' || asset.name?.toLowerCase().endsWith('.pdf');
+                                const ext = isPdf ? 'pdf' : (asset.name?.split('.').pop()?.toLowerCase() || 'jpg');
+                                const storagePath = `claims/${user?.id}/${Date.now()}.${ext}`;
+                                let base64Data: string;
+                                if (Platform.OS === 'web') {
+                                  const response = await fetch(asset.uri);
+                                  const blob = await response.blob();
+                                  base64Data = await new Promise<string>((resolve) => {
+                                    const reader = new FileReader();
+                                    reader.onloadend = () => { const r = reader.result as string; resolve(r.split(',')[1]); };
+                                    reader.readAsDataURL(blob);
+                                  });
+                                } else {
+                                  const FileSystem = require('expo-file-system');
+                                  base64Data = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
+                                }
+                                const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: asset.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'), upsert: true });
+                                if (uploadError) throw uploadError;
+                                const { data: urlData } = supabase.storage.from('club-cards').getPublicUrl(storagePath);
+                                setUploadingProof(false);
+                                if (urlData?.publicUrl) {
+                                  setClaimProofUri(asset.uri);
+                                  setClaimProofUrl(urlData.publicUrl);
+                                  setClaimProofType(isPdf ? 'pdf' : 'image');
+                                } else {
+                                  showAlert(t('common', 'error'), t('club', 'errorUploadClubCard'));
+                                }
+                              }
+                            } catch (e: any) {
+                              setUploadingProof(false);
+                              console.log('Error picking document for claim proof:', e);
+                              showAlert(t('common', 'error'), e.message || t('club', 'errorUploadClubCard'));
+                            }
+                          }},
+                          { text: t('common', 'cancel'), style: 'cancel' },
+                        ]
+                      );
+                    }}
+                  >
+                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#2563EB12', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="add-a-photo" size={24} color="#2563EB" />
+                    </View>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#2563EB' }}>{t('club', 'claimAddProof')}</Text>
+                  </Pressable>
+                )}
+              </View>
+
+              <View style={styles.pvNote}>
+                <MaterialIcons name="info-outline" size={16} color={theme.primary} />
+                <Text style={styles.pvNoteText}>
+                  {language === 'fr'
+                    ? 'Le proprietaire actuel recevra votre demande et pourra accepter ou refuser le transfert. En cas de transfert, il conservera un badge Contributeur.'
+                    : 'The current owner will receive your request and can accept or decline the transfer. If accepted, they will keep a Contributor badge.'}
+                </Text>
+              </View>
+            </ScrollView>
+            <View style={styles.pvActions}>
+              <Pressable style={styles.pvCancelBtn} onPress={() => setShowClaimModal(false)}>
+                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.pvConfirmBtn, { backgroundColor: '#2563EB' }]}
+                onPress={async () => {
+                  if (!club || !user?.id || !club.userId) return;
+                  setSubmittingClaim(true);
+                  const { error } = await submitClubClaim({
+                    clubId: club.id,
+                    currentOwnerId: club.userId,
+                    requesterUserId: user.id,
+                    requesterName: user.username || user.email,
+                    requesterEmail: user.email,
+                    message: claimMessage.trim() || undefined,
+                    proofUrl: claimProofUrl || undefined,
+                  });
+                  setSubmittingClaim(false);
+                  if (error === 'claim_already_pending') {
+                    showAlert(t('common', 'error'), t('club', 'claimAlreadyPending'));
+                  } else if (error) {
+                    showAlert(t('common', 'error'), error);
+                  } else {
+                    setClaimStatus('pending');
+                    setShowClaimModal(false);
+                    setClaimMessage('');
+                    setClaimProofUri(null);
+                    setClaimProofUrl(null);
+                    setClaimProofType('image');
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    showAlert(t('club', 'claimSent'), t('club', 'claimSentDesc'));
+                  }
+                }}
+                disabled={submittingClaim}
+              >
+                {submittingClaim ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="send" size={18} color="#FFF" />
+                    <Text style={styles.pvConfirmText}>{t('club', 'claimSubmit')}</Text>
+                  </>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Proof Fullscreen Modal */}
+      <Modal visible={!!showProofFullscreen} animationType="fade" transparent onRequestClose={() => setShowProofFullscreen(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
+          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setShowProofFullscreen(null)}>
+            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="close" size={28} color="#FFF" />
+            </View>
+          </Pressable>
+          {showProofFullscreen ? <Image source={{ uri: showProofFullscreen }} style={{ width: screenWidth, height: screenWidth * 1.4 }} contentFit="contain" transition={200} /> : null}
+        </View>
+      </Modal>
+
       {/* Club Card Fullscreen Modal */}
       <Modal visible={showCardFullscreen} animationType="fade" transparent onRequestClose={() => setShowCardFullscreen(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
@@ -981,6 +1408,32 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  claimNotifBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    position: 'relative' as const,
+  },
+  claimNotifBadge: {
+    position: 'absolute' as const,
+    top: 2,
+    right: 2,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#EF4444',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: theme.surface,
+  },
+  claimNotifBadgeText: {
+    fontSize: 9,
+    fontWeight: '800' as const,
+    color: '#FFF',
   },
   headerTitle: {
     fontSize: 17,
@@ -1360,6 +1813,179 @@ const styles = StyleSheet.create({
   visibilityBadgeText: {
     fontSize: 12,
     fontWeight: '700',
+  },
+
+  // Verified badge
+  verifiedBadge: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    backgroundColor: '#2563EB12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+
+  // Claim styles
+  claimButton: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    gap: 14,
+    borderWidth: 1.5,
+    borderColor: '#2563EB25',
+    ...theme.shadows.card,
+  },
+  claimButtonIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#2563EB12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  claimButtonTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#2563EB',
+  },
+  claimButtonDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+    lineHeight: 17,
+  },
+  claimStatusCard: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    gap: 14,
+    ...theme.shadows.card,
+  },
+  claimStatusIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  claimStatusTitle: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#F59E0B',
+  },
+  claimStatusDesc: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 2,
+  },
+  claimCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    marginBottom: 10,
+    borderWidth: 1.5,
+    borderColor: '#F59E0B30',
+    ...theme.shadows.card,
+  },
+  claimCardHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    marginBottom: 10,
+  },
+  claimAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F59E0B',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  claimName: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: theme.textPrimary,
+  },
+  claimEmail: {
+    fontSize: 12,
+    color: theme.textSecondary,
+    marginTop: 1,
+  },
+  claimDate: {
+    fontSize: 11,
+    color: theme.textMuted,
+    marginTop: 2,
+  },
+  claimMessageBox: {
+    flexDirection: 'row' as const,
+    gap: 8,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    marginBottom: 12,
+  },
+  claimMessageText: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textSecondary,
+    lineHeight: 19,
+    fontStyle: 'italic' as const,
+  },
+  claimActions: {
+    flexDirection: 'row' as const,
+    gap: 8,
+  },
+  claimDeclineBtn: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 5,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+  claimDeclineText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: theme.error,
+  },
+  claimAcceptBtn: {
+    flex: 2,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 5,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#10B981',
+  },
+  claimAcceptText: {
+    fontSize: 13,
+    fontWeight: '700' as const,
+    color: '#FFF',
+  },
+  claimInput: {
+    flexDirection: 'row' as const,
+    gap: 10,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: theme.borderRadius.md,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  claimInputField: {
+    fontSize: 14,
+    color: theme.textPrimary,
+    lineHeight: 20,
+    minHeight: 80,
+    textAlignVertical: 'top' as const,
   },
 
   // ===== Preview Modal =====

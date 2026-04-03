@@ -16,6 +16,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { Image } from 'expo-image';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -120,6 +121,7 @@ export default function NotificationsHubScreen() {
   const [clubClaims, setClubClaims] = useState<ClubClaimRequest[]>([]);
   const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
   const [claimFilter, setClaimFilter] = useState('all');
+  const [proofFullscreen, setProofFullscreen] = useState<string | null>(null);
 
   // Filter state
   const [invFilter, setInvFilter] = useState('all');
@@ -739,6 +741,25 @@ export default function NotificationsHubScreen() {
                           <Text style={{ flex: 1, fontSize: 12, color: '#64748B', lineHeight: 18, fontStyle: 'italic' }}>{claim.message}</Text>
                         </View>
                       ) : null}
+                      {claim.proofUrl ? (
+                        <Pressable
+                          style={{ borderRadius: 10, overflow: 'hidden', marginTop: 8, borderWidth: 1, borderColor: '#2563EB20' }}
+                          onPress={() => claim.proofUrl!.toLowerCase().endsWith('.pdf') ? Linking.openURL(claim.proofUrl!) : setProofFullscreen(claim.proofUrl!)}
+                        >
+                          {claim.proofUrl.toLowerCase().endsWith('.pdf') ? (
+                            <View style={{ width: '100%', height: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', gap: 4 }}>
+                              <MaterialIcons name="picture-as-pdf" size={28} color="#EF4444" />
+                              <Text style={{ fontSize: 11, fontWeight: '600', color: '#0F172A' }}>{fr ? 'Document PDF' : 'PDF Document'}</Text>
+                            </View>
+                          ) : (
+                            <Image source={{ uri: claim.proofUrl }} style={{ width: '100%', height: 100 }} contentFit="cover" transition={200} />
+                          )}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, padding: 8, backgroundColor: '#EFF6FF' }}>
+                            <MaterialIcons name={claim.proofUrl.toLowerCase().endsWith('.pdf') ? 'open-in-new' : 'photo'} size={13} color="#2563EB" />
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#2563EB' }}>{fr ? 'Piece justificative jointe' : 'Supporting proof attached'}</Text>
+                          </View>
+                        </Pressable>
+                      ) : null}
                       <View style={s.actionRow}>
                         <Pressable style={s.declineBtn} onPress={() => handleDeclineClaim(claim.id)} disabled={processingClaimId === claim.id}><MaterialIcons name="close" size={16} color={theme.error} /><Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text></Pressable>
                         <Pressable style={[s.acceptBtn, { backgroundColor: '#10B981' }]} onPress={() => handleAcceptClaim(claim.id)} disabled={processingClaimId === claim.id}>
@@ -775,6 +796,18 @@ export default function NotificationsHubScreen() {
             ) : null}
 
             {filteredClaims.length === 0 ? renderEmpty('verified-user', claimFilter !== 'all') : null}
+
+            {/* Proof Fullscreen Modal */}
+            <Modal visible={!!proofFullscreen} animationType="fade" transparent onRequestClose={() => setProofFullscreen(null)}>
+              <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
+                <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setProofFullscreen(null)}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="close" size={28} color="#FFF" />
+                  </View>
+                </Pressable>
+                {proofFullscreen ? <Image source={{ uri: proofFullscreen }} style={{ width: 360, height: 500 }} contentFit="contain" transition={200} /> : null}
+              </View>
+            </Modal>
           </View>
         ) : null}
 
