@@ -1752,7 +1752,14 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
       </View>
       <View style={styles.itemContent}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemHeader}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {item.isVerified ? (
+            <View style={styles.clubVerifiedBadge}>
+              <MaterialIcons name="verified" size={14} color="#2563EB" />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.itemMeta}>
           <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.city}, {item.country || 'France'}</Text></View>
           {item.terrainName ? <View style={styles.metaItem}><MaterialIcons name="sports-soccer" size={12} color={theme.success} /><Text style={[styles.metaText, { color: theme.success }]}>{item.terrainName}</Text></View> : null}
@@ -2802,6 +2809,14 @@ const styles = StyleSheet.create({
   loadMoreFooter: {
     paddingVertical: 20,
     alignItems: 'center' as const,
+  },
+  clubVerifiedBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2563EB10',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   mapLinkBtn: {
     width: 30,

@@ -64,6 +64,11 @@ export const commonTranslations = {
     training: { fr: 'Entraînement', en: 'Training' },
     tournament: { fr: 'Tournoi', en: 'Tournament' },
   },
+  maintenance: {
+    title: { fr: 'Maintenance', en: 'Maintenance' },
+    defaultMessage: { fr: 'Maintenance en cours. Certains services peuvent etre temporairement indisponibles.', en: 'Maintenance in progress. Some services may be temporarily unavailable.' },
+    endingSoon: { fr: 'Bientot termine', en: 'Ending soon' },
+  },
   offlineBanner: {
     neverSynced: { fr: 'jamais synchronisé', en: 'never synced' },
     syncing: { fr: 'Synchronisation...', en: 'Syncing...' },
