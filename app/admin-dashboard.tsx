@@ -28,6 +28,8 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
 import { getMaintenanceStatus } from '@/services/maintenanceService';
+import { getRecentActivityLogs, AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
+import { getAllAppeals, BanAppeal } from '@/services/banAppealService';
 
 interface DashboardStats {
   totalUsers: number;
@@ -43,13 +45,14 @@ interface DashboardStats {
   flaggedPlayers: number;
   maintenanceActive: boolean;
   maintenanceScheduled: boolean;
+  pendingAppeals: number;
 }
 
 const INITIAL_STATS: DashboardStats = {
   totalUsers: 0, premiumUsers: 0, totalPlayers: 0, totalTerrains: 0,
   totalClubs: 0, totalMatches: 0, pendingReports: 0, activeWarnings: 0,
   activeBans: 0, totalAnnouncements: 0, flaggedPlayers: 0,
-  maintenanceActive: false, maintenanceScheduled: false,
+  maintenanceActive: false, maintenanceScheduled: false, pendingAppeals: 0,
 };
 
 const ADMIN_SECTIONS: { key: string; route: string; icon: string; color: string; labelFr: string; labelEn: string; descFr: string; descEn: string; statKey?: keyof DashboardStats; badgeColor?: string }[] = [
@@ -70,6 +73,7 @@ export default function AdminDashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats>(INITIAL_STATS);
+  const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -78,6 +82,7 @@ export default function AdminDashboardScreen() {
       const [
         usersRes, playersRes, terrainsRes, clubsRes, matchesRes,
         reportsRes, announcementsRes, suspiciousRes, maintenanceRes,
+        activityRes, appealsRes,
       ] = await Promise.all([
         supabase.from('user_profiles').select('id, is_premium', { count: 'exact', head: false }),
         supabase.from('players').select('id', { count: 'exact', head: true }),
@@ -88,7 +93,11 @@ export default function AdminDashboardScreen() {
         supabase.from('announcements').select('id', { count: 'exact', head: true }),
         supabase.from('suspicious_players').select('id, status'),
         getMaintenanceStatus(),
+        getRecentActivityLogs(20),
+        getAllAppeals(50),
       ]);
+
+      setActivityLogs(activityRes.logs || []);
 
       const users = usersRes.data || [];
       const reports = reportsRes.data || [];
@@ -108,6 +117,7 @@ export default function AdminDashboardScreen() {
         flaggedPlayers: suspicious.filter((s: any) => s.status === 'flagged').length,
         maintenanceActive: maintenanceRes.isActive,
         maintenanceScheduled: maintenanceRes.isScheduled,
+        pendingAppeals: (appealsRes.appeals || []).filter((a: any) => a.status === 'pending').length,
       });
     } catch (e) {
       console.log('[AdminDashboard] Error loading stats:', e);
@@ -264,6 +274,58 @@ export default function AdminDashboardScreen() {
           </View>
         </Animated.View>
 
+        {/* Pending Appeals Alert */}
+        {stats.pendingAppeals > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(120)}>
+            <Pressable
+              style={[s.alertCard, { backgroundColor: '#FFFBEB', borderColor: '#FDE68A' }]}
+              onPress={() => { Haptics.selectionAsync(); router.push('/admin-moderation' as any); }}
+            >
+              <View style={[s.alertIcon, { backgroundColor: '#D9770620' }]}>
+                <MaterialIcons name="rate-review" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.alertTitle, { color: '#92400E' }]}>
+                  {stats.pendingAppeals} {fr ? 'appel(s) de ban en attente' : 'pending ban appeal(s)'}
+                </Text>
+                <Text style={[s.alertDesc, { color: '#B45309' }]}>
+                  {fr ? 'Cliquez pour examiner' : 'Click to review'}
+                </Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color="#D97706" />
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        {/* Activity Log */}
+        {activityLogs.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(130)}>
+            <Text style={s.sectionTitle}>{fr ? 'ACTIVITE RECENTE' : 'RECENT ACTIVITY'}</Text>
+            <View style={s.activityCard}>
+              {activityLogs.slice(0, 10).map((log, idx) => {
+                const cfg = ACTION_CONFIG[log.actionType] || { iconFr: log.actionType, iconEn: log.actionType, color: '#64748B', icon: 'info' };
+                const timeAgo = getTimeAgo(log.createdAt, fr);
+                return (
+                  <View key={log.id} style={[s.activityItem, idx > 0 && s.activityItemBorder]}>
+                    <View style={[s.activityIcon, { backgroundColor: cfg.color + '12' }]}>
+                      <MaterialIcons name={cfg.icon as any} size={14} color={cfg.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.activityText} numberOfLines={1}>
+                        {fr ? cfg.iconFr : cfg.iconEn}
+                        {log.targetName ? ` — ${log.targetName}` : ''}
+                      </Text>
+                      <Text style={s.activityMeta}>
+                        {log.adminName || 'Admin'} {"\u2022"} {timeAgo}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          </Animated.View>
+        ) : null}
+
         {/* Quick Navigation */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)}>
           <Text style={s.sectionTitle}>{fr ? 'NAVIGATION RAPIDE' : 'QUICK NAVIGATION'}</Text>
@@ -352,4 +414,24 @@ const s = StyleSheet.create({
   navBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   navBadgeText: { fontSize: 11, fontWeight: '800' },
   maintDot: { width: 6, height: 6, borderRadius: 3 },
+
+  // Activity Log
+  activityCard: { backgroundColor: '#FFF', borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16 },
+  activityItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 14 },
+  activityItemBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  activityIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  activityText: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
+  activityMeta: { fontSize: 10, color: '#94A3B8', marginTop: 1 },
 });
+
+function getTimeAgo(dateStr: string, fr: boolean): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const mins = Math.floor(diff / 60000);
+  if (mins < 1) return fr ? 'A l\'instant' : 'Just now';
+  if (mins < 60) return `${mins}${fr ? ' min' : 'm'}`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}${fr ? 'j' : 'd'}`;
+  return new Date(dateStr).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+}

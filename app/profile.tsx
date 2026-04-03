@@ -1977,6 +1977,14 @@ export default function ProfileScreen() {
             {isAdmin ? (
               <>
                 <Text style={[styles.sectionTitle, { marginTop: 16 }]}>ADMIN</Text>
+                <Pressable style={[styles.menuItem, { backgroundColor: '#0F172A' }]} onPress={() => { Haptics.selectionAsync(); router.push('/admin-dashboard' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#FFF' + '20' }]}><MaterialIcons name="dashboard" size={20} color="#FFF" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={[styles.menuItemText, { color: '#FFF' }]}>{language === 'fr' ? 'Tableau de bord' : 'Dashboard'}</Text>
+                    <Text style={[styles.menuItemSubtext, { color: '#94A3B8' }]}>{language === 'fr' ? 'Vue d\'ensemble admin' : 'Admin overview'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color="#64748B" />
+                </Pressable>
                 <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-promos' as any); }}>
                   <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} /></View>
                   <View style={styles.menuItemContent}>
@@ -2002,6 +2010,20 @@ export default function ProfileScreen() {
                   <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="campaign" size={20} color="#7C3AED" /></View>
                   <View style={styles.menuItemContent}>
                     <Text style={styles.menuItemText}>{language === 'fr' ? 'Annonces ciblees' : 'Targeted Announcements'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-moderation' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#DC2626' + '15' }]}><MaterialIcons name="gavel" size={20} color="#DC2626" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Moderation joueurs' : 'Player Moderation'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-terrains' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#10B981' + '15' }]}><MaterialIcons name="sports-soccer" size={20} color="#10B981" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion terrains' : 'Terrain Management'}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>

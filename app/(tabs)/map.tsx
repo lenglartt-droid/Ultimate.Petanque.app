@@ -254,12 +254,16 @@ const pMarkerStyles = StyleSheet.create({
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null }) => (
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean }) => (
   <View style={styles.markerWrapper}>
     <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback]}>
       <MaterialIcons name={icon as any} size={14} color="#FFF" />
     </View>
-    {fallbackSource ? (
+    {isVerified ? (
+      <View style={styles.verifiedBadge}>
+        <MaterialIcons name="verified" size={9} color="#FFF" />
+      </View>
+    ) : fallbackSource ? (
       <View style={[styles.fallbackBadge, { backgroundColor: fallbackSource === 'terrain' ? theme.success : theme.accent }]}>
         <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={7} color="#FFF" />
       </View>
@@ -1242,7 +1246,7 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={false}
               >
-                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} />
+                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} />
               </MarkerComponent>
             );
           }
@@ -1900,6 +1904,7 @@ const styles = StyleSheet.create({
   accessBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   accessBadgePublic: { backgroundColor: theme.success },
   accessBadgePrivate: { backgroundColor: '#F59E0B' },
+  verifiedBadge: { position: 'absolute', bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   // Fallback badge for players with terrain/club location
   fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },

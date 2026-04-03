@@ -37,9 +37,12 @@ import {
   adminDeleteTerrain,
   getTerrainStats,
   detectDuplicateTerrains,
+  mergeTerrains,
+  pickBestTerrain,
   AdminTerrain,
   DuplicateGroup,
 } from '@/services/adminTerrainService';
+import { logAdminAction } from '@/services/adminActivityLogService';
 
 type FilterKey = 'all' | 'public' | 'private' | 'lighting' | 'covered';
 
@@ -172,6 +175,7 @@ export default function AdminTerrainsScreen() {
         courtsCount: parseInt(editCourts, 10) || 1,
       } : t));
       setEditTerrain(null);
+      logAdminAction({ actionType: 'terrain_edit', targetType: 'terrain', targetId: editTerrain.id, targetName: editName.trim(), actionDetail: `${editCity.trim()} - ${editType}` });
     }
     setEditSubmitting(false);
   }, [editTerrain, editName, editCity, editType, editPublic, editLighting, editCovered, editCourts, fr, showAlert]);
@@ -191,6 +195,41 @@ export default function AdminTerrainsScreen() {
             else {
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               setTerrains(prev => prev.filter(t => t.id !== terrain.id));
+              logAdminAction({ actionType: 'terrain_delete', targetType: 'terrain', targetId: terrain.id, targetName: terrain.name, actionDetail: `${terrain.city} - ${terrain.type}` });
+            }
+          },
+        },
+      ]
+    );
+  }, [fr, showAlert]);
+
+  const handleMergeDuplicates = useCallback((group: DuplicateGroup) => {
+    if (group.terrains.length < 2) return;
+    const a = group.terrains[0];
+    const b = group.terrains[1];
+    const { keepId, deleteId } = pickBestTerrain(a, b);
+    const keepTerrain = keepId === a.id ? a : b;
+    const deleteTerrain = deleteId === a.id ? a : b;
+
+    Alert.alert(
+      fr ? 'Fusionner ces terrains ?' : 'Merge these terrains?',
+      fr
+        ? `Conserver: ${keepTerrain.name}\nSupprimer: ${deleteTerrain.name}\n\nLes matchs, tournois, meetups et references seront transferes au terrain conserve.`
+        : `Keep: ${keepTerrain.name}\nDelete: ${deleteTerrain.name}\n\nMatches, tournaments, meetups and references will be transferred to the kept terrain.`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: fr ? 'Fusionner' : 'Merge',
+          style: 'destructive',
+          onPress: async () => {
+            const { error } = await mergeTerrains(keepId, deleteId);
+            if (error) showAlert(fr ? 'Erreur' : 'Error', error);
+            else {
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              setTerrains(prev => prev.filter(t => t.id !== deleteId));
+              setDuplicates(prev => prev.filter(g => g !== group));
+              showAlert(fr ? 'Fusion reussie' : 'Merge successful', fr ? `${deleteTerrain.name} a ete fusionne dans ${keepTerrain.name}` : `${deleteTerrain.name} merged into ${keepTerrain.name}`);
+              logAdminAction({ actionType: 'terrain_merge', targetType: 'terrain', targetId: keepId, targetName: keepTerrain.name, actionDetail: `Merged ${deleteTerrain.name} into ${keepTerrain.name}`, metadata: { deletedId: deleteId, deletedName: deleteTerrain.name } });
             }
           },
         },
@@ -347,24 +386,38 @@ export default function AdminTerrainsScreen() {
                         {group.distanceM}m {fr ? 'de distance' : 'apart'} {"\u2022"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
                       </Text>
                     </View>
-                    {group.terrains.map((t, tIdx) => (
-                      <View key={t.id} style={s.dupeItem}>
-                        <View style={s.dupeItemNum}>
-                          <Text style={s.dupeItemNumText}>{tIdx + 1}</Text>
+                    {group.terrains.map((t, tIdx) => {
+                      const best = group.terrains.length >= 2 ? pickBestTerrain(group.terrains[0], group.terrains[1]) : null;
+                      const isKept = best && best.keepId === t.id;
+                      return (
+                        <View key={t.id} style={s.dupeItem}>
+                          <View style={[s.dupeItemNum, isKept && { backgroundColor: '#DCFCE7' }]}>
+                            <Text style={[s.dupeItemNumText, isKept && { color: '#10B981' }]}>{isKept ? '✓' : String(tIdx + 1)}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.dupeItemName}>{t.name}</Text>
+                            <Text style={s.dupeItemCity}>{t.city} {"\u2022"} {t.type}{isKept ? (fr ? ' (conserve)' : ' (kept)') : ''}</Text>
+                          </View>
+                          <Pressable
+                            style={s.dupeDeleteBtn}
+                            onPress={() => handleDelete(t)}
+                            hitSlop={8}
+                          >
+                            <MaterialIcons name="delete-outline" size={16} color="#EF4444" />
+                          </Pressable>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.dupeItemName}>{t.name}</Text>
-                          <Text style={s.dupeItemCity}>{t.city} {"\u2022"} {t.type}</Text>
-                        </View>
-                        <Pressable
-                          style={s.dupeDeleteBtn}
-                          onPress={() => handleDelete(t)}
-                          hitSlop={8}
-                        >
-                          <MaterialIcons name="delete-outline" size={16} color="#EF4444" />
-                        </Pressable>
-                      </View>
-                    ))}
+                      );
+                    })}
+                    {/* Merge button */}
+                    {group.terrains.length >= 2 ? (
+                      <Pressable
+                        style={s.dupeMergeBtn}
+                        onPress={() => handleMergeDuplicates(group)}
+                      >
+                        <MaterialIcons name="merge-type" size={14} color="#7C3AED" />
+                        <Text style={s.dupeMergeBtnText}>{fr ? 'Fusionner automatiquement' : 'Auto-merge'}</Text>
+                      </Pressable>
+                    ) : null}
                   </View>
                 ))}
               </View>
@@ -697,4 +750,6 @@ const s = StyleSheet.create({
   dupeItemName: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
   dupeItemCity: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
   dupeDeleteBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FECACA' },
+  dupeMergeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE', marginTop: 8 },
+  dupeMergeBtnText: { fontSize: 12, fontWeight: '700', color: '#7C3AED' },
 });
