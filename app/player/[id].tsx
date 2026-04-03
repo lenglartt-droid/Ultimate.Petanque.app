@@ -779,7 +779,7 @@ export default function PlayerDetailScreen() {
           );
         })()}
 
-        {/* ===== MATCH STATISTICS ===== */
+        {/* ===== MATCH STATISTICS ===== */}
         <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="sports" size={18} color={theme.primary} /></View>
