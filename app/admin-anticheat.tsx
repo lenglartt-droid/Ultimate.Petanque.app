@@ -10,6 +10,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
 import { useApp } from '@/contexts/AppContext';

@@ -25,6 +25,7 @@ const ADMIN_SECTIONS = [
   { route: '/admin-reports', icon: 'assessment', label: 'Rapports', color: '#0EA5E9' },
   { route: '/admin-activity-log', icon: 'history', label: 'Journal', color: '#64748B' },
   { route: '/admin-notifications', icon: 'notifications', label: 'Alertes', color: '#DC2626' },
+  { route: '/admin-changelog', icon: 'update', label: 'Changelog', color: '#0EA5E9' },
 ];
 
 interface AdminQuickNavProps {
