@@ -213,7 +213,7 @@ export default function AdminActivityLogScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.back()}>
+          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
             <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
           </Pressable>
           <Text style={s.headerTitle}>{fr ? 'Journal d\'activite' : 'Activity Log'}</Text>
@@ -228,7 +228,7 @@ export default function AdminActivityLogScreen() {
     <AdminGuard language={language} requiredPermission="reports">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Journal d\'activite' : 'Activity Log'}</Text>

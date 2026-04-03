@@ -201,7 +201,7 @@ export default function AdminReportsScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
           <Text style={s.headerTitle}>{fr ? 'Rapports' : 'Reports'}</Text>
           <View style={{ width: 40 }} />
         </View>
@@ -213,7 +213,7 @@ export default function AdminReportsScreen() {
   return (
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
         <Text style={s.headerTitle}>{fr ? 'Rapports hebdomadaires' : 'Weekly Reports'}</Text>
         <Pressable
           style={[s.backBtn, { borderWidth: 1, borderColor: '#DBEAFE' }, exporting && { opacity: 0.5 }]}
@@ -223,6 +223,8 @@ export default function AdminReportsScreen() {
           {exporting ? <ActivityIndicator size="small" color="#3B82F6" /> : <MaterialIcons name="file-download" size={20} color="#3B82F6" />}
         </Pressable>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-reports" />
 
       <ScrollView
         style={s.scroll}
