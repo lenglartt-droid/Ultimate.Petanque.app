@@ -1831,6 +1831,49 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={async () => {
+                Haptics.selectionAsync();
+                try {
+                  const sb = getSupabaseClient();
+                  const tables = ['matches', 'challenges', 'tournaments', 'players', 'clubs', 'terrains', 'boules_sets'];
+                  const allData: Record<string, any[]> = {};
+                  for (const table of tables) {
+                    const { data } = await sb.from(table).select('*').eq('user_id', user?.id || '');
+                    allData[table] = data || [];
+                  }
+                  const jsonStr = JSON.stringify(allData, null, 2);
+                  const filename = `petanque-backup-${new Date().toISOString().slice(0, 10)}.json`;
+                  if (Platform.OS === 'web') {
+                    try {
+                      const blob = new Blob([jsonStr], { type: 'application/json' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url; a.download = filename; a.click();
+                      URL.revokeObjectURL(url);
+                    } catch {
+                      try { const ExpoClipboard = require('expo-clipboard'); await ExpoClipboard.setStringAsync(jsonStr); } catch {}
+                    }
+                  } else {
+                    const FS = require('expo-file-system');
+                    const SharingModule = require('expo-sharing');
+                    const path = `${FS.cacheDirectory}${filename}`;
+                    await FS.writeAsStringAsync(path, jsonStr, { encoding: FS.EncodingType.UTF8 });
+                    const canShare = await SharingModule.isAvailableAsync();
+                    if (canShare) await SharingModule.shareAsync(path, { mimeType: 'application/json', dialogTitle: language === 'fr' ? 'Sauvegarder mes donnees' : 'Backup my data' });
+                  }
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (e: any) {
+                  showAlert(language === 'fr' ? 'Erreur' : 'Error', e.message || 'Backup failed');
+                }
+              }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="backup" size={16} color="#7C3AED" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Sauvegarde complete' : 'Full Backup'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>JSON ({language === 'fr' ? 'toutes les donnees' : 'all data'})</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
               <View style={[styles.compactMenuItem, { paddingVertical: 10 }]}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: (batterySaverEnabled ? theme.warning : '#10B981') + '15' }]}><MaterialIcons name={batterySaverEnabled ? 'battery-saver' : 'bolt'} size={16} color={batterySaverEnabled ? theme.warning : '#10B981'} /></View>
                 <Text style={[styles.compactMenuText, { flex: 1 }]}>{t('syncHistory', 'batterySaver')}</Text>
@@ -1981,75 +2024,15 @@ export default function ProfileScreen() {
                   <View style={[styles.menuIcon, { backgroundColor: '#FFF' + '20' }]}><MaterialIcons name="dashboard" size={20} color="#FFF" /></View>
                   <View style={styles.menuItemContent}>
                     <Text style={[styles.menuItemText, { color: '#FFF' }]}>{language === 'fr' ? 'Tableau de bord' : 'Dashboard'}</Text>
-                    <Text style={[styles.menuItemSubtext, { color: '#94A3B8' }]}>{language === 'fr' ? 'Vue d\'ensemble admin' : 'Admin overview'}</Text>
+                    <Text style={[styles.menuItemSubtext, { color: '#94A3B8' }]}>{language === 'fr' ? 'Toutes les sections admin' : 'All admin sections'}</Text>
                   </View>
+                  {maintenanceActive ? (
+                    <View style={[styles.maintenanceBadge, { backgroundColor: '#FEF3C7', marginRight: 8 }]}>
+                      <View style={[styles.maintenanceDot, { backgroundColor: '#D97706' }]} />
+                      <Text style={[styles.maintenanceBadgeText, { color: '#92400E' }]}>MAINT.</Text>
+                    </View>
+                  ) : null}
                   <MaterialIcons name="chevron-right" size={20} color="#64748B" />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-promos' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="admin-panel-settings" size={20} color={theme.carreauColor} /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion codes promo' : 'Promo Code Management'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-sponsors' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="handshake" size={20} color="#7C3AED" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion Sponsors & Ambassadeurs' : 'Sponsors & Ambassadors'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#EF4444' + '15' }]}><MaterialIcons name="security" size={20} color="#EF4444" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Anti-triche & Trust Score' : 'Anti-cheat & Trust Score'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-announcements' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="campaign" size={20} color="#7C3AED" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Annonces ciblees' : 'Targeted Announcements'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-moderation' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#DC2626' + '15' }]}><MaterialIcons name="gavel" size={20} color="#DC2626" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Moderation joueurs' : 'Player Moderation'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-terrains' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#10B981' + '15' }]}><MaterialIcons name="sports-soccer" size={20} color="#10B981" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion terrains' : 'Terrain Management'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-users' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="people" size={20} color="#3B82F6" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion utilisateurs' : 'User Management'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-clubs' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="home" size={20} color="#7C3AED" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion clubs' : 'Club Management'}</Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-                </Pressable>
-                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-maintenance' as any); }}>
-                  <View style={[styles.menuIcon, { backgroundColor: '#D97706' + '15' }]}><MaterialIcons name="construction" size={20} color="#D97706" /></View>
-                  <View style={styles.menuItemContent}>
-                    <Text style={styles.menuItemText}>Maintenance</Text>
-                  </View>
-                  <View style={[styles.maintenanceBadge, { backgroundColor: maintenanceActive ? '#FEF3C7' : '#DCFCE7' }]}>
-                    <View style={[styles.maintenanceDot, { backgroundColor: maintenanceActive ? '#D97706' : '#10B981' }]} />
-                    <Text style={[styles.maintenanceBadgeText, { color: maintenanceActive ? '#92400E' : '#166534' }]}>{maintenanceActive ? 'ON' : 'OFF'}</Text>
-                  </View>
                 </Pressable>
               </>
             ) : null}

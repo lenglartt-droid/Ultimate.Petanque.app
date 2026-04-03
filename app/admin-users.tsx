@@ -31,6 +31,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
@@ -334,6 +335,7 @@ export default function AdminUsersScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -631,6 +633,7 @@ export default function AdminUsersScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

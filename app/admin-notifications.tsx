@@ -28,6 +28,7 @@ import { getAllAppeals, BanAppeal, respondToAppeal } from '@/services/banAppealS
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 
 interface AdminNotification {
   id: string;
@@ -266,6 +267,7 @@ export default function AdminNotificationsScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>
@@ -446,6 +448,7 @@ export default function AdminNotificationsScreen() {
         )}
       </ScrollView>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

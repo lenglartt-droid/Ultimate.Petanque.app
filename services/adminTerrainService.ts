@@ -237,6 +237,38 @@ function parseLocation(terrain: AdminTerrain): { lat: number; lng: number } | nu
 }
 
 /**
+ * Get a preview of what will be affected by merging two terrains.
+ */
+export async function getMergePreview(keepId: string, deleteId: string): Promise<{ preview: { matches: number; challenges: number; tournaments: number; meetups: number; clubs: number; players: number; events: number }; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const [matchesRes, challengesRes, tournamentsRes, meetupsRes, clubsRes, playersRes, eventsRes] = await Promise.all([
+      supabase.from('matches').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('challenges').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('tournaments').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('terrain_meetups').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('clubs').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('players').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+      supabase.from('sponsored_events').select('id', { count: 'exact', head: true }).eq('terrain_id', deleteId),
+    ]);
+    return {
+      preview: {
+        matches: matchesRes.count || 0,
+        challenges: challengesRes.count || 0,
+        tournaments: tournamentsRes.count || 0,
+        meetups: meetupsRes.count || 0,
+        clubs: clubsRes.count || 0,
+        players: playersRes.count || 0,
+        events: eventsRes.count || 0,
+      },
+      error: null,
+    };
+  } catch (e: any) {
+    return { preview: { matches: 0, challenges: 0, tournaments: 0, meetups: 0, clubs: 0, players: 0, events: 0 }, error: e.message };
+  }
+}
+
+/**
  * Merge duplicate terrains: keep the most complete one, transfer references, delete the other.
  */
 export async function mergeTerrains(keepId: string, deleteId: string): Promise<{ error: string | null }> {

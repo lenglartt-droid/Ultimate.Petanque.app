@@ -32,6 +32,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 import {
   getAllTerrains,
   adminUpdateTerrain,
@@ -39,6 +40,7 @@ import {
   getTerrainStats,
   detectDuplicateTerrains,
   mergeTerrains,
+  getMergePreview,
   pickBestTerrain,
   AdminTerrain,
   DuplicateGroup,
@@ -204,39 +206,50 @@ export default function AdminTerrainsScreen() {
     );
   }, [fr, showAlert]);
 
-  const handleMergeDuplicates = useCallback((group: DuplicateGroup) => {
+  // Merge preview state
+  const [mergePreview, setMergePreview] = useState<{ matches: number; challenges: number; tournaments: number; meetups: number; clubs: number; players: number; events: number } | null>(null);
+  const [mergeGroup, setMergeGroup] = useState<DuplicateGroup | null>(null);
+  const [mergeKeepId, setMergeKeepId] = useState<string | null>(null);
+  const [mergeDeleteId, setMergeDeleteId] = useState<string | null>(null);
+  const [loadingPreview, setLoadingPreview] = useState(false);
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [merging, setMerging] = useState(false);
+
+  const handleMergeDuplicates = useCallback(async (group: DuplicateGroup) => {
     if (group.terrains.length < 2) return;
     const a = group.terrains[0];
     const b = group.terrains[1];
     const { keepId, deleteId } = pickBestTerrain(a, b);
-    const keepTerrain = keepId === a.id ? a : b;
-    const deleteTerrain = deleteId === a.id ? a : b;
+    setMergeGroup(group);
+    setMergeKeepId(keepId);
+    setMergeDeleteId(deleteId);
+    setShowMergeModal(true);
+    setLoadingPreview(true);
+    const { preview } = await getMergePreview(keepId, deleteId);
+    setMergePreview(preview);
+    setLoadingPreview(false);
+  }, []);
 
-    Alert.alert(
-      fr ? 'Fusionner ces terrains ?' : 'Merge these terrains?',
-      fr
-        ? `Conserver: ${keepTerrain.name}\nSupprimer: ${deleteTerrain.name}\n\nLes matchs, tournois, meetups et references seront transferes au terrain conserve.`
-        : `Keep: ${keepTerrain.name}\nDelete: ${deleteTerrain.name}\n\nMatches, tournaments, meetups and references will be transferred to the kept terrain.`,
-      [
-        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
-        {
-          text: fr ? 'Fusionner' : 'Merge',
-          style: 'destructive',
-          onPress: async () => {
-            const { error } = await mergeTerrains(keepId, deleteId);
-            if (error) showAlert(fr ? 'Erreur' : 'Error', error);
-            else {
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              setTerrains(prev => prev.filter(t => t.id !== deleteId));
-              setDuplicates(prev => prev.filter(g => g !== group));
-              showAlert(fr ? 'Fusion reussie' : 'Merge successful', fr ? `${deleteTerrain.name} a ete fusionne dans ${keepTerrain.name}` : `${deleteTerrain.name} merged into ${keepTerrain.name}`);
-              logAdminAction({ actionType: 'terrain_merge', targetType: 'terrain', targetId: keepId, targetName: keepTerrain.name, actionDetail: `Merged ${deleteTerrain.name} into ${keepTerrain.name}`, metadata: { deletedId: deleteId, deletedName: deleteTerrain.name } });
-            }
-          },
-        },
-      ]
-    );
-  }, [fr, showAlert]);
+  const executeMerge = useCallback(async () => {
+    if (!mergeKeepId || !mergeDeleteId || !mergeGroup) return;
+    setMerging(true);
+    const keepTerrain = mergeGroup.terrains.find(t => t.id === mergeKeepId)!;
+    const deleteTerrain = mergeGroup.terrains.find(t => t.id === mergeDeleteId)!;
+    const { error } = await mergeTerrains(mergeKeepId, mergeDeleteId);
+    if (error) {
+      showAlert(fr ? 'Erreur' : 'Error', error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTerrains(prev => prev.filter(t => t.id !== mergeDeleteId));
+      setDuplicates(prev => prev.filter(g => g !== mergeGroup));
+      showAlert(fr ? 'Fusion reussie' : 'Merge successful', fr ? `${deleteTerrain.name} a ete fusionne dans ${keepTerrain.name}` : `${deleteTerrain.name} merged into ${keepTerrain.name}`);
+      logAdminAction({ actionType: 'terrain_merge', targetType: 'terrain', targetId: mergeKeepId, targetName: keepTerrain.name, actionDetail: `Merged ${deleteTerrain.name} into ${keepTerrain.name}`, metadata: { deletedId: mergeDeleteId, deletedName: deleteTerrain.name, preview: mergePreview } });
+    }
+    setMerging(false);
+    setShowMergeModal(false);
+    setMergePreview(null);
+    setMergeGroup(null);
+  }, [mergeKeepId, mergeDeleteId, mergeGroup, mergePreview, fr, showAlert]);
 
   const handleTogglePublic = useCallback(async (terrain: AdminTerrain) => {
     Haptics.selectionAsync();
@@ -265,6 +278,7 @@ export default function AdminTerrainsScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -423,31 +437,20 @@ export default function AdminTerrainsScreen() {
                         </Pressable>
                         <Pressable
                           style={[s.dupeMergeBtn, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
-                          onPress={() => {
+                          onPress={async () => {
                             Haptics.selectionAsync();
                             const best = pickBestTerrain(group.terrains[0], group.terrains[1]);
                             const swapped = best.keepId === group.terrains[0].id
                               ? { keepId: group.terrains[1].id, deleteId: group.terrains[0].id }
                               : { keepId: group.terrains[0].id, deleteId: group.terrains[1].id };
-                            const keepT = group.terrains.find(t => t.id === swapped.keepId)!;
-                            const delT = group.terrains.find(t => t.id === swapped.deleteId)!;
-                            Alert.alert(
-                              fr ? 'Fusion inversee' : 'Reverse merge',
-                              fr ? `Conserver: ${keepT.name}\nSupprimer: ${delT.name}` : `Keep: ${keepT.name}\nDelete: ${delT.name}`,
-                              [
-                                { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
-                                { text: fr ? 'Fusionner' : 'Merge', style: 'destructive', onPress: async () => {
-                                  const { error } = await mergeTerrains(swapped.keepId, swapped.deleteId);
-                                  if (error) showAlert(fr ? 'Erreur' : 'Error', error);
-                                  else {
-                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                    setTerrains(prev => prev.filter(t => t.id !== swapped.deleteId));
-                                    setDuplicates(prev => prev.filter(g => g !== group));
-                                    logAdminAction({ actionType: 'terrain_merge', targetType: 'terrain', targetId: swapped.keepId, targetName: keepT.name, actionDetail: `Reverse merged ${delT.name} into ${keepT.name}` });
-                                  }
-                                }},
-                              ]
-                            );
+                            setMergeGroup(group);
+                            setMergeKeepId(swapped.keepId);
+                            setMergeDeleteId(swapped.deleteId);
+                            setShowMergeModal(true);
+                            setLoadingPreview(true);
+                            const { preview } = await getMergePreview(swapped.keepId, swapped.deleteId);
+                            setMergePreview(preview);
+                            setLoadingPreview(false);
                           }}
                         >
                           <MaterialIcons name="swap-horiz" size={14} color="#D97706" />
@@ -604,6 +607,132 @@ export default function AdminTerrainsScreen() {
         )}
       </ScrollView>
 
+      {/* ===== MERGE PREVIEW MODAL ===== */}
+      <Modal
+        visible={showMergeModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => { if (!merging) { setShowMergeModal(false); setMergePreview(null); } }}
+      >
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.modalCloseBtn} onPress={() => { if (!merging) { setShowMergeModal(false); setMergePreview(null); } }} disabled={merging}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.modalTitle}>{fr ? 'Apercu de la fusion' : 'Merge Preview'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+            {mergeGroup && mergeKeepId && mergeDeleteId ? (() => {
+              const keepT = mergeGroup.terrains.find(t => t.id === mergeKeepId);
+              const delT = mergeGroup.terrains.find(t => t.id === mergeDeleteId);
+              if (!keepT || !delT) return null;
+              return (
+                <>
+                  {/* Keep/Delete cards */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                    <View style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#BBF7D0' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <MaterialIcons name="check-circle" size={16} color="#10B981" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>{fr ? 'CONSERVER' : 'KEEP'}</Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{keepT.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepT.city} {"\u2022"} {keepT.type}</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#FECACA' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <MaterialIcons name="delete" size={16} color="#EF4444" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 0.5 }}>{fr ? 'SUPPRIMER' : 'DELETE'}</Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{delT.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delT.city} {"\u2022"} {delT.type}</Text>
+                    </View>
+                  </View>
+
+                  {/* Swap button */}
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: '#FEF3C7', borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 16 }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setMergeKeepId(mergeDeleteId);
+                      setMergeDeleteId(mergeKeepId);
+                      setLoadingPreview(true);
+                      getMergePreview(mergeDeleteId!, mergeKeepId!).then(({ preview }) => { setMergePreview(preview); setLoadingPreview(false); });
+                    }}
+                    disabled={loadingPreview || merging}
+                  >
+                    <MaterialIcons name="swap-horiz" size={18} color="#D97706" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#D97706' }}>{fr ? 'Inverser' : 'Swap'}</Text>
+                  </Pressable>
+
+                  {/* Impact Preview */}
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 10 }}>{fr ? 'IMPACT DE LA FUSION' : 'MERGE IMPACT'}</Text>
+                  {loadingPreview ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Analyse en cours...' : 'Analyzing...'}</Text>
+                    </View>
+                  ) : mergePreview ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16 }}>
+                      {[
+                        { icon: 'sports', label: fr ? 'Matchs a transferer' : 'Matches to transfer', count: mergePreview.matches, color: '#3B82F6' },
+                        { icon: 'flag', label: fr ? 'Defis a transferer' : 'Challenges to transfer', count: mergePreview.challenges, color: '#D97706' },
+                        { icon: 'emoji-events', label: fr ? 'Tournois a transferer' : 'Tournaments to transfer', count: mergePreview.tournaments, color: '#7C3AED' },
+                        { icon: 'groups', label: fr ? 'Meetups a transferer' : 'Meetups to transfer', count: mergePreview.meetups, color: '#0EA5E9' },
+                        { icon: 'home', label: fr ? 'Clubs references' : 'Clubs referenced', count: mergePreview.clubs, color: '#10B981' },
+                        { icon: 'person', label: fr ? 'Joueurs (terrain favori)' : 'Players (favorite terrain)', count: mergePreview.players, color: '#EF4444' },
+                        { icon: 'event', label: fr ? 'Evenements sponsors' : 'Sponsored events', count: mergePreview.events, color: '#F59E0B' },
+                      ].map((item, idx) => (
+                        <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                          <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: item.color + '12', alignItems: 'center', justifyContent: 'center' }}>
+                            <MaterialIcons name={item.icon as any} size={16} color={item.color} />
+                          </View>
+                          <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{item.label}</Text>
+                          <View style={{ minWidth: 28, height: 24, borderRadius: 8, backgroundColor: item.count > 0 ? item.color + '15' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: item.count > 0 ? item.color : '#CBD5E1' }}>{item.count}</Text>
+                          </View>
+                        </View>
+                      ))}
+                      {/* Total */}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Total des references' : 'Total references'}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                          {(mergePreview.matches + mergePreview.challenges + mergePreview.tournaments + mergePreview.meetups + mergePreview.clubs + mergePreview.players + mergePreview.events)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Warning */}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 16 }}>
+                    <MaterialIcons name="warning-amber" size={18} color="#D97706" />
+                    <Text style={{ flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 }}>
+                      {fr
+                        ? 'Cette action est irreversible. Toutes les references seront transferees au terrain conserve, puis le terrain supprime sera efface.'
+                        : 'This action is irreversible. All references will be transferred to the kept terrain, then the deleted terrain will be removed.'}
+                    </Text>
+                  </View>
+
+                  {/* Merge Button */}
+                  <Pressable
+                    style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 14, backgroundColor: '#DC2626' }, (merging || loadingPreview) && { opacity: 0.5 }]}
+                    onPress={executeMerge}
+                    disabled={merging || loadingPreview}
+                  >
+                    {merging ? <ActivityIndicator size="small" color="#FFF" /> : (
+                      <>
+                        <MaterialIcons name="merge-type" size={20} color="#FFF" />
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>{fr ? 'Confirmer la fusion' : 'Confirm Merge'}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              );
+            })() : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       {/* ===== EDIT MODAL ===== */}
       <Modal
         visible={!!editTerrain}
@@ -674,6 +803,7 @@ export default function AdminTerrainsScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

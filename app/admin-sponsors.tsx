@@ -24,6 +24,8 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 import {
   fetchAmbassadors,
   Ambassador,
@@ -371,16 +373,19 @@ export default function AdminSponsorsScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
-        <Text style={s.headerTitle}>{fr ? 'Gestion Sponsors' : 'Sponsor Management'}</Text>
+        <Text style={s.headerTitle}>{fr ? 'Sponsors' : 'Sponsors'}</Text>
         <Pressable style={s.addBtn} onPress={() => { Haptics.selectionAsync(); setShowCreateModal(true); }}>
           <MaterialIcons name="add" size={22} color="#FFF" />
         </Pressable>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-sponsors" />
 
       {/* Summary counts */}
       <View style={s.countRow}>
@@ -529,6 +534,7 @@ export default function AdminSponsorsScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 
