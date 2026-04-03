@@ -11,6 +11,7 @@ import OfflineBanner from '@/components/ui/OfflineBanner';
 import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
+import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
 import { isATTPromptNeeded } from '@/services/trackingService';
 import { initSentry } from '@/services/sentryService';
 import { addNotificationResponseListener } from '@/services/notificationService';
@@ -203,6 +204,9 @@ function LayoutInner() {
           case 'club_claim':
             router.push({ pathname: '/notifications-hub', params: { tab: 'claims' } } as any);
             break;
+          case 'maintenance':
+            // No navigation, banner auto-shows via polling
+            break;
           default:
             break;
         }
@@ -213,6 +217,7 @@ function LayoutInner() {
   return (
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
+            <MaintenanceBanner />
             <OfflineBanner />
             <TrackingConsentModal
               visible={showATT}
@@ -737,6 +742,13 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="roadmap" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-maintenance" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',

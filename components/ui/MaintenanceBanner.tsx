@@ -11,7 +11,7 @@ import { View, Text, StyleSheet, Pressable } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, { FadeInDown, FadeOutUp } from 'react-native-reanimated';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getMaintenanceStatus, MaintenanceStatus } from '@/services/maintenanceService';
+import { getMaintenanceStatus, autoActivateScheduledMaintenance, MaintenanceStatus } from '@/services/maintenanceService';
 
 const POLL_INTERVAL_MS = 60_000; // Check every 60s
 
@@ -20,17 +20,32 @@ export default function MaintenanceBanner() {
   const fr = language === 'fr';
   const [status, setStatus] = useState<MaintenanceStatus | null>(null);
   const [countdown, setCountdown] = useState('');
+  const [scheduleCountdown, setScheduleCountdown] = useState('');
   const [dismissed, setDismissed] = useState(false);
+  const [scheduleDismissed, setScheduleDismissed] = useState(false);
+  const [autoActivated, setAutoActivated] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const scheduleCountdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fetchStatus = useCallback(async () => {
     const result = await getMaintenanceStatus();
     setStatus(result);
-    if (!result.isActive) {
-      setDismissed(false); // Reset dismiss when maintenance ends
+    if (!result.isActive && !result.isScheduled) {
+      setDismissed(false);
+      setScheduleDismissed(false);
+      setAutoActivated(false);
     }
-  }, []);
+    // Auto-activate scheduled maintenance when time passes (admin only, silently fails for others)
+    if (result.scheduledAt && !result.isScheduled && !result.isActive && !autoActivated) {
+      // scheduledAt exists but isScheduled=false means time passed, isActive=false means not yet activated
+    }
+    if (result.isActive && result.scheduledAt && !autoActivated) {
+      // Scheduled time passed, try to formalize activation
+      setAutoActivated(true);
+      autoActivateScheduledMaintenance(result).catch(() => {});
+    }
+  }, [autoActivated]);
 
   // Poll maintenance status
   useEffect(() => {
@@ -41,7 +56,47 @@ export default function MaintenanceBanner() {
     };
   }, [fetchStatus]);
 
-  // Countdown timer
+  // Scheduled countdown timer
+  useEffect(() => {
+    if (!status?.isScheduled || !status.scheduledAt) {
+      setScheduleCountdown('');
+      if (scheduleCountdownRef.current) clearInterval(scheduleCountdownRef.current);
+      return;
+    }
+
+    const updateScheduleCountdown = () => {
+      const start = new Date(status.scheduledAt!).getTime();
+      const now = Date.now();
+      const diff = start - now;
+
+      if (diff <= 0) {
+        setScheduleCountdown(fr ? 'Imminent' : 'Imminent');
+        fetchStatus(); // Re-fetch to detect transition
+        return;
+      }
+
+      const hours = Math.floor(diff / 3_600_000);
+      const minutes = Math.floor((diff % 3_600_000) / 60_000);
+
+      if (hours > 24) {
+        const days = Math.floor(hours / 24);
+        setScheduleCountdown(`${days}j ${hours % 24}h`);
+      } else if (hours > 0) {
+        setScheduleCountdown(`${hours}h ${minutes.toString().padStart(2, '0')}m`);
+      } else {
+        const seconds = Math.floor((diff % 60_000) / 1_000);
+        setScheduleCountdown(`${minutes}m ${seconds.toString().padStart(2, '0')}s`);
+      }
+    };
+
+    updateScheduleCountdown();
+    scheduleCountdownRef.current = setInterval(updateScheduleCountdown, 1000);
+    return () => {
+      if (scheduleCountdownRef.current) clearInterval(scheduleCountdownRef.current);
+    };
+  }, [status?.isScheduled, status?.scheduledAt, fr, fetchStatus]);
+
+  // Active countdown timer
   useEffect(() => {
     if (!status?.isActive || !status.endTime) {
       setCountdown('');
@@ -81,7 +136,47 @@ export default function MaintenanceBanner() {
     };
   }, [status?.isActive, status?.endTime, fr, fetchStatus]);
 
-  // Don't render if not active or dismissed
+  // Don't render if nothing to show
+  if (!status?.isActive && !status?.isScheduled) return null;
+
+  // Scheduled maintenance banner (blue)
+  if (status?.isScheduled && !scheduleDismissed) {
+    const schedMsg = fr ? status.scheduledMessageFr : status.scheduledMessageEn;
+    const scheduledDate = status.scheduledAt
+      ? new Date(status.scheduledAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : '';
+    return (
+      <Animated.View entering={FadeInDown.duration(400)} exiting={FadeOutUp.duration(300)} style={styles.scheduledContainer}>
+        <View style={styles.inner}>
+          <View style={styles.scheduledIconWrap}>
+            <MaterialIcons name="schedule" size={20} color="#FFF" />
+          </View>
+          <View style={styles.content}>
+            <View style={styles.headerRow}>
+              <Text style={styles.title}>{fr ? 'Maintenance prevue' : 'Scheduled Maintenance'}</Text>
+              {scheduleCountdown ? (
+                <View style={styles.scheduledCountdownBadge}>
+                  <MaterialIcons name="timer" size={12} color="#FFF" />
+                  <Text style={styles.countdownText}>{scheduleCountdown}</Text>
+                </View>
+              ) : null}
+            </View>
+            <Text style={styles.message} numberOfLines={2}>
+              {schedMsg || `${scheduledDate}`}
+            </Text>
+            {schedMsg && scheduledDate ? (
+              <Text style={styles.scheduledDate}>{scheduledDate}</Text>
+            ) : null}
+          </View>
+          <Pressable style={styles.closeBtn} onPress={() => setScheduleDismissed(true)} hitSlop={8}>
+            <MaterialIcons name="close" size={16} color="rgba(255,255,255,0.6)" />
+          </Pressable>
+        </View>
+      </Animated.View>
+    );
+  }
+
+  // Active maintenance banner (orange)
   if (!status?.isActive || dismissed) return null;
 
   const message = fr ? status.messageFr : status.messageEn;
@@ -123,6 +218,36 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     zIndex: 100,
+  },
+  scheduledContainer: {
+    backgroundColor: '#2563EB',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    zIndex: 100,
+  },
+  scheduledIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  scheduledCountdownBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  scheduledDate: {
+    fontSize: 10,
+    color: 'rgba(255,255,255,0.7)',
+    fontWeight: '600',
+    marginTop: 2,
   },
   inner: {
     flexDirection: 'row',

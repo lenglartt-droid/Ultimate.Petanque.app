@@ -225,9 +225,9 @@ export default function ProfileScreen() {
   // Load maintenance status for admin badge
   useEffect(() => {
     if (!isAdmin) return;
-    getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive));
+    getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive || s.isScheduled));
     const interval = setInterval(() => {
-      getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive));
+      getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive || s.isScheduled));
     }, 30000);
     return () => clearInterval(interval);
   }, [isAdmin]);
