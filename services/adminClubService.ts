@@ -206,6 +206,89 @@ export async function getClubMergeHistory(limit = 20): Promise<{ logs: { id: str
   }
 }
 
+/**
+ * Compute monthly health scores for a club over 6 months.
+ * Returns monthly snapshots: { month, score, matches, members }.
+ */
+export async function getClubHealthTrends(clubId: string, language: 'fr' | 'en' = 'fr'): Promise<{
+  trends: { month: string; score: number; matches: number; members: number; color: string }[];
+  direction: 'improving' | 'declining' | 'stable';
+  error: string | null;
+}> {
+  try {
+    const supabase = getSupabaseClient();
+    const now = new Date();
+    const trends: { month: string; score: number; matches: number; members: number; color: string }[] = [];
+
+    // Get all players for this club
+    const { data: clubPlayers } = await supabase.from('players').select('user_id, created_at').eq('club_id', clubId);
+    const playerUserIds = (clubPlayers || []).map((p: any) => p.user_id);
+
+    // Get all matches for club players in last 6 months
+    const sixMonthsAgo = new Date(now.getTime() - 180 * 24 * 60 * 60 * 1000).toISOString();
+    let allMatches: any[] = [];
+    if (playerUserIds.length > 0) {
+      const { data } = await supabase.from('matches').select('user_id, date').in('user_id', playerUserIds).gte('date', sixMonthsAgo);
+      allMatches = data || [];
+    }
+
+    // Get tournaments for club
+    const { data: tournaments } = await supabase.from('tournaments').select('date').eq('club_id', clubId).gte('date', sixMonthsAgo.slice(0, 10));
+
+    // Get club creation date for age calculation
+    const { data: clubData } = await supabase.from('clubs').select('created_at, members_count').eq('id', clubId).single();
+
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59);
+      const monthLabel = monthStart.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' });
+
+      // Matches in this month
+      const monthMatches = allMatches.filter(m => {
+        const d = new Date(m.date);
+        return d >= monthStart && d <= monthEnd;
+      }).length;
+
+      // Tournaments in this month
+      const monthTournaments = (tournaments || []).filter((t: any) => {
+        const d = new Date(t.date);
+        return d >= monthStart && d <= monthEnd;
+      }).length;
+
+      // Members who joined up to this month
+      const membersAtMonth = (clubPlayers || []).filter((p: any) => {
+        return new Date(p.created_at) <= monthEnd;
+      }).length;
+
+      // Age in months at this point
+      const clubCreated = clubData?.created_at ? new Date(clubData.created_at) : monthStart;
+      const ageMonths = Math.max(0, Math.floor((monthEnd.getTime() - clubCreated.getTime()) / (30 * 24 * 60 * 60 * 1000)));
+
+      // Score calculation (same formula as computeHealthScores)
+      const memberActivity = Math.min(membersAtMonth * 2, 30);
+      const age = Math.min(ageMonths * 2, 20);
+      const rawScore = Math.min(100, monthMatches * 3 + monthTournaments * 10 + memberActivity + age);
+      const score = Math.round(rawScore);
+      const color = score >= 70 ? '#10B981' : score >= 40 ? '#D97706' : score >= 15 ? '#EF4444' : '#94A3B8';
+
+      trends.push({ month: monthLabel, score, matches: monthMatches, members: membersAtMonth, color });
+    }
+
+    // Determine direction
+    let direction: 'improving' | 'declining' | 'stable' = 'stable';
+    if (trends.length >= 3) {
+      const recent = trends.slice(-2).reduce((s, t) => s + t.score, 0) / 2;
+      const older = trends.slice(0, 2).reduce((s, t) => s + t.score, 0) / 2;
+      if (recent > older + 5) direction = 'improving';
+      else if (recent < older - 5) direction = 'declining';
+    }
+
+    return { trends, direction, error: null };
+  } catch (e: any) {
+    return { trends: [], direction: 'stable', error: e.message };
+  }
+}
+
 export async function mergeClubs(keepId: string, deleteId: string): Promise<{ error: string | null }> {
   try {
     const supabase = getSupabaseClient();

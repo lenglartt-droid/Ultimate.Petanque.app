@@ -373,7 +373,7 @@ export default function AdminSponsorsScreen() {
   }
 
   return (
-    <AdminGuard language={language}>
+    <AdminGuard language={language} requiredPermission="sponsors">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>

@@ -365,7 +365,7 @@ export default function AdminTerrainsScreen() {
   }
 
   return (
-    <AdminGuard language={language}>
+    <AdminGuard language={language} requiredPermission="terrains">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
