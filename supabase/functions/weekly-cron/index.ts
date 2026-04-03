@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report'];
 
     const results: Record<string, any> = {};
 
@@ -797,7 +797,114 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 9: Clean up old analytics (older than 365 days)
+    // TASK 9: Admin Weekly Report - Send stats digest to all admins
+    // ============================================================
+    if (tasks.includes('admin_weekly_report')) {
+      console.log('[weekly-cron] Generating admin weekly report...');
+      try {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Gather stats
+        const [usersRes, matchesWeekRes, reportsRes, clubsRes, terrainsRes, appealsRes] = await Promise.all([
+          supabaseAdmin.from('user_profiles').select('id, created_at', { count: 'exact' }),
+          supabaseAdmin.from('matches').select('id', { count: 'exact' }).gte('created_at', weekAgo.toISOString()),
+          supabaseAdmin.from('player_reports').select('status'),
+          supabaseAdmin.from('clubs').select('id, is_verified', { count: 'exact' }),
+          supabaseAdmin.from('terrains').select('id', { count: 'exact' }),
+          supabaseAdmin.from('ban_appeals').select('id, status'),
+        ]);
+
+        const totalUsers = usersRes.count || 0;
+        const newUsersWeek = (usersRes.data || []).filter((u: any) => u.created_at && new Date(u.created_at) >= weekAgo).length;
+        const matchesThisWeek = matchesWeekRes.count || 0;
+        const pendingReports = (reportsRes.data || []).filter((r: any) => r.status === 'pending').length;
+        const activeBans = (reportsRes.data || []).filter((r: any) => r.status === 'banned').length;
+        const totalClubs = clubsRes.count || 0;
+        const verifiedClubs = (clubsRes.data || []).filter((c: any) => c.is_verified).length;
+        const totalTerrains = terrainsRes.count || 0;
+        const pendingAppeals = (appealsRes.data || []).filter((a: any) => a.status === 'pending').length;
+
+        // Check dedup: only send once per week
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+        weekStart.setHours(0, 0, 0, 0);
+        const { data: existing } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'admin_weekly_report')
+          .gte('created_at', weekStart.toISOString())
+          .limit(1);
+
+        if (existing && existing.length > 0) {
+          console.log('[weekly-cron] Admin weekly report already sent this week');
+          results.admin_weekly_report = { sent: false, reason: 'already_sent_this_week' };
+        } else {
+          // Get all admin users
+          const { data: adminUsers } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id')
+            .eq('is_admin', true);
+
+          if (adminUsers && adminUsers.length > 0) {
+            const adminIds = adminUsers.map((a: any) => a.id);
+            const { data: adminTokens } = await supabaseAdmin
+              .from('push_tokens')
+              .select('token')
+              .in('user_id', adminIds)
+              .eq('active', true);
+
+            if (adminTokens && adminTokens.length > 0) {
+              const weekLabel = `${weekAgo.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })} - ${now.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' })}`;
+              const title = `\u{1F4CA} Rapport admin hebdo`;
+              const bodyText = [
+                `${totalUsers} utilisateurs (+${newUsersWeek})`,
+                `${matchesThisWeek} matchs cette semaine`,
+                `${totalClubs} clubs (${verifiedClubs} verifies)`,
+                pendingReports > 0 ? `${pendingReports} signalement(s) en attente` : null,
+                pendingAppeals > 0 ? `${pendingAppeals} appel(s) en attente` : null,
+              ].filter(Boolean).join(' \u2022 ');
+
+              const messages = adminTokens.map((t: any) => buildPushMessage(
+                t.token,
+                title,
+                bodyText,
+                { type: 'moderation_action', action: 'weekly_report' },
+                { channelId: 'tournament-reminders', priority: 'default' }
+              ));
+
+              const tickets = await sendPushNotifications(messages);
+              const sentCount = tickets.filter((t: any) => t.status === 'ok').length;
+
+              // Track dedup
+              await supabaseAdmin.from('ambassador_analytics').insert({
+                ambassador_id: '00000000-0000-0000-0000-000000000000',
+                event_type: 'admin_weekly_report',
+                source_page: `users:${totalUsers}|new:${newUsersWeek}|matches:${matchesThisWeek}|clubs:${totalClubs}|reports:${pendingReports}|appeals:${pendingAppeals}`,
+                viewer_id: adminIds[0],
+              }).catch(() => {});
+
+              console.log(`[weekly-cron] Admin weekly report sent to ${sentCount} tokens`);
+              results.admin_weekly_report = {
+                sent: true,
+                sentCount,
+                stats: { totalUsers, newUsersWeek, matchesThisWeek, totalClubs, verifiedClubs, totalTerrains, pendingReports, activeBans, pendingAppeals },
+              };
+            } else {
+              results.admin_weekly_report = { sent: false, reason: 'no_admin_tokens' };
+            }
+          } else {
+            results.admin_weekly_report = { sent: false, reason: 'no_admins' };
+          }
+        }
+      } catch (reportErr: any) {
+        console.error('[weekly-cron] Admin weekly report error:', reportErr.message);
+        results.admin_weekly_report = { error: reportErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 10: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');
