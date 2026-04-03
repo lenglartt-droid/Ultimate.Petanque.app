@@ -15,7 +15,6 @@ import {
   Dimensions,
   Alert,
   Platform,
-  Share,
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -27,7 +26,6 @@ import theme from '@/constants/theme';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import RadarChart from '@/components/ui/RadarChart';
-import { GameFormat } from '@/constants/config';
 import { getRoleColor, getRoleIcon, generateRoleExportData } from '@/services/roleAnalysisService';
 import { useAuth } from '@/template';
 
@@ -60,43 +58,7 @@ export default function RolePerformanceScreen() {
   React.useEffect(() => { const sub = Dimensions.addEventListener('change', ({ window }) => setScreenW(window.width)); return () => sub?.remove(); }, []);
 
   const radarSize = Math.min(screenW - 48, 280);
-  const { user } = useAuth();
   const [exporting, setExporting] = useState(false);
-
-  const handleExport = useCallback(async () => {
-    if (!selfPlayer || totalMatches === 0) {
-      Alert.alert(fr ? 'Pas de donnees' : 'No data', fr ? 'Jouez des matchs pour exporter.' : 'Play matches to export.');
-      return;
-    }
-    setExporting(true);
-    try {
-      const exportData = generateRoleExportData(selfPlayer.id, filteredMatches);
-      const sep = ',';
-      const headers = [fr ? 'Role' : 'Role', fr ? 'Matchs' : 'Matches', fr ? 'Victoires' : 'Wins', fr ? 'Defaites' : 'Losses', fr ? 'Taux Victoire' : 'Win Rate', fr ? 'Taux Tir' : 'Shot Rate', fr ? 'Taux Point' : 'Point Rate', fr ? 'Taux Carreau' : 'Carreau Rate', fr ? 'Tirs' : 'Shots', fr ? 'Tirs Reussis' : 'Shots Hit', 'Points', fr ? 'Points Reussis' : 'Points Hit', 'Carreaux'];
-      const rows = exportData.map(r => [r.role, r.matchCount, r.wins, r.losses, `${r.winRate}%`, `${r.tirRate}%`, `${r.pointRate}%`, `${r.carreauRate}%`, r.tirs, r.tirsSuccess, r.points, r.pointsSuccess, r.carreaux].join(sep));
-      const csv = '\ufeff' + [headers.join(sep), ...rows].join('\n');
-
-      if (Platform.OS === 'web') {
-        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement('a'); link.href = url; link.download = `role_performance_${new Date().toISOString().slice(0, 10)}.csv`; link.click();
-        URL.revokeObjectURL(url);
-      } else {
-        const ExpoFS = require('expo-file-system');
-        const ExpoSharing = require('expo-sharing');
-        const fileName = `role_performance_${new Date().toISOString().slice(0, 10)}.csv`;
-        const fileUri = `${ExpoFS.cacheDirectory}${fileName}`;
-        await ExpoFS.writeAsStringAsync(fileUri, csv, { encoding: ExpoFS.EncodingType.UTF8 });
-        if (await ExpoSharing.isAvailableAsync()) {
-          await ExpoSharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
-        }
-      }
-    } catch (e) {
-      console.log('Export error:', e);
-    } finally {
-      setExporting(false);
-    }
-  }, [selfPlayer, filteredMatches, totalMatches, fr]);
 
   // Filter matches by period
   const filteredMatches = useMemo(() => {
@@ -174,6 +136,41 @@ export default function RolePerformanceScreen() {
   }, [roleData]);
 
   const totalMatches = roles.reduce((s, r) => s + r.matchCount, 0);
+
+  const handleExport = useCallback(async () => {
+    if (!selfPlayer || totalMatches === 0) {
+      Alert.alert(fr ? 'Pas de donnees' : 'No data', fr ? 'Jouez des matchs pour exporter.' : 'Play matches to export.');
+      return;
+    }
+    setExporting(true);
+    try {
+      const exportData = generateRoleExportData(selfPlayer.id, filteredMatches);
+      const sep = ',';
+      const headers = [fr ? 'Role' : 'Role', fr ? 'Matchs' : 'Matches', fr ? 'Victoires' : 'Wins', fr ? 'Defaites' : 'Losses', fr ? 'Taux Victoire' : 'Win Rate', fr ? 'Taux Tir' : 'Shot Rate', fr ? 'Taux Point' : 'Point Rate', fr ? 'Taux Carreau' : 'Carreau Rate', fr ? 'Tirs' : 'Shots', fr ? 'Tirs Reussis' : 'Shots Hit', 'Points', fr ? 'Points Reussis' : 'Points Hit', 'Carreaux'];
+      const rows = exportData.map(r => [r.role, r.matchCount, r.wins, r.losses, `${r.winRate}%`, `${r.tirRate}%`, `${r.pointRate}%`, `${r.carreauRate}%`, r.tirs, r.tirsSuccess, r.points, r.pointsSuccess, r.carreaux].join(sep));
+      const csv = '\ufeff' + [headers.join(sep), ...rows].join('\n');
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a'); link.href = url; link.download = `role_performance_${new Date().toISOString().slice(0, 10)}.csv`; link.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const ExpoFS = require('expo-file-system');
+        const ExpoSharing = require('expo-sharing');
+        const fileName = `role_performance_${new Date().toISOString().slice(0, 10)}.csv`;
+        const fileUri = `${ExpoFS.cacheDirectory}${fileName}`;
+        await ExpoFS.writeAsStringAsync(fileUri, csv, { encoding: ExpoFS.EncodingType.UTF8 });
+        if (await ExpoSharing.isAvailableAsync()) {
+          await ExpoSharing.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
+        }
+      }
+    } catch (e) {
+      console.log('Export error:', e);
+    } finally {
+      setExporting(false);
+    }
+  }, [selfPlayer, filteredMatches, totalMatches, fr]);
   const bestRole = [...roles].sort((a, b) => {
     const scoreA = a.tirRate * 0.3 + a.pointRate * 0.3 + a.winRate * 0.3 + a.carreauRate * 0.1;
     const scoreB = b.tirRate * 0.3 + b.pointRate * 0.3 + b.winRate * 0.3 + b.carreauRate * 0.1;
