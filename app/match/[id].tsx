@@ -22,7 +22,7 @@ import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { PlayerAction, DetailedShotRecord, RoleSegment } from '@/types/petanque';
+import { Match, PlayerAction, DetailedShotRecord, RoleSegment } from '@/types/petanque';
 import { getRoleColor, getRoleIcon } from '@/services/roleAnalysisService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components/ui/SimplifiedShotNotation';
 import ShareModal from '@/components/ui/ShareModal';
