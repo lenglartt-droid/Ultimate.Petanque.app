@@ -409,11 +409,7 @@ export default function AdminUsersScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
-            <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
-          </Pressable>
           <Text style={s.headerTitle}>{fr ? 'Utilisateurs' : 'Users'}</Text>
-          <View style={{ width: 40 }} />
         </View>
         <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
       </SafeAreaView>
@@ -424,9 +420,6 @@ export default function AdminUsersScreen() {
     <AdminGuard language={language} requiredPermission="users">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
-          <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
-        </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Utilisateurs' : 'User Management'}</Text>
         <Pressable
           style={[s.selectModeBtn, selectionMode && s.selectModeBtnActive]}
