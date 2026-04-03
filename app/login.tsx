@@ -74,6 +74,9 @@ export default function LoginScreen() {
     const { error } = await signInWithPassword(email.trim(), password);
     if (error) {
       showAlert(t('login', 'loginError'), error);
+    } else {
+      // Navigate to index so AuthRouter/ProfileChecker can handle routing
+      router.replace('/');
     }
   };
 
@@ -148,6 +151,8 @@ export default function LoginScreen() {
           );
         }).catch(() => {});
       }
+      // Navigate to index so AuthRouter/ProfileChecker can handle routing
+      router.replace('/');
     }
   };
 
