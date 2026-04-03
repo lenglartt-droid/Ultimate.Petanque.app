@@ -1293,6 +1293,84 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // CO_ADMIN: Notify user when added/removed as club co-admin
+    // ============================================================
+    else if (type === 'co_admin') {
+      const { targetUserId, clubName, clubId, action: coAction, adderName } = payload || {};
+      if (!targetUserId || !clubId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/clubId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAdded = coAction === 'added';
+        const title = isAdded
+          ? `\u{1F3E2} Vous etes co-admin !`
+          : `\u{1F3E2} Co-admin retire`;
+        const body = isAdded
+          ? `${adderName || 'Le proprietaire'} vous a ajoute comme co-administrateur de "${clubName || 'un club'}".`
+          : `Vous avez ete retire comme co-administrateur de "${clubName || 'un club'}".`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'club_claim', clubId },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // BAN_APPEAL_RESPONSE: Notify banned user about appeal decision
+    // ============================================================
+    else if (type === 'ban_appeal_response') {
+      const { targetUserId, appealStatus, adminResponse: appealMsg } = payload || {};
+      if (!targetUserId || !appealStatus) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/appealStatus' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAccepted = appealStatus === 'accepted';
+        const title = isAccepted
+          ? `\u2705 Appel accepte - Compte reactif !`
+          : `\u274C Appel rejete`;
+        const body = isAccepted
+          ? `Votre appel de ban a ete accepte. Votre compte est de nouveau actif.${appealMsg ? ` Message: ${appealMsg}` : ''}`
+          : `Votre appel de ban a ete rejete.${appealMsg ? ` Raison: ${appealMsg}` : ' Contactez le support pour plus d\'informations.'}`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'moderation_action', action: isAccepted ? 'unbanned' : 'appeal_rejected' },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

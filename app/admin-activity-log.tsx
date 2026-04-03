@@ -13,6 +13,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -23,6 +25,8 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
 import { AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 
 const PAGE_SIZE = 30;
 
@@ -144,6 +148,47 @@ export default function AdminActivityLogScreen() {
   const formatFullDate = (d: string) =>
     new Date(d).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
+  const [exporting, setExporting] = useState(false);
+
+  const handleExportCSV = useCallback(async () => {
+    if (filteredLogs.length === 0) return;
+    setExporting(true);
+    try {
+      const headers = 'Date,Admin,Action,Target,Detail';
+      const rows = filteredLogs.map(log => {
+        const cfg = ACTION_CONFIG[log.actionType] || { iconFr: log.actionType, iconEn: log.actionType };
+        const action = (fr ? cfg.iconFr : cfg.iconEn).replace(/,/g, ';');
+        const target = (log.targetName || '').replace(/,/g, ';');
+        const detail = (log.actionDetail || '').replace(/,/g, ';').replace(/\n/g, ' ');
+        const admin = (log.adminName || 'Admin').replace(/,/g, ';');
+        const date = new Date(log.createdAt).toISOString();
+        return `${date},${admin},${action},${target},${detail}`;
+      });
+      const csv = [headers, ...rows].join('\n');
+
+      if (Platform.OS === 'web') {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `admin-activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const path = `${FileSystem.cacheDirectory}admin-activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) {
+          await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le journal' : 'Export activity log' });
+        }
+      }
+    } catch (e) {
+      console.log('[ActivityLog] Export error:', e);
+    } finally {
+      setExporting(false);
+    }
+  }, [filteredLogs, fr]);
+
   if (loading) {
     return (
       <SafeAreaView style={s.container}>
@@ -166,9 +211,15 @@ export default function AdminActivityLogScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Journal d\'activite' : 'Activity Log'}</Text>
-        <View style={s.headerRight}>
-          <Text style={s.headerCount}>{filteredLogs.length} {fr ? 'actions' : 'actions'}</Text>
-        </View>
+        <Pressable
+          style={[s.exportBtn, exporting && { opacity: 0.5 }]}
+          onPress={handleExportCSV}
+          disabled={exporting || filteredLogs.length === 0}
+        >
+          {exporting ? <ActivityIndicator size="small" color="#2563EB" /> : (
+            <MaterialIcons name="file-download" size={20} color="#2563EB" />
+          )}
+        </Pressable>
       </View>
 
       {/* Action Type Filters */}
@@ -303,6 +354,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', letterSpacing: -0.3 },
   headerRight: { minWidth: 40, alignItems: 'flex-end' },
   headerCount: { fontSize: 11, fontWeight: '700', color: '#94A3B8' },
+  exportBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#DBEAFE' },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8 },

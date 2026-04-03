@@ -6,6 +6,8 @@
  */
 
 import { getSupabaseClient } from '@/template';
+import { triggerServerPush } from '@/services/pushTokenService';
+import { logAdminAction } from '@/services/adminActivityLogService';
 
 export interface PlayerReport {
   id: string;
@@ -131,9 +133,17 @@ export async function updateReportStatus(
   reportId: string,
   status: 'warned' | 'suspended' | 'banned' | 'dismissed',
   adminNotes?: string
-): Promise<{ error: string | null }> {
+): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
   try {
     const supabase = getSupabaseClient();
+
+    // Get report details before updating (for push notification)
+    const { data: reportData } = await supabase
+      .from('player_reports')
+      .select('reported_player_id, reported_user_id, reason')
+      .eq('id', reportId)
+      .single();
+
     const { error } = await supabase
       .from('player_reports')
       .update({
@@ -144,7 +154,37 @@ export async function updateReportStatus(
       .eq('id', reportId);
 
     if (error) return { error: error.message };
-    return { error: null };
+
+    // Log admin activity
+    const actionTypeMap: Record<string, any> = {
+      warned: 'moderation_warn',
+      suspended: 'moderation_suspend',
+      banned: 'moderation_ban',
+      dismissed: 'moderation_dismiss',
+    };
+    logAdminAction({
+      actionType: actionTypeMap[status] || 'moderation_dismiss',
+      targetType: 'player',
+      targetId: reportData?.reported_player_id || undefined,
+      actionDetail: `Report ${reportId}: ${status}${adminNotes ? ' - ' + adminNotes : ''}`,
+    });
+
+    // Send push notification to the reported player (if action is not dismissed)
+    let pushSent = 0;
+    let pushErrors = 0;
+    if (status !== 'dismissed' && reportData?.reported_user_id) {
+      try {
+        const result = await triggerServerPush('moderation_action', {
+          targetUserId: reportData.reported_user_id,
+          action: status,
+          reason: reportData.reason,
+        });
+        pushSent = result.sent;
+        pushErrors = result.errors;
+      } catch { /* silent - push is best-effort */ }
+    }
+
+    return { error: null, pushSent, pushErrors };
   } catch (e: any) {
     return { error: e.message };
   }
