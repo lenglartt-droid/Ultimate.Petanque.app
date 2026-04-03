@@ -816,6 +816,20 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="admin-clubs" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-reports" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             </View>
   );
