@@ -30,6 +30,8 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import {
@@ -281,6 +283,7 @@ export default function AdminModerationScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -289,6 +292,8 @@ export default function AdminModerationScreen() {
         <Text style={s.headerTitle}>{fr ? 'Moderation' : 'Moderation'}</Text>
         <View style={{ width: 40 }} />
       </View>
+
+      <AdminQuickNav currentRoute="/admin-moderation" />
 
       <ScrollView
         style={s.scroll}
@@ -916,6 +921,7 @@ export default function AdminModerationScreen() {
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

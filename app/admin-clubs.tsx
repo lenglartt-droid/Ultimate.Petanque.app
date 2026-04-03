@@ -32,6 +32,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
+import { detectDuplicateClubs, pickBestClub, getClubMergePreview, mergeClubs, getClubMergeHistory, getClubHealthTrends, ClubDuplicateGroup } from '@/services/adminClubService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
@@ -113,6 +114,26 @@ export default function AdminClubsScreen() {
   // Comparison trends
   const [comparisonTrends, setComparisonTrends] = useState<Map<string, { month: string; matches: number }[]>>(new Map());
   const [loadingTrends, setLoadingTrends] = useState(false);
+
+  // Club duplicates / merge
+  const [clubDuplicates, setClubDuplicates] = useState<ClubDuplicateGroup[]>([]);
+  const [showClubDuplicates, setShowClubDuplicates] = useState(false);
+  const [showClubMergeModal, setShowClubMergeModal] = useState(false);
+  const [clubMergeGroup, setClubMergeGroup] = useState<ClubDuplicateGroup | null>(null);
+  const [clubMergeKeepId, setClubMergeKeepId] = useState<string | null>(null);
+  const [clubMergeDeleteId, setClubMergeDeleteId] = useState<string | null>(null);
+  const [clubMergePreview, setClubMergePreview] = useState<{ players: number; matches: number; tournaments: number; terrains: number; sharedItems: number; claimRequests: number } | null>(null);
+  const [loadingClubMergePreview, setLoadingClubMergePreview] = useState(false);
+  const [mergingClub, setMergingClub] = useState(false);
+
+  // Merge history
+  const [mergeHistory, setMergeHistory] = useState<{ id: string; targetName: string; sourceName: string; createdAt: string; sourceSnapshot: any }[]>([]);
+  const [showMergeHistory, setShowMergeHistory] = useState(false);
+
+  // Health trends
+  const [healthTrends, setHealthTrends] = useState<{ month: string; score: number; matches: number; members: number; color: string }[]>([]);
+  const [healthDirection, setHealthDirection] = useState<'improving' | 'declining' | 'stable'>('stable');
+  const [loadingTrends2, setLoadingTrends2] = useState(false);
 
   // Load match counts for enhanced verification
   const loadClubMatchCounts = useCallback(async () => {
@@ -257,8 +278,17 @@ export default function AdminClubsScreen() {
   }, [fr]);
 
   useEffect(() => {
-    if (detailClub) loadClubTimeline(detailClub.id);
-  }, [detailClub, loadClubTimeline]);
+    if (detailClub) {
+      loadClubTimeline(detailClub.id);
+      // Load health trends
+      setLoadingTrends2(true);
+      setHealthTrends([]);
+      getClubHealthTrends(detailClub.id, language).then(({ trends, direction }) => {
+        setHealthTrends(trends);
+        setHealthDirection(direction);
+      }).finally(() => setLoadingTrends2(false));
+    }
+  }, [detailClub, loadClubTimeline, language]);
 
   // Load comparison trends when modal opens
   useEffect(() => {
@@ -297,8 +327,64 @@ export default function AdminClubsScreen() {
     loadTrends();
   }, [showComparison, selectedIds, clubs, fr]);
 
-  useEffect(() => { loadClubs(); loadClubMatchCounts(); }, [loadClubs, loadClubMatchCounts]);
+  // Load merge history
+  const loadMergeHistory = useCallback(async () => {
+    const { logs } = await getClubMergeHistory();
+    setMergeHistory(logs);
+  }, []);
+
+  useEffect(() => { loadClubs(); loadClubMatchCounts(); loadMergeHistory(); }, [loadClubs, loadClubMatchCounts, loadMergeHistory]);
   useEffect(() => { if (clubs.length > 0) computeHealthScores(); }, [clubs, computeHealthScores]);
+
+  // Detect club duplicates when clubs load
+  useEffect(() => {
+    if (clubs.length > 0) {
+      const dupes = detectDuplicateClubs(clubs.map(c => ({
+        id: c.id, name: c.name, city: c.city, membersCount: c.membersCount,
+        isVerified: c.isVerified, isPublic: c.isPublic, description: c.description,
+        logo: c.logo, address: c.address, contactEmail: c.contactEmail,
+        facilities: c.facilities, foundedYear: c.foundedYear, createdAt: c.createdAt, userId: c.userId,
+      })));
+      setClubDuplicates(dupes);
+    }
+  }, [clubs]);
+
+  const handleOpenClubMerge = useCallback(async (group: ClubDuplicateGroup) => {
+    if (group.clubs.length < 2) return;
+    const a = group.clubs[0];
+    const b = group.clubs[1];
+    const { keepId, deleteId } = pickBestClub(a, b);
+    setClubMergeGroup(group);
+    setClubMergeKeepId(keepId);
+    setClubMergeDeleteId(deleteId);
+    setShowClubMergeModal(true);
+    setLoadingClubMergePreview(true);
+    const { preview } = await getClubMergePreview(keepId, deleteId);
+    setClubMergePreview(preview);
+    setLoadingClubMergePreview(false);
+  }, []);
+
+  const executeClubMerge = useCallback(async () => {
+    if (!clubMergeKeepId || !clubMergeDeleteId || !clubMergeGroup) return;
+    setMergingClub(true);
+    const keepClub = clubMergeGroup.clubs.find(c => c.id === clubMergeKeepId);
+    const delClub = clubMergeGroup.clubs.find(c => c.id === clubMergeDeleteId);
+    const { error } = await mergeClubs(clubMergeKeepId, clubMergeDeleteId);
+    if (error) {
+      showAlert(fr ? 'Erreur' : 'Error', error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setClubs(prev => prev.filter(c => c.id !== clubMergeDeleteId));
+      setClubDuplicates(prev => prev.filter(g => g !== clubMergeGroup));
+      showAlert(fr ? 'Fusion reussie' : 'Merge successful', fr ? `${delClub?.name} a ete fusionne dans ${keepClub?.name}` : `${delClub?.name} merged into ${keepClub?.name}`);
+      logAdminAction({ actionType: 'club_merge' as any, targetType: 'club', targetId: clubMergeKeepId, targetName: keepClub?.name || '', actionDetail: `Merged ${delClub?.name} into ${keepClub?.name}`, metadata: { deletedId: clubMergeDeleteId, deletedName: delClub?.name, preview: clubMergePreview } });
+      loadMergeHistory();
+    }
+    setMergingClub(false);
+    setShowClubMergeModal(false);
+    setClubMergePreview(null);
+    setClubMergeGroup(null);
+  }, [clubMergeKeepId, clubMergeDeleteId, clubMergeGroup, clubMergePreview, fr, showAlert]);
 
   const inactiveClubs = useMemo(() => {
     return clubs.filter(c => {
@@ -663,6 +749,95 @@ export default function AdminClubsScreen() {
           </Animated.View>
         ) : null}
 
+        {/* Club Duplicates Detection */}
+        {clubDuplicates.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(20)}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F5F3FF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#DDD6FE' }}
+              onPress={() => { setShowClubDuplicates(!showClubDuplicates); Haptics.selectionAsync(); }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="content-copy" size={18} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#5B21B6' }}>
+                  {fr ? `${clubDuplicates.length} doublon(s) detecte(s)` : `${clubDuplicates.length} duplicate(s) detected`}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#7C3AED', marginTop: 2 }}>
+                  {fr ? 'Clubs avec noms similaires dans la meme ville' : 'Clubs with similar names in the same city'}
+                </Text>
+              </View>
+              <MaterialIcons name={showClubDuplicates ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showClubDuplicates ? (
+              <View style={{ gap: 8, marginBottom: 14 }}>
+                {clubDuplicates.map((group, gIdx) => (
+                  <View key={gIdx} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#DDD6FE', borderLeftWidth: 3, borderLeftColor: '#7C3AED' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                      <MaterialIcons name="warning" size={14} color="#7C3AED" />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#7C3AED' }}>
+                        {group.sameCity ? (fr ? 'Meme ville' : 'Same city') : ''} {"\u2022"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
+                      </Text>
+                    </View>
+                    {group.clubs.map((c, cIdx) => {
+                      const best = group.clubs.length >= 2 ? pickBestClub(group.clubs[0], group.clubs[1]) : null;
+                      const isKept = best && best.keepId === c.id;
+                      return (
+                        <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: cIdx > 0 ? 1 : 0, borderTopColor: '#F5F3FF' }}>
+                          <View style={[{ width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }, isKept ? { backgroundColor: '#DCFCE7' } : { backgroundColor: '#F1F5F9' }]}>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: isKept ? '#10B981' : '#64748B' }}>{isKept ? '\u2713' : String(cIdx + 1)}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{c.name}</Text>
+                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                              {c.city} {"\u2022"} {c.membersCount} {fr ? 'membres' : 'members'}
+                              {c.isVerified ? ' \u2022 \u2705' : ''}
+                              {isKept ? (fr ? ' (conserve)' : ' (kept)') : ''}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                    {group.clubs.length >= 2 ? (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 8 }}>
+                        <Pressable
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE' }}
+                          onPress={() => handleOpenClubMerge(group)}
+                        >
+                          <MaterialIcons name="merge-type" size={14} color="#7C3AED" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'Fusionner' : 'Merge'}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#FEF3C7', borderWidth: 1, borderColor: '#FDE68A' }}
+                          onPress={async () => {
+                            Haptics.selectionAsync();
+                            const best = pickBestClub(group.clubs[0], group.clubs[1]);
+                            const swapped = best.keepId === group.clubs[0].id
+                              ? { keepId: group.clubs[1].id, deleteId: group.clubs[0].id }
+                              : { keepId: group.clubs[0].id, deleteId: group.clubs[1].id };
+                            setClubMergeGroup(group);
+                            setClubMergeKeepId(swapped.keepId);
+                            setClubMergeDeleteId(swapped.deleteId);
+                            setShowClubMergeModal(true);
+                            setLoadingClubMergePreview(true);
+                            const { preview } = await getClubMergePreview(swapped.keepId, swapped.deleteId);
+                            setClubMergePreview(preview);
+                            setLoadingClubMergePreview(false);
+                          }}
+                        >
+                          <MaterialIcons name="swap-horiz" size={14} color="#D97706" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706' }}>{fr ? 'Inverser' : 'Swap'}</Text>
+                        </Pressable>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
         {/* Inactive Clubs Alert */}
         {showInactiveAlert && inactiveClubs.length > 0 ? (
           <Pressable
@@ -684,6 +859,76 @@ export default function AdminClubsScreen() {
               {archivingInactive ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Archiver' : 'Archive'}</Text>}
             </Pressable>
           </Pressable>
+        ) : null}
+
+        {/* Merge History */}
+        {mergeHistory.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(30)}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#F0FDF4', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#BBF7D0' }}
+              onPress={() => { setShowMergeHistory(!showMergeHistory); Haptics.selectionAsync(); }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#10B98115', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="history" size={18} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#065F46' }}>
+                  {fr ? `${mergeHistory.length} fusion(s) recente(s)` : `${mergeHistory.length} recent merge(s)`}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#10B981', marginTop: 2 }}>
+                  {fr ? 'Historique des fusions de clubs' : 'Club merge history'}
+                </Text>
+              </View>
+              <MaterialIcons name={showMergeHistory ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showMergeHistory ? (
+              <View style={{ gap: 6, marginBottom: 14 }}>
+                {mergeHistory.map((log) => {
+                  const d = new Date(log.createdAt);
+                  const dateStr = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  const snapshot = log.sourceSnapshot || {};
+                  return (
+                    <View key={log.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#BBF7D0', borderLeftWidth: 3, borderLeftColor: '#10B981' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <MaterialIcons name="merge-type" size={16} color="#10B981" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            <Text style={{ color: '#EF4444', textDecorationLine: 'line-through' }}>{log.sourceName}</Text>
+                            {' \u2192 '}
+                            <Text style={{ color: '#10B981' }}>{log.targetName}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{dateStr}</Text>
+                        </View>
+                      </View>
+                      {snapshot.city || snapshot.members_count ? (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                          {snapshot.city ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <MaterialIcons name="place" size={9} color="#64748B" />
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{snapshot.city}</Text>
+                            </View>
+                          ) : null}
+                          {snapshot.members_count ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <MaterialIcons name="people" size={9} color="#64748B" />
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{snapshot.members_count} {fr ? 'membres' : 'members'}</Text>
+                            </View>
+                          ) : null}
+                          {snapshot.is_verified ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                              <MaterialIcons name="verified" size={9} color="#2563EB" />
+                              <Text style={{ fontSize: 9, fontWeight: '600', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+          </Animated.View>
         ) : null}
 
         {/* Batch Actions Bar */}
@@ -1009,13 +1254,67 @@ export default function AdminClubsScreen() {
               );
               const avgLat = clubsWithLoc.reduce((s, c) => s + (c.location?.latitude || 0), 0) / clubsWithLoc.length;
               const avgLng = clubsWithLoc.reduce((s, c) => s + (c.location?.longitude || 0), 0) / clubsWithLoc.length;
+
+              // Grid-based clustering
+              const gridSize = 0.35; // ~35km grid cells
+              const clusterMap = new Map<string, AdminClub[]>();
+              clubsWithLoc.forEach(club => {
+                const gLat = Math.floor((club.location!.latitude) / gridSize);
+                const gLng = Math.floor((club.location!.longitude) / gridSize);
+                const key = `${gLat}_${gLng}`;
+                if (!clusterMap.has(key)) clusterMap.set(key, []);
+                clusterMap.get(key)!.push(club);
+              });
+
+              const clusters: { key: string; clubs: AdminClub[]; lat: number; lng: number; count: number; avgHealth: number; avgHealthColor: string; hasVerified: boolean }[] = [];
+              const singles: AdminClub[] = [];
+              clusterMap.forEach((groupClubs, key) => {
+                if (groupClubs.length === 1) {
+                  singles.push(groupClubs[0]);
+                } else {
+                  const cLat = groupClubs.reduce((s, c) => s + c.location!.latitude, 0) / groupClubs.length;
+                  const cLng = groupClubs.reduce((s, c) => s + c.location!.longitude, 0) / groupClubs.length;
+                  let totalHealth = 0;
+                  let healthCount = 0;
+                  let hasVerified = false;
+                  groupClubs.forEach(c => {
+                    const hs = clubHealthScores.get(c.id);
+                    if (hs) { totalHealth += hs.score; healthCount++; }
+                    if (c.isVerified) hasVerified = true;
+                  });
+                  const avgH = healthCount > 0 ? Math.round(totalHealth / healthCount) : 50;
+                  const avgHColor = avgH >= 70 ? '#10B981' : avgH >= 40 ? '#D97706' : avgH >= 15 ? '#EF4444' : '#94A3B8';
+                  clusters.push({ key, clubs: groupClubs, lat: cLat, lng: cLng, count: groupClubs.length, avgHealth: avgH, avgHealthColor: avgHColor, hasVerified });
+                }
+              });
+
               return (
                 <MapViewComponent
                   style={{ flex: 1 }}
                   initialRegion={{ latitude: avgLat || 46.6, longitude: avgLng || 2.3, latitudeDelta: 6, longitudeDelta: 6 }}
                   showsUserLocation
                 >
-                  {clubsWithLoc.map(club => {
+                  {/* Cluster markers */}
+                  {clusters.map(cluster => (
+                    <MarkerComponent
+                      key={`cluster-${cluster.key}`}
+                      coordinate={{ latitude: cluster.lat, longitude: cluster.lng }}
+                      tracksViewChanges={false}
+                    >
+                      <View style={{ alignItems: 'center' }}>
+                        <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: cluster.avgHealthColor, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4, elevation: 4 }}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF' }}>{cluster.count}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.92)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginTop: 2, borderWidth: 1, borderColor: cluster.avgHealthColor + '40' }}>
+                          <MaterialIcons name="favorite" size={8} color={cluster.avgHealthColor} />
+                          <Text style={{ fontSize: 8, fontWeight: '800', color: cluster.avgHealthColor }}>{cluster.avgHealth}</Text>
+                          {cluster.hasVerified ? <MaterialIcons name="verified" size={8} color="#2563EB" /> : null}
+                        </View>
+                      </View>
+                    </MarkerComponent>
+                  ))}
+                  {/* Individual markers */}
+                  {singles.map(club => {
                     const hs = clubHealthScores.get(club.id);
                     const markerColor = hs ? hs.color : '#94A3B8';
                     return (
@@ -1079,6 +1378,127 @@ export default function AdminClubsScreen() {
               ))}
             </View>
           </View>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Club Merge Preview Modal */}
+      <Modal visible={showClubMergeModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!mergingClub) { setShowClubMergeModal(false); setClubMergePreview(null); } }}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => { if (!mergingClub) { setShowClubMergeModal(false); setClubMergePreview(null); } }} disabled={mergingClub}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Fusion de clubs' : 'Club Merge'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+            {clubMergeGroup && clubMergeKeepId && clubMergeDeleteId ? (() => {
+              const keepC = clubMergeGroup.clubs.find(c => c.id === clubMergeKeepId);
+              const delC = clubMergeGroup.clubs.find(c => c.id === clubMergeDeleteId);
+              if (!keepC || !delC) return null;
+              return (
+                <>
+                  {/* Keep/Delete cards */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                    <View style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#BBF7D0' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <MaterialIcons name="check-circle" size={16} color="#10B981" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>{fr ? 'CONSERVER' : 'KEEP'}</Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{keepC.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepC.city} {"\u2022"} {keepC.membersCount} {fr ? 'membres' : 'members'}</Text>
+                      {keepC.isVerified ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}><MaterialIcons name="verified" size={12} color="#2563EB" /><Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#FECACA' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <MaterialIcons name="delete" size={16} color="#EF4444" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 0.5 }}>{fr ? 'SUPPRIMER' : 'DELETE'}</Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{delC.name}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delC.city} {"\u2022"} {delC.membersCount} {fr ? 'membres' : 'members'}</Text>
+                      {delC.isVerified ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}><MaterialIcons name="verified" size={12} color="#2563EB" /><Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
+                    </View>
+                  </View>
+
+                  {/* Swap button */}
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: '#FEF3C7', borderRadius: 10, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 16 }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setClubMergeKeepId(clubMergeDeleteId);
+                      setClubMergeDeleteId(clubMergeKeepId);
+                      setLoadingClubMergePreview(true);
+                      getClubMergePreview(clubMergeDeleteId!, clubMergeKeepId!).then(({ preview }) => { setClubMergePreview(preview); setLoadingClubMergePreview(false); });
+                    }}
+                    disabled={loadingClubMergePreview || mergingClub}
+                  >
+                    <MaterialIcons name="swap-horiz" size={18} color="#D97706" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#D97706' }}>{fr ? 'Inverser' : 'Swap'}</Text>
+                  </Pressable>
+
+                  {/* Impact Preview */}
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 1, marginBottom: 10 }}>{fr ? 'IMPACT DE LA FUSION' : 'MERGE IMPACT'}</Text>
+                  {loadingClubMergePreview ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 32, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <ActivityIndicator size="large" color={theme.primary} />
+                      <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Analyse en cours...' : 'Analyzing...'}</Text>
+                    </View>
+                  ) : clubMergePreview ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 16 }}>
+                      {[
+                        { icon: 'person', label: fr ? 'Joueurs a transferer' : 'Players to transfer', count: clubMergePreview.players, color: '#3B82F6' },
+                        { icon: 'sports', label: fr ? 'Matchs des membres' : 'Member matches', count: clubMergePreview.matches, color: '#D97706' },
+                        { icon: 'emoji-events', label: fr ? 'Tournois a transferer' : 'Tournaments to transfer', count: clubMergePreview.tournaments, color: '#7C3AED' },
+                        { icon: 'sports-soccer', label: fr ? 'Terrains lies' : 'Linked terrains', count: clubMergePreview.terrains, color: '#10B981' },
+                        { icon: 'share', label: fr ? 'Partages' : 'Shared items', count: clubMergePreview.sharedItems, color: '#0EA5E9' },
+                        { icon: 'assignment', label: fr ? 'Demandes de transfert' : 'Claim requests', count: clubMergePreview.claimRequests, color: '#EF4444' },
+                      ].map((item, idx) => (
+                        <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                          <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: item.color + '12', alignItems: 'center', justifyContent: 'center' }}>
+                            <MaterialIcons name={item.icon as any} size={16} color={item.color} />
+                          </View>
+                          <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{item.label}</Text>
+                          <View style={{ minWidth: 28, height: 24, borderRadius: 8, backgroundColor: item.count > 0 ? item.color + '15' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 8 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: item.count > 0 ? item.color : '#CBD5E1' }}>{item.count}</Text>
+                          </View>
+                        </View>
+                      ))}
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: 1, borderTopColor: '#E2E8F0', backgroundColor: '#F8FAFC' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Total des references' : 'Total references'}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#0F172A' }}>
+                          {(clubMergePreview.players + clubMergePreview.tournaments + clubMergePreview.terrains + clubMergePreview.sharedItems + clubMergePreview.claimRequests)}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* Warning */}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#FDE68A', marginBottom: 16 }}>
+                    <MaterialIcons name="warning-amber" size={18} color="#D97706" />
+                    <Text style={{ flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 }}>
+                      {fr
+                        ? 'Cette action est irreversible. Tous les joueurs, tournois et references seront transferes au club conserve, puis le club supprime sera efface. Les membres seront fusionnes.'
+                        : 'This action is irreversible. All players, tournaments and references will be transferred to the kept club, then the deleted club will be removed. Members will be merged.'}
+                    </Text>
+                  </View>
+
+                  {/* Merge Button */}
+                  <Pressable
+                    style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 16, borderRadius: 14, backgroundColor: '#DC2626' }, (mergingClub || loadingClubMergePreview) && { opacity: 0.5 }]}
+                    onPress={executeClubMerge}
+                    disabled={mergingClub || loadingClubMergePreview}
+                  >
+                    {mergingClub ? <ActivityIndicator size="small" color="#FFF" /> : (
+                      <>
+                        <MaterialIcons name="merge-type" size={20} color="#FFF" />
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>{fr ? 'Confirmer la fusion' : 'Confirm Merge'}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                </>
+              );
+            })() : null}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -1220,6 +1640,73 @@ export default function AdminClubsScreen() {
                         ))}
                       </View>
                     </View>
+                  </View>
+                );
+              })() : null}
+
+              {/* Health Score Trends */}
+              {detailClub ? (() => {
+                const hs = clubHealthScores.get(detailClub.id);
+                return (
+                  <View style={s.detailSection}>
+                    <Text style={s.detailSectionTitle}>{fr ? 'EVOLUTION SANTE (6 MOIS)' : 'HEALTH TRENDS (6 MONTHS)'}</Text>
+                    {loadingTrends2 ? (
+                      <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                        <ActivityIndicator size="small" color="#3B82F6" />
+                      </View>
+                    ) : healthTrends.length > 0 ? (
+                      <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                        {/* Direction indicator */}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name="show-chart" size={16} color={healthDirection === 'improving' ? '#10B981' : healthDirection === 'declining' ? '#EF4444' : '#D97706'} />
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Tendance' : 'Trend'}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: healthDirection === 'improving' ? '#DCFCE7' : healthDirection === 'declining' ? '#FEF2F2' : '#FEF3C7', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                            <MaterialIcons name={healthDirection === 'improving' ? 'trending-up' : healthDirection === 'declining' ? 'trending-down' : 'trending-flat'} size={14} color={healthDirection === 'improving' ? '#10B981' : healthDirection === 'declining' ? '#EF4444' : '#D97706'} />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: healthDirection === 'improving' ? '#10B981' : healthDirection === 'declining' ? '#EF4444' : '#D97706' }}>
+                              {healthDirection === 'improving' ? (fr ? 'En hausse' : 'Improving') : healthDirection === 'declining' ? (fr ? 'En baisse' : 'Declining') : (fr ? 'Stable' : 'Stable')}
+                            </Text>
+                          </View>
+                        </View>
+                        {/* Monthly bars */}
+                        {(() => {
+                          const maxScore = Math.max(...healthTrends.map(t => t.score), 1);
+                          return healthTrends.map((t, idx) => {
+                            const isLast = idx === healthTrends.length - 1;
+                            return (
+                              <View key={idx} style={{ marginBottom: 6 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Text style={{ width: 36, fontSize: 10, fontWeight: isLast ? '800' : '600', color: isLast ? '#0F172A' : '#94A3B8' }}>{t.month}</Text>
+                                  <View style={{ flex: 1, height: 18, backgroundColor: '#F1F5F9', borderRadius: 5, overflow: 'hidden' }}>
+                                    <View style={{ height: '100%' as any, width: `${Math.max(3, (t.score / 100) * 100)}%`, backgroundColor: t.color, borderRadius: 5 }} />
+                                  </View>
+                                  <Text style={{ width: 28, fontSize: 12, fontWeight: '800', color: t.color, textAlign: 'right' }}>{t.score}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', gap: 8, marginLeft: 44, marginTop: 2 }}>
+                                  <Text style={{ fontSize: 8, color: '#94A3B8' }}>{t.matches} {fr ? 'matchs' : 'matches'}</Text>
+                                  <Text style={{ fontSize: 8, color: '#94A3B8' }}>{t.members} {fr ? 'membres' : 'members'}</Text>
+                                </View>
+                              </View>
+                            );
+                          });
+                        })()}
+                        {/* Declining alert */}
+                        {healthDirection === 'declining' ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#FECACA' }}>
+                            <MaterialIcons name="warning-amber" size={14} color="#EF4444" />
+                            <Text style={{ flex: 1, fontSize: 10, color: '#991B1B', lineHeight: 14 }}>
+                              {fr ? 'Le score de sante de ce club est en baisse. Verifiez l\'activite des membres et encouragez la participation.' : 'This club\'s health score is declining. Check member activity and encourage participation.'}
+                            </Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    ) : (
+                      <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', gap: 6 }}>
+                        <MaterialIcons name="show-chart" size={28} color="#CBD5E1" />
+                        <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Pas assez de donnees' : 'Not enough data'}</Text>
+                      </View>
+                    )}
                   </View>
                 );
               })() : null}

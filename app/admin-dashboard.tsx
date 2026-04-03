@@ -386,6 +386,18 @@ export default function AdminDashboardScreen() {
       if (inactiveClubsPct > 50) detectedAlerts.push({ id: 'unverified_clubs', severity: 'info', title: fr ? 'Clubs non verifies' : 'Unverified clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies.` : `${inactiveClubsPct}% of clubs are not verified.`, icon: 'pending', color: '#D97706', route: '/admin-clubs' });
       if (recentUsers.length === 0) detectedAlerts.push({ id: 'no_signups', severity: 'info', title: fr ? 'Aucune inscription recente' : 'No recent signups', message: fr ? 'Aucun nouvel utilisateur cette semaine.' : 'No new users this week.', icon: 'person-off', color: '#94A3B8' });
       if (overdueCount > 0) detectedAlerts.push({ id: 'overdue_appeals', severity: 'critical', title: fr ? 'Appels en retard' : 'Overdue appeals', message: fr ? `${overdueCount} appel(s) en attente depuis +48h.` : `${overdueCount} appeal(s) pending for 48h+.`, icon: 'timer-off', color: '#DC2626', route: '/admin-moderation' });
+      // Declining clubs detection
+      const decliningClubCount = allClubs.filter((c: any) => {
+        const hs = (() => {
+          const cPlayers = (eloPlayersRes.data || []).filter((p: any) => p.club_id === c.id);
+          return cPlayers.length;
+        })();
+        return c.is_verified && !c.is_public;
+      }).length;
+      if (unverified.length > 5) {
+        const pctUnverified = Math.round((unverified.length / allClubs.length) * 100);
+        if (pctUnverified > 60) detectedAlerts.push({ id: 'declining_clubs', severity: 'warning', title: fr ? 'Clubs a risque' : 'At-risk clubs', message: fr ? `${pctUnverified}% des clubs ne sont pas verifies. Examinez les tendances de sante.` : `${pctUnverified}% of clubs are unverified. Review health trends.`, icon: 'trending-down', color: '#D97706', route: '/admin-clubs' });
+      }
       setSmartAlerts(detectedAlerts);
       setAdminNotifCount(detectedAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length + pendingAppealsList.length + pendingCount);
 

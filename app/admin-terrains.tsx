@@ -372,12 +372,45 @@ export default function AdminTerrainsScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Terrains' : 'Terrain Management'}</Text>
-        <Pressable
-          style={[s.backBtn, selectionMode && { backgroundColor: '#3B82F6' }]}
-          onPress={() => { Haptics.selectionAsync(); setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds(new Set()); }}
-        >
-          <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            style={[s.backBtn, { backgroundColor: '#EFF6FF' }]}
+            onPress={async () => {
+              if (filteredTerrains.length === 0) return;
+              Haptics.selectionAsync();
+              try {
+                const headers = 'Name,City,Type,Public,Lighting,Covered,Courts,Owner,Created';
+                const rows = filteredTerrains.map(t =>
+                  `"${t.name}","${t.city}","${t.type}",${t.isPublic},${t.lighting},${t.covered},${t.courtsCount},"${t.ownerName || ''}",${t.createdAt ? new Date(t.createdAt).toLocaleDateString() : ''}`
+                );
+                const csv = [headers, ...rows].join('\n');
+                const filename = `terrains-all-${new Date().toISOString().slice(0, 10)}.csv`;
+                if (typeof document !== 'undefined') {
+                  const blob = new Blob([csv], { type: 'text/csv' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a'); a.href = url; a.download = filename; a.click();
+                  URL.revokeObjectURL(url);
+                } else {
+                  const FS = require('expo-file-system');
+                  const SH = require('expo-sharing');
+                  const path = `${FS.cacheDirectory}${filename}`;
+                  await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+                  const canShare = await SH.isAvailableAsync();
+                  if (canShare) await SH.shareAsync(path, { mimeType: 'text/csv' });
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (e) { console.log('[AdminTerrains] Export all error:', e); }
+            }}
+          >
+            <MaterialIcons name="file-download" size={20} color="#3B82F6" />
+          </Pressable>
+          <Pressable
+            style={[s.backBtn, selectionMode && { backgroundColor: '#3B82F6' }]}
+            onPress={() => { Haptics.selectionAsync(); setSelectionMode(!selectionMode); if (selectionMode) setSelectedIds(new Set()); }}
+          >
+            <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
+          </Pressable>
+        </View>
       </View>
 
       <AdminQuickNav currentRoute="/admin-terrains" />

@@ -37,6 +37,7 @@ import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { getEloRank } from '@/services/eloService';
+import { ADMIN_PERMISSIONS, PermissionKey, getUserPermissions, setUserPermissions, getBulkUserPermissions } from '@/services/adminPermissionService';
 
 interface AdminUser {
   id: string;
@@ -54,6 +55,7 @@ interface AdminUser {
   eloRating?: number;
   wins?: number;
   losses?: number;
+  permissions?: PermissionKey[];
 }
 
 interface UserDetail extends AdminUser {
@@ -86,6 +88,14 @@ export default function AdminUsersScreen() {
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [bulkProcessing, setBulkProcessing] = useState(false);
+
+  // Permissions modal
+  const [showPermissions, setShowPermissions] = useState(false);
+  const [permUser, setPermUser] = useState<AdminUser | null>(null);
+  const [permSelections, setPermSelections] = useState<Set<PermissionKey>>(new Set());
+  const [savingPerms, setSavingPerms] = useState(false);
+  const [loadingPerms, setLoadingPerms] = useState(false);
+  const [userPermsMap, setUserPermsMap] = useState<Map<string, PermissionKey[]>>(new Map());
 
   const loadUsers = useCallback(async () => {
     try {
@@ -122,7 +132,7 @@ export default function AdminUsersScreen() {
         });
       }
 
-      setUsers((data || []).map((u: any) => ({
+      const mappedUsers = (data || []).map((u: any) => ({
         id: u.id,
         username: u.username,
         email: u.email,
@@ -137,7 +147,19 @@ export default function AdminUsersScreen() {
         matchCount: matchCounts.get(u.id) || 0,
         eloRating: eloMap.get(u.id) || 1000,
         wins: winsMap.get(u.id) || 0,
-      })));
+      }));
+
+      // Load permissions for admin users
+      const adminIds = mappedUsers.filter(u => u.isAdmin).map(u => u.id);
+      if (adminIds.length > 0) {
+        const { permissionsMap } = await getBulkUserPermissions(adminIds);
+        setUserPermsMap(permissionsMap);
+        mappedUsers.forEach(u => {
+          if (permissionsMap.has(u.id)) u.permissions = permissionsMap.get(u.id);
+        });
+      }
+
+      setUsers(mappedUsers);
     } catch (e) {
       console.log('[AdminUsers] Load error:', e);
     } finally {
@@ -297,6 +319,65 @@ export default function AdminUsersScreen() {
     );
   }, [fr, showAlert, detailUser]);
 
+  const handleOpenPermissions = useCallback(async (user: AdminUser) => {
+    Haptics.selectionAsync();
+    setPermUser(user);
+    setShowPermissions(true);
+    setLoadingPerms(true);
+    const { permissions } = await getUserPermissions(user.id);
+    setPermSelections(new Set(permissions));
+    setLoadingPerms(false);
+  }, []);
+
+  const handleSavePermissions = useCallback(async () => {
+    if (!permUser) return;
+    setSavingPerms(true);
+    const perms = [...permSelections] as PermissionKey[];
+    const { error } = await setUserPermissions(permUser.id, perms);
+    if (error) {
+      showAlert(fr ? 'Erreur' : 'Error', error);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setUserPermsMap(prev => {
+        const next = new Map(prev);
+        next.set(permUser.id, perms);
+        return next;
+      });
+      setUsers(prev => prev.map(u => u.id === permUser.id ? { ...u, permissions: perms } : u));
+      logAdminAction({
+        actionType: 'user_permissions_update' as any,
+        targetType: 'user',
+        targetId: permUser.id,
+        targetName: permUser.username || permUser.email,
+        actionDetail: `Permissions: ${perms.join(', ') || 'none'}`,
+        metadata: { permissions: perms },
+      });
+      setShowPermissions(false);
+    }
+    setSavingPerms(false);
+  }, [permUser, permSelections, fr, showAlert]);
+
+  const togglePermission = useCallback((perm: PermissionKey) => {
+    Haptics.selectionAsync();
+    setPermSelections(prev => {
+      const next = new Set(prev);
+      if (perm === 'full_access') {
+        // Full access is exclusive
+        if (next.has('full_access')) {
+          next.delete('full_access');
+        } else {
+          next.clear();
+          next.add('full_access');
+        }
+        return next;
+      }
+      // If selecting a specific perm, remove full_access
+      next.delete('full_access');
+      if (next.has(perm)) next.delete(perm); else next.add(perm);
+      return next;
+    });
+  }, []);
+
   const handleToggleAdmin = useCallback(async (user: AdminUser) => {
     const newVal = !user.isAdmin;
     Alert.alert(
@@ -449,6 +530,12 @@ export default function AdminUsersScreen() {
                         <Text style={s.userName} numberOfLines={1}>{user.username || (fr ? 'Sans nom' : 'No name')}</Text>
                         {user.isAdmin ? <View style={s.adminBadge}><MaterialIcons name="shield" size={10} color="#DC2626" /></View> : null}
                         {user.isPremium ? <View style={s.premiumBadge}><MaterialIcons name="star" size={10} color="#D4A017" /></View> : null}
+                        {user.isAdmin && (userPermsMap.get(user.id) || []).length > 0 ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#F5F3FF', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#DDD6FE' }}>
+                            <MaterialIcons name="tune" size={8} color="#7C3AED" />
+                            <Text style={{ fontSize: 8, fontWeight: '700', color: '#7C3AED' }}>{(userPermsMap.get(user.id) || []).length}</Text>
+                          </View>
+                        ) : null}
                       </View>
                       <Text style={s.userEmail} numberOfLines={1}>{user.email}</Text>
                       <View style={s.userMetaRow}>
@@ -468,7 +555,21 @@ export default function AdminUsersScreen() {
                         </View>
                       </View>
                     </View>
-                    {!selectionMode ? <MaterialIcons name="chevron-right" size={18} color="#CBD5E1" /> : null}
+                    {!selectionMode ? (
+                      <View style={{ alignItems: 'center', gap: 4 }}>
+                        {user.isAdmin ? (
+                          <Pressable
+                            style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: '#F5F3FF', alignItems: 'center', justifyContent: 'center' }}
+                            onPress={(e) => { e.stopPropagation(); handleOpenPermissions(user); }}
+                            hitSlop={6}
+                          >
+                            <MaterialIcons name="tune" size={16} color="#7C3AED" />
+                          </Pressable>
+                        ) : (
+                          <MaterialIcons name="chevron-right" size={18} color="#CBD5E1" />
+                        )}
+                      </View>
+                    ) : null}
                   </View>
                 </Pressable>
               </Animated.View>
@@ -502,6 +603,132 @@ export default function AdminUsersScreen() {
           {bulkProcessing ? <ActivityIndicator size="small" color="#3B82F6" style={{ marginLeft: 8 }} /> : null}
         </Animated.View>
       ) : null}
+
+      {/* Permissions Modal */}
+      <Modal visible={showPermissions} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { if (!savingPerms) setShowPermissions(false); }}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => { if (!savingPerms) setShowPermissions(false); }} disabled={savingPerms}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Permissions' : 'Permissions'}</Text>
+            <Pressable
+              style={[{ paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#7C3AED', borderRadius: 10 }, savingPerms && { opacity: 0.5 }]}
+              onPress={handleSavePermissions}
+              disabled={savingPerms}
+            >
+              {savingPerms ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Sauver' : 'Save'}</Text>}
+            </Pressable>
+          </View>
+          <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+            {permUser ? (
+              <>
+                {/* User header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                  {permUser.avatar ? (
+                    <Image source={{ uri: permUser.avatar }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} />
+                  ) : (
+                    <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 20, fontWeight: '700', color: '#64748B' }}>{(permUser.username || permUser.email).charAt(0).toUpperCase()}</Text>
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#0F172A' }}>{permUser.username || permUser.email}</Text>
+                    <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 1 }}>{permUser.email}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <View style={s.adminBadge}><MaterialIcons name="shield" size={10} color="#DC2626" /></View>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#DC2626' }}>Admin</Text>
+                  </View>
+                </View>
+
+                {loadingPerms ? (
+                  <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                    <ActivityIndicator size="large" color="#7C3AED" />
+                  </View>
+                ) : (
+                  <>
+                    {/* Info */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, marginBottom: 16, borderWidth: 1, borderColor: '#DBEAFE' }}>
+                      <MaterialIcons name="info-outline" size={16} color="#3B82F6" />
+                      <Text style={{ flex: 1, fontSize: 11, color: '#3B82F6', lineHeight: 16 }}>
+                        {fr ? 'Selectionnez les sections auxquelles cet admin a acces. "Acces complet" donne toutes les permissions.' : 'Select sections this admin can access. "Full Access" grants all permissions.'}
+                      </Text>
+                    </View>
+
+                    {/* Permission toggles */}
+                    {(Object.entries(ADMIN_PERMISSIONS) as [PermissionKey, typeof ADMIN_PERMISSIONS[PermissionKey]][]).map(([key, perm]) => {
+                      const isSelected = permSelections.has(key);
+                      const isDisabled = key !== 'full_access' && permSelections.has('full_access');
+                      return (
+                        <Pressable
+                          key={key}
+                          style={[{
+                            flexDirection: 'row', alignItems: 'center', gap: 12,
+                            backgroundColor: isSelected ? perm.color + '08' : '#FFF',
+                            borderRadius: 14, padding: 14, marginBottom: 8,
+                            borderWidth: 1.5, borderColor: isSelected ? perm.color + '40' : '#F1F5F9',
+                          }, isDisabled && { opacity: 0.4 }]}
+                          onPress={() => togglePermission(key)}
+                          disabled={isDisabled}
+                        >
+                          <View style={[{
+                            width: 40, height: 40, borderRadius: 12,
+                            backgroundColor: isSelected ? perm.color + '15' : '#F8FAFC',
+                            alignItems: 'center', justifyContent: 'center',
+                          }]}>
+                            <MaterialIcons name={perm.icon as any} size={20} color={isSelected ? perm.color : '#94A3B8'} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: isSelected ? perm.color : '#0F172A' }}>
+                              {fr ? perm.labelFr : perm.labelEn}
+                            </Text>
+                            <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
+                              {fr ? perm.description_fr : perm.description_en}
+                            </Text>
+                          </View>
+                          <View style={[{
+                            width: 24, height: 24, borderRadius: 7,
+                            borderWidth: 2, borderColor: isSelected ? perm.color : '#CBD5E1',
+                            backgroundColor: isSelected ? perm.color : 'transparent',
+                            alignItems: 'center', justifyContent: 'center',
+                          }]}>
+                            {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+
+                    {/* Summary */}
+                    <View style={{ backgroundColor: '#F8FAFC', borderRadius: 12, padding: 14, marginTop: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 8 }}>
+                        {fr ? 'RESUME DES PERMISSIONS' : 'PERMISSIONS SUMMARY'}
+                      </Text>
+                      {permSelections.size === 0 ? (
+                        <Text style={{ fontSize: 12, color: '#94A3B8', fontStyle: 'italic' }}>
+                          {fr ? 'Aucune permission specifique (acces admin standard)' : 'No specific permissions (standard admin access)'}
+                        </Text>
+                      ) : (
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                          {[...permSelections].map(key => {
+                            const perm = ADMIN_PERMISSIONS[key];
+                            return (
+                              <View key={key} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: perm.color + '12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: perm.color + '25' }}>
+                                <MaterialIcons name={perm.icon as any} size={10} color={perm.color} />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: perm.color }}>{fr ? perm.labelFr : perm.labelEn}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  </>
+                )}
+              </>
+            ) : null}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
 
       {/* User Detail Modal */}
       <Modal visible={!!detailUser} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailUser(null)}>
@@ -625,6 +852,16 @@ export default function AdminUsersScreen() {
                   <Text style={s.viewPlayerText}>{fr ? 'Voir la fiche joueur' : 'View player card'}</Text>
                   <MaterialIcons name="chevron-right" size={18} color="#3B82F6" />
                 </Pressable>
+                {detailUser.isAdmin ? (
+                  <Pressable
+                    style={[s.viewPlayerBtn, { backgroundColor: '#F5F3FF', borderColor: '#DDD6FE', marginTop: 8 }]}
+                    onPress={() => { setDetailUser(null); setTimeout(() => handleOpenPermissions(detailUser), 200); }}
+                  >
+                    <MaterialIcons name="tune" size={20} color="#7C3AED" />
+                    <Text style={[s.viewPlayerText, { color: '#7C3AED' }]}>{fr ? 'Gerer les permissions' : 'Manage permissions'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color="#7C3AED" />
+                  </Pressable>
+                ) : null}
               </View>
 
               {loadingDetail ? <ActivityIndicator size="small" color={theme.primary} style={{ marginTop: 16 }} /> : null}
