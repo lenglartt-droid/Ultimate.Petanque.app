@@ -28,6 +28,7 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { uploadPlayerAvatar } from '@/services/storageService';
 import { deactivatePushToken } from '@/services/pushTokenService';
+import { getMaintenanceStatus } from '@/services/maintenanceService';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
@@ -141,6 +142,9 @@ export default function ProfileScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
 
+  // Maintenance status (admin only)
+  const [maintenanceActive, setMaintenanceActive] = useState(false);
+
   // Badges & XP
   const { badges: userBadges, xp: userXp, loading: badgesLoading, currentUnlock, dismissUnlock, totalBadges } = useBadges();
 
@@ -217,6 +221,16 @@ export default function ProfileScreen() {
     isUserAmbassador(user.id).then(setIsAmbassador);
     isUserSponsor(user.id).then(setIsSponsor);
   }, [user?.id]);
+
+  // Load maintenance status for admin badge
+  useEffect(() => {
+    if (!isAdmin) return;
+    getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive));
+    const interval = setInterval(() => {
+      getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive));
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [isAdmin]);
 
   // Load federation card URL
   useEffect(() => {
@@ -1984,6 +1998,16 @@ export default function ProfileScreen() {
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-maintenance' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#D97706' + '15' }]}><MaterialIcons name="construction" size={20} color="#D97706" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>Maintenance</Text>
+                  </View>
+                  <View style={[styles.maintenanceBadge, { backgroundColor: maintenanceActive ? '#FEF3C7' : '#DCFCE7' }]}>
+                    <View style={[styles.maintenanceDot, { backgroundColor: maintenanceActive ? '#D97706' : '#10B981' }]} />
+                    <Text style={[styles.maintenanceBadgeText, { color: maintenanceActive ? '#92400E' : '#166534' }]}>{maintenanceActive ? 'ON' : 'OFF'}</Text>
+                  </View>
+                </Pressable>
               </>
             ) : null}
           </View>
@@ -3473,6 +3497,23 @@ const styles = StyleSheet.create({
     fontWeight: '600' as const,
     color: theme.textSecondary,
     letterSpacing: 1,
+  },
+  maintenanceBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 10,
+  },
+  maintenanceDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  maintenanceBadgeText: {
+    fontSize: 11,
+    fontWeight: '800' as const,
   },
   // Boules edit fields
   boulesEditRow: {
