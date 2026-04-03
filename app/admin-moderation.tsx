@@ -42,6 +42,8 @@ import {
   ReportedPlayerDetail,
 } from '@/services/moderationService';
 import { getEloRank } from '@/services/eloService';
+import { getAllAppeals, respondToAppeal, BanAppeal } from '@/services/banAppealService';
+import { logAdminAction } from '@/services/adminActivityLogService';
 
 type FilterKey = 'all' | 'pending' | 'warned' | 'suspended' | 'banned' | 'dismissed';
 
@@ -129,14 +131,23 @@ export default function AdminModerationScreen() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [showDetailModal, setShowDetailModal] = useState(false);
 
+  // Appeals
+  const [appeals, setAppeals] = useState<(BanAppeal & { userName?: string; userEmail?: string })[]>([]);
+  const [showAppeals, setShowAppeals] = useState(false);
+  const [appealResponse, setAppealResponse] = useState('');
+  const [respondingAppeal, setRespondingAppeal] = useState<string | null>(null);
+  const [activeAppealId, setActiveAppealId] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
-      const [reportsResult, statsResult] = await Promise.all([
+      const [reportsResult, statsResult, appealsResult] = await Promise.all([
         getPlayerReports(100),
         getReportStats(),
+        getAllAppeals(50),
       ]);
       setReports(reportsResult.reports);
       setStats(statsResult);
+      setAppeals(appealsResult.appeals || []);
     } catch (e) {
       console.log('Error loading moderation data:', e);
     } finally {
@@ -326,6 +337,161 @@ export default function AdminModerationScreen() {
             </View>
           </View>
         </Animated.View>
+
+        {/* Pending Appeals Banner */}
+        {appeals.filter(a => a.status === 'pending').length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(15)}>
+            <Pressable
+              style={s.appealsBanner}
+              onPress={() => { Haptics.selectionAsync(); setShowAppeals(!showAppeals); }}
+            >
+              <View style={s.appealsBannerIcon}>
+                <MaterialIcons name="rate-review" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.appealsBannerTitle}>
+                  {appeals.filter(a => a.status === 'pending').length} {fr ? 'appel(s) de ban en attente' : 'pending ban appeal(s)'}
+                </Text>
+                <Text style={s.appealsBannerDesc}>{fr ? 'Cliquez pour examiner' : 'Click to review'}</Text>
+              </View>
+              <MaterialIcons name={showAppeals ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showAppeals ? (
+              <View style={s.appealsList}>
+                {appeals.filter(a => a.status === 'pending').map((appeal) => (
+                  <View key={appeal.id} style={s.appealCard}>
+                    <View style={s.appealCardHeader}>
+                      <View style={s.appealAvatar}>
+                        <Text style={s.appealAvatarText}>{(appeal.userName || '?').charAt(0).toUpperCase()}</Text>
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.appealUserName}>{appeal.userName || (fr ? 'Utilisateur' : 'User')}</Text>
+                        {appeal.userEmail ? <Text style={s.appealUserEmail}>{appeal.userEmail}</Text> : null}
+                        <Text style={s.appealDate}>{formatDate(appeal.createdAt)}</Text>
+                      </View>
+                      <View style={s.appealStatusBadge}>
+                        <MaterialIcons name="schedule" size={10} color="#D97706" />
+                        <Text style={s.appealStatusText}>{fr ? 'En attente' : 'Pending'}</Text>
+                      </View>
+                    </View>
+                    <View style={s.appealMessageBox}>
+                      <MaterialIcons name="format-quote" size={13} color="#94A3B8" />
+                      <Text style={s.appealMessageText}>{appeal.message}</Text>
+                    </View>
+                    {/* Response input */}
+                    {activeAppealId === appeal.id ? (
+                      <View style={s.appealResponseForm}>
+                        <TextInput
+                          style={s.appealResponseInput}
+                          value={appealResponse}
+                          onChangeText={setAppealResponse}
+                          placeholder={fr ? 'Reponse admin (facultatif)...' : 'Admin response (optional)...'}
+                          placeholderTextColor="#94A3B8"
+                          multiline
+                          numberOfLines={2}
+                          maxLength={500}
+                        />
+                        <View style={s.appealResponseActions}>
+                          <Pressable
+                            style={s.appealRejectBtn}
+                            onPress={async () => {
+                              setRespondingAppeal(appeal.id);
+                              const { error } = await respondToAppeal(appeal.id, 'rejected', appealResponse.trim() || undefined);
+                              setRespondingAppeal(null);
+                              if (error) { showAlert(fr ? 'Erreur' : 'Error', error); }
+                              else {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setAppeals(prev => prev.map(a => a.id === appeal.id ? { ...a, status: 'rejected' as const } : a));
+                                setActiveAppealId(null); setAppealResponse('');
+                                logAdminAction({ actionType: 'moderation_dismiss', targetType: 'appeal', targetId: appeal.id, targetName: appeal.userName, actionDetail: 'Ban appeal rejected' });
+                              }
+                            }}
+                            disabled={respondingAppeal === appeal.id}
+                          >
+                            {respondingAppeal === appeal.id ? <ActivityIndicator size="small" color="#EF4444" /> : (
+                              <><MaterialIcons name="close" size={14} color="#EF4444" /><Text style={s.appealRejectText}>{fr ? 'Rejeter' : 'Reject'}</Text></>
+                            )}
+                          </Pressable>
+                          <Pressable
+                            style={s.appealAcceptBtn}
+                            onPress={async () => {
+                              Alert.alert(
+                                fr ? 'Accepter l\'appel ?' : 'Accept appeal?',
+                                fr ? 'Le joueur sera debanni automatiquement.' : 'The player will be automatically unbanned.',
+                                [
+                                  { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                                  { text: fr ? 'Accepter' : 'Accept', onPress: async () => {
+                                    setRespondingAppeal(appeal.id);
+                                    const { error } = await respondToAppeal(appeal.id, 'accepted', appealResponse.trim() || undefined);
+                                    setRespondingAppeal(null);
+                                    if (error) { showAlert(fr ? 'Erreur' : 'Error', error); }
+                                    else {
+                                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                      setAppeals(prev => prev.map(a => a.id === appeal.id ? { ...a, status: 'accepted' as const } : a));
+                                      setActiveAppealId(null); setAppealResponse('');
+                                      showAlert(fr ? 'Appel accepte' : 'Appeal accepted', fr ? 'Le joueur a ete debanni.' : 'The player has been unbanned.');
+                                      logAdminAction({ actionType: 'moderation_dismiss', targetType: 'appeal', targetId: appeal.id, targetName: appeal.userName, actionDetail: 'Ban appeal accepted - player unbanned' });
+                                      loadData(); // Refresh reports
+                                    }
+                                  }},
+                                ]
+                              );
+                            }}
+                            disabled={respondingAppeal === appeal.id}
+                          >
+                            {respondingAppeal === appeal.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                              <><MaterialIcons name="check" size={14} color="#FFF" /><Text style={s.appealAcceptText}>{fr ? 'Accepter & Debannir' : 'Accept & Unban'}</Text></>
+                            )}
+                          </Pressable>
+                        </View>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={s.appealReviewBtn}
+                        onPress={() => { setActiveAppealId(appeal.id); setAppealResponse(''); }}
+                      >
+                        <MaterialIcons name="rate-review" size={14} color="#D97706" />
+                        <Text style={s.appealReviewBtnText}>{fr ? 'Examiner' : 'Review'}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                ))}
+
+                {/* Resolved appeals */}
+                {appeals.filter(a => a.status !== 'pending').length > 0 ? (
+                  <View style={s.appealsResolvedHeader}>
+                    <Text style={s.appealsResolvedTitle}>{fr ? 'Appels traites' : 'Resolved appeals'}</Text>
+                  </View>
+                ) : null}
+                {appeals.filter(a => a.status !== 'pending').slice(0, 5).map((appeal) => (
+                  <View key={appeal.id} style={[s.appealCard, { opacity: 0.7 }]}>
+                    <View style={s.appealCardHeader}>
+                      <View style={[s.appealAvatar, { backgroundColor: appeal.status === 'accepted' ? '#DCFCE7' : '#FEF2F2' }]}>
+                        <MaterialIcons name={appeal.status === 'accepted' ? 'check' : 'close'} size={16} color={appeal.status === 'accepted' ? '#10B981' : '#EF4444'} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.appealUserName}>{appeal.userName || (fr ? 'Utilisateur' : 'User')}</Text>
+                        <Text style={s.appealDate}>{formatShortDate(appeal.createdAt)}</Text>
+                      </View>
+                      <View style={[s.appealStatusBadge, { backgroundColor: appeal.status === 'accepted' ? '#DCFCE7' : '#FEF2F2' }]}>
+                        <Text style={[s.appealStatusText, { color: appeal.status === 'accepted' ? '#10B981' : '#EF4444' }]}>
+                          {appeal.status === 'accepted' ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Rejete' : 'Rejected')}
+                        </Text>
+                      </View>
+                    </View>
+                    {appeal.adminResponse ? (
+                      <View style={[s.adminNotesRow, { marginBottom: 0 }]}>
+                        <MaterialIcons name="edit-note" size={12} color="#7C3AED" />
+                        <Text style={s.adminNotesText}>{appeal.adminResponse}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
 
         {/* Report Reason Analytics */}
         {reasonAnalytics.length > 0 ? (
@@ -916,4 +1082,33 @@ const s = StyleSheet.create({
   // View full btn
   detailViewFullBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#EFF6FF', borderRadius: 14, paddingVertical: 14, marginBottom: 16, borderWidth: 1, borderColor: '#DBEAFE' },
   detailViewFullText: { fontSize: 14, fontWeight: '700', color: '#2563EB' },
+
+  // Appeals
+  appealsBanner: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFFBEB', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#FDE68A' },
+  appealsBannerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  appealsBannerTitle: { fontSize: 14, fontWeight: '700', color: '#92400E' },
+  appealsBannerDesc: { fontSize: 11, color: '#B45309', marginTop: 2 },
+  appealsList: { gap: 8, marginBottom: 14 },
+  appealCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#FDE68A', borderLeftWidth: 3, borderLeftColor: '#D97706' },
+  appealCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  appealAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FEF3C7', alignItems: 'center', justifyContent: 'center' },
+  appealAvatarText: { fontSize: 15, fontWeight: '700', color: '#D97706' },
+  appealUserName: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  appealUserEmail: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
+  appealDate: { fontSize: 10, color: '#CBD5E1', marginTop: 1 },
+  appealStatusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  appealStatusText: { fontSize: 10, fontWeight: '700', color: '#D97706' },
+  appealMessageBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 6, backgroundColor: '#FFFBEB', borderRadius: 10, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#FDE68A' },
+  appealMessageText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 17, fontStyle: 'italic' },
+  appealReviewBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#FFFBEB', borderWidth: 1, borderColor: '#FDE68A' },
+  appealReviewBtnText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
+  appealResponseForm: { gap: 10 },
+  appealResponseInput: { backgroundColor: '#F8FAFC', borderRadius: 10, padding: 12, fontSize: 13, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', minHeight: 60, textAlignVertical: 'top' },
+  appealResponseActions: { flexDirection: 'row', gap: 8 },
+  appealRejectBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  appealRejectText: { fontSize: 12, fontWeight: '700', color: '#EF4444' },
+  appealAcceptBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 10, backgroundColor: '#10B981' },
+  appealAcceptText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  appealsResolvedHeader: { paddingTop: 8, paddingBottom: 6, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
+  appealsResolvedTitle: { fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, textTransform: 'uppercase' },
 });
