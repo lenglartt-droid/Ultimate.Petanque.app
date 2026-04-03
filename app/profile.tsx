@@ -2034,6 +2034,13 @@ export default function ProfileScreen() {
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </Pressable>
+                <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-clubs' as any); }}>
+                  <View style={[styles.menuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="home" size={20} color="#7C3AED" /></View>
+                  <View style={styles.menuItemContent}>
+                    <Text style={styles.menuItemText}>{language === 'fr' ? 'Gestion clubs' : 'Club Management'}</Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </Pressable>
                 <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/admin-maintenance' as any); }}>
                   <View style={[styles.menuIcon, { backgroundColor: '#D97706' + '15' }]}><MaterialIcons name="construction" size={20} color="#D97706" /></View>
                   <View style={styles.menuItemContent}>

@@ -57,30 +57,6 @@ export async function submitBanAppeal(message: string): Promise<{ error: string 
       });
 
     if (error) return { error: error.message };
-    // Send push notification to the user about the appeal response
-    try {
-      const { data: appeal } = await supabase
-        .from('ban_appeals')
-        .select('user_id')
-        .eq('id', appealId)
-        .single();
-
-      if (appeal?.user_id) {
-        await supabase.functions.invoke('send-push', {
-          body: {
-            type: 'ban_appeal_response',
-            payload: {
-              targetUserId: appeal.user_id,
-              appealStatus: status,
-              adminResponse: adminResponse || null,
-            },
-          },
-        });
-      }
-    } catch (pushErr) {
-      console.log('[BanAppeal] Push notification error (non-blocking):', pushErr);
-    }
-
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
