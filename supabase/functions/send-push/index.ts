@@ -1333,6 +1333,91 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // CLUB_VERIFICATION: Notify club owner when admin verifies their club
+    // ============================================================
+    else if (type === 'club_verification') {
+      const { targetUserId, clubName, clubId: verifiedClubId } = payload || {};
+      if (!targetUserId || !verifiedClubId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/clubId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u2705 Club verifie !`,
+          `Felicitations ! Votre club "${clubName || 'votre club'}" a ete verifie par un administrateur. Le badge bleu est desormais visible.`,
+          { type: 'club_verification', clubId: verifiedClubId },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // APPEAL_DEADLINE: Notify all admin users about overdue ban appeals
+    // ============================================================
+    else if (type === 'appeal_deadline') {
+      const { overdueCount, oldestAppealDays } = payload || {};
+
+      // Verify caller is admin
+      const { data: adminDeadline } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminDeadline?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send appeal deadline notifications' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Get all admin users
+      const { data: adminUsers } = await supabaseAdmin
+        .from('user_profiles')
+        .select('id')
+        .eq('is_admin', true);
+
+      if (!adminUsers || adminUsers.length === 0) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'no_admins' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const adminIds = adminUsers.map((a: any) => a.id);
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('user_id, token')
+        .in('user_id', adminIds)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const count = overdueCount || 1;
+        const days = oldestAppealDays || 2;
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{26A0}\u{FE0F} ${count} appel(s) de ban en retard`,
+          `${count} appel(s) de ban en attente depuis plus de ${days} jour(s). Veuillez les examiner rapidement.`,
+          { type: 'moderation_action', action: 'appeal_deadline' },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // BAN_APPEAL_RESPONSE: Notify banned user about appeal decision
     // ============================================================
     else if (type === 'ban_appeal_response') {

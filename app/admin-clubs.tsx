@@ -31,6 +31,19 @@ import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
+
+let MapViewComponent: React.ComponentType<any> | null = null;
+let MarkerComponent: React.ComponentType<any> | null = null;
+try {
+  if (Platform.OS !== 'web') {
+    const Maps = require('react-native-maps');
+    MapViewComponent = Maps.default;
+    MarkerComponent = Maps.Marker;
+  }
+} catch { /* silent */ }
 
 interface AdminClub {
   id: string;
@@ -47,6 +60,7 @@ interface AdminClub {
   website: string | null;
   isPublic: boolean;
   isVerified: boolean;
+  location: { latitude: number; longitude: number } | null;
   logo: string | null;
   facilities: string[];
   createdAt: string;
@@ -77,6 +91,26 @@ export default function AdminClubsScreen() {
   const [bulkProcessing, setBulkProcessing] = useState(false);
   const [showStats, setShowStats] = useState(false);
   const [clubMatchCounts, setClubMatchCounts] = useState<Map<string, number>>(new Map());
+  const [clubHealthScores, setClubHealthScores] = useState<Map<string, { score: number; label: string; color: string; details: { matches30d: number; tournamentCount: number; memberActivity: number; age: number } }>>(new Map());
+  const [showInactiveAlert, setShowInactiveAlert] = useState(true);
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [sendingBulkPush, setSendingBulkPush] = useState(false);
+  const [archivingInactive, setArchivingInactive] = useState(false);
+
+  // Club activity timeline
+  const [timelineData, setTimelineData] = useState<{ type: string; date: string; label: string; icon: string; color: string }[]>([]);
+  const [loadingTimeline, setLoadingTimeline] = useState(false);
+
+  // Comparison
+  const [showComparison, setShowComparison] = useState(false);
+
+  // Map view
+  const [showMap, setShowMap] = useState(false);
+  const [mapFilter, setMapFilter] = useState<'all' | 'active' | 'verified' | 'inactive'>('all');
+
+  // Comparison trends
+  const [comparisonTrends, setComparisonTrends] = useState<Map<string, { month: string; matches: number }[]>>(new Map());
+  const [loadingTrends, setLoadingTrends] = useState(false);
 
   // Load match counts for enhanced verification
   const loadClubMatchCounts = useCallback(async () => {
@@ -139,6 +173,7 @@ export default function AdminClubsScreen() {
         ownerName: ownerMap.get(c.user_id)?.name,
         ownerEmail: ownerMap.get(c.user_id)?.email,
         coAdminCount: (c.admin_user_ids || []).length,
+        location: c.location && c.location.latitude ? { latitude: c.location.latitude, longitude: c.location.longitude } : null,
       })));
     } catch (e) {
       console.log('[AdminClubs] Load error:', e);
@@ -147,7 +182,197 @@ export default function AdminClubsScreen() {
     }
   }, []);
 
+  // Compute club health scores
+  const computeHealthScores = useCallback(async () => {
+    try {
+      const supabase = getSupabaseClient();
+      const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: recentMatches } = await supabase.from('matches').select('user_id, date').gte('date', thirtyDaysAgo);
+      const { data: allPlayers } = await supabase.from('players').select('user_id, club_id');
+      const { data: tournamentsData } = await supabase.from('tournaments').select('club_id').not('club_id', 'is', null);
+
+      const playerClubMap = new Map<string, string>();
+      (allPlayers || []).forEach((p: any) => { if (p.club_id) playerClubMap.set(p.user_id, p.club_id); });
+
+      const matchesByClub = new Map<string, number>();
+      (recentMatches || []).forEach((m: any) => {
+        const cid = playerClubMap.get(m.user_id);
+        if (cid) matchesByClub.set(cid, (matchesByClub.get(cid) || 0) + 1);
+      });
+
+      const tournamentsByClub = new Map<string, number>();
+      (tournamentsData || []).forEach((t: any) => {
+        if (t.club_id) tournamentsByClub.set(t.club_id, (tournamentsByClub.get(t.club_id) || 0) + 1);
+      });
+
+      const scores = new Map<string, any>();
+      clubs.forEach(club => {
+        const matches30d = matchesByClub.get(club.id) || 0;
+        const tournamentCount = tournamentsByClub.get(club.id) || 0;
+        const memberActivity = Math.min(club.membersCount * 2, 30);
+        const ageMonths = Math.floor((Date.now() - new Date(club.createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000));
+        const age = Math.min(ageMonths * 2, 20);
+
+        const rawScore = Math.min(100, matches30d * 3 + tournamentCount * 10 + memberActivity + age);
+        const score = Math.round(rawScore);
+        const label = score >= 70 ? (fr ? 'Actif' : 'Active') : score >= 40 ? (fr ? 'Modere' : 'Moderate') : score >= 15 ? (fr ? 'Faible' : 'Low') : (fr ? 'Inactif' : 'Inactive');
+        const color = score >= 70 ? '#10B981' : score >= 40 ? '#D97706' : score >= 15 ? '#EF4444' : '#94A3B8';
+        scores.set(club.id, { score, label, color, details: { matches30d, tournamentCount, memberActivity, age } });
+      });
+      setClubHealthScores(scores);
+    } catch { /* silent */ }
+  }, [clubs, fr]);
+
+  // Load club activity timeline for detail modal
+  const loadClubTimeline = useCallback(async (clubId: string) => {
+    setLoadingTimeline(true);
+    setTimelineData([]);
+    try {
+      const supabase = getSupabaseClient();
+      const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+      const { data: allPlayers } = await supabase.from('players').select('user_id, club_id, name, created_at').eq('club_id', clubId);
+      const playerUserIds = (allPlayers || []).map((p: any) => p.user_id);
+      const events: { type: string; date: string; label: string; icon: string; color: string }[] = [];
+      if (playerUserIds.length > 0) {
+        const { data: recentMatches } = await supabase.from('matches').select('id, date, team_a, team_b, winner, format').in('user_id', playerUserIds).gte('date', sixMonthsAgo).order('date', { ascending: false }).limit(15);
+        (recentMatches || []).forEach((m: any) => {
+          events.push({ type: 'match', date: m.date, label: `${m.format || 'Match'} — ${m.winner === 'A' ? 'Victoire' : m.winner === 'B' ? 'Defaite' : 'Egalite'}`, icon: 'sports', color: m.winner === 'A' ? '#10B981' : m.winner === 'B' ? '#EF4444' : '#D97706' });
+        });
+      }
+      const { data: clubTournaments } = await supabase.from('tournaments').select('id, name, date, status, format').eq('club_id', clubId).gte('date', sixMonthsAgo.slice(0, 10)).order('date', { ascending: false }).limit(10);
+      (clubTournaments || []).forEach((t: any) => {
+        events.push({ type: 'tournament', date: t.date, label: `${t.name} (${t.format})`, icon: 'emoji-events', color: '#7C3AED' });
+      });
+      (allPlayers || []).forEach((p: any) => {
+        if (p.created_at && p.created_at >= sixMonthsAgo) {
+          events.push({ type: 'member', date: p.created_at, label: `${p.name} ${fr ? 'a rejoint' : 'joined'}`, icon: 'person-add', color: '#3B82F6' });
+        }
+      });
+      events.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      setTimelineData(events.slice(0, 20));
+    } catch { /* silent */ }
+    setLoadingTimeline(false);
+  }, [fr]);
+
+  useEffect(() => {
+    if (detailClub) loadClubTimeline(detailClub.id);
+  }, [detailClub, loadClubTimeline]);
+
+  // Load comparison trends when modal opens
+  useEffect(() => {
+    if (!showComparison || selectedIds.size < 2) return;
+    const loadTrends = async () => {
+      setLoadingTrends(true);
+      try {
+        const supabase = getSupabaseClient();
+        const compClubs = clubs.filter(c => selectedIds.has(c.id));
+        const { data: allPlayers } = await supabase.from('players').select('user_id, club_id');
+        const playerClubMap = new Map<string, string>();
+        (allPlayers || []).forEach((p: any) => { if (p.club_id) playerClubMap.set(p.user_id, p.club_id); });
+        const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recentMatches } = await supabase.from('matches').select('user_id, date').gte('date', sixMonthsAgo);
+        const trends = new Map<string, { month: string; matches: number }[]>();
+        for (const club of compClubs) {
+          const monthMap = new Map<string, number>();
+          for (let i = 5; i >= 0; i--) {
+            const d = new Date(); d.setMonth(d.getMonth() - i);
+            const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short' });
+            monthMap.set(key, 0);
+          }
+          (recentMatches || []).forEach((m: any) => {
+            const cid = playerClubMap.get(m.user_id);
+            if (cid !== club.id) return;
+            const d = new Date(m.date);
+            const key = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short' });
+            if (monthMap.has(key)) monthMap.set(key, (monthMap.get(key) || 0) + 1);
+          });
+          trends.set(club.id, [...monthMap.entries()].map(([month, matches]) => ({ month, matches })));
+        }
+        setComparisonTrends(trends);
+      } catch { /* silent */ }
+      setLoadingTrends(false);
+    };
+    loadTrends();
+  }, [showComparison, selectedIds, clubs, fr]);
+
   useEffect(() => { loadClubs(); loadClubMatchCounts(); }, [loadClubs, loadClubMatchCounts]);
+  useEffect(() => { if (clubs.length > 0) computeHealthScores(); }, [clubs, computeHealthScores]);
+
+  const inactiveClubs = useMemo(() => {
+    return clubs.filter(c => {
+      const hs = clubHealthScores.get(c.id);
+      return hs && hs.score < 15;
+    });
+  }, [clubs, clubHealthScores]);
+
+  const handleExportCsv = useCallback(async () => {
+    if (exportingCsv) return;
+    setExportingCsv(true);
+    try {
+      const headers = 'Name,City,Country,Members,Verified,Public,Health Score,Owner,Email,Created';
+      const rows = filteredClubs.map(c => {
+        const hs = clubHealthScores.get(c.id);
+        return `"${c.name}","${c.city}","${c.country}",${c.membersCount},${c.isVerified},${c.isPublic},${hs?.score || 0},"${c.ownerName || ''}","${c.ownerEmail || ''}",${c.createdAt ? new Date(c.createdAt).toLocaleDateString() : ''}`;
+      });
+      const csv = [headers, ...rows].join('\n');
+      if (typeof document !== 'undefined') {
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a'); a.href = url;
+        a.download = `clubs-export-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+        URL.revokeObjectURL(url);
+      } else {
+        const path = `${FileSystem.cacheDirectory}clubs-export-${new Date().toISOString().slice(0, 10)}.csv`;
+        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+        const canShare = await Sharing.isAvailableAsync();
+        if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter clubs' : 'Export clubs' });
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (e) { console.log('[AdminClubs] Export error:', e); }
+    setExportingCsv(false);
+  }, [filteredClubs, clubHealthScores, fr, exportingCsv]);
+
+  const handleBulkPushOwners = useCallback(async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setSendingBulkPush(true);
+    try {
+      const supabase = getSupabaseClient();
+      const targetClubs = clubs.filter(c => ids.includes(c.id));
+      for (const club of targetClubs) {
+        try {
+          await supabase.functions.invoke('send-push', {
+            body: { type: 'club_verification', payload: { targetUserId: club.userId, clubName: club.name, clubId: club.id } },
+          });
+        } catch { /* silent */ }
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? 'Push envoyes' : 'Push sent', fr ? `${targetClubs.length} notification(s) envoyee(s)` : `${targetClubs.length} notification(s) sent`);
+      logAdminAction({ actionType: 'club_verify', actionDetail: `Bulk push to ${targetClubs.length} club owners`, metadata: { clubIds: ids } });
+    } catch { /* silent */ }
+    setSendingBulkPush(false);
+  }, [selectedIds, clubs, fr, showAlert]);
+
+  const handleArchiveInactive = useCallback(async () => {
+    if (inactiveClubs.length === 0) return;
+    Alert.alert(
+      fr ? 'Archiver les clubs inactifs' : 'Archive Inactive Clubs',
+      fr ? `Rendre ${inactiveClubs.length} club(s) prives ?` : `Make ${inactiveClubs.length} club(s) private?`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Archiver' : 'Archive', style: 'destructive', onPress: async () => {
+          setArchivingInactive(true);
+          const supabase = getSupabaseClient();
+          const ids = inactiveClubs.map(c => c.id);
+          await supabase.from('clubs').update({ is_public: false, updated_at: new Date().toISOString() }).in('id', ids);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setClubs(prev => prev.map(c => ids.includes(c.id) ? { ...c, isPublic: false } : c));
+          logAdminAction({ actionType: 'club_unverify', actionDetail: `Archived ${ids.length} inactive clubs`, metadata: { clubIds: ids } });
+          setArchivingInactive(false);
+        }},
+      ]
+    );
+  }, [inactiveClubs, fr]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
@@ -433,15 +658,54 @@ export default function AdminClubsScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Stats toggle */}
-        <Pressable
-          style={s.statsToggle}
-          onPress={() => { Haptics.selectionAsync(); setShowStats(!showStats); }}
-        >
-          <MaterialIcons name="bar-chart" size={16} color="#3B82F6" />
-          <Text style={s.statsToggleText}>{showStats ? (fr ? 'Masquer stats' : 'Hide stats') : (fr ? 'Voir les statistiques' : 'Show statistics')}</Text>
-          <MaterialIcons name={showStats ? 'expand-less' : 'expand-more'} size={18} color="#3B82F6" />
-        </Pressable>
+        {/* Inactive Clubs Alert */}
+        {showInactiveAlert && inactiveClubs.length > 0 ? (
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1.5, borderColor: '#FECACA' }}
+            onPress={() => setShowInactiveAlert(false)}
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#EF444415', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="warning-amber" size={18} color="#EF4444" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#991B1B' }}>{inactiveClubs.length} {fr ? 'club(s) inactif(s)' : 'inactive club(s)'}</Text>
+              <Text style={{ fontSize: 11, color: '#DC2626', marginTop: 1 }}>{fr ? 'Aucune activite depuis 30+ jours' : 'No activity for 30+ days'}</Text>
+            </View>
+            <Pressable
+              style={{ paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#EF4444', borderRadius: 8 }}
+              onPress={handleArchiveInactive}
+              disabled={archivingInactive}
+            >
+              {archivingInactive ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Archiver' : 'Archive'}</Text>}
+            </Pressable>
+          </Pressable>
+        ) : null}
+
+        {/* Batch Actions Bar */}
+        <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12, flexWrap: 'wrap' }}>
+          <Pressable
+            style={[s.statsToggle, { flex: 1, minWidth: 90 }]}
+            onPress={() => { Haptics.selectionAsync(); setShowStats(!showStats); }}
+          >
+            <MaterialIcons name="bar-chart" size={16} color="#3B82F6" />
+            <Text style={s.statsToggleText}>{showStats ? (fr ? 'Masquer' : 'Hide') : 'Stats'}</Text>
+          </Pressable>
+          <Pressable
+            style={[s.statsToggle, { flex: 1, minWidth: 80, borderColor: '#7C3AED40', backgroundColor: '#F5F3FF' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowMap(true); }}
+          >
+            <MaterialIcons name="map" size={16} color="#7C3AED" />
+            <Text style={[s.statsToggleText, { color: '#7C3AED' }]}>{fr ? 'Carte' : 'Map'}</Text>
+          </Pressable>
+          <Pressable
+            style={[s.statsToggle, { flex: 1, minWidth: 80, borderColor: '#10B98140', backgroundColor: '#F0FDF4' }, exportingCsv && { opacity: 0.5 }]}
+            onPress={handleExportCsv}
+            disabled={exportingCsv}
+          >
+            {exportingCsv ? <ActivityIndicator size="small" color="#10B981" /> : <MaterialIcons name="file-download" size={16} color="#10B981" />}
+            <Text style={[s.statsToggleText, { color: '#10B981' }]}>CSV</Text>
+          </Pressable>
+        </View>
 
       {/* Club list */}
         {filteredClubs.length === 0 ? (
@@ -494,6 +758,16 @@ export default function AdminClubsScreen() {
                             </View>
                           );
                         })()}
+                        {(() => {
+                          const hs = clubHealthScores.get(club.id);
+                          if (!hs) return null;
+                          return (
+                            <View style={[s.clubMeta, { backgroundColor: hs.color + '15' }]}>
+                              <MaterialIcons name="favorite" size={8} color={hs.color} />
+                              <Text style={[s.clubMetaText, { color: hs.color }]}>{hs.score}</Text>
+                            </View>
+                          );
+                        })()}
                       </View>
                     </View>
                     {!selectionMode ? (
@@ -527,12 +801,281 @@ export default function AdminClubsScreen() {
                 <><MaterialIcons name="verified" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Verifier' : 'Verify'}</Text></>
               )}
             </Pressable>
-            <Pressable style={[s.bulkBtn, { backgroundColor: '#64748B' }]} onPress={() => { setSelectedIds(new Set()); setSelectionMode(false); }}>
-              <MaterialIcons name="close" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Annuler' : 'Cancel'}</Text>
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#7C3AED' }]} onPress={handleBulkPushOwners} disabled={sendingBulkPush}>
+              {sendingBulkPush ? <ActivityIndicator size="small" color="#FFF" /> : (
+                <><MaterialIcons name="notifications" size={16} color="#FFF" /><Text style={s.bulkBtnText}>Push</Text></>
+              )}
+            </Pressable>
+            {selectedIds.size >= 2 && selectedIds.size <= 3 ? (
+              <Pressable style={[s.bulkBtn, { backgroundColor: '#0EA5E9' }]} onPress={() => { Haptics.selectionAsync(); setShowComparison(true); }}>
+                <MaterialIcons name="compare-arrows" size={16} color="#FFF" /><Text style={s.bulkBtnText}>{fr ? 'Comparer' : 'Compare'}</Text>
+              </Pressable>
+            ) : null}
+            <Pressable style={[s.bulkBtn, { backgroundColor: '#64748B', flex: 0, paddingHorizontal: 14 }]} onPress={() => { setSelectedIds(new Set()); setSelectionMode(false); }}>
+              <MaterialIcons name="close" size={16} color="#FFF" />
             </Pressable>
           </View>
         </Animated.View>
       ) : null}
+
+      {/* Comparison Modal */}
+      <Modal visible={showComparison} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowComparison(false)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setShowComparison(false)}><MaterialIcons name="close" size={24} color="#0F172A" /></Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Comparaison' : 'Comparison'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+            {(() => {
+              const compClubs = clubs.filter(c => selectedIds.has(c.id)).slice(0, 3);
+              if (compClubs.length < 2) return <Text style={{ textAlign: 'center', color: '#94A3B8', marginTop: 40 }}>{fr ? 'Selectionnez 2-3 clubs' : 'Select 2-3 clubs'}</Text>;
+              const colors = ['#3B82F6', '#10B981', '#7C3AED'];
+              const metrics = [
+                { key: 'members', label: fr ? 'Membres' : 'Members', icon: 'people', getValue: (c: AdminClub) => c.membersCount },
+                { key: 'health', label: fr ? 'Score sante' : 'Health Score', icon: 'favorite', getValue: (c: AdminClub) => clubHealthScores.get(c.id)?.score || 0 },
+                { key: 'completeness', label: fr ? 'Completude' : 'Completeness', icon: 'check-circle', getValue: (c: AdminClub) => getCompletenessScore(c) },
+                { key: 'matches', label: fr ? 'Matchs' : 'Matches', icon: 'sports', getValue: (c: AdminClub) => clubMatchCounts.get(c.id) || 0 },
+                { key: 'coAdmins', label: 'Co-admins', icon: 'group', getValue: (c: AdminClub) => c.coAdminCount },
+              ];
+              return (
+                <>
+                  {/* Club headers */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
+                    {compClubs.map((c, i) => (
+                      <View key={c.id} style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 14, padding: 12, alignItems: 'center', borderWidth: 2, borderColor: colors[i] + '30' }}>
+                        {c.logo ? <Image source={{ uri: c.logo }} style={{ width: 40, height: 40, borderRadius: 12, marginBottom: 6 }} contentFit="cover" transition={200} /> : <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: colors[i] + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 6 }}><MaterialIcons name="home" size={20} color={colors[i]} /></View>}
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A', textAlign: 'center' }} numberOfLines={1}>{c.name}</Text>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>{c.city}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[i] }} />
+                          {c.isVerified ? <MaterialIcons name="verified" size={12} color="#2563EB" /> : null}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                  {/* Metrics comparison */}
+                  {metrics.map(metric => {
+                    const values = compClubs.map(c => metric.getValue(c));
+                    const maxVal = Math.max(...values, 1);
+                    return (
+                      <View key={metric.key} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                          <MaterialIcons name={metric.icon as any} size={14} color="#64748B" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{metric.label}</Text>
+                        </View>
+                        {compClubs.map((c, i) => (
+                          <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors[i] }} />
+                            <View style={{ flex: 1, height: 22, backgroundColor: '#F1F5F9', borderRadius: 6, overflow: 'hidden' }}>
+                              <View style={{ height: '100%', width: `${Math.max(3, (values[i] / maxVal) * 100)}%`, backgroundColor: colors[i], borderRadius: 6 }} />
+                            </View>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: colors[i], width: 36, textAlign: 'right' }}>{values[i]}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    );
+                  })}
+                  {/* Comparison Trends */}
+                  <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                      <MaterialIcons name="trending-up" size={14} color="#64748B" />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Tendances (6 mois)' : 'Trends (6 months)'}</Text>
+                    </View>
+                    {loadingTrends ? (
+                      <ActivityIndicator size="small" color="#3B82F6" style={{ paddingVertical: 16 }} />
+                    ) : (() => {
+                      const allMonths = compClubs.length > 0 && comparisonTrends.has(compClubs[0].id)
+                        ? comparisonTrends.get(compClubs[0].id)!.map(t => t.month)
+                        : [];
+                      if (allMonths.length === 0) return <Text style={{ fontSize: 11, color: '#94A3B8', textAlign: 'center', paddingVertical: 12 }}>{fr ? 'Aucune donnee' : 'No data'}</Text>;
+                      const maxTrendVal = Math.max(1, ...compClubs.flatMap(c => (comparisonTrends.get(c.id) || []).map(t => t.matches)));
+                      return allMonths.map((month, mIdx) => (
+                        <View key={mIdx} style={{ marginBottom: 8 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginBottom: 3 }}>{month}</Text>
+                          {compClubs.map((c, i) => {
+                            const trend = comparisonTrends.get(c.id);
+                            const val = trend ? trend[mIdx]?.matches || 0 : 0;
+                            return (
+                              <View key={c.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: colors[i] }} />
+                                <View style={{ flex: 1, height: 14, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                                  <View style={{ height: '100%', width: `${Math.max(3, (val / maxTrendVal) * 100)}%`, backgroundColor: colors[i] + '90', borderRadius: 4 }} />
+                                </View>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: colors[i], width: 20, textAlign: 'right' }}>{val}</Text>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ));
+                    })()}
+                  </View>
+                  {/* Export Comparison CSV */}
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#EFF6FF', borderRadius: 12, paddingVertical: 12, marginBottom: 8, borderWidth: 1, borderColor: '#DBEAFE' }}
+                    onPress={async () => {
+                      try {
+                        const compClubs = clubs.filter(c => selectedIds.has(c.id)).slice(0, 3);
+                        const headers = 'Club,City,Members,Health Score,Completeness,Matches,Co-admins,Verified,Public';
+                        const rows = compClubs.map(c => {
+                          const hs = clubHealthScores.get(c.id);
+                          return `"${c.name}","${c.city}",${c.membersCount},${hs?.score || 0},${getCompletenessScore(c)},${clubMatchCounts.get(c.id) || 0},${c.coAdminCount},${c.isVerified},${c.isPublic}`;
+                        });
+                        const csv = [headers, ...rows].join('\n');
+                        if (typeof document !== 'undefined') {
+                          const blob = new Blob([csv], { type: 'text/csv' });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url;
+                          a.download = `club-comparison-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+                          URL.revokeObjectURL(url);
+                        } else {
+                          const path = `${FileSystem.cacheDirectory}club-comparison-${new Date().toISOString().slice(0, 10)}.csv`;
+                          await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
+                          const canShare = await Sharing.isAvailableAsync();
+                          if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv' });
+                        }
+                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      } catch { /* silent */ }
+                    }}
+                  >
+                    <MaterialIcons name="file-download" size={16} color="#2563EB" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Exporter comparaison' : 'Export comparison'}</Text>
+                  </Pressable>
+                  {/* Verification status */}
+                  <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#0F172A', marginBottom: 10 }}>Status</Text>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {compClubs.map((c, i) => (
+                        <View key={c.id} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, justifyContent: 'center' }}>
+                            {c.isVerified ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#DBEAFE', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}><MaterialIcons name="verified" size={9} color="#2563EB" /><Text style={{ fontSize: 8, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
+                            {c.isPublic ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#DCFCE7', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}><MaterialIcons name="public" size={9} color="#10B981" /><Text style={{ fontSize: 8, fontWeight: '700', color: '#10B981' }}>Public</Text></View> : null}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                </>
+              );
+            })()}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Map Modal */}
+      <Modal visible={showMap} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowMap(false)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setShowMap(false)}><MaterialIcons name="close" size={24} color="#0F172A" /></Pressable>
+            <Text style={s.headerTitle}>{fr ? 'Carte des clubs' : 'Club Map'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          {/* Map Filters */}
+          <View style={{ flexDirection: 'row', gap: 6, paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
+            {([
+              { key: 'all' as const, label: fr ? 'Tout' : 'All', color: '#64748B' },
+              { key: 'active' as const, label: fr ? 'Actifs' : 'Active', color: '#10B981' },
+              { key: 'verified' as const, label: fr ? 'Verifies' : 'Verified', color: '#2563EB' },
+              { key: 'inactive' as const, label: fr ? 'Inactifs' : 'Inactive', color: '#EF4444' },
+            ]).map(f => {
+              const isActive = mapFilter === f.key;
+              return (
+                <Pressable key={f.key} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: isActive ? f.color + '15' : '#F8FAFC', borderWidth: 1.5, borderColor: isActive ? f.color + '40' : '#E2E8F0' }} onPress={() => { Haptics.selectionAsync(); setMapFilter(f.key); }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: isActive ? f.color : '#CBD5E1' }} />
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: isActive ? f.color : '#94A3B8' }}>{f.label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <View style={{ flex: 1 }}>
+            {MapViewComponent && MarkerComponent ? (() => {
+              const clubsWithLoc = clubs.filter(c => {
+                if (!c.location) return false;
+                if (mapFilter === 'verified') return c.isVerified;
+                if (mapFilter === 'active') { const hs = clubHealthScores.get(c.id); return hs && hs.score >= 40; }
+                if (mapFilter === 'inactive') { const hs = clubHealthScores.get(c.id); return hs && hs.score < 15; }
+                return true;
+              });
+              if (clubsWithLoc.length === 0) return (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  <MaterialIcons name="location-off" size={48} color="#CBD5E1" />
+                  <Text style={{ fontSize: 14, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Aucun club geolocalisee' : 'No geolocated clubs'}</Text>
+                </View>
+              );
+              const avgLat = clubsWithLoc.reduce((s, c) => s + (c.location?.latitude || 0), 0) / clubsWithLoc.length;
+              const avgLng = clubsWithLoc.reduce((s, c) => s + (c.location?.longitude || 0), 0) / clubsWithLoc.length;
+              return (
+                <MapViewComponent
+                  style={{ flex: 1 }}
+                  initialRegion={{ latitude: avgLat || 46.6, longitude: avgLng || 2.3, latitudeDelta: 6, longitudeDelta: 6 }}
+                  showsUserLocation
+                >
+                  {clubsWithLoc.map(club => {
+                    const hs = clubHealthScores.get(club.id);
+                    const markerColor = hs ? hs.color : '#94A3B8';
+                    return (
+                      <MarkerComponent
+                        key={club.id}
+                        coordinate={{ latitude: club.location!.latitude, longitude: club.location!.longitude }}
+                        onPress={() => { setShowMap(false); setTimeout(() => setDetailClub(club), 300); }}
+                        tracksViewChanges={false}
+                      >
+                        <View style={{ alignItems: 'center' }}>
+                          <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: markerColor, alignItems: 'center', justifyContent: 'center', borderWidth: 2.5, borderColor: '#FFF' }}>
+                            <MaterialIcons name="home" size={14} color="#FFF" />
+                          </View>
+                          {club.isVerified ? (
+                            <View style={{ position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF' }}>
+                              <MaterialIcons name="verified" size={8} color="#FFF" />
+                            </View>
+                          ) : null}
+                        </View>
+                      </MarkerComponent>
+                    );
+                  })}
+                </MapViewComponent>
+              );
+            })() : (
+              <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+                <Text style={{ fontSize: 13, color: '#94A3B8', textAlign: 'center', marginTop: 20, marginBottom: 16 }}>{fr ? 'Carte disponible sur mobile' : 'Map available on mobile'}</Text>
+                {clubs.filter(c => {
+                  if (!c.location) return false;
+                  if (mapFilter === 'verified') return c.isVerified;
+                  if (mapFilter === 'active') { const hs = clubHealthScores.get(c.id); return hs && hs.score >= 40; }
+                  if (mapFilter === 'inactive') { const hs = clubHealthScores.get(c.id); return hs && hs.score < 15; }
+                  return true;
+                }).map(club => {
+                  const hs = clubHealthScores.get(club.id);
+                  return (
+                    <Pressable key={club.id} style={[s.clubCard, { marginBottom: 6 }]} onPress={() => { setShowMap(false); setTimeout(() => setDetailClub(club), 200); }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: hs?.color || '#94A3B8' }} />
+                        <Text style={s.clubName} numberOfLines={1}>{club.name}</Text>
+                        {club.isVerified ? <MaterialIcons name="verified" size={14} color="#2563EB" /> : null}
+                        <Text style={{ fontSize: 11, color: '#94A3B8', marginLeft: 'auto' }}>{club.city}</Text>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+            {/* Map Legend */}
+            <View style={{ position: 'absolute', bottom: insets.bottom + 16, left: 16, right: 16, backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: 14, padding: 12, flexDirection: 'row', justifyContent: 'space-around', borderWidth: 1, borderColor: '#F1F5F9' }}>
+              {[
+                { color: '#10B981', label: fr ? 'Actif' : 'Active' },
+                { color: '#D97706', label: fr ? 'Modere' : 'Moderate' },
+                { color: '#EF4444', label: fr ? 'Faible' : 'Low' },
+                { color: '#94A3B8', label: fr ? 'Inactif' : 'Inactive' },
+              ].map(l => (
+                <View key={l.color} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: l.color }} />
+                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{l.label}</Text>
+                </View>
+              ))}
+            </View>
+          </View>
+        </SafeAreaView>
+      </Modal>
 
       {/* Detail Modal */}
       <Modal visible={!!detailClub} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setDetailClub(null)}>
@@ -638,6 +1181,79 @@ export default function AdminClubsScreen() {
                       </View>
                     ))}
                   </View>
+                </View>
+              ) : null}
+
+              {/* Health Score */}
+              {detailClub ? (() => {
+                const hs = clubHealthScores.get(detailClub.id);
+                if (!hs) return null;
+                return (
+                  <View style={s.detailSection}>
+                    <Text style={s.detailSectionTitle}>{fr ? 'SCORE DE SANTE' : 'HEALTH SCORE'}</Text>
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name="favorite" size={16} color={hs.color} />
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{hs.label}</Text>
+                        </View>
+                        <Text style={{ fontSize: 20, fontWeight: '800', color: hs.color }}>{hs.score}/100</Text>
+                      </View>
+                      <View style={{ height: 8, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                        <View style={{ height: '100%', width: `${Math.max(3, hs.score)}%`, backgroundColor: hs.color, borderRadius: 4 }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                        {[
+                          { label: fr ? `${hs.details.matches30d} matchs/30j` : `${hs.details.matches30d} matches/30d`, icon: 'sports', value: hs.details.matches30d },
+                          { label: fr ? `${hs.details.tournamentCount} tournoi(s)` : `${hs.details.tournamentCount} tournament(s)`, icon: 'emoji-events', value: hs.details.tournamentCount },
+                          { label: `${detailClub.membersCount} ${fr ? 'membres' : 'members'}`, icon: 'people', value: detailClub.membersCount },
+                        ].map((item, i) => (
+                          <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, backgroundColor: item.value > 0 ? '#DCFCE7' : '#FEF2F2', borderWidth: 1, borderColor: item.value > 0 ? '#BBF7D0' : '#FECACA' }}>
+                            <MaterialIcons name={item.icon as any} size={10} color={item.value > 0 ? '#10B981' : '#EF4444'} />
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: item.value > 0 ? '#10B981' : '#EF4444' }}>{item.label}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  </View>
+                );
+              })() : null}
+
+              {/* Activity Timeline */}
+              {detailClub ? (
+                <View style={s.detailSection}>
+                  <Text style={s.detailSectionTitle}>{fr ? 'ACTIVITE RECENTE' : 'RECENT ACTIVITY'}</Text>
+                  {loadingTimeline ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      <ActivityIndicator size="small" color="#3B82F6" />
+                    </View>
+                  ) : timelineData.length === 0 ? (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', gap: 6 }}>
+                      <MaterialIcons name="history" size={28} color="#CBD5E1" />
+                      <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Aucune activite recente' : 'No recent activity'}</Text>
+                    </View>
+                  ) : (
+                    <View style={{ backgroundColor: '#FFF', borderRadius: 14, overflow: 'hidden', borderWidth: 1, borderColor: '#F1F5F9' }}>
+                      {timelineData.map((ev, idx) => {
+                        const d = new Date(ev.date);
+                        const dateStr = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+                        return (
+                          <View key={idx} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                            <View style={{ alignItems: 'center', width: 28 }}>
+                              <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: ev.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                                <MaterialIcons name={ev.icon as any} size={14} color={ev.color} />
+                              </View>
+                              {idx < timelineData.length - 1 ? <View style={{ width: 2, flex: 1, backgroundColor: '#F1F5F9', marginTop: 4, minHeight: 8 }} /> : null}
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>{ev.label}</Text>
+                              <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>{dateStr}</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
               ) : null}
 

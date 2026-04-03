@@ -35,6 +35,9 @@ const ACTION_TYPE_GROUPS: { key: string; labelFr: string; labelEn: string; icon:
   { key: 'terrain', labelFr: 'Terrains', labelEn: 'Terrains', icon: 'sports-soccer', color: '#10B981', types: ['terrain_edit', 'terrain_delete', 'terrain_merge', 'terrain_visibility'] },
   { key: 'announcement', labelFr: 'Annonces', labelEn: 'Announcements', icon: 'campaign', color: '#7C3AED', types: ['announcement_sent'] },
   { key: 'maintenance', labelFr: 'Maintenance', labelEn: 'Maintenance', icon: 'construction', color: '#D97706', types: ['maintenance_enable', 'maintenance_disable', 'maintenance_schedule', 'maintenance_cancel'] },
+  { key: 'appeals', labelFr: 'Appels', labelEn: 'Appeals', icon: 'rate-review', color: '#E11D48', types: ['appeal_accept', 'appeal_reject'] },
+  { key: 'clubs', labelFr: 'Clubs', labelEn: 'Clubs', icon: 'home', color: '#7C3AED', types: ['club_verify', 'club_unverify', 'club_permission'] },
+  { key: 'users', labelFr: 'Utilisateurs', labelEn: 'Users', icon: 'people', color: '#3B82F6', types: ['user_premium', 'user_admin'] },
 ];
 
 export default function AdminActivityLogScreen() {
@@ -149,45 +152,60 @@ export default function AdminActivityLogScreen() {
     new Date(d).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   const [exporting, setExporting] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'filtered' | 'full'>('filtered');
 
-  const handleExportCSV = useCallback(async () => {
-    if (filteredLogs.length === 0) return;
+  const handleExportCSV = useCallback(async (format: 'filtered' | 'full' = 'filtered') => {
+    const exportData = format === 'full' ? logs : filteredLogs;
+    if (exportData.length === 0) return;
     setExporting(true);
     try {
-      const headers = 'Date,Admin,Action,Target,Detail';
-      const rows = filteredLogs.map(log => {
+      const headers = 'Date,Admin,Action Type,Action Label,Target Type,Target ID,Target Name,Detail,Metadata';
+      const rows = exportData.map(log => {
         const cfg = ACTION_CONFIG[log.actionType] || { iconFr: log.actionType, iconEn: log.actionType };
-        const action = (fr ? cfg.iconFr : cfg.iconEn).replace(/,/g, ';');
-        const target = (log.targetName || '').replace(/,/g, ';');
-        const detail = (log.actionDetail || '').replace(/,/g, ';').replace(/\n/g, ' ');
-        const admin = (log.adminName || 'Admin').replace(/,/g, ';');
+        const action = (fr ? cfg.iconFr : cfg.iconEn).replace(/"/g, '""');
+        const target = (log.targetName || '').replace(/"/g, '""');
+        const detail = (log.actionDetail || '').replace(/"/g, '""').replace(/\n/g, ' ');
+        const admin = (log.adminName || 'Admin').replace(/"/g, '""');
         const date = new Date(log.createdAt).toISOString();
-        return `${date},${admin},${action},${target},${detail}`;
+        const meta = log.metadata ? JSON.stringify(log.metadata).replace(/"/g, '""') : '';
+        return `"${date}","${admin}","${log.actionType}","${action}","${log.targetType || ''}","${log.targetId || ''}","${target}","${detail}","${meta}"`;
       });
-      const csv = [headers, ...rows].join('\n');
+      // Summary section
+      const summary = [
+        '',
+        '--- Export Summary ---',
+        `Total Records,${exportData.length}`,
+        `Export Date,${new Date().toISOString()}`,
+        `Filter,${format === 'full' ? 'None (full export)' : (filterGroup || 'all') + (filterAdmin ? ' / ' + (uniqueAdmins.find(a => a.id === filterAdmin)?.name || filterAdmin) : '')}`,
+        `Unique Admins,${new Set(exportData.map(l => l.adminUserId)).size}`,
+        ...Object.entries(exportData.reduce((acc, l) => { acc[l.actionType] = (acc[l.actionType] || 0) + 1; return acc; }, {} as Record<string, number>)).sort((a, b) => b[1] - a[1]).map(([type, count]) => `${type},${count}`),
+      ];
+      const csv = [headers, ...rows, ...summary].join('\n');
 
+      const filename = `admin-audit-${format === 'full' ? 'full' : 'filtered'}-${new Date().toISOString().slice(0, 10)}.csv`;
       if (Platform.OS === 'web') {
         const blob = new Blob([csv], { type: 'text/csv' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `admin-activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+        a.download = filename;
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        const path = `${FileSystem.cacheDirectory}admin-activity-log-${new Date().toISOString().slice(0, 10)}.csv`;
+        const path = `${FileSystem.cacheDirectory}${filename}`;
         await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
         const canShare = await Sharing.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le journal' : 'Export activity log' });
+          await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le journal d\'audit' : 'Export audit log' });
         }
       }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) {
       console.log('[ActivityLog] Export error:', e);
     } finally {
       setExporting(false);
     }
-  }, [filteredLogs, fr]);
+  }, [filteredLogs, logs, fr, filterGroup, filterAdmin, uniqueAdmins]);
 
   if (loading) {
     return (
@@ -211,15 +229,24 @@ export default function AdminActivityLogScreen() {
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Journal d\'activite' : 'Activity Log'}</Text>
-        <Pressable
-          style={[s.exportBtn, exporting && { opacity: 0.5 }]}
-          onPress={handleExportCSV}
-          disabled={exporting || filteredLogs.length === 0}
-        >
-          {exporting ? <ActivityIndicator size="small" color="#2563EB" /> : (
-            <MaterialIcons name="file-download" size={20} color="#2563EB" />
-          )}
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            style={[s.exportBtn, exporting && { opacity: 0.5 }]}
+            onPress={() => handleExportCSV('filtered')}
+            disabled={exporting || filteredLogs.length === 0}
+          >
+            {exporting ? <ActivityIndicator size="small" color="#2563EB" /> : (
+              <MaterialIcons name="file-download" size={20} color="#2563EB" />
+            )}
+          </Pressable>
+          <Pressable
+            style={[s.exportBtn, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }, exporting && { opacity: 0.5 }]}
+            onPress={() => handleExportCSV('full')}
+            disabled={exporting || logs.length === 0}
+          >
+            <MaterialIcons name="download-for-offline" size={20} color="#10B981" />
+          </Pressable>
+        </View>
       </View>
 
       {/* Action Type Filters */}

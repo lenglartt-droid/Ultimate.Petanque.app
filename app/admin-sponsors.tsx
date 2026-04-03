@@ -427,9 +427,9 @@ export default function AdminSponsorsScreen() {
         ) : null}
 
         {filtered.map((item, idx) => {
-          const cfg = BADGE_TYPE_CONFIG[(item.badge_type as BadgeType) || 'ambassador'];
+          const cfg = BADGE_TYPE_CONFIG[(item.badge_type as BadgeType) || 'ambassador'] || BADGE_TYPE_CONFIG.ambassador;
           const stats = analytics.get(item.id);
-          const lvlCfg = AMBASSADOR_LEVELS[(item.ambassador_level as AmbassadorLevel) || 'decouverte'];
+          const lvlCfg = AMBASSADOR_LEVELS[(item.ambassador_level as AmbassadorLevel) || 'decouverte'] || AMBASSADOR_LEVELS.decouverte;
           return (
             <Animated.View key={item.id} entering={FadeInDown.duration(300).delay(idx * 40)} style={[s.itemCard, !item.is_active && { opacity: 0.5 }]}>
               <View style={s.itemTopRow}>
@@ -447,7 +447,7 @@ export default function AdminSponsorsScreen() {
                       <MaterialIcons name={cfg.icon as any} size={9} color="#FFF" />
                       <Text style={s.itemTypeBadgeText}>{fr ? cfg.label : cfg.labelEn}</Text>
                     </LinearGradient>
-                    {item.badge_type === 'ambassador' ? (
+                    {item.badge_type === 'ambassador' && lvlCfg ? (
                       <View style={[s.itemLevelBadge, { backgroundColor: lvlCfg.color + '15' }]}>
                         <MaterialIcons name={lvlCfg.icon as any} size={10} color={lvlCfg.color} />
                         <Text style={[s.itemLevelText, { color: lvlCfg.color }]}>{LEVEL_LABELS[(item.ambassador_level as AmbassadorLevel) || 'decouverte'][fr ? 'fr' : 'en']}</Text>
