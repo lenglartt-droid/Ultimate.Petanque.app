@@ -33,7 +33,16 @@ export type ActionType =
   | 'terrain_edit'
   | 'terrain_delete'
   | 'terrain_merge'
-  | 'terrain_visibility';
+  | 'terrain_visibility'
+  | 'coadmin_permission_change'
+  | 'coadmin_added'
+  | 'coadmin_removed'
+  | 'club_verify'
+  | 'club_unverify'
+  | 'user_premium_enable'
+  | 'user_premium_disable'
+  | 'user_admin_promote'
+  | 'user_admin_demote';
 
 const ACTION_CONFIG: Record<string, { iconFr: string; iconEn: string; color: string; icon: string }> = {
   moderation_warn: { iconFr: 'Avertissement joueur', iconEn: 'Player warning', color: '#D97706', icon: 'warning-amber' },
@@ -50,6 +59,15 @@ const ACTION_CONFIG: Record<string, { iconFr: string; iconEn: string; color: str
   terrain_delete: { iconFr: 'Terrain supprime', iconEn: 'Terrain deleted', color: '#EF4444', icon: 'delete-outline' },
   terrain_merge: { iconFr: 'Terrains fusionnes', iconEn: 'Terrains merged', color: '#7C3AED', icon: 'merge-type' },
   terrain_visibility: { iconFr: 'Visibilite terrain', iconEn: 'Terrain visibility', color: '#3B82F6', icon: 'visibility' },
+  coadmin_permission_change: { iconFr: 'Permission co-admin modifiee', iconEn: 'Co-admin permission changed', color: '#7C3AED', icon: 'admin-panel-settings' },
+  coadmin_added: { iconFr: 'Co-admin ajoute', iconEn: 'Co-admin added', color: '#7C3AED', icon: 'person-add' },
+  coadmin_removed: { iconFr: 'Co-admin retire', iconEn: 'Co-admin removed', color: '#94A3B8', icon: 'person-remove' },
+  club_verify: { iconFr: 'Club verifie', iconEn: 'Club verified', color: '#2563EB', icon: 'verified' },
+  club_unverify: { iconFr: 'Verification club retiree', iconEn: 'Club verification removed', color: '#94A3B8', icon: 'remove-circle' },
+  user_premium_enable: { iconFr: 'Premium active', iconEn: 'Premium enabled', color: '#D4A017', icon: 'star' },
+  user_premium_disable: { iconFr: 'Premium desactive', iconEn: 'Premium disabled', color: '#94A3B8', icon: 'star-outline' },
+  user_admin_promote: { iconFr: 'Promu admin', iconEn: 'Promoted to admin', color: '#DC2626', icon: 'shield' },
+  user_admin_demote: { iconFr: 'Admin retire', iconEn: 'Admin removed', color: '#64748B', icon: 'remove-moderator' },
 };
 
 export { ACTION_CONFIG };
