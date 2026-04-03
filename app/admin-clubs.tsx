@@ -624,7 +624,7 @@ export default function AdminClubsScreen() {
   }
 
   return (
-    <AdminGuard language={language}>
+    <AdminGuard language={language} requiredPermission="clubs">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color="#0F172A" /></Pressable>

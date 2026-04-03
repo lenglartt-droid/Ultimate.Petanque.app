@@ -225,7 +225,7 @@ export default function AdminActivityLogScreen() {
   }
 
   return (
-    <AdminGuard language={language}>
+    <AdminGuard language={language} requiredPermission="reports">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>

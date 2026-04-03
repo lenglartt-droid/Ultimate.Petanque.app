@@ -143,11 +143,14 @@ export default function AdminDashboardScreen() {
   // PDF export
   const [exportingPdf, setExportingPdf] = useState(false);
 
+  // Club health alerts
+  const [decliningClubs, setDecliningClubs] = useState<{ id: string; name: string; city: string; score: number; prevScore: number; delta: number; color: string }[]>([]);
+
   // Search modal
   const [showSearch, setShowSearch] = useState(false);
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'onboarding', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -345,6 +348,40 @@ export default function AdminDashboardScreen() {
         setStepAnalytics(stepData);
       } catch { /* silent */ }
 
+      // Compute declining clubs for health alerts widget
+      try {
+        const allClubsList = clubsFullRes.data || [];
+        const { data: allPlayersForHealth } = await supabase.from('players').select('user_id, club_id');
+        const playerClubMap = new Map<string, string>();
+        (allPlayersForHealth || []).forEach((p: any) => { if (p.club_id) playerClubMap.set(p.user_id, p.club_id); });
+        const thirtyDaysAgo2 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const sixtyDaysAgo2 = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: recentM } = await supabase.from('matches').select('user_id, date').gte('date', sixtyDaysAgo2);
+        const declining: typeof decliningClubs = [];
+        allClubsList.forEach((c: any) => {
+          const cid = c.id;
+          let recentCount = 0;
+          let prevCount = 0;
+          (recentM || []).forEach((m: any) => {
+            const pcid = playerClubMap.get(m.user_id);
+            if (pcid !== cid) return;
+            const md = new Date(m.date);
+            if (md.toISOString() >= thirtyDaysAgo2) recentCount++;
+            else prevCount++;
+          });
+          const members = c.members_count || 0;
+          const currentScore = Math.min(100, Math.round(recentCount * 3 + Math.min(members * 2, 30)));
+          const prevScore = Math.min(100, Math.round(prevCount * 3 + Math.min(members * 2, 30)));
+          const delta = currentScore - prevScore;
+          if (delta < -5 || (currentScore < 20 && prevScore > currentScore)) {
+            const color = currentScore >= 40 ? '#D97706' : currentScore >= 15 ? '#EF4444' : '#94A3B8';
+            declining.push({ id: cid, name: c.name, city: c.city || '', score: currentScore, prevScore, delta, color });
+          }
+        });
+        declining.sort((a, b) => a.delta - b.delta);
+        setDecliningClubs(declining.slice(0, 10));
+      } catch { /* silent */ }
+
       setEloDistribution([
         { tier: 'master', count: eloBuckets.master, color: '#F59E0B', label: fr ? 'Maitre' : 'Master' },
         { tier: 'diamond', count: eloBuckets.diamond, color: '#8B5CF6', label: fr ? 'Diamant' : 'Diamond' },
@@ -532,6 +569,7 @@ export default function AdminDashboardScreen() {
                 { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
                 { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
                 { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
+                { key: 'clubHealthAlerts', label: fr ? 'Sante clubs' : 'Club Health', icon: 'favorite' },
                 { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
                 { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
                 { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
@@ -684,6 +722,56 @@ export default function AdminDashboardScreen() {
                 {alert.route ? <MaterialIcons name="chevron-right" size={18} color={alert.color} /> : null}
               </Pressable>
             ))}
+          </Animated.View>
+          );
+
+          if (wKey === 'clubHealthAlerts' && decliningClubs.length > 0) return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>{fr ? 'CLUBS EN DECLIN' : 'DECLINING CLUBS'}</Text>
+            <View style={s.chartCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <View style={[s.metricIcon, { backgroundColor: '#FEF2F2' }]}>
+                  <MaterialIcons name="trending-down" size={18} color="#EF4444" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{decliningClubs.length} {fr ? 'club(s) en baisse' : 'declining club(s)'}</Text>
+                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>{fr ? 'Score de sante en baisse sur 30 jours' : 'Health score declining over 30 days'}</Text>
+                </View>
+              </View>
+              {decliningClubs.map((club, idx) => (
+                <Pressable
+                  key={club.id}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}
+                  onPress={() => { Haptics.selectionAsync(); router.push(`/club/${club.id}` as any); }}
+                >
+                  <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: club.color + '12', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="home" size={16} color={club.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{club.name}</Text>
+                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>{club.city}</Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: club.color }}>{club.score}</Text>
+                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>/100</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                      <MaterialIcons name="trending-down" size={10} color="#EF4444" />
+                      <Text style={{ fontSize: 9, fontWeight: '800', color: '#EF4444' }}>{club.delta}</Text>
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={16} color="#CBD5E1" />
+                </Pressable>
+              ))}
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}
+                onPress={() => { Haptics.selectionAsync(); router.push('/admin-clubs' as any); }}
+              >
+                <MaterialIcons name="open-in-new" size={14} color="#3B82F6" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{fr ? 'Voir tous les clubs' : 'View all clubs'}</Text>
+              </Pressable>
+            </View>
           </Animated.View>
           );
 
