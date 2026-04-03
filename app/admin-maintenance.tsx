@@ -35,6 +35,8 @@ import {
   getMaintenanceStatus,
   enableMaintenance,
   disableMaintenance,
+  scheduleMaintenance,
+  cancelScheduledMaintenance,
   logMaintenanceAction,
   getMaintenanceHistory,
   MaintenanceStatus,
@@ -49,6 +51,17 @@ const DURATION_PRESETS = [
   { label: '2h', minutes: 120 },
   { label: '4h', minutes: 240 },
   { label: '8h', minutes: 480 },
+];
+
+// Schedule presets - return a future Date
+const getSchedulePresets = (fr: boolean) => [
+  { labelFr: 'Dans 1h', labelEn: 'In 1h', getDate: () => new Date(Date.now() + 3_600_000) },
+  { labelFr: 'Dans 2h', labelEn: 'In 2h', getDate: () => new Date(Date.now() + 7_200_000) },
+  { labelFr: 'Dans 4h', labelEn: 'In 4h', getDate: () => new Date(Date.now() + 14_400_000) },
+  { labelFr: 'Ce soir 22h', labelEn: 'Tonight 10pm', getDate: () => { const d = new Date(); d.setHours(22, 0, 0, 0); if (d.getTime() <= Date.now()) d.setDate(d.getDate() + 1); return d; } },
+  { labelFr: 'Demain 6h', labelEn: 'Tomorrow 6am', getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(6, 0, 0, 0); return d; } },
+  { labelFr: 'Demain 8h', labelEn: 'Tomorrow 8am', getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(8, 0, 0, 0); return d; } },
+  { labelFr: 'Demain 14h', labelEn: 'Tomorrow 2pm', getDate: () => { const d = new Date(); d.setDate(d.getDate() + 1); d.setHours(14, 0, 0, 0); return d; } },
 ];
 
 export default function AdminMaintenanceScreen() {
@@ -67,11 +80,20 @@ export default function AdminMaintenanceScreen() {
   // Form fields
   const [messageFr, setMessageFr] = useState('');
   const [messageEn, setMessageEn] = useState('');
+  const [sendRecapPush, setSendRecapPush] = useState(true);
   const [selectedDuration, setSelectedDuration] = useState<number | null>(60);
   const [customHours, setCustomHours] = useState('');
   const [customMinutes, setCustomMinutes] = useState('');
   const [sendPush, setSendPush] = useState(true);
   const [showCustomDuration, setShowCustomDuration] = useState(false);
+
+  // Schedule mode
+  const [formMode, setFormMode] = useState<'immediate' | 'scheduled'>('immediate');
+  const [selectedSchedulePreset, setSelectedSchedulePreset] = useState<number | null>(null);
+  const [scheduleDate, setScheduleDate] = useState<Date | null>(null);
+  const [showCustomSchedule, setShowCustomSchedule] = useState(false);
+  const [customScheduleDate, setCustomScheduleDate] = useState(''); // DD/MM/YYYY
+  const [customScheduleTime, setCustomScheduleTime] = useState(''); // HH:MM
 
   // History
   const [history, setHistory] = useState<MaintenanceLogEntry[]>([]);
@@ -89,6 +111,23 @@ export default function AdminMaintenanceScreen() {
       if (result.isActive) {
         if (result.messageFr) setMessageFr(result.messageFr);
         if (result.messageEn) setMessageEn(result.messageEn);
+      }
+      // Pre-fill if scheduled
+      if (result.isScheduled) {
+        if (result.scheduledMessageFr) setMessageFr(result.scheduledMessageFr);
+        if (result.scheduledMessageEn) setMessageEn(result.scheduledMessageEn);
+        if (result.scheduledDurationMinutes) {
+          const preset = DURATION_PRESETS.find(p => p.minutes === result.scheduledDurationMinutes);
+          if (preset) setSelectedDuration(preset.minutes);
+          else {
+            setShowCustomDuration(true);
+            setCustomHours(String(Math.floor(result.scheduledDurationMinutes / 60)));
+            setCustomMinutes(String(result.scheduledDurationMinutes % 60));
+          }
+        }
+        if (result.scheduledAt) setScheduleDate(new Date(result.scheduledAt));
+        setSendPush(result.scheduledSendPush);
+        setFormMode('scheduled');
       }
 
       const { logs } = await getMaintenanceHistory(20);
@@ -195,27 +234,169 @@ export default function AdminMaintenanceScreen() {
     );
   }, [messageFr, messageEn, sendPush, getEndTime, fr, user, showAlert, loadData]);
 
-  // Disable maintenance
-  const handleDisable = useCallback(async () => {
+  // Schedule maintenance
+  const handleSchedule = useCallback(async () => {
+    if (!messageFr.trim() && !messageEn.trim()) {
+      showAlert(fr ? 'Erreur' : 'Error', fr ? 'Un message est requis (FR ou EN)' : 'A message is required (FR or EN)');
+      return;
+    }
+
+    // Compute schedule date
+    let targetDate = scheduleDate;
+    if (showCustomSchedule) {
+      const parts = customScheduleDate.split('/');
+      const timeParts = customScheduleTime.split(':');
+      if (parts.length === 3 && timeParts.length === 2) {
+        const d = new Date(
+          parseInt(parts[2], 10),
+          parseInt(parts[1], 10) - 1,
+          parseInt(parts[0], 10),
+          parseInt(timeParts[0], 10),
+          parseInt(timeParts[1], 10)
+        );
+        if (!isNaN(d.getTime()) && d.getTime() > Date.now()) targetDate = d;
+        else {
+          showAlert(fr ? 'Erreur' : 'Error', fr ? 'Date/heure invalide ou dans le passe' : 'Invalid or past date/time');
+          return;
+        }
+      } else {
+        showAlert(fr ? 'Erreur' : 'Error', fr ? 'Format: JJ/MM/AAAA et HH:MM' : 'Format: DD/MM/YYYY and HH:MM');
+        return;
+      }
+    }
+    if (!targetDate || targetDate.getTime() <= Date.now()) {
+      showAlert(fr ? 'Erreur' : 'Error', fr ? 'Selectionnez une date future' : 'Select a future date');
+      return;
+    }
+
+    // Compute duration in minutes
+    let durationMinutes: number | undefined;
+    if (showCustomDuration) {
+      const h = parseInt(customHours || '0', 10);
+      const m = parseInt(customMinutes || '0', 10);
+      if (h * 60 + m > 0) durationMinutes = h * 60 + m;
+    } else if (selectedDuration) {
+      durationMinutes = selectedDuration;
+    }
+
+    const scheduledDateStr = formatDate(targetDate.toISOString());
     Alert.alert(
-      fr ? 'Desactiver la maintenance ?' : 'Disable maintenance?',
-      fr ? 'La banniere sera masquee pour tous les utilisateurs.' : 'The banner will be hidden for all users.',
+      fr ? 'Planifier la maintenance ?' : 'Schedule maintenance?',
+      fr
+        ? `La maintenance sera activee le ${scheduledDateStr}.${sendPush ? ' Push envoye au demarrage.' : ''}`
+        : `Maintenance will activate on ${scheduledDateStr}.${sendPush ? ' Push sent at start.' : ''}`,
       [
         { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
         {
-          text: fr ? 'Desactiver' : 'Disable',
+          text: fr ? 'Planifier' : 'Schedule',
           onPress: async () => {
             setSubmitting(true);
-            const { error } = await disableMaintenance();
+            const { error } = await scheduleMaintenance({
+              scheduledAt: targetDate!.toISOString(),
+              messageFr: messageFr.trim() || messageEn.trim(),
+              messageEn: messageEn.trim() || messageFr.trim(),
+              durationMinutes,
+              sendPush,
+            });
+            if (error) {
+              showAlert(fr ? 'Erreur' : 'Error', error);
+            } else {
+              await logMaintenanceAction({
+                action: 'enabled',
+                adminName: user?.username || user?.email || 'Admin',
+                messageFr: `[PLANIFIE ${scheduledDateStr}] ${messageFr.trim()}`,
+                messageEn: `[SCHEDULED ${scheduledDateStr}] ${messageEn.trim()}`,
+                endTime: durationMinutes ? new Date(targetDate!.getTime() + durationMinutes * 60000).toISOString() : undefined,
+                pushSent: false,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(
+                fr ? 'Maintenance planifiee' : 'Maintenance scheduled',
+                fr ? `Activation prevue : ${scheduledDateStr}` : `Activation scheduled: ${scheduledDateStr}`
+              );
+              await loadData();
+            }
+            setSubmitting(false);
+          },
+        },
+      ]
+    );
+  }, [messageFr, messageEn, sendPush, scheduleDate, showCustomSchedule, customScheduleDate, customScheduleTime, showCustomDuration, customHours, customMinutes, selectedDuration, fr, user, showAlert, loadData]);
+
+  // Cancel scheduled maintenance
+  const handleCancelSchedule = useCallback(async () => {
+    Alert.alert(
+      fr ? 'Annuler la planification ?' : 'Cancel schedule?',
+      fr ? 'La maintenance planifiee sera annulee.' : 'The scheduled maintenance will be cancelled.',
+      [
+        { text: fr ? 'Non' : 'No', style: 'cancel' },
+        {
+          text: fr ? 'Oui, annuler' : 'Yes, cancel',
+          style: 'destructive',
+          onPress: async () => {
+            setSubmitting(true);
+            const { error } = await cancelScheduledMaintenance();
             if (error) {
               showAlert(fr ? 'Erreur' : 'Error', error);
             } else {
               await logMaintenanceAction({
                 action: 'disabled',
                 adminName: user?.username || user?.email || 'Admin',
+                messageFr: '[PLANIFICATION ANNULEE]',
+                messageEn: '[SCHEDULE CANCELLED]',
               });
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              showAlert(fr ? 'Maintenance desactivee' : 'Maintenance disabled');
+              showAlert(fr ? 'Planification annulee' : 'Schedule cancelled');
+              setScheduleDate(null);
+              setSelectedSchedulePreset(null);
+              setShowCustomSchedule(false);
+              setFormMode('immediate');
+              await loadData();
+            }
+            setSubmitting(false);
+          },
+        },
+      ]
+    );
+  }, [fr, user, showAlert, loadData]);
+
+  // Disable maintenance
+  const handleDisable = useCallback(async () => {
+    Alert.alert(
+      fr ? 'Desactiver la maintenance ?' : 'Disable maintenance?',
+      fr
+        ? `La banniere sera masquee pour tous les utilisateurs.${sendRecapPush ? ' Un push de fin sera envoye.' : ''}`
+        : `The banner will be hidden for all users.${sendRecapPush ? ' A recap push will be sent.' : ''}`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: fr ? 'Desactiver' : 'Disable',
+          onPress: async () => {
+            setSubmitting(true);
+            const result = await disableMaintenance({
+              sendRecapPush,
+              recapMessageFr: fr ? 'L\'application est de nouveau operationnelle. Merci de votre patience !' : undefined,
+              recapMessageEn: !fr ? 'The application is back online. Thank you for your patience!' : undefined,
+            });
+            if (result.error) {
+              showAlert(fr ? 'Erreur' : 'Error', result.error);
+            } else {
+              const sentCount = result.pushSent || 0;
+              const errorCount = result.pushErrors || 0;
+              await logMaintenanceAction({
+                action: 'disabled',
+                adminName: user?.username || user?.email || 'Admin',
+                pushSent: sendRecapPush,
+                pushSentCount: sentCount,
+                pushErrorCount: errorCount,
+              });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(
+                fr ? 'Maintenance desactivee' : 'Maintenance disabled',
+                sendRecapPush
+                  ? (fr ? `Push recap envoye : ${sentCount} succes, ${errorCount} erreur(s)` : `Recap push sent: ${sentCount} success, ${errorCount} error(s)`)
+                  : undefined
+              );
               setMessageFr('');
               setMessageEn('');
               await loadData();
@@ -225,7 +406,7 @@ export default function AdminMaintenanceScreen() {
         },
       ]
     );
-  }, [fr, user, showAlert, loadData]);
+  }, [fr, user, showAlert, loadData, sendRecapPush]);
 
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString(fr ? 'fr-FR' : 'en-US', {
@@ -255,6 +436,9 @@ export default function AdminMaintenanceScreen() {
   }
 
   const isActive = status?.isActive === true;
+  const isScheduled = status?.isScheduled === true;
+  const showForm = !isActive && !isScheduled;
+  const schedulePresets = getSchedulePresets(fr);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -275,15 +459,17 @@ export default function AdminMaintenanceScreen() {
       >
         {/* Current Status */}
         <Animated.View entering={FadeInDown.duration(300)}>
-          <View style={[styles.statusCard, { borderColor: isActive ? '#D97706' + '40' : theme.success + '30' }]}>
-            <View style={[styles.statusIcon, { backgroundColor: isActive ? '#D97706' + '15' : theme.success + '15' }]}>
-              <MaterialIcons name={isActive ? 'construction' : 'check-circle'} size={28} color={isActive ? '#D97706' : theme.success} />
+          <View style={[styles.statusCard, { borderColor: isActive ? '#D97706' + '40' : isScheduled ? '#2563EB40' : theme.success + '30' }]}>
+            <View style={[styles.statusIcon, { backgroundColor: isActive ? '#D97706' + '15' : isScheduled ? '#2563EB15' : theme.success + '15' }]}>
+              <MaterialIcons name={isActive ? 'construction' : isScheduled ? 'schedule' : 'check-circle'} size={28} color={isActive ? '#D97706' : isScheduled ? '#2563EB' : theme.success} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.statusTitle, { color: isActive ? '#D97706' : theme.success }]}>
+              <Text style={[styles.statusTitle, { color: isActive ? '#D97706' : isScheduled ? '#2563EB' : theme.success }]}>
                 {isActive
                   ? (fr ? 'Maintenance en cours' : 'Maintenance active')
-                  : (fr ? 'Application operationnelle' : 'Application operational')}
+                  : isScheduled
+                    ? (fr ? 'Maintenance planifiee' : 'Maintenance scheduled')
+                    : (fr ? 'Application operationnelle' : 'Application operational')}
               </Text>
               {isActive && status?.startedAt ? (
                 <Text style={styles.statusSub}>
@@ -298,19 +484,86 @@ export default function AdminMaintenanceScreen() {
                   </Text>
                 </View>
               ) : null}
+              {isScheduled && status?.scheduledAt ? (
+                <View style={[styles.statusEndRow, { marginTop: 3 }]}>
+                  <MaterialIcons name="event" size={12} color="#2563EB" />
+                  <Text style={[styles.statusEndText, { color: '#2563EB' }]}>
+                    {fr ? 'Prevue' : 'Scheduled'}: {formatDate(status.scheduledAt)}
+                  </Text>
+                </View>
+              ) : null}
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: isActive ? '#FEF3C7' : '#DCFCE7' }]}>
-              <View style={[styles.statusDot, { backgroundColor: isActive ? '#D97706' : theme.success }]} />
-              <Text style={[styles.statusBadgeText, { color: isActive ? '#92400E' : '#166534' }]}>
-                {isActive ? 'ON' : 'OFF'}
+            <View style={[styles.statusBadge, { backgroundColor: isActive ? '#FEF3C7' : isScheduled ? '#DBEAFE' : '#DCFCE7' }]}>
+              <View style={[styles.statusDot, { backgroundColor: isActive ? '#D97706' : isScheduled ? '#2563EB' : theme.success }]} />
+              <Text style={[styles.statusBadgeText, { color: isActive ? '#92400E' : isScheduled ? '#1E40AF' : '#166534' }]}>
+                {isActive ? 'ON' : isScheduled ? (fr ? 'PLANIF.' : 'SCHED.') : 'OFF'}
               </Text>
             </View>
           </View>
         </Animated.View>
 
+        {/* Scheduled maintenance - cancel button */}
+        {isScheduled ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+            <View style={styles.scheduledInfoCard}>
+              <View style={styles.scheduledInfoRow}>
+                <MaterialIcons name="schedule" size={18} color="#2563EB" />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.scheduledInfoTitle}>{fr ? 'Activation automatique' : 'Auto-activation'}</Text>
+                  <Text style={styles.scheduledInfoDesc}>
+                    {fr ? 'La banniere apparaitra et le push sera envoye a l\'heure prevue.' : 'Banner will appear and push sent at the scheduled time.'}
+                  </Text>
+                  {status?.scheduledSendPush ? (
+                    <View style={styles.scheduledPushBadge}>
+                      <MaterialIcons name="notifications-active" size={11} color="#2563EB" />
+                      <Text style={styles.scheduledPushText}>{fr ? 'Push au demarrage' : 'Push on start'}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </View>
+            <Pressable
+              style={({ pressed }) => [styles.cancelScheduleBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+              onPress={handleCancelSchedule}
+              disabled={submitting}
+            >
+              {submitting ? (
+                <ActivityIndicator size="small" color="#EF4444" />
+              ) : (
+                <>
+                  <MaterialIcons name="event-busy" size={20} color="#EF4444" />
+                  <Text style={styles.cancelScheduleBtnText}>
+                    {fr ? 'Annuler la planification' : 'Cancel schedule'}
+                  </Text>
+                </>
+              )}
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* Quick Disable Button when active */}
         {isActive ? (
           <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+            {/* Recap push toggle */}
+            <View style={styles.recapPushCard}>
+              <View style={[styles.toggleIcon, { backgroundColor: sendRecapPush ? '#10B981' + '15' : theme.textMuted + '15' }]}>
+                <MaterialIcons name={sendRecapPush ? 'campaign' : 'notifications-off'} size={20} color={sendRecapPush ? '#10B981' : theme.textMuted} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.toggleTitle}>{fr ? 'Push de fin de maintenance' : 'Maintenance end push'}</Text>
+                <Text style={styles.toggleDesc}>
+                  {sendRecapPush
+                    ? (fr ? 'Notifier tous les utilisateurs que l\'app est de retour' : 'Notify all users the app is back')
+                    : (fr ? 'Pas de notification de fin' : 'No end notification')}
+                </Text>
+              </View>
+              <Switch
+                value={sendRecapPush}
+                onValueChange={setSendRecapPush}
+                trackColor={{ false: theme.border, true: '#10B981' + '60' }}
+                thumbColor={sendRecapPush ? '#10B981' : theme.textMuted}
+              />
+            </View>
             <Pressable
               style={({ pressed }) => [styles.disableBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
               onPress={handleDisable}
@@ -331,7 +584,7 @@ export default function AdminMaintenanceScreen() {
         ) : null}
 
         {/* ===== FORM ===== */}
-        {!isActive ? (
+        {showForm ? (
           <Animated.View entering={FadeInDown.duration(300).delay(100)}>
             <View style={styles.formSection}>
               <View style={styles.sectionHeaderRow}>
@@ -340,6 +593,99 @@ export default function AdminMaintenanceScreen() {
                 </View>
                 <Text style={styles.sectionTitle}>{fr ? 'Configurer la maintenance' : 'Configure maintenance'}</Text>
               </View>
+
+              {/* Mode toggle: Immediate vs Scheduled */}
+              <View style={styles.modeToggle}>
+                <Pressable
+                  style={[styles.modeToggleItem, formMode === 'immediate' && styles.modeToggleItemActive]}
+                  onPress={() => { setFormMode('immediate'); Haptics.selectionAsync(); }}
+                >
+                  <MaterialIcons name="flash-on" size={16} color={formMode === 'immediate' ? '#FFF' : '#64748B'} />
+                  <Text style={[styles.modeToggleText, formMode === 'immediate' && styles.modeToggleTextActive]}>
+                    {fr ? 'Immediat' : 'Immediate'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modeToggleItem, formMode === 'scheduled' && styles.modeToggleItemActiveBlue]}
+                  onPress={() => { setFormMode('scheduled'); Haptics.selectionAsync(); }}
+                >
+                  <MaterialIcons name="schedule" size={16} color={formMode === 'scheduled' ? '#FFF' : '#64748B'} />
+                  <Text style={[styles.modeToggleText, formMode === 'scheduled' && styles.modeToggleTextActive]}>
+                    {fr ? 'Planifier' : 'Schedule'}
+                  </Text>
+                </Pressable>
+              </View>
+
+              {/* Schedule date/time selection */}
+              {formMode === 'scheduled' ? (
+                <View style={styles.fieldWrap}>
+                  <View style={styles.fieldLabel}>
+                    <MaterialIcons name="event" size={16} color="#2563EB" />
+                    <Text style={[styles.fieldLabelText, { color: '#2563EB' }]}>{fr ? 'Date et heure de debut' : 'Start date and time'}</Text>
+                  </View>
+                  <View style={styles.durationGrid}>
+                    {schedulePresets.map((preset, idx) => {
+                      const isSelected = !showCustomSchedule && selectedSchedulePreset === idx;
+                      return (
+                        <Pressable
+                          key={idx}
+                          style={[styles.durationChip, isSelected && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}
+                          onPress={() => {
+                            setSelectedSchedulePreset(idx);
+                            setScheduleDate(preset.getDate());
+                            setShowCustomSchedule(false);
+                            Haptics.selectionAsync();
+                          }}
+                        >
+                          <Text style={[styles.durationChipText, isSelected && { color: '#FFF' }]}>
+                            {fr ? preset.labelFr : preset.labelEn}
+                          </Text>
+                        </Pressable>
+                      );
+                    })}
+                    <Pressable
+                      style={[styles.durationChip, showCustomSchedule && { backgroundColor: '#2563EB', borderColor: '#2563EB' }]}
+                      onPress={() => { setShowCustomSchedule(true); setSelectedSchedulePreset(null); setScheduleDate(null); Haptics.selectionAsync(); }}
+                    >
+                      <MaterialIcons name="edit-calendar" size={14} color={showCustomSchedule ? '#FFF' : theme.textSecondary} />
+                    </Pressable>
+                  </View>
+                  {showCustomSchedule ? (
+                    <View style={styles.customScheduleRow}>
+                      <View style={[styles.customDurationField, { flex: 1 }]}>
+                        <MaterialIcons name="calendar-today" size={14} color="#64748B" />
+                        <TextInput
+                          style={[styles.customDurationInput, { width: 90, textAlign: 'left' }]}
+                          placeholder="JJ/MM/AAAA"
+                          placeholderTextColor={theme.textMuted}
+                          value={customScheduleDate}
+                          onChangeText={setCustomScheduleDate}
+                          keyboardType="number-pad"
+                          maxLength={10}
+                        />
+                      </View>
+                      <View style={styles.customDurationField}>
+                        <MaterialIcons name="access-time" size={14} color="#64748B" />
+                        <TextInput
+                          style={[styles.customDurationInput, { width: 50, textAlign: 'left' }]}
+                          placeholder="HH:MM"
+                          placeholderTextColor={theme.textMuted}
+                          value={customScheduleTime}
+                          onChangeText={setCustomScheduleTime}
+                          keyboardType="number-pad"
+                          maxLength={5}
+                        />
+                      </View>
+                    </View>
+                  ) : null}
+                  {scheduleDate ? (
+                    <View style={styles.schedulePreviewRow}>
+                      <MaterialIcons name="check-circle" size={14} color="#2563EB" />
+                      <Text style={styles.schedulePreviewText}>{formatDate(scheduleDate.toISOString())}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
 
               {/* Message FR */}
               <View style={styles.fieldWrap}>
@@ -479,14 +825,14 @@ export default function AdminMaintenanceScreen() {
               </View>
 
               {(messageFr.trim() || messageEn.trim() || isActive) ? (
-                <View style={styles.previewBanner}>
+                <View style={[styles.previewBanner, formMode === 'scheduled' && !isActive && { backgroundColor: '#2563EB' }]}>
                   <View style={styles.previewBannerInner}>
                     <View style={styles.previewIconWrap}>
-                      <MaterialIcons name="construction" size={16} color="#FFF" />
+                      <MaterialIcons name={formMode === 'scheduled' && !isActive ? 'schedule' : 'construction'} size={16} color="#FFF" />
                     </View>
                     <View style={{ flex: 1 }}>
                       <View style={styles.previewHeaderRow}>
-                        <Text style={styles.previewTitle}>Maintenance</Text>
+                        <Text style={styles.previewTitle}>{formMode === 'scheduled' && !isActive ? (fr ? 'Maintenance prevue' : 'Scheduled') : 'Maintenance'}</Text>
                         {previewCountdown ? (
                           <View style={styles.previewCountdownBadge}>
                             <MaterialIcons name="timer" size={9} color="#FFF" />
@@ -523,25 +869,44 @@ export default function AdminMaintenanceScreen() {
           </View>
         </Animated.View>
 
-        {/* Enable button */}
-        {!isActive ? (
+        {/* Action button */}
+        {showForm ? (
           <Animated.View entering={FadeInDown.duration(300).delay(200)}>
-            <Pressable
-              style={({ pressed }) => [styles.enableBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }, (!messageFr.trim() && !messageEn.trim()) && styles.enableBtnDisabled]}
-              onPress={handleEnable}
-              disabled={submitting || (!messageFr.trim() && !messageEn.trim())}
-            >
-              {submitting ? (
-                <ActivityIndicator size="small" color="#FFF" />
-              ) : (
-                <>
-                  <MaterialIcons name="warning-amber" size={20} color="#FFF" />
-                  <Text style={styles.enableBtnText}>
-                    {fr ? 'Activer le mode maintenance' : 'Enable maintenance mode'}
-                  </Text>
-                </>
-              )}
-            </Pressable>
+            {formMode === 'scheduled' ? (
+              <Pressable
+                style={({ pressed }) => [styles.scheduleBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }, (!messageFr.trim() && !messageEn.trim()) && styles.enableBtnDisabled]}
+                onPress={handleSchedule}
+                disabled={submitting || (!messageFr.trim() && !messageEn.trim())}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="schedule-send" size={20} color="#FFF" />
+                    <Text style={styles.enableBtnText}>
+                      {fr ? 'Planifier la maintenance' : 'Schedule maintenance'}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [styles.enableBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }, (!messageFr.trim() && !messageEn.trim()) && styles.enableBtnDisabled]}
+                onPress={handleEnable}
+                disabled={submitting || (!messageFr.trim() && !messageEn.trim())}
+              >
+                {submitting ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialIcons name="warning-amber" size={20} color="#FFF" />
+                    <Text style={styles.enableBtnText}>
+                      {fr ? 'Activer le mode maintenance' : 'Enable maintenance mode'}
+                    </Text>
+                  </>
+                )}
+              </Pressable>
+            )}
           </Animated.View>
         ) : null}
 
@@ -678,6 +1043,9 @@ const styles = StyleSheet.create({
   statusDot: { width: 8, height: 8, borderRadius: 4 },
   statusBadgeText: { fontSize: 12, fontWeight: '800' },
 
+  // Recap push card
+  recapPushCard: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#F1F5F9', marginBottom: 12 },
+
   // Disable btn
   disableBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 16, marginBottom: 20, shadowColor: '#10B981', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   disableBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
@@ -734,8 +1102,30 @@ const styles = StyleSheet.create({
   previewContent: { padding: 16, gap: 10 },
   previewPlaceholder: { height: 12, borderRadius: 6, backgroundColor: '#1E293B', width: '90%' },
 
+  // Mode toggle
+  modeToggle: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 12, padding: 3, marginBottom: 18, gap: 3 },
+  modeToggleItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10 },
+  modeToggleItemActive: { backgroundColor: '#0F172A' },
+  modeToggleItemActiveBlue: { backgroundColor: '#2563EB' },
+  modeToggleText: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  modeToggleTextActive: { color: '#FFF' },
+
+  // Schedule
+  customScheduleRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  schedulePreviewRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#EFF6FF', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#DBEAFE' },
+  schedulePreviewText: { fontSize: 13, fontWeight: '600', color: '#2563EB' },
+  scheduledInfoCard: { backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: '#DBEAFE' },
+  scheduledInfoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+  scheduledInfoTitle: { fontSize: 14, fontWeight: '700', color: '#1E40AF', marginBottom: 3 },
+  scheduledInfoDesc: { fontSize: 12, color: '#3B82F6', lineHeight: 17 },
+  scheduledPushBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DBEAFE', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginTop: 6, alignSelf: 'flex-start' },
+  scheduledPushText: { fontSize: 10, fontWeight: '700', color: '#2563EB' },
+  cancelScheduleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#FEF2F2', paddingVertical: 14, borderRadius: 14, marginBottom: 20, borderWidth: 1, borderColor: '#FECACA' },
+  cancelScheduleBtnText: { fontSize: 15, fontWeight: '700', color: '#EF4444' },
+
   // Enable btn
   enableBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#D97706', paddingVertical: 16, borderRadius: 16, marginBottom: 20, shadowColor: '#D97706', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
+  scheduleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 16, marginBottom: 20, shadowColor: '#2563EB', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4 },
   enableBtnDisabled: { opacity: 0.5 },
   enableBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 
