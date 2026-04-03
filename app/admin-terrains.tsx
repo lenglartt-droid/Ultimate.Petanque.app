@@ -353,7 +353,7 @@ export default function AdminTerrainsScreen() {
     return (
       <SafeAreaView style={s.container}>
         <View style={s.header}>
-          <Pressable style={s.backBtn} onPress={() => router.back()}>
+          <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
             <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
           </Pressable>
           <Text style={s.headerTitle}>{fr ? 'Terrains' : 'Terrains'}</Text>
@@ -368,7 +368,7 @@ export default function AdminTerrainsScreen() {
     <AdminGuard language={language} requiredPermission="terrains">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Gestion Terrains' : 'Terrain Management'}</Text>

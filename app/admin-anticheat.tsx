@@ -264,9 +264,6 @@ export default function AdminAntiCheatScreen() {
   return (
     <SafeAreaView edges={['top']} style={st.container}>
       <View style={st.header}>
-        <Pressable style={st.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
-          <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-        </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={st.headerTitle}>{(et.adminTitle as any)?.[language] || 'Anti-cheat'}</Text>
           <Text style={st.headerSub}>{filtered.length} {(et.adminDesc as any)?.[language] || 'players'}</Text>
@@ -298,6 +295,8 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.scanBtnText}>{scanning ? ((et.adminScanning as any)?.[language] || 'Scanning...') : ((et.adminRunFullScan as any)?.[language] || 'Scan')}</Text>
         </Pressable>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-anticheat" />
 
       {/* ============ ELO Dashboard ============ */}
       {!eloLoading && eloDashboard ? (

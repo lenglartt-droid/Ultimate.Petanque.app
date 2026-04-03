@@ -34,14 +34,13 @@ import { getAllAppeals, BanAppeal } from '@/services/banAppealService';
 import { getEloRank } from '@/services/eloService';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { useAlert } from '@/template';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminSearchModal from '@/components/feature/AdminSearchModal';
 import AdminGuard from '@/components/feature/AdminGuard';
 import { getOnboardingStepAnalytics, OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
-import * as Print from 'expo-print';
+
 
 interface DashboardStats {
   totalUsers: number;
@@ -525,10 +524,12 @@ export default function AdminDashboardScreen() {
                 const now = new Date();
                 const dateStr = now.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
                 const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:24px;color:#0F172A;background:#F8FAFC}h1{font-size:22px;margin:0 0 4px}h2{font-size:14px;color:#64748B;margin:24px 0 12px;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #E2E8F0;padding-bottom:6px}.sub{font-size:12px;color:#94A3B8;margin-bottom:20px}.grid{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.card{flex:1;min-width:120px;background:#FFF;border-radius:12px;padding:16px;text-align:center;border:1px solid #E2E8F0}.card .val{font-size:28px;font-weight:800}.card .lbl{font-size:10px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px}.alert{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px;color:#991B1B}.alert.warn{background:#FFFBEB;border-color:#FDE68A;color:#92400E}.alert.info{background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF}.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}.bar-row .label{width:80px;color:#64748B;font-weight:600}.bar-row .bar{flex:1;height:14px;background:#F1F5F9;border-radius:4px;overflow:hidden}.bar-row .fill{height:100%;border-radius:4px}.bar-row .num{width:30px;text-align:right;font-weight:800;font-size:12px}footer{margin-top:32px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;text-align:center}</style></head><body><h1>Ultimate Petanque - ${fr ? 'Rapport Admin' : 'Admin Report'}</h1><p class="sub">${dateStr}</p><h2>${fr ? 'Vue d\'ensemble' : 'Overview'}</h2><div class="grid"><div class="card"><div class="val" style="color:#3B82F6">${stats.totalUsers}</div><div class="lbl">${fr ? 'Utilisateurs' : 'Users'}</div></div><div class="card"><div class="val" style="color:#10B981">${stats.totalTerrains}</div><div class="lbl">Terrains</div></div><div class="card"><div class="val" style="color:#7C3AED">${stats.totalClubs}</div><div class="lbl">Clubs</div></div><div class="card"><div class="val" style="color:#D97706">${stats.totalMatches}</div><div class="lbl">${fr ? 'Matchs' : 'Matches'}</div></div></div><div class="grid"><div class="card"><div class="val" style="color:#0EA5E9">${stats.totalPlayers}</div><div class="lbl">${fr ? 'Joueurs' : 'Players'}</div></div><div class="card"><div class="val" style="color:#C0C0C0">${stats.premiumUsers}</div><div class="lbl">Premium</div></div><div class="card"><div class="val" style="color:#2563EB">${stats.verifiedClubs}</div><div class="lbl">${fr ? 'Clubs verifies' : 'Verified Clubs'}</div></div><div class="card"><div class="val" style="color:#F59E0B">${pushStats.sent}</div><div class="lbl">Push</div></div></div><h2>${fr ? 'Moderation' : 'Moderation'}</h2><div class="grid"><div class="card"><div class="val" style="color:#F59E0B">${stats.pendingReports}</div><div class="lbl">${fr ? 'En attente' : 'Pending'}</div></div><div class="card"><div class="val" style="color:#D97706">${stats.activeWarnings}</div><div class="lbl">${fr ? 'Avertis' : 'Warned'}</div></div><div class="card"><div class="val" style="color:#DC2626">${stats.activeBans}</div><div class="lbl">${fr ? 'Bannis' : 'Banned'}</div></div><div class="card"><div class="val" style="color:#EF4444">${stats.flaggedPlayers}</div><div class="lbl">${fr ? 'Suspects' : 'Flagged'}</div></div></div>${smartAlerts.length > 0 ? `<h2>${fr ? 'Alertes' : 'Alerts'}</h2>${smartAlerts.map(a => `<div class="alert ${a.severity === 'warning' ? 'warn' : a.severity === 'info' ? 'info' : ''}">${a.title}: ${a.message}</div>`).join('')}` : ''}<h2>${fr ? 'Croissance utilisateurs' : 'User Growth'}</h2>${monthlyGrowth.map(m => `<div class="bar-row"><span class="label">${m.month}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (m.count / Math.max(...monthlyGrowth.map(x => x.count), 1)) * 100)}%;background:#3B82F6"></div></div><span class="num">${m.count}</span></div>`).join('')}<h2>${fr ? 'Matchs par semaine' : 'Matches per Week'}</h2>${weeklyMatches.map(w => `<div class="bar-row"><span class="label">${w.week}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (w.count / Math.max(...weeklyMatches.map(x => x.count), 1)) * 100)}%;background:#10B981"></div></div><span class="num">${w.count}</span></div>`).join('')}<h2>ELO</h2>${eloDistribution.map(e => `<div class="bar-row"><span class="label" style="color:${e.color}">${e.label}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (e.count / Math.max(...eloDistribution.map(x => x.count), 1)) * 100)}%;background:${e.color}"></div></div><span class="num">${e.count}</span></div>`).join('')}<footer>Ultimate Petanque Admin Report - ${dateStr}</footer></body></html>`;
-                const { uri } = await Print.printToFileAsync({ html, base64: false });
+                const PrintModule = require('expo-print');
+                const { uri } = await PrintModule.printToFileAsync({ html, base64: false });
                 if (uri) {
-                  const canShare = await Sharing.isAvailableAsync();
-                  if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Rapport Admin PDF' : 'Admin Report PDF' });
+                  const SharingModule = require('expo-sharing');
+                  const canShare = await SharingModule.isAvailableAsync();
+                  if (canShare) await SharingModule.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Rapport Admin PDF' : 'Admin Report PDF' });
                 }
                 Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               } catch (e) { console.log('[Dashboard] PDF export error:', e); }
@@ -943,10 +944,12 @@ export default function AdminDashboardScreen() {
                       a.click();
                       URL.revokeObjectURL(url);
                     } else {
-                      const path = `${FileSystem.cacheDirectory}growth-report-${new Date().toISOString().slice(0, 10)}.csv`;
-                      await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-                      const canShare = await Sharing.isAvailableAsync();
-                      if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le rapport' : 'Export report' });
+                      const FS = require('expo-file-system');
+                      const SharingMod = require('expo-sharing');
+                      const path = `${FS.cacheDirectory}growth-report-${new Date().toISOString().slice(0, 10)}.csv`;
+                      await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+                      const canShare = await SharingMod.isAvailableAsync();
+                      if (canShare) await SharingMod.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le rapport' : 'Export report' });
                     }
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                   } catch (e) { console.log('[Dashboard] Export error:', e); }

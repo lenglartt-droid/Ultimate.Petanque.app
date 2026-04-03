@@ -366,7 +366,7 @@ export default function AdminSponsorsScreen() {
   if (loading) {
     return (
       <SafeAreaView style={s.container}>
-        <View style={s.header}><Pressable style={s.backBtn} onPress={() => router.back()}><MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} /></Pressable><Text style={s.headerTitle}>{fr ? 'Admin Sponsors' : 'Admin Sponsors'}</Text><View style={{ width: 40 }} /></View>
+        <View style={s.header}><Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}><MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} /></Pressable><Text style={s.headerTitle}>{fr ? 'Admin Sponsors' : 'Admin Sponsors'}</Text><View style={{ width: 40 }} /></View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator size="large" color={theme.primary} /></View>
       </SafeAreaView>
     );
@@ -376,7 +376,7 @@ export default function AdminSponsorsScreen() {
     <AdminGuard language={language} requiredPermission="sponsors">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
-        <Pressable style={s.backBtn} onPress={() => router.back()}>
+        <Pressable style={s.backBtn} onPress={() => router.push('/admin-dashboard' as any)}>
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={s.headerTitle}>{fr ? 'Sponsors' : 'Sponsors'}</Text>
