@@ -26,6 +26,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
 import { AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -224,6 +225,7 @@ export default function AdminActivityLogScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -374,6 +376,7 @@ export default function AdminActivityLogScreen() {
         ) : null}
       </ScrollView>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

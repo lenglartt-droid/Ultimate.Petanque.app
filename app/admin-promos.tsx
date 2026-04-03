@@ -22,6 +22,7 @@ import { useAuth, useAlert } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 
 interface PromoCode {
   id: string;
@@ -497,6 +498,8 @@ export default function AdminPromosScreen() {
           </Pressable>
         </View>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-promos" />
 
       {loading ? (
         <View style={styles.emptyContainer}>
