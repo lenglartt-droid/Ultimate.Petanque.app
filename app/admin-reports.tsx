@@ -24,8 +24,8 @@ import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+// expo-file-system and expo-sharing loaded dynamically to avoid web bundler crash
+import AdminGuard from '@/components/feature/AdminGuard';
 
 interface WeeklySnapshot {
   weekStart: string;
@@ -172,10 +172,12 @@ export default function AdminReportsScreen() {
         a.download = `weekly-report-${new Date().toISOString().slice(0, 10)}.csv`; a.click();
         URL.revokeObjectURL(url);
       } else {
-        const path = `${FileSystem.cacheDirectory}weekly-report-${new Date().toISOString().slice(0, 10)}.csv`;
-        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter rapport' : 'Export report' });
+        const FS = require('expo-file-system');
+        const SH = require('expo-sharing');
+        const path = `${FS.cacheDirectory}weekly-report-${new Date().toISOString().slice(0, 10)}.csv`;
+        await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+        const canShare = await SH.isAvailableAsync();
+        if (canShare) await SH.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter rapport' : 'Export report' });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (e) { console.log('[Reports] Export error:', e); }
@@ -209,6 +211,7 @@ export default function AdminReportsScreen() {
   }
 
   return (
+    <AdminGuard language={language} requiredPermission="reports">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Text style={s.headerTitle}>{fr ? 'Rapports hebdomadaires' : 'Weekly Reports'}</Text>
@@ -355,6 +358,7 @@ export default function AdminReportsScreen() {
         ) : null}
       </ScrollView>
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 

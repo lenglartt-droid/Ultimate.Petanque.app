@@ -27,8 +27,7 @@ import { getSupabaseClient } from '@/template';
 import { AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminGuard from '@/components/feature/AdminGuard';
-import * as FileSystem from 'expo-file-system';
-import * as Sharing from 'expo-sharing';
+// expo-file-system and expo-sharing loaded dynamically to avoid web bundler crash
 
 const PAGE_SIZE = 30;
 
@@ -194,11 +193,13 @@ export default function AdminActivityLogScreen() {
         a.click();
         URL.revokeObjectURL(url);
       } else {
-        const path = `${FileSystem.cacheDirectory}${filename}`;
-        await FileSystem.writeAsStringAsync(path, csv, { encoding: FileSystem.EncodingType.UTF8 });
-        const canShare = await Sharing.isAvailableAsync();
+        const FS = require('expo-file-system');
+        const SH = require('expo-sharing');
+        const path = `${FS.cacheDirectory}${filename}`;
+        await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+        const canShare = await SH.isAvailableAsync();
         if (canShare) {
-          await Sharing.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le journal d\'audit' : 'Export audit log' });
+          await SH.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter le journal d\'audit' : 'Export audit log' });
         }
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
