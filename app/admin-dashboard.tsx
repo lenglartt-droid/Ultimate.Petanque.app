@@ -18,6 +18,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -38,6 +39,9 @@ import * as Sharing from 'expo-sharing';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminSearchModal from '@/components/feature/AdminSearchModal';
+import AdminGuard from '@/components/feature/AdminGuard';
+import { getOnboardingStepAnalytics, OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
+import * as Print from 'expo-print';
 
 interface DashboardStats {
   totalUsers: number;
@@ -87,7 +91,8 @@ const ADMIN_SECTIONS: { key: string; route: string; icon: string; color: string;
   { key: 'users', route: '/admin-users', icon: 'people', color: '#3B82F6', labelFr: 'Utilisateurs', labelEn: 'Users', descFr: 'Gestion des comptes', descEn: 'Account management', statKey: 'totalUsers' },
   { key: 'clubs', route: '/admin-clubs', icon: 'home', color: '#7C3AED', labelFr: 'Clubs', labelEn: 'Clubs', descFr: 'Verification et gestion', descEn: 'Verification and management', statKey: 'totalClubs' },
   { key: 'reports', route: '/admin-reports', icon: 'assessment', color: '#0EA5E9', labelFr: 'Rapports', labelEn: 'Reports', descFr: 'Historique hebdomadaire', descEn: 'Weekly history' },
-  { key: 'notifications', route: '/admin-notifications', icon: 'notifications-active', color: '#DC2626', labelFr: 'Centre alertes', labelEn: 'Alert Center', descFr: 'Alertes et notifications admin', descEn: 'Admin alerts and notifications', statKey: 'pendingReports' as keyof DashboardStats },  
+  { key: 'notifications', route: '/admin-notifications', icon: 'notifications-active', color: '#DC2626', labelFr: 'Centre alertes', labelEn: 'Alert Center', descFr: 'Alertes et notifications admin', descEn: 'Admin alerts and notifications', statKey: 'pendingReports' as keyof DashboardStats },
+  { key: 'changelog', route: '/admin-changelog', icon: 'update', color: '#0EA5E9', labelFr: 'Changelog', labelEn: 'Changelog', descFr: 'Historique des versions', descEn: 'Version history' },
 ];
 
 export default function AdminDashboardScreen() {
@@ -129,11 +134,20 @@ export default function AdminDashboardScreen() {
   // Push analytics
   const [pushStats, setPushStats] = useState({ sent: 0, types: {} as Record<string, number> });
 
+  // Onboarding analytics
+  const [onboardingStats, setOnboardingStats] = useState<{ total: number; withProfile: number; withConsent: number; withRole: number; conversionRate: number; avgDaysToProfile: number }>({ total: 0, withProfile: 0, withConsent: 0, withRole: 0, conversionRate: 0, avgDaysToProfile: 0 });
+
+  // Onboarding step-level analytics
+  const [stepAnalytics, setStepAnalytics] = useState<OnboardingAnalytics | null>(null);
+
+  // PDF export
+  const [exportingPdf, setExportingPdf] = useState(false);
+
   // Search modal
   const [showSearch, setShowSearch] = useState(false);
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'onboarding', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -310,6 +324,27 @@ export default function AdminDashboardScreen() {
       });
       setPushStats({ sent: totalPushSent, types: pushByType });
 
+      // Process onboarding analytics
+      const allUsers = userGrowthRes.data || [];
+      const totalUsersCount = allUsers.length;
+      const usersWithProfile = allUsers.filter((u: any) => u.consent_date).length;
+      const usersWithConsent = allUsers.filter((u: any) => u.consent_date).length;
+      const profileCompletion = totalUsersCount > 0 ? Math.round((usersWithConsent / totalUsersCount) * 100) : 0;
+      setOnboardingStats({
+        total: totalUsersCount,
+        withProfile: usersWithProfile,
+        withConsent: usersWithConsent,
+        withRole: 0,
+        conversionRate: profileCompletion,
+        avgDaysToProfile: 0,
+      });
+
+      // Load step-level onboarding analytics
+      try {
+        const stepData = await getOnboardingStepAnalytics();
+        setStepAnalytics(stepData);
+      } catch { /* silent */ }
+
       setEloDistribution([
         { tier: 'master', count: eloBuckets.master, color: '#F59E0B', label: fr ? 'Maitre' : 'Master' },
         { tier: 'diamond', count: eloBuckets.diamond, color: '#8B5CF6', label: fr ? 'Diamant' : 'Diamond' },
@@ -381,6 +416,20 @@ export default function AdminDashboardScreen() {
 
   useEffect(() => { loadStats(); }, [loadStats]);
 
+  // Real-time polling every 30 seconds
+  const [pollingActive, setPollingActive] = useState(true);
+  const [lastPoll, setLastPoll] = useState<Date>(new Date());
+  useEffect(() => {
+    if (!pollingActive || loading) return;
+    const interval = setInterval(async () => {
+      try {
+        await loadStats();
+        setLastPoll(new Date());
+      } catch { /* silent */ }
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [pollingActive, loading, loadStats]);
+
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadStats();
@@ -403,6 +452,7 @@ export default function AdminDashboardScreen() {
   }
 
   return (
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Pressable style={s.backBtn} onPress={() => router.back()}>
@@ -417,6 +467,29 @@ export default function AdminDashboardScreen() {
             <MaterialIcons name="search" size={20} color="#64748B" />
           </Pressable>
           <Pressable
+            style={[s.backBtn, exportingPdf && { opacity: 0.5 }]}
+            onPress={async () => {
+              if (exportingPdf) return;
+              setExportingPdf(true);
+              Haptics.selectionAsync();
+              try {
+                const now = new Date();
+                const dateStr = now.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:24px;color:#0F172A;background:#F8FAFC}h1{font-size:22px;margin:0 0 4px}h2{font-size:14px;color:#64748B;margin:24px 0 12px;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #E2E8F0;padding-bottom:6px}.sub{font-size:12px;color:#94A3B8;margin-bottom:20px}.grid{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}.card{flex:1;min-width:120px;background:#FFF;border-radius:12px;padding:16px;text-align:center;border:1px solid #E2E8F0}.card .val{font-size:28px;font-weight:800}.card .lbl{font-size:10px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px}.alert{background:#FEF2F2;border:1px solid #FECACA;border-radius:10px;padding:12px;margin-bottom:8px;font-size:12px;color:#991B1B}.alert.warn{background:#FFFBEB;border-color:#FDE68A;color:#92400E}.alert.info{background:#EFF6FF;border-color:#BFDBFE;color:#1E40AF}.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px}.bar-row .label{width:80px;color:#64748B;font-weight:600}.bar-row .bar{flex:1;height:14px;background:#F1F5F9;border-radius:4px;overflow:hidden}.bar-row .fill{height:100%;border-radius:4px}.bar-row .num{width:30px;text-align:right;font-weight:800;font-size:12px}footer{margin-top:32px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;text-align:center}</style></head><body><h1>Ultimate Petanque - ${fr ? 'Rapport Admin' : 'Admin Report'}</h1><p class="sub">${dateStr}</p><h2>${fr ? 'Vue d\'ensemble' : 'Overview'}</h2><div class="grid"><div class="card"><div class="val" style="color:#3B82F6">${stats.totalUsers}</div><div class="lbl">${fr ? 'Utilisateurs' : 'Users'}</div></div><div class="card"><div class="val" style="color:#10B981">${stats.totalTerrains}</div><div class="lbl">Terrains</div></div><div class="card"><div class="val" style="color:#7C3AED">${stats.totalClubs}</div><div class="lbl">Clubs</div></div><div class="card"><div class="val" style="color:#D97706">${stats.totalMatches}</div><div class="lbl">${fr ? 'Matchs' : 'Matches'}</div></div></div><div class="grid"><div class="card"><div class="val" style="color:#0EA5E9">${stats.totalPlayers}</div><div class="lbl">${fr ? 'Joueurs' : 'Players'}</div></div><div class="card"><div class="val" style="color:#C0C0C0">${stats.premiumUsers}</div><div class="lbl">Premium</div></div><div class="card"><div class="val" style="color:#2563EB">${stats.verifiedClubs}</div><div class="lbl">${fr ? 'Clubs verifies' : 'Verified Clubs'}</div></div><div class="card"><div class="val" style="color:#F59E0B">${pushStats.sent}</div><div class="lbl">Push</div></div></div><h2>${fr ? 'Moderation' : 'Moderation'}</h2><div class="grid"><div class="card"><div class="val" style="color:#F59E0B">${stats.pendingReports}</div><div class="lbl">${fr ? 'En attente' : 'Pending'}</div></div><div class="card"><div class="val" style="color:#D97706">${stats.activeWarnings}</div><div class="lbl">${fr ? 'Avertis' : 'Warned'}</div></div><div class="card"><div class="val" style="color:#DC2626">${stats.activeBans}</div><div class="lbl">${fr ? 'Bannis' : 'Banned'}</div></div><div class="card"><div class="val" style="color:#EF4444">${stats.flaggedPlayers}</div><div class="lbl">${fr ? 'Suspects' : 'Flagged'}</div></div></div>${smartAlerts.length > 0 ? `<h2>${fr ? 'Alertes' : 'Alerts'}</h2>${smartAlerts.map(a => `<div class="alert ${a.severity === 'warning' ? 'warn' : a.severity === 'info' ? 'info' : ''}">${a.title}: ${a.message}</div>`).join('')}` : ''}<h2>${fr ? 'Croissance utilisateurs' : 'User Growth'}</h2>${monthlyGrowth.map(m => `<div class="bar-row"><span class="label">${m.month}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (m.count / Math.max(...monthlyGrowth.map(x => x.count), 1)) * 100)}%;background:#3B82F6"></div></div><span class="num">${m.count}</span></div>`).join('')}<h2>${fr ? 'Matchs par semaine' : 'Matches per Week'}</h2>${weeklyMatches.map(w => `<div class="bar-row"><span class="label">${w.week}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (w.count / Math.max(...weeklyMatches.map(x => x.count), 1)) * 100)}%;background:#10B981"></div></div><span class="num">${w.count}</span></div>`).join('')}<h2>ELO</h2>${eloDistribution.map(e => `<div class="bar-row"><span class="label" style="color:${e.color}">${e.label}</span><div class="bar"><div class="fill" style="width:${Math.max(3, (e.count / Math.max(...eloDistribution.map(x => x.count), 1)) * 100)}%;background:${e.color}"></div></div><span class="num">${e.count}</span></div>`).join('')}<footer>Ultimate Petanque Admin Report - ${dateStr}</footer></body></html>`;
+                const { uri } = await Print.printToFileAsync({ html, base64: false });
+                if (uri) {
+                  const canShare = await Sharing.isAvailableAsync();
+                  if (canShare) await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Rapport Admin PDF' : 'Admin Report PDF' });
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (e) { console.log('[Dashboard] PDF export error:', e); }
+              setExportingPdf(false);
+            }}
+            disabled={exportingPdf}
+          >
+            {exportingPdf ? <ActivityIndicator size="small" color="#64748B" /> : <MaterialIcons name="picture-as-pdf" size={20} color="#DC2626" />}
+          </Pressable>
+          <Pressable
             style={[s.backBtn, showWidgetSettings && { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]}
             onPress={() => { Haptics.selectionAsync(); setShowWidgetSettings(!showWidgetSettings); }}
           >
@@ -427,55 +500,76 @@ export default function AdminDashboardScreen() {
 
       <AdminQuickNav currentRoute="/admin-dashboard" />
 
+      {/* Widget Settings Modal */}
+      <Modal visible={showWidgetSettings} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowWidgetSettings(false)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setShowWidgetSettings(false)}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.modalTitle}>{fr ? 'Widgets du tableau de bord' : 'Dashboard Widgets'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12 }}>
+              <MaterialIcons name="info-outline" size={16} color="#3B82F6" />
+              <Text style={{ flex: 1, fontSize: 12, color: '#3B82F6', lineHeight: 18 }}>{fr ? 'Activez ou desactivez les widgets et reorganisez-les avec les fleches.' : 'Toggle widgets on/off and reorder them with the arrows.'}</Text>
+            </View>
+            {(() => {
+              const items = [
+                { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
+                { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
+                { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
+                { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
+                { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
+                { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
+                { key: 'activity', label: fr ? 'Activite recente' : 'Recent Activity', icon: 'history' },
+                { key: 'weeklyMatches', label: fr ? 'Matchs/semaine' : 'Matches/week', icon: 'sports' },
+                { key: 'userGrowth', label: fr ? 'Croissance' : 'Growth', icon: 'trending-up' },
+                { key: 'clubVerification', label: fr ? 'Verification clubs' : 'Club Verification', icon: 'verified' },
+                { key: 'eloDistribution', label: 'ELO', icon: 'leaderboard' },
+                { key: 'navigation', label: fr ? 'Navigation rapide' : 'Quick Nav', icon: 'menu' },
+              ];
+              const sorted = [...items].sort((a, b) => widgetOrder.indexOf(a.key) - widgetOrder.indexOf(b.key));
+              return sorted.map((w, idx) => (
+                <View key={w.key} style={s.widgetToggle}>
+                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }} onPress={() => toggleWidget(w.key)}>
+                    <MaterialIcons name={w.icon as any} size={16} color={widgetVisibility[w.key] !== false ? '#3B82F6' : '#CBD5E1'} />
+                    <Text style={[s.widgetToggleText, widgetVisibility[w.key] === false && { color: '#CBD5E1' }]}>{w.label}</Text>
+                  </Pressable>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    <Pressable onPress={() => moveWidget(w.key, 'up')} disabled={idx === 0} hitSlop={6}>
+                      <MaterialIcons name="keyboard-arrow-up" size={18} color={idx === 0 ? '#E2E8F0' : '#64748B'} />
+                    </Pressable>
+                    <Pressable onPress={() => moveWidget(w.key, 'down')} disabled={idx === sorted.length - 1} hitSlop={6}>
+                      <MaterialIcons name="keyboard-arrow-down" size={18} color={idx === sorted.length - 1 ? '#E2E8F0' : '#64748B'} />
+                    </Pressable>
+                    <View style={[s.widgetDot, widgetVisibility[w.key] !== false ? { backgroundColor: '#10B981' } : { backgroundColor: '#E2E8F0' }]} />
+                  </View>
+                </View>
+              ));
+            })()}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
-        {/* Widget Settings Panel */}
-        {showWidgetSettings ? (
-          <Animated.View entering={FadeInDown.duration(200)}>
-            <View style={s.widgetPanel}>
-              <View style={s.widgetPanelHeader}>
-                <MaterialIcons name="dashboard-customize" size={16} color="#3B82F6" />
-                <Text style={s.widgetPanelTitle}>{fr ? 'Widgets du tableau de bord' : 'Dashboard Widgets'}</Text>
-              </View>
-              {(() => {
-                const items = [
-                  { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
-                  { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
-                  { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
-                  { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
-                  { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
-                  { key: 'activity', label: fr ? 'Activite recente' : 'Recent Activity', icon: 'history' },
-                  { key: 'weeklyMatches', label: fr ? 'Matchs/semaine' : 'Matches/week', icon: 'sports' },
-                  { key: 'userGrowth', label: fr ? 'Croissance' : 'Growth', icon: 'trending-up' },
-                  { key: 'clubVerification', label: fr ? 'Verification clubs' : 'Club Verification', icon: 'verified' },
-                  { key: 'eloDistribution', label: 'ELO', icon: 'leaderboard' },
-                  { key: 'navigation', label: fr ? 'Navigation rapide' : 'Quick Nav', icon: 'menu' },
-                ];
-                const sorted = [...items].sort((a, b) => widgetOrder.indexOf(a.key) - widgetOrder.indexOf(b.key));
-                return sorted.map((w, idx) => (
-                  <View key={w.key} style={s.widgetToggle}>
-                    <Pressable style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }} onPress={() => toggleWidget(w.key)}>
-                      <MaterialIcons name={w.icon as any} size={16} color={widgetVisibility[w.key] !== false ? '#3B82F6' : '#CBD5E1'} />
-                      <Text style={[s.widgetToggleText, widgetVisibility[w.key] === false && { color: '#CBD5E1' }]}>{w.label}</Text>
-                    </Pressable>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                      <Pressable onPress={() => moveWidget(w.key, 'up')} disabled={idx === 0} hitSlop={6}>
-                        <MaterialIcons name="keyboard-arrow-up" size={18} color={idx === 0 ? '#E2E8F0' : '#64748B'} />
-                      </Pressable>
-                      <Pressable onPress={() => moveWidget(w.key, 'down')} disabled={idx === sorted.length - 1} hitSlop={6}>
-                        <MaterialIcons name="keyboard-arrow-down" size={18} color={idx === sorted.length - 1 ? '#E2E8F0' : '#64748B'} />
-                      </Pressable>
-                      <View style={[s.widgetDot, widgetVisibility[w.key] !== false ? { backgroundColor: '#10B981' } : { backgroundColor: '#E2E8F0' }]} />
-                    </View>
-                  </View>
-                ));
-              })()}
-            </View>
-          </Animated.View>
+        {/* Polling Indicator */}
+        {pollingActive && !loading ? (
+          <Pressable
+            style={s.pollingIndicator}
+            onPress={() => { Haptics.selectionAsync(); setPollingActive(!pollingActive); }}
+          >
+            <View style={s.pollingDot} />
+            <Text style={s.pollingText}>
+              {fr ? 'Actualisation auto' : 'Auto-refresh'} • {lastPoll.toLocaleTimeString(fr ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </Pressable>
         ) : null}
 
         {/* Maintenance Alert */}
@@ -912,6 +1006,111 @@ export default function AdminDashboardScreen() {
           </Animated.View>
           );
 
+          if (wKey === 'onboarding') return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>ONBOARDING</Text>
+            <View style={s.chartCard}>
+              {/* Step-level funnel (from tracking table) */}
+              {stepAnalytics && stepAnalytics.steps.length > 0 ? (
+                <>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="funnel-chart" size={16} color="#3B82F6" />
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Entonnoir par etape' : 'Step Funnel'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600' }}>{stepAnalytics.totalSessions} sessions</Text>
+                      <View style={{ backgroundColor: stepAnalytics.completionRate >= 50 ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '800', color: stepAnalytics.completionRate >= 50 ? '#10B981' : '#D97706' }}>{stepAnalytics.completionRate}%</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ gap: 4 }}>
+                    {stepAnalytics.steps.filter(st => st.step >= 1).map((st, idx) => {
+                      const maxEntered = Math.max(...stepAnalytics.steps.filter(s => s.step >= 1).map(s => s.entered), 1);
+                      const pct = maxEntered > 0 ? Math.round((st.entered / maxEntered) * 100) : 0;
+                      const stepColors = ['#3B82F6', '#10B981', '#F59E0B', '#7C3AED', '#0EA5E9', '#EC4899', '#D97706', '#EF4444'];
+                      const color = stepColors[idx % stepColors.length];
+                      return (
+                        <View key={st.step}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                            <Text style={{ width: 18, fontSize: 9, fontWeight: '800', color: '#94A3B8', textAlign: 'center' }}>{st.step}</Text>
+                            <Text style={{ flex: 1, fontSize: 10, fontWeight: '600', color: '#0F172A' }}>{st.name}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '800', color }}>{st.entered}</Text>
+                            {st.avgDurationSec > 0 ? <Text style={{ fontSize: 8, color: '#94A3B8', width: 28, textAlign: 'right' }}>{st.avgDurationSec}s</Text> : null}
+                            {st.dropoffRate > 20 ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} /> : null}
+                          </View>
+                          <View style={{ height: 5, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden', marginLeft: 24, marginBottom: 3 }}>
+                            <View style={{ height: '100%' as any, width: `${Math.max(3, pct)}%`, backgroundColor: color, borderRadius: 3 }} />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  {/* Summary row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, marginTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', gap: 8 }}>
+                    {stepAnalytics.avgTotalDurationSec > 0 ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialIcons name="timer" size={12} color="#3B82F6" />
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{fr ? 'Duree moy.' : 'Avg duration'}: {Math.floor(stepAnalytics.avgTotalDurationSec / 60)}m{stepAnalytics.avgTotalDurationSec % 60}s</Text>
+                      </View>
+                    ) : null}
+                    {stepAnalytics.topDropoffStep ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#EF4444' }} />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#DC2626' }}>{fr ? 'Abandon' : 'Dropoff'}: {stepAnalytics.topDropoffStep}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </>
+              ) : (
+                <>
+                  {/* Fallback: user_profiles-based funnel */}
+                  <View style={{ gap: 8, marginBottom: 12 }}>
+                    {[
+                      { label: fr ? 'Inscrits' : 'Registered', count: onboardingStats.total, color: '#3B82F6', icon: 'person-add' },
+                      { label: fr ? 'Profil complete' : 'Profile completed', count: onboardingStats.withProfile, color: '#10B981', icon: 'badge' },
+                      { label: fr ? 'Consentement donne' : 'Consent given', count: onboardingStats.withConsent, color: '#7C3AED', icon: 'verified-user' },
+                    ].map((step, idx) => {
+                      const pct = onboardingStats.total > 0 ? Math.round((step.count / onboardingStats.total) * 100) : 0;
+                      return (
+                        <View key={idx}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                            <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: step.color + '12', alignItems: 'center', justifyContent: 'center' }}>
+                              <MaterialIcons name={step.icon as any} size={14} color={step.color} />
+                            </View>
+                            <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#0F172A' }}>{step.label}</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '800', color: step.color }}>{step.count}</Text>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', width: 32, textAlign: 'right' }}>{pct}%</Text>
+                          </View>
+                          <View style={{ height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden', marginLeft: 36 }}>
+                            <View style={{ height: '100%' as any, width: `${Math.max(3, pct)}%`, backgroundColor: step.color, borderRadius: 3 }} />
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="funnel-chart" size={14} color="#3B82F6" />
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{fr ? 'Taux de completion' : 'Completion rate'}</Text>
+                    </View>
+                    <View style={{ backgroundColor: onboardingStats.conversionRate >= 70 ? '#DCFCE7' : onboardingStats.conversionRate >= 40 ? '#FEF3C7' : '#FEF2F2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: onboardingStats.conversionRate >= 70 ? '#10B981' : onboardingStats.conversionRate >= 40 ? '#D97706' : '#EF4444' }}>{onboardingStats.conversionRate}%</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EFF6FF', borderRadius: 8, padding: 8 }}>
+                    <MaterialIcons name="info-outline" size={14} color="#3B82F6" />
+                    <Text style={{ flex: 1, fontSize: 10, color: '#3B82F6', lineHeight: 14 }}>
+                      {fr ? 'Le tracking detaille par etape sera disponible quand des utilisateurs passeront l\'onboarding.' : 'Detailed step tracking will appear once users go through onboarding.'}
+                    </Text>
+                  </View>
+                </>
+              )}
+            </View>
+          </Animated.View>
+          );
+
           if (wKey === 'pushAnalytics') return (
           <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <Text style={s.sectionTitle}>PUSH ANALYTICS</Text>
@@ -1004,6 +1203,7 @@ export default function AdminDashboardScreen() {
       </ScrollView>
       <AdminSearchModal visible={showSearch} onClose={() => setShowSearch(false)} language={language} />
     </SafeAreaView>
+    </AdminGuard>
   );
 }
 
@@ -1052,6 +1252,11 @@ const s = StyleSheet.create({
   navBadgeText: { fontSize: 11, fontWeight: '800' },
   maintDot: { width: 6, height: 6, borderRadius: 3 },
 
+  // Polling indicator
+  pollingIndicator: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, alignSelf: 'flex-end' as const, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#DCFCE7', marginBottom: 8 },
+  pollingDot: { width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#10B981' },
+  pollingText: { fontSize: 10, fontWeight: '600' as const, color: '#10B981' },
+
   // Chart styles
   chartCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.02, shadowRadius: 3, elevation: 1 },
   chartRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
@@ -1074,11 +1279,13 @@ const s = StyleSheet.create({
   appealPushBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', marginTop: 8 },
   appealPushText: { fontSize: 11, fontWeight: '700' as const, color: '#DC2626' },
 
+  // Modal
+  modalContainer: { flex: 1, backgroundColor: '#F8FAFC' },
+  modalHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  modalTitle: { fontSize: 17, fontWeight: '700' as const, color: '#0F172A' },
+
   // Widget settings
-  widgetPanel: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#DBEAFE', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
-  widgetPanelHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  widgetPanelTitle: { fontSize: 13, fontWeight: '700' as const, color: '#0F172A' },
-  widgetToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 8, paddingHorizontal: 4, justifyContent: 'space-between' as const },
+  widgetToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 10, paddingHorizontal: 12, justifyContent: 'space-between' as const, backgroundColor: '#FFF', borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: '#F1F5F9' },
   widgetToggleText: { flex: 1, fontSize: 13, fontWeight: '600' as const, color: '#0F172A' },
   widgetDot: { width: 10, height: 10, borderRadius: 5 },
 
