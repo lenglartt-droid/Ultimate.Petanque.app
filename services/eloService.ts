@@ -391,18 +391,32 @@ export async function updateEloAfterMatch(
     const avgEloA = Math.round(teamAElos.reduce((a, b) => a + b, 0) / teamAElos.length);
     const avgEloB = Math.round(teamBElos.reduce((a, b) => a + b, 0) / teamBElos.length);
 
-    // Build player role map from playerActions
+    // Build player role map from match team roles first, then fallback to action distribution
     const playerRoleMap = new Map<string, string>();
+    // Check playerActions for team role data (passed from match save)
     if (playerActions) {
       for (const pa of playerActions) {
-        // Detect role from action distribution
-        if (pa.playerId) {
-          const tirs = pa.actions?.tirs || 0;
-          const points = pa.actions?.points || 0;
-          if (tirs > points * 2) playerRoleMap.set(pa.playerId, 'tireur');
-          else if (points > tirs * 2) playerRoleMap.set(pa.playerId, 'pointeur');
-          else playerRoleMap.set(pa.playerId, 'milieu');
+        if (!pa.playerId) continue;
+        // Check if role segments exist (player had explicit role assignments)
+        if (pa.roleSegments && pa.roleSegments.length > 0) {
+          // Use the role with most actions
+          const bestSeg = pa.roleSegments.reduce((best: any, seg: any) => {
+            const total = (seg.actions?.tirs || 0) + (seg.actions?.points || 0);
+            const bestTotal = (best.actions?.tirs || 0) + (best.actions?.points || 0);
+            return total > bestTotal ? seg : best;
+          }, pa.roleSegments[0]);
+          if (bestSeg?.role) {
+            const r = bestSeg.role.toLowerCase();
+            playerRoleMap.set(pa.playerId, r === 'tireur' ? 'tireur' : r === 'pointeur' ? 'pointeur' : 'milieu');
+            continue;
+          }
         }
+        // Fallback: detect role from action distribution
+        const tirs = pa.actions?.tirs || 0;
+        const points = pa.actions?.points || 0;
+        if (tirs > points * 2) playerRoleMap.set(pa.playerId, 'tireur');
+        else if (points > tirs * 2) playerRoleMap.set(pa.playerId, 'pointeur');
+        else playerRoleMap.set(pa.playerId, 'milieu');
       }
     }
 

@@ -38,6 +38,7 @@ import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
 import EloSection from '@/components/feature/player/EloSection';
 import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
+import { computeHeadToHeadRoleAnalysis, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -704,7 +705,81 @@ export default function PlayerDetailScreen() {
         </View>
 
         {belowFoldReady ? (<>
-        {/* ===== MATCH STATISTICS ===== */}
+        {/* ===== HEAD-TO-HEAD ROLE ANALYSIS ===== */}
+        {(() => {
+          if (!selfPlayer || isSelf || !player) return null;
+          const h2h = computeHeadToHeadRoleAnalysis(selfPlayer.id, player.id, matches, language);
+          if (!h2h || h2h.totalMatches === 0) return null;
+          return (
+            <View style={s.sectionCard}>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: '#EC489915' }]}><MaterialIcons name="compare-arrows" size={18} color="#EC4899" /></View>
+                <Text style={s.sectionTitle}>{language === 'fr' ? 'Face-a-face par role' : 'Head-to-Head by Role'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 14 }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{language === 'fr' ? 'Vous' : 'You'}</Text>
+                  <Text style={{ fontSize: 28, fontWeight: '900', color: h2h.player1Wins >= h2h.player2Wins ? '#10B981' : theme.textSecondary }}>{h2h.player1Wins}</Text>
+                </View>
+                <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted }}>{h2h.totalMatches} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted }}>vs</Text>
+                </View>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 }}>{player.name.split(' ')[0]}</Text>
+                  <Text style={{ fontSize: 28, fontWeight: '900', color: h2h.player2Wins >= h2h.player1Wins ? '#10B981' : theme.textSecondary }}>{h2h.player2Wins}</Text>
+                </View>
+              </View>
+              {h2h.roles.map(roleData => {
+                const rc = getRoleColorService(roleData.role);
+                const ri = getRoleIconService(roleData.role);
+                const p1Better = (roleData.player1.tirRate + roleData.player1.pointRate) >= (roleData.player2.tirRate + roleData.player2.pointRate);
+                return (
+                  <View key={roleData.role} style={{ backgroundColor: rc + '06', borderRadius: 14, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: rc + '18' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: rc + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={ri as any} size={14} color={rc} />
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: rc }}>{t('roles', roleData.role)}</Text>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, marginLeft: 'auto' }}>
+                        {roleData.player1.matches + roleData.player2.matches} {language === 'fr' ? 'matchs' : 'matches'}
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {[{ label: language === 'fr' ? 'Vous' : 'You', d: roleData.player1, isBetter: p1Better }, { label: player.name.split(' ')[0], d: roleData.player2, isBetter: !p1Better }].map((side, si) => (
+                        <View key={si} style={{ flex: 1, backgroundColor: side.isBetter ? '#10B98108' : theme.backgroundSecondary, borderRadius: 10, padding: 10, borderWidth: side.isBetter ? 1 : 0, borderColor: '#10B98125' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: side.isBetter ? '#10B981' : theme.textMuted, textAlign: 'center', marginBottom: 6 }}>{side.label} {side.isBetter ? '\u2B50' : ''}</Text>
+                          <View style={{ gap: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Tir' : 'Shot'}</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: '#F97316' }}>{side.d.tirRate}%</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 10, color: theme.textMuted }}>Point</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: '#3B82F6' }}>{side.d.pointRate}%</Text>
+                            </View>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <Text style={{ fontSize: 10, color: theme.textMuted }}>Car.</Text>
+                              <Text style={{ fontSize: 12, fontWeight: '800', color: '#D97706' }}>{side.d.carreaux}</Text>
+                            </View>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                    {h2h.recommendation ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: rc + '15' }}>
+                        <MaterialIcons name="lightbulb" size={12} color={rc} />
+                        <Text style={{ fontSize: 10, color: rc, fontWeight: '600', flex: 1 }}>{h2h.recommendation}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })()}
+
+        {/* ===== MATCH STATISTICS ===== */
         <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="sports" size={18} color={theme.primary} /></View>

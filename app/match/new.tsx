@@ -29,6 +29,7 @@ import { createShareLink } from '@/services/shareService';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { showInterstitial } from '@/services/adService';
 import { predictMatch, getEloRank, formatEloDelta, ELO_INITIAL } from '@/services/eloService';
+import { analyzePlayerRoles, getSuggestionColor, getRoleIcon, getRoleColor, RoleSuggestion } from '@/services/roleAnalysisService';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
 const PHASE_IDS = {
@@ -98,6 +99,17 @@ interface Mene {
   isNull?: boolean;
 }
 
+interface RoleSegmentState {
+  role: PlayerRoleType;
+  actions: {
+    tirs: number;
+    tirsSuccess: number;
+    points: number;
+    pointsSuccess: number;
+    carreaux: number;
+  };
+}
+
 interface PlayerActionState {
   playerId: string;
   playerName: string;
@@ -110,6 +122,7 @@ interface PlayerActionState {
     carreaux: number;
   };
   detailedShots?: SimpleShotRecord[];
+  roleSegments?: RoleSegmentState[];
 }
 
 type PlayerRoleType = 'Pointeur' | 'Milieu' | 'Tireur';
@@ -220,6 +233,7 @@ export default function NewMatchScreen() {
   const [advancedShotRecords, setAdvancedShotRecords] = useState<SimpleShotRecord[]>([]);
   const [notationMode, setNotationMode] = useState<'quick' | 'detailed'>('quick');
   const [actionHistory, setActionHistory] = useState<Record<string, Array<{type: 'tir' | 'point' | 'carreau', success: boolean}>>>({});
+  const [roleSuggestions, setRoleSuggestions] = useState<Map<string, RoleSuggestion>>(new Map());
   const [selectedTerrainId, setSelectedTerrainId] = useState<string | null>(() => selfPlayer?.terrainId || null);
   const [showTerrainPicker, setShowTerrainPicker] = useState(false);
   const [terrainSearch, setTerrainSearch] = useState('');
@@ -494,6 +508,18 @@ export default function NewMatchScreen() {
     }));
   }, [availableRoles]);
 
+  // Compute role suggestions for all players in teams
+  useEffect(() => {
+    if (matches.length < 2) return;
+    const allPlayerIds = [...teamAPlayers.map(p => p.playerId), ...teamBPlayers.map(p => p.playerId)];
+    const newSuggestions = new Map<string, RoleSuggestion>();
+    for (const pid of allPlayerIds) {
+      const suggestion = analyzePlayerRoles(pid, matches, language);
+      if (suggestion) newSuggestions.set(pid, suggestion);
+    }
+    setRoleSuggestions(newSuggestions);
+  }, [teamAPlayers, teamBPlayers, matches, language]);
+
   // Initialize player actions when teams change
   useEffect(() => {
     const allPlayers = [
@@ -516,8 +542,18 @@ export default function NewMatchScreen() {
     });
   }, [teamAPlayers, teamBPlayers]);
 
+  // Get current role for a player
+  const getPlayerCurrentRole = useCallback((playerId: string): PlayerRoleType | null => {
+    const inA = teamAPlayers.find(p => p.playerId === playerId);
+    if (inA) return inA.role;
+    const inB = teamBPlayers.find(p => p.playerId === playerId);
+    if (inB) return inB.role;
+    return null;
+  }, [teamAPlayers, teamBPlayers]);
+
   const recordAction = useCallback((playerId: string, actionType: ActionType, success: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const currentRole = getPlayerCurrentRole(playerId);
     setPlayerActions(prev => prev.map(p => {
       if (p.playerId !== playerId) return p;
       const newActions = { ...p.actions };
@@ -532,13 +568,31 @@ export default function NewMatchScreen() {
         newActions.tirsSuccess++;
         newActions.carreaux++;
       }
-      return { ...p, actions: newActions };
+      // Track per-role segment
+      let roleSegments = [...(p.roleSegments || [])];
+      if (currentRole) {
+        const existingSeg = roleSegments.find(s => s.role === currentRole);
+        if (existingSeg) {
+          const sa = { ...existingSeg.actions };
+          if (actionType === 'tir') { sa.tirs++; if (success) sa.tirsSuccess++; }
+          else if (actionType === 'point') { sa.points++; if (success) sa.pointsSuccess++; }
+          else if (actionType === 'carreau') { sa.tirs++; sa.tirsSuccess++; sa.carreaux++; }
+          roleSegments = roleSegments.map(s => s.role === currentRole ? { ...s, actions: sa } : s);
+        } else {
+          const sa = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+          if (actionType === 'tir') { sa.tirs = 1; if (success) sa.tirsSuccess = 1; }
+          else if (actionType === 'point') { sa.points = 1; if (success) sa.pointsSuccess = 1; }
+          else if (actionType === 'carreau') { sa.tirs = 1; sa.tirsSuccess = 1; sa.carreaux = 1; }
+          roleSegments.push({ role: currentRole, actions: sa });
+        }
+      }
+      return { ...p, actions: newActions, roleSegments };
     }));
     setActionHistory(prev => ({
       ...prev,
       [playerId]: [...(prev[playerId] || []), { type: actionType, success }],
     }));
-  }, []);
+  }, [getPlayerCurrentRole]);
 
   const undoLastAction = useCallback((playerId: string) => {
     setActionHistory(prev => {
@@ -578,6 +632,7 @@ export default function NewMatchScreen() {
   const handleAdvancedShotSubmit = useCallback((record: SimpleShotRecord) => {
     setAdvancedShotRecords(prev => [...prev, record]);
     
+    const advCurrentRole = getPlayerCurrentRole(record.playerId);
     setPlayerActions(prev => prev.map(p => {
       if (p.playerId !== record.playerId) return p;
       const newActions = { ...p.actions };
@@ -589,9 +644,24 @@ export default function NewMatchScreen() {
         newActions.points++;
         if (record.success) newActions.pointsSuccess++;
       }
-      
+      // Track per-role segment for detailed notation
+      let roleSegments = [...(p.roleSegments || [])];
+      if (advCurrentRole) {
+        const existingSeg = roleSegments.find(s => s.role === advCurrentRole);
+        if (existingSeg) {
+          const sa = { ...existingSeg.actions };
+          if (record.actionType === 'tir') { sa.tirs++; if (record.success) sa.tirsSuccess++; if (record.carreau) sa.carreaux++; }
+          else { sa.points++; if (record.success) sa.pointsSuccess++; }
+          roleSegments = roleSegments.map(s => s.role === advCurrentRole ? { ...s, actions: sa } : s);
+        } else {
+          const sa = { tirs: 0, tirsSuccess: 0, points: 0, pointsSuccess: 0, carreaux: 0 };
+          if (record.actionType === 'tir') { sa.tirs = 1; if (record.success) sa.tirsSuccess = 1; if (record.carreau) sa.carreaux = 1; }
+          else { sa.points = 1; if (record.success) sa.pointsSuccess = 1; }
+          roleSegments.push({ role: advCurrentRole, actions: sa });
+        }
+      }
       const detailedShots = p.detailedShots || [];
-      return { ...p, actions: newActions, detailedShots: [...detailedShots, record] };
+      return { ...p, actions: newActions, detailedShots: [...detailedShots, record], roleSegments };
     }));
     
     // Track in action history for undo
@@ -1219,6 +1289,20 @@ export default function NewMatchScreen() {
                         <View style={[styles.fsQuickNotationNameBadge, { backgroundColor: teamColor + '25' }, isCompact && { paddingVertical: 4, paddingHorizontal: 8, marginBottom: 6 }]}>
                           <View style={[styles.fsQuickNotationDot, { backgroundColor: teamColor }]} />
                           <Text style={[styles.fsQuickNotationName, isUltraCompact && { fontSize: 11 }]} numberOfLines={1}>{firstName}</Text>
+                          {availableRoles.length > 0 ? (
+                            <Pressable
+                              style={[styles.fsRoleBadge, { backgroundColor: p.role === 'Tireur' ? theme.tirColor + '30' : p.role === 'Pointeur' ? theme.pointColor + '30' : theme.accent + '30' }]}
+                              onPress={() => {
+                                Haptics.selectionAsync();
+                                const currentIdx = availableRoles.indexOf(p.role);
+                                const nextIdx = (currentIdx + 1) % availableRoles.length;
+                                updatePlayerRole(p.playerId, isTeamA ? 'A' : 'B', availableRoles[nextIdx]);
+                              }}
+                              hitSlop={6}
+                            >
+                              <Text style={[styles.fsRoleBadgeText, { color: p.role === 'Tireur' ? theme.tirColor : p.role === 'Pointeur' ? theme.pointColor : theme.accent }]}>{t('roles', p.role).substring(0, 1)}</Text>
+                            </Pressable>
+                          ) : null}
                           {!isUltraCompact ? (
                             <Text style={styles.fsQuickNotationStats}>
                               {stats.tirsSuccess}/{stats.tirs} • {stats.pointsSuccess}/{stats.points}{stats.carreaux > 0 ? ` • C${stats.carreaux}` : ''}
@@ -1634,25 +1718,46 @@ export default function NewMatchScreen() {
                             </View>
                             {teamPlayers.map(pa => {
                               const a = pa.actions;
+                              const hasMultipleRoles = (pa.roleSegments || []).length > 1;
                               return (
-                                <View key={pa.playerId} style={styles.fsWinnerPlayerRow}>
-                                  <Text style={styles.fsWinnerPlayerName} numberOfLines={1}>{getPlayerName(pa.playerId).split(' ')[0]}</Text>
-                                  <View style={styles.fsWinnerPlayerStats}>
-                                    <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(34,197,94,0.2)' }]}>
-                                      <MaterialIcons name="gps-fixed" size={11} color="#4ADE80" />
-                                      <Text style={[styles.fsWinnerStatVal, { color: '#4ADE80' }]}>{a.tirsSuccess}/{a.tirs}</Text>
-                                    </View>
-                                    <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(59,130,246,0.2)' }]}>
-                                      <MaterialIcons name="adjust" size={11} color="#60A5FA" />
-                                      <Text style={[styles.fsWinnerStatVal, { color: '#60A5FA' }]}>{a.pointsSuccess}/{a.points}</Text>
-                                    </View>
-                                    {a.carreaux > 0 ? (
-                                      <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(217,119,6,0.2)' }]}>
-                                        <MaterialIcons name="stars" size={11} color="#FBBF24" />
-                                        <Text style={[styles.fsWinnerStatVal, { color: '#FBBF24' }]}>{a.carreaux}</Text>
+                                <View key={pa.playerId}>
+                                  <View style={styles.fsWinnerPlayerRow}>
+                                    <Text style={styles.fsWinnerPlayerName} numberOfLines={1}>{getPlayerName(pa.playerId).split(' ')[0]}</Text>
+                                    <View style={styles.fsWinnerPlayerStats}>
+                                      <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(34,197,94,0.2)' }]}>
+                                        <MaterialIcons name="gps-fixed" size={11} color="#4ADE80" />
+                                        <Text style={[styles.fsWinnerStatVal, { color: '#4ADE80' }]}>{a.tirsSuccess}/{a.tirs}</Text>
                                       </View>
-                                    ) : null}
+                                      <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(59,130,246,0.2)' }]}>
+                                        <MaterialIcons name="adjust" size={11} color="#60A5FA" />
+                                        <Text style={[styles.fsWinnerStatVal, { color: '#60A5FA' }]}>{a.pointsSuccess}/{a.points}</Text>
+                                      </View>
+                                      {a.carreaux > 0 ? (
+                                        <View style={[styles.fsWinnerStatBadge, { backgroundColor: 'rgba(217,119,6,0.2)' }]}>
+                                          <MaterialIcons name="stars" size={11} color="#FBBF24" />
+                                          <Text style={[styles.fsWinnerStatVal, { color: '#FBBF24' }]}>{a.carreaux}</Text>
+                                        </View>
+                                      ) : null}
+                                    </View>
                                   </View>
+                                  {hasMultipleRoles ? (
+                                    <View style={{ marginLeft: 12, marginBottom: 6, paddingLeft: 10, borderLeftWidth: 2, borderLeftColor: 'rgba(255,255,255,0.1)', gap: 3 }}>
+                                      {(pa.roleSegments || []).map(seg => {
+                                        const rc = getRoleColor(seg.role as any);
+                                        return (
+                                          <View key={seg.role} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: rc + '25', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                              <MaterialIcons name={getRoleIcon(seg.role as any) as any} size={9} color={rc} />
+                                              <Text style={{ fontSize: 8, fontWeight: '800', color: rc }}>{t('roles', seg.role).substring(0, 1)}</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 9, color: 'rgba(255,255,255,0.5)' }}>
+                                              T:{seg.actions.tirsSuccess}/{seg.actions.tirs} P:{seg.actions.pointsSuccess}/{seg.actions.points}{seg.actions.carreaux > 0 ? ` C:${seg.actions.carreaux}` : ''}
+                                            </Text>
+                                          </View>
+                                        );
+                                      })}
+                                    </View>
+                                  ) : null}
                                 </View>
                               );
                             })}
@@ -2659,22 +2764,42 @@ export default function NewMatchScreen() {
                 {showPlayerPicker && availableRoles.length > 0 && (showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).length > 0 ? (
                   <View style={styles.roleSelectionSection}>
                     <Text style={styles.roleSelectionTitle}>{t('match', 'playerRoles')}</Text>
-                    {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => (
-                      <View key={p.playerId} style={styles.roleSelectionRow}>
-                        <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
-                        <View style={styles.roleButtonsRow}>
-                          {availableRoles.map(role => (
-                            <Pressable
-                              key={role}
-                              style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB)]}
-                              onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
-                            >
-                              <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{t('roles', role).charAt(0)}</Text>
-                            </Pressable>
-                          ))}
+                    {(showPlayerPicker === 'A' ? teamAPlayers : teamBPlayers).map(p => {
+                      const suggestion = roleSuggestions.get(p.playerId);
+                      return (
+                        <View key={p.playerId} style={styles.roleSelectionRow}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={styles.roleSelectionName}>{getPlayerName(p.playerId)}</Text>
+                            {suggestion ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                <MaterialIcons name="auto-awesome" size={10} color={getSuggestionColor(suggestion.confidence)} />
+                                <Text style={{ fontSize: 9, fontWeight: '600', color: getSuggestionColor(suggestion.confidence) }}>
+                                  {t('roles', suggestion.bestRole)} ({suggestion.confidence}%)
+                                </Text>
+                                {p.role === suggestion.bestRole ? (
+                                  <MaterialIcons name="check-circle" size={10} color="#10B981" />
+                                ) : null}
+                              </View>
+                            ) : null}
+                          </View>
+                          <View style={styles.roleButtonsRow}>
+                            {availableRoles.map(role => {
+                              const isSuggested = suggestion?.bestRole === role && p.role !== role;
+                              return (
+                                <Pressable
+                                  key={role}
+                                  style={[styles.roleButton, p.role === role && (showPlayerPicker === 'A' ? styles.roleButtonActiveA : styles.roleButtonActiveB), isSuggested && { borderWidth: 1.5, borderColor: getSuggestionColor(suggestion?.confidence || 0) + '60' }]}
+                                  onPress={() => updatePlayerRole(p.playerId, showPlayerPicker!, role)}
+                                >
+                                  <Text style={[styles.roleButtonText, p.role === role && styles.roleButtonTextActive]}>{t('roles', role).charAt(0)}</Text>
+                                  {isSuggested ? <View style={{ position: 'absolute', top: -2, right: -2, width: 6, height: 6, borderRadius: 3, backgroundColor: getSuggestionColor(suggestion?.confidence || 0) }} /> : null}
+                                </Pressable>
+                              );
+                            })}
+                          </View>
                         </View>
-                      </View>
-                    ))}
+                      );
+                    })}
                   </View>
                 ) : null}
 
@@ -2979,6 +3104,8 @@ const styles = StyleSheet.create({
   fsQuickNotationName: { fontSize: 13, fontWeight: '700', color: '#FFF', flex: 1 },
   fsQuickNotationStats: { fontSize: 10, fontWeight: '500', color: 'rgba(255,255,255,0.5)' },
   fsQuickUndoBtn: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.12)', alignItems: 'center' as const, justifyContent: 'center' as const, marginLeft: 4 },
+  fsRoleBadge: { paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, marginLeft: 2 },
+  fsRoleBadgeText: { fontSize: 10, fontWeight: '800' as const, letterSpacing: 0.5 },
   fsQuickNotationBtns: { flexDirection: 'row', gap: 8 },
   fsQuickNotationTirBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.tirColor, borderRadius: 12 },
   fsQuickNotationPointBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, backgroundColor: theme.pointColor, borderRadius: 12 },
