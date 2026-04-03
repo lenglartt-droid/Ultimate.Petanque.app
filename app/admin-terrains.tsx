@@ -31,6 +31,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import {
   getAllTerrains,
   adminUpdateTerrain,
@@ -273,6 +274,8 @@ export default function AdminTerrainsScreen() {
         <View style={{ width: 40 }} />
       </View>
 
+      <AdminQuickNav currentRoute="/admin-terrains" />
+
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
@@ -410,13 +413,47 @@ export default function AdminTerrainsScreen() {
                     })}
                     {/* Merge button */}
                     {group.terrains.length >= 2 ? (
-                      <Pressable
-                        style={s.dupeMergeBtn}
-                        onPress={() => handleMergeDuplicates(group)}
-                      >
-                        <MaterialIcons name="merge-type" size={14} color="#7C3AED" />
-                        <Text style={s.dupeMergeBtnText}>{fr ? 'Fusionner automatiquement' : 'Auto-merge'}</Text>
-                      </Pressable>
+                      <View style={s.dupeMergeRow}>
+                        <Pressable
+                          style={s.dupeMergeBtn}
+                          onPress={() => handleMergeDuplicates(group)}
+                        >
+                          <MaterialIcons name="merge-type" size={14} color="#7C3AED" />
+                          <Text style={s.dupeMergeBtnText}>{fr ? 'Fusion auto' : 'Auto-merge'}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={[s.dupeMergeBtn, { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            const best = pickBestTerrain(group.terrains[0], group.terrains[1]);
+                            const swapped = best.keepId === group.terrains[0].id
+                              ? { keepId: group.terrains[1].id, deleteId: group.terrains[0].id }
+                              : { keepId: group.terrains[0].id, deleteId: group.terrains[1].id };
+                            const keepT = group.terrains.find(t => t.id === swapped.keepId)!;
+                            const delT = group.terrains.find(t => t.id === swapped.deleteId)!;
+                            Alert.alert(
+                              fr ? 'Fusion inversee' : 'Reverse merge',
+                              fr ? `Conserver: ${keepT.name}\nSupprimer: ${delT.name}` : `Keep: ${keepT.name}\nDelete: ${delT.name}`,
+                              [
+                                { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                                { text: fr ? 'Fusionner' : 'Merge', style: 'destructive', onPress: async () => {
+                                  const { error } = await mergeTerrains(swapped.keepId, swapped.deleteId);
+                                  if (error) showAlert(fr ? 'Erreur' : 'Error', error);
+                                  else {
+                                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                    setTerrains(prev => prev.filter(t => t.id !== swapped.deleteId));
+                                    setDuplicates(prev => prev.filter(g => g !== group));
+                                    logAdminAction({ actionType: 'terrain_merge', targetType: 'terrain', targetId: swapped.keepId, targetName: keepT.name, actionDetail: `Reverse merged ${delT.name} into ${keepT.name}` });
+                                  }
+                                }},
+                              ]
+                            );
+                          }}
+                        >
+                          <MaterialIcons name="swap-horiz" size={14} color="#D97706" />
+                          <Text style={[s.dupeMergeBtnText, { color: '#D97706' }]}>{fr ? 'Inverser' : 'Swap'}</Text>
+                        </Pressable>
+                      </View>
                     ) : null}
                   </View>
                 ))}
@@ -750,6 +787,7 @@ const s = StyleSheet.create({
   dupeItemName: { fontSize: 13, fontWeight: '600', color: '#0F172A' },
   dupeItemCity: { fontSize: 11, color: '#94A3B8', marginTop: 1 },
   dupeDeleteBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#FECACA' },
-  dupeMergeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE', marginTop: 8 },
+  dupeMergeRow: { flexDirection: 'row', gap: 6, marginTop: 8 },
+  dupeMergeBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#F5F3FF', borderWidth: 1, borderColor: '#DDD6FE' },
   dupeMergeBtnText: { fontSize: 12, fontWeight: '700', color: '#7C3AED' },
 });

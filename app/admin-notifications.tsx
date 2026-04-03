@@ -27,6 +27,7 @@ import { useAlert } from '@/template';
 import { getAllAppeals, BanAppeal, respondToAppeal } from '@/services/banAppealService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logAdminAction } from '@/services/adminActivityLogService';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 
 interface AdminNotification {
   id: string;
@@ -275,6 +276,8 @@ export default function AdminNotificationsScreen() {
           </Pressable>
         ) : <View style={{ width: 40 }} />}
       </View>
+
+      <AdminQuickNav currentRoute="/admin-notifications" />
 
       <ScrollView
         style={s.scroll}

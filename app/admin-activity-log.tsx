@@ -25,6 +25,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
 import { AdminActivityLog, ACTION_CONFIG } from '@/services/adminActivityLogService';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 
@@ -248,6 +249,8 @@ export default function AdminActivityLogScreen() {
           </Pressable>
         </View>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-activity-log" />
 
       {/* Action Type Filters */}
       <View style={s.filtersSection}>

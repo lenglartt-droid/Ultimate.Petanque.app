@@ -26,6 +26,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
@@ -547,6 +548,8 @@ export default function AdminClubsScreen() {
           <MaterialIcons name={selectionMode ? 'close' : 'checklist'} size={20} color={selectionMode ? '#FFF' : '#64748B'} />
         </Pressable>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-clubs" />
 
       <ScrollView
         style={s.scroll}

@@ -35,6 +35,9 @@ import { logAdminAction } from '@/services/adminActivityLogService';
 import { useAlert } from '@/template';
 import * as FileSystem from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminSearchModal from '@/components/feature/AdminSearchModal';
 
 interface DashboardStats {
   totalUsers: number;
@@ -83,6 +86,8 @@ const ADMIN_SECTIONS: { key: string; route: string; icon: string; color: string;
   { key: 'maintenance', route: '/admin-maintenance', icon: 'construction', color: '#D97706', labelFr: 'Maintenance', labelEn: 'Maintenance', descFr: 'Mode maintenance et push', descEn: 'Maintenance mode and push' },
   { key: 'users', route: '/admin-users', icon: 'people', color: '#3B82F6', labelFr: 'Utilisateurs', labelEn: 'Users', descFr: 'Gestion des comptes', descEn: 'Account management', statKey: 'totalUsers' },
   { key: 'clubs', route: '/admin-clubs', icon: 'home', color: '#7C3AED', labelFr: 'Clubs', labelEn: 'Clubs', descFr: 'Verification et gestion', descEn: 'Verification and management', statKey: 'totalClubs' },
+  { key: 'reports', route: '/admin-reports', icon: 'assessment', color: '#0EA5E9', labelFr: 'Rapports', labelEn: 'Reports', descFr: 'Historique hebdomadaire', descEn: 'Weekly history' },
+  { key: 'notifications', route: '/admin-notifications', icon: 'notifications-active', color: '#DC2626', labelFr: 'Centre alertes', labelEn: 'Alert Center', descFr: 'Alertes et notifications admin', descEn: 'Admin alerts and notifications', statKey: 'pendingReports' as keyof DashboardStats },  
 ];
 
 export default function AdminDashboardScreen() {
@@ -108,6 +113,88 @@ export default function AdminDashboardScreen() {
   const [verifyingClubId, setVerifyingClubId] = useState<string | null>(null);
   const [showClubVerification, setShowClubVerification] = useState(false);
   const [exportingGrowth, setExportingGrowth] = useState(false);
+  const [sendingAppealPush, setSendingAppealPush] = useState(false);
+
+  // Widget visibility (persisted)
+  const [widgetVisibility, setWidgetVisibility] = useState<Record<string, boolean>>({
+    overview: true, moderation: true, appeals: true, activity: true,
+    weeklyMatches: true, userGrowth: true, clubVerification: true, eloDistribution: true, navigation: true,
+  });
+  const [showWidgetSettings, setShowWidgetSettings] = useState(false);
+
+  // Smart alerts
+  const [smartAlerts, setSmartAlerts] = useState<{ id: string; severity: 'critical' | 'warning' | 'info'; title: string; message: string; icon: string; color: string; route?: string }[]>([]);
+  const [adminNotifCount, setAdminNotifCount] = useState(0);
+
+  // Push analytics
+  const [pushStats, setPushStats] = useState({ sent: 0, types: {} as Record<string, number> });
+
+  // Search modal
+  const [showSearch, setShowSearch] = useState(false);
+
+  // Widget order (persisted)
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
+
+  // Load widget preferences + order
+  useEffect(() => {
+    AsyncStorage.getItem('admin_widget_prefs').then(val => {
+      if (val) try { setWidgetVisibility(JSON.parse(val)); } catch { /* silent */ }
+    }).catch(() => {});
+    AsyncStorage.getItem('admin_widget_order').then(val => {
+      if (val) try {
+        const parsed = JSON.parse(val);
+        // Accept saved order even if length differs (new widgets added)
+        const merged = [...parsed, ...DEFAULT_ORDER.filter(k => !parsed.includes(k))];
+        setWidgetOrder(merged);
+      } catch { /* silent */ }
+    }).catch(() => {});
+  }, []);
+
+  const toggleWidget = useCallback((key: string) => {
+    Haptics.selectionAsync();
+    setWidgetVisibility(prev => {
+      const next = { ...prev, [key]: !prev[key] };
+      AsyncStorage.setItem('admin_widget_prefs', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const moveWidget = useCallback((key: string, direction: 'up' | 'down') => {
+    Haptics.selectionAsync();
+    setWidgetOrder(prev => {
+      const idx = prev.indexOf(key);
+      if (idx < 0) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[newIdx]] = [next[newIdx], next[idx]];
+      AsyncStorage.setItem('admin_widget_order', JSON.stringify(next)).catch(() => {});
+      return next;
+    });
+  }, []);
+
+  const sendAppealDeadlinePush = useCallback(async () => {
+    if (sendingAppealPush || stats.overdueAppeals === 0) return;
+    setSendingAppealPush(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'appeal_deadline',
+          payload: {
+            overdueCount: stats.overdueAppeals,
+            oldestAppealDays: 2,
+          },
+        },
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? 'Rappel envoye' : 'Reminder sent', fr ? 'Notification envoyee a tous les admins' : 'Notification sent to all admins');
+    } catch (e) {
+      console.log('[Dashboard] Appeal push error:', e);
+    }
+    setSendingAppealPush(false);
+  }, [sendingAppealPush, stats.overdueAppeals, fr, showAlert]);
 
   const loadStats = useCallback(async () => {
     try {
@@ -117,7 +204,7 @@ export default function AdminDashboardScreen() {
         usersRes, playersRes, terrainsRes, clubsRes, matchesRes,
         reportsRes, announcementsRes, suspiciousRes, maintenanceRes,
         activityRes, appealsRes, weeklyMatchesRes, eloPlayersRes,
-        clubsFullRes, userGrowthRes,
+        clubsFullRes, userGrowthRes, pushLogsRes,
       ] = await Promise.all([
         supabase.from('user_profiles').select('id, is_premium', { count: 'exact', head: false }),
         supabase.from('players').select('id', { count: 'exact', head: true }),
@@ -138,6 +225,8 @@ export default function AdminDashboardScreen() {
         supabase.from('clubs').select('id, name, city, members_count, description, address, contact_email, is_public, is_verified'),
         // User growth - monthly registrations (last 6 months)
         supabase.from('user_profiles').select('created_at, consent_date').order('created_at', { ascending: true }),
+        // Push notification logs from announcements
+        supabase.from('announcements').select('push_sent_count, push_error_count, target_type, created_at').order('created_at', { ascending: false }).limit(50),
       ]);
 
       // Process weekly matches
@@ -210,6 +299,17 @@ export default function AdminDashboardScreen() {
       }));
       setUnverifiedClubs(unverified);
 
+      // Process push analytics
+      const pushData = pushLogsRes.data || [];
+      const totalPushSent = pushData.reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0);
+      const totalPushErrors = pushData.reduce((s: number, a: any) => s + (a.push_error_count || 0), 0);
+      const pushByType: Record<string, number> = {};
+      pushData.forEach((a: any) => {
+        const t = a.target_type || 'all';
+        pushByType[t] = (pushByType[t] || 0) + (a.push_sent_count || 0);
+      });
+      setPushStats({ sent: totalPushSent, types: pushByType });
+
       setEloDistribution([
         { tier: 'master', count: eloBuckets.master, color: '#F59E0B', label: fr ? 'Maitre' : 'Master' },
         { tier: 'diamond', count: eloBuckets.diamond, color: '#8B5CF6', label: fr ? 'Diamant' : 'Diamond' },
@@ -235,6 +335,24 @@ export default function AdminDashboardScreen() {
       const pendingAppealsList = (appealsRes.appeals || []).filter((a: any) => a.status === 'pending');
       const overdueThreshold = Date.now() - 48 * 60 * 60 * 1000;
       const overdueCount = pendingAppealsList.filter((a: any) => new Date(a.createdAt || a.created_at).getTime() < overdueThreshold).length;
+
+      // Smart alert detection
+      const detectedAlerts: typeof smartAlerts = [];
+      const pendingCount = reports.filter((r: any) => r.status === 'pending').length;
+      if (pendingCount >= 5) detectedAlerts.push({ id: 'report_spike', severity: 'critical', title: fr ? 'Pic de signalements' : 'Report spike', message: fr ? `${pendingCount} signalements en attente. Intervention recommandee.` : `${pendingCount} pending reports. Action recommended.`, icon: 'warning', color: '#DC2626', route: '/admin-moderation' });
+      else if (pendingCount >= 3) detectedAlerts.push({ id: 'reports_pending', severity: 'warning', title: fr ? 'Signalements en attente' : 'Pending reports', message: fr ? `${pendingCount} signalement(s) a traiter.` : `${pendingCount} report(s) to review.`, icon: 'gavel', color: '#D97706', route: '/admin-moderation' });
+      const weeklyArr2 = [...weekMap.values()];
+      if (weeklyArr2.length >= 2) {
+        const thisW = weeklyArr2[weeklyArr2.length - 1] || 0;
+        const lastW = weeklyArr2[weeklyArr2.length - 2] || 0;
+        if (lastW > 0 && thisW < lastW * 0.7) detectedAlerts.push({ id: 'match_decline', severity: 'warning', title: fr ? 'Baisse d\'activite matchs' : 'Match activity decline', message: fr ? `${thisW} matchs cette semaine vs ${lastW} la semaine derniere (-${Math.round((1 - thisW / lastW) * 100)}%)` : `${thisW} matches this week vs ${lastW} last week (-${Math.round((1 - thisW / lastW) * 100)}%)`, icon: 'trending-down', color: '#EF4444' });
+      }
+      const inactiveClubsPct = unverified.length > 0 && allClubs.length > 0 ? Math.round((unverified.length / allClubs.length) * 100) : 0;
+      if (inactiveClubsPct > 50) detectedAlerts.push({ id: 'unverified_clubs', severity: 'info', title: fr ? 'Clubs non verifies' : 'Unverified clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies.` : `${inactiveClubsPct}% of clubs are not verified.`, icon: 'pending', color: '#D97706', route: '/admin-clubs' });
+      if (recentUsers.length === 0) detectedAlerts.push({ id: 'no_signups', severity: 'info', title: fr ? 'Aucune inscription recente' : 'No recent signups', message: fr ? 'Aucun nouvel utilisateur cette semaine.' : 'No new users this week.', icon: 'person-off', color: '#94A3B8' });
+      if (overdueCount > 0) detectedAlerts.push({ id: 'overdue_appeals', severity: 'critical', title: fr ? 'Appels en retard' : 'Overdue appeals', message: fr ? `${overdueCount} appel(s) en attente depuis +48h.` : `${overdueCount} appeal(s) pending for 48h+.`, icon: 'timer-off', color: '#DC2626', route: '/admin-moderation' });
+      setSmartAlerts(detectedAlerts);
+      setAdminNotifCount(detectedAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length + pendingAppealsList.length + pendingCount);
 
       setStats({
         totalUsers: usersRes.count || users.length,
@@ -290,9 +408,24 @@ export default function AdminDashboardScreen() {
         <Pressable style={s.backBtn} onPress={() => router.back()}>
           <MaterialIcons name="arrow-back" size={24} color="#0F172A" />
         </Pressable>
-        <Text style={s.headerTitle}>{fr ? 'Tableau de bord Admin' : 'Admin Dashboard'}</Text>
-        <View style={{ width: 40 }} />
+        <Text style={s.headerTitle}>{fr ? 'Tableau de bord' : 'Dashboard'}</Text>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            style={s.backBtn}
+            onPress={() => { Haptics.selectionAsync(); setShowSearch(true); }}
+          >
+            <MaterialIcons name="search" size={20} color="#64748B" />
+          </Pressable>
+          <Pressable
+            style={[s.backBtn, showWidgetSettings && { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowWidgetSettings(!showWidgetSettings); }}
+          >
+            <MaterialIcons name="tune" size={20} color={showWidgetSettings ? '#FFF' : '#64748B'} />
+          </Pressable>
+        </View>
       </View>
+
+      <AdminQuickNav currentRoute="/admin-dashboard" />
 
       <ScrollView
         style={s.scroll}
@@ -300,6 +433,51 @@ export default function AdminDashboardScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {/* Widget Settings Panel */}
+        {showWidgetSettings ? (
+          <Animated.View entering={FadeInDown.duration(200)}>
+            <View style={s.widgetPanel}>
+              <View style={s.widgetPanelHeader}>
+                <MaterialIcons name="dashboard-customize" size={16} color="#3B82F6" />
+                <Text style={s.widgetPanelTitle}>{fr ? 'Widgets du tableau de bord' : 'Dashboard Widgets'}</Text>
+              </View>
+              {(() => {
+                const items = [
+                  { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
+                  { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
+                  { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
+                  { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
+                  { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
+                  { key: 'activity', label: fr ? 'Activite recente' : 'Recent Activity', icon: 'history' },
+                  { key: 'weeklyMatches', label: fr ? 'Matchs/semaine' : 'Matches/week', icon: 'sports' },
+                  { key: 'userGrowth', label: fr ? 'Croissance' : 'Growth', icon: 'trending-up' },
+                  { key: 'clubVerification', label: fr ? 'Verification clubs' : 'Club Verification', icon: 'verified' },
+                  { key: 'eloDistribution', label: 'ELO', icon: 'leaderboard' },
+                  { key: 'navigation', label: fr ? 'Navigation rapide' : 'Quick Nav', icon: 'menu' },
+                ];
+                const sorted = [...items].sort((a, b) => widgetOrder.indexOf(a.key) - widgetOrder.indexOf(b.key));
+                return sorted.map((w, idx) => (
+                  <View key={w.key} style={s.widgetToggle}>
+                    <Pressable style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 10 }} onPress={() => toggleWidget(w.key)}>
+                      <MaterialIcons name={w.icon as any} size={16} color={widgetVisibility[w.key] !== false ? '#3B82F6' : '#CBD5E1'} />
+                      <Text style={[s.widgetToggleText, widgetVisibility[w.key] === false && { color: '#CBD5E1' }]}>{w.label}</Text>
+                    </Pressable>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                      <Pressable onPress={() => moveWidget(w.key, 'up')} disabled={idx === 0} hitSlop={6}>
+                        <MaterialIcons name="keyboard-arrow-up" size={18} color={idx === 0 ? '#E2E8F0' : '#64748B'} />
+                      </Pressable>
+                      <Pressable onPress={() => moveWidget(w.key, 'down')} disabled={idx === sorted.length - 1} hitSlop={6}>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={idx === sorted.length - 1 ? '#E2E8F0' : '#64748B'} />
+                      </Pressable>
+                      <View style={[s.widgetDot, widgetVisibility[w.key] !== false ? { backgroundColor: '#10B981' } : { backgroundColor: '#E2E8F0' }]} />
+                    </View>
+                  </View>
+                ));
+              })()}
+            </View>
+          </Animated.View>
+        ) : null}
+
         {/* Maintenance Alert */}
         {(stats.maintenanceActive || stats.maintenanceScheduled) ? (
           <Animated.View entering={FadeInDown.duration(300)}>
@@ -323,8 +501,13 @@ export default function AdminDashboardScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Key Metrics */}
-        <Animated.View entering={FadeInDown.duration(300).delay(50)}>
+        {/* Ordered Widget Rendering */}
+        {widgetOrder.map((wKey, wIdx) => {
+          if (widgetVisibility[wKey] === false) return null;
+          const wDelay = 50 + wIdx * 20;
+
+          if (wKey === 'overview') return (
+        <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
           <Text style={s.sectionTitle}>{fr ? 'VUE D\'ENSEMBLE' : 'OVERVIEW'}</Text>
           <View style={s.metricsGrid}>
             <View style={[s.metricCard, { borderColor: '#3B82F620' }]}>
@@ -371,8 +554,35 @@ export default function AdminDashboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Moderation Summary */}
-        <Animated.View entering={FadeInDown.duration(300).delay(100)}>
+          );
+
+          if (wKey === 'smartAlerts' && smartAlerts.length > 0) return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>{fr ? 'ALERTES INTELLIGENTES' : 'SMART ALERTS'}</Text>
+            {smartAlerts.map((alert, aIdx) => (
+              <Pressable
+                key={alert.id}
+                style={[s.alertCard, { backgroundColor: alert.severity === 'critical' ? '#FEF2F2' : alert.severity === 'warning' ? '#FFFBEB' : '#F0F9FF', borderColor: alert.severity === 'critical' ? '#FECACA' : alert.severity === 'warning' ? '#FDE68A' : '#BAE6FD', marginBottom: 8 }]}
+                onPress={() => { if (alert.route) { Haptics.selectionAsync(); router.push(alert.route as any); } }}
+              >
+                <View style={[s.alertIcon, { backgroundColor: alert.color + '15' }]}>
+                  <MaterialIcons name={alert.icon as any} size={18} color={alert.color} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={[s.alertTitle, { color: alert.color }]}>{alert.title}</Text>
+                    {alert.severity === 'critical' ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#DC2626' }} /> : null}
+                  </View>
+                  <Text style={[s.alertDesc, { color: alert.color + 'CC' }]}>{alert.message}</Text>
+                </View>
+                {alert.route ? <MaterialIcons name="chevron-right" size={18} color={alert.color} /> : null}
+              </Pressable>
+            ))}
+          </Animated.View>
+          );
+
+          if (wKey === 'moderation') return (
+        <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
           <Text style={s.sectionTitle}>{fr ? 'MODERATION' : 'MODERATION'}</Text>
           <View style={s.moderationGrid}>
             <Pressable
@@ -409,8 +619,9 @@ export default function AdminDashboardScreen() {
           </View>
         </Animated.View>
 
-        {/* Pending Appeals Alert */}
-        {stats.pendingAppeals > 0 ? (
+          );
+
+          if (wKey === 'appeals' && stats.pendingAppeals > 0) return (
           <Animated.View entering={FadeInDown.duration(300).delay(120)}>
             <Pressable
               style={[s.alertCard, { backgroundColor: stats.overdueAppeals > 0 ? '#FEF2F2' : '#FFFBEB', borderColor: stats.overdueAppeals > 0 ? '#FECACA' : '#FDE68A' }]}
@@ -438,11 +649,21 @@ export default function AdminDashboardScreen() {
               </View>
               <MaterialIcons name="chevron-right" size={20} color={stats.overdueAppeals > 0 ? '#DC2626' : '#D97706'} />
             </Pressable>
+            {stats.overdueAppeals > 0 ? (
+              <Pressable
+                style={[s.appealPushBtn, sendingAppealPush && { opacity: 0.5 }]}
+                onPress={sendAppealDeadlinePush}
+                disabled={sendingAppealPush}
+              >
+                {sendingAppealPush ? <ActivityIndicator size="small" color="#DC2626" /> : (
+                  <><MaterialIcons name="notifications-active" size={14} color="#DC2626" /><Text style={s.appealPushText}>{fr ? 'Rappeler les admins' : 'Remind admins'}</Text></>
+                )}
+              </Pressable>
+            ) : null}
           </Animated.View>
-        ) : null}
+          );
 
-        {/* Activity Log */}
-        {activityLogs.length > 0 ? (
+          if (wKey === 'activity' && activityLogs.length > 0) return (
           <Animated.View entering={FadeInDown.duration(300).delay(130)}>
             <View style={s.activityHeader}>
               <Text style={s.sectionTitle}>{fr ? 'ACTIVITE RECENTE' : 'RECENT ACTIVITY'}</Text>
@@ -477,11 +698,10 @@ export default function AdminDashboardScreen() {
               })}
             </View>
           </Animated.View>
-        ) : null}
+          );
 
-        {/* Statistics: Weekly Matches */}
-        {weeklyMatches.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(140)}>
+          if (wKey === 'weeklyMatches' && weeklyMatches.length > 0) return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <Text style={s.sectionTitle}>{fr ? 'MATCHS PAR SEMAINE' : 'MATCHES PER WEEK'}</Text>
             <View style={s.chartCard}>
               {(() => {
@@ -504,11 +724,10 @@ export default function AdminDashboardScreen() {
               ) : null}
             </View>
           </Animated.View>
-        ) : null}
+          );
 
-        {/* User Growth Chart */}
-        {monthlyGrowth.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(142)}>
+          if (wKey === 'userGrowth' && monthlyGrowth.length > 0) return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <View style={s.growthHeader}>
               <Text style={s.sectionTitle}>{fr ? 'CROISSANCE UTILISATEURS' : 'USER GROWTH'}</Text>
               <Pressable
@@ -572,10 +791,10 @@ export default function AdminDashboardScreen() {
               </View>
             </View>
           </Animated.View>
-        ) : null}
+          );
 
-        {/* Club Verification */}
-        <Animated.View entering={FadeInDown.duration(300).delay(143)}>
+          if (wKey === 'clubVerification') return (
+        <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
           <Pressable style={s.verifyHeader} onPress={() => { Haptics.selectionAsync(); setShowClubVerification(!showClubVerification); }}>
             <Text style={s.sectionTitle}>{fr ? 'VERIFICATION CLUBS' : 'CLUB VERIFICATION'}</Text>
             <View style={s.verifyStats}>
@@ -669,9 +888,10 @@ export default function AdminDashboardScreen() {
           ) : null}
         </Animated.View>
 
-        {/* ELO Distribution */}
-        {eloDistribution.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(145)}>
+          );
+
+          if (wKey === 'eloDistribution' && eloDistribution.length > 0) return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <Text style={s.sectionTitle}>{fr ? 'DISTRIBUTION ELO' : 'ELO DISTRIBUTION'}</Text>
             <View style={s.chartCard}>
               {(() => {
@@ -690,10 +910,50 @@ export default function AdminDashboardScreen() {
               })()}
             </View>
           </Animated.View>
-        ) : null}
+          );
 
-        {/* Quick Navigation */}
-        <Animated.View entering={FadeInDown.duration(300).delay(150)}>
+          if (wKey === 'pushAnalytics') return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>PUSH ANALYTICS</Text>
+            <View style={s.chartCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+                <View style={[s.metricIcon, { backgroundColor: '#DBEAFE' }]}>
+                  <MaterialIcons name="send" size={18} color="#3B82F6" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#3B82F6' }}>{pushStats.sent}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.3 }}>{fr ? 'Notifications envoyees' : 'Notifications sent'}</Text>
+                </View>
+              </View>
+              {Object.keys(pushStats.types).length > 0 ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>{fr ? 'Par type de cible' : 'By target type'}</Text>
+                  {(() => {
+                    const maxPush = Math.max(...Object.values(pushStats.types), 1);
+                    const typeColors: Record<string, string> = { all: '#3B82F6', city: '#10B981', club: '#7C3AED', level: '#D97706' };
+                    return Object.entries(pushStats.types).sort((a, b) => b[1] - a[1]).map(([type, count]) => (
+                      <View key={type} style={s.chartRow}>
+                        <Text style={[s.chartLabel, { width: 56 }]}>{type === 'all' ? (fr ? 'Tous' : 'All') : type}</Text>
+                        <View style={s.chartBarBg}>
+                          <View style={[s.chartBarFill, { width: `${Math.max(4, (count / maxPush) * 100)}%`, backgroundColor: typeColors[type] || '#94A3B8' }]} />
+                        </View>
+                        <Text style={s.chartValue}>{count}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                  <MaterialIcons name="notifications-off" size={24} color="#CBD5E1" />
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{fr ? 'Aucune notification envoyee' : 'No notifications sent yet'}</Text>
+                </View>
+              )}
+            </View>
+          </Animated.View>
+          );
+
+          if (wKey === 'navigation') return (
+        <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
           <Text style={s.sectionTitle}>{fr ? 'NAVIGATION RAPIDE' : 'QUICK NAVIGATION'}</Text>
           {ADMIN_SECTIONS.map((section, idx) => {
             const statValue = section.statKey ? (stats as any)[section.statKey] : null;
@@ -725,13 +985,24 @@ export default function AdminDashboardScreen() {
                       </Text>
                     </View>
                   ) : null}
+                  {section.key === 'notifications' && adminNotifCount > 0 ? (
+                    <View style={[s.navBadge, { backgroundColor: '#FEF2F2' }]}>
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
+                      <Text style={[s.navBadgeText, { color: '#DC2626' }]}>{adminNotifCount}</Text>
+                    </View>
+                  ) : null}
                   <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                 </Pressable>
               </Animated.View>
             );
           })}
         </Animated.View>
+          );
+
+          return null;
+        })}
       </ScrollView>
+      <AdminSearchModal visible={showSearch} onClose={() => setShowSearch(false)} language={language} />
     </SafeAreaView>
   );
 }
@@ -798,6 +1069,18 @@ const s = StyleSheet.create({
   growthDelta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   growthDeltaText: { fontSize: 11, fontWeight: '800' as const },
   growthExportBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#DBEAFE' },
+
+  // Appeal push button
+  appealPushBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA', marginTop: 8 },
+  appealPushText: { fontSize: 11, fontWeight: '700' as const, color: '#DC2626' },
+
+  // Widget settings
+  widgetPanel: { backgroundColor: '#FFF', borderRadius: 16, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#DBEAFE', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  widgetPanelHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  widgetPanelTitle: { fontSize: 13, fontWeight: '700' as const, color: '#0F172A' },
+  widgetToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 8, paddingHorizontal: 4, justifyContent: 'space-between' as const },
+  widgetToggleText: { flex: 1, fontSize: 13, fontWeight: '600' as const, color: '#0F172A' },
+  widgetDot: { width: 10, height: 10, borderRadius: 5 },
 
   // Club verification
   verifyHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingVertical: 6, marginTop: 8 },
