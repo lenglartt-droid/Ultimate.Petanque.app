@@ -6,6 +6,8 @@ import {
   Pressable,
   StyleSheet,
   ActivityIndicator,
+  Modal,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -176,6 +178,7 @@ export default function BadgesScreen() {
   const isFr = language === 'fr';
 
   const [activeCategory, setActiveCategory] = useState<BadgeCategory>('all');
+  const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(null);
 
   const eloData = useMemo(() => {
     if (!selfPlayer) return { eloRating: ELO_INITIAL, eloTireur: ELO_INITIAL, eloPointeur: ELO_INITIAL, eloMilieu: ELO_INITIAL };
@@ -369,8 +372,8 @@ export default function BadgesScreen() {
           const isComplete = !!unlocked;
 
           return (
+            <Pressable key={badge.id} onPress={() => setSelectedBadgeId(badge.id)}>
             <Animated.View
-              key={badge.id}
               entering={FadeInDown.duration(250).delay(200 + index * 30)}
               style={[s.badgeCard, isComplete && { borderLeftWidth: 3, borderLeftColor: badge.color }]}
             >
@@ -418,6 +421,7 @@ export default function BadgesScreen() {
                 </View>
               </View>
             </Animated.View>
+            </Pressable>
           );
         })}
 
@@ -471,9 +475,287 @@ export default function BadgesScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* Badge Detail Modal */}
+      <BadgeDetailModal
+        badgeId={selectedBadgeId}
+        visible={!!selectedBadgeId}
+        onClose={() => setSelectedBadgeId(null)}
+        language={language}
+        isUnlocked={!!selectedBadgeId && !!userBadges.find(ub => ub.badgeId === selectedBadgeId)}
+        unlockedAt={selectedBadgeId ? userBadges.find(ub => ub.badgeId === selectedBadgeId)?.unlockedAt || null : null}
+        progress={(() => {
+          if (!selectedBadgeId || !badgeContext) return { current: 0, target: 1, percent: 0, label: '' };
+          const ctxFull = { ...badgeContext, trustScore: trustScoreValue, witnessAttestationsGiven: witnessCount, profileCompleteness, ...eloData };
+          return getBadgeProgress(selectedBadgeId, ctxFull, language);
+        })()}
+      />
     </SafeAreaView>
   );
 }
+
+// ============================================
+// Badge Detail Modal Component
+// ============================================
+function BadgeDetailModal({ badgeId, visible, onClose, language, isUnlocked, unlockedAt, progress }: {
+  badgeId: string | null;
+  visible: boolean;
+  onClose: () => void;
+  language: 'fr' | 'en';
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+  progress: BadgeProgress;
+}) {
+  const badge = BADGES.find(b => b.id === badgeId);
+  const isFr = language === 'fr';
+  if (!badge || !badgeId) return null;
+
+  const tips = getBadgeTips(badgeId, isFr);
+  const cat = BADGE_CATEGORIES.find(c => c.badgeIds.includes(badgeId));
+
+  return (
+    <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={onClose}>
+      <SafeAreaView style={dm.container}>
+        <View style={dm.header}>
+          <Pressable style={dm.closeBtn} onPress={onClose} hitSlop={12}>
+            <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={dm.headerTitle}>{isFr ? 'Detail du badge' : 'Badge Detail'}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+
+        <ScrollView contentContainerStyle={dm.content} showsVerticalScrollIndicator={false}>
+          {/* Hero */}
+          <LinearGradient
+            colors={[badge.color + '18', badge.color + '06', theme.surface]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={dm.hero}
+          >
+            <View style={[dm.iconOuter, { backgroundColor: badge.color + '15' }]}>
+              <View style={[dm.iconInner, { backgroundColor: isUnlocked ? badge.color : badge.color + '30' }]}>
+                <MaterialIcons name={badge.icon as any} size={48} color={isUnlocked ? '#FFF' : '#FFF'} />
+              </View>
+              {isUnlocked ? (
+                <View style={[dm.checkBadge, { backgroundColor: '#22C55E' }]}>
+                  <MaterialIcons name="check" size={14} color="#FFF" />
+                </View>
+              ) : null}
+            </View>
+
+            <Text style={[dm.badgeName, { color: isUnlocked ? badge.color : theme.textPrimary }]}>
+              {getBadgeName(badgeId, language)}
+            </Text>
+
+            {cat ? (
+              <View style={[dm.catChip, { backgroundColor: cat.color + '12' }]}>
+                <MaterialIcons name={cat.icon as any} size={12} color={cat.color} />
+                <Text style={[dm.catChipText, { color: cat.color }]}>{isFr ? cat.labelFr : cat.labelEn}</Text>
+              </View>
+            ) : null}
+
+            <View style={[dm.xpRow, { borderColor: badge.color + '25' }]}>
+              <MaterialIcons name="bolt" size={18} color="#F59E0B" />
+              <Text style={dm.xpText}>+{badge.xpReward} XP</Text>
+            </View>
+          </LinearGradient>
+
+          {/* Description */}
+          <View style={dm.section}>
+            <View style={dm.sectionHeader}>
+              <MaterialIcons name="info-outline" size={16} color={theme.textSecondary} />
+              <Text style={dm.sectionTitle}>{isFr ? 'Description' : 'Description'}</Text>
+            </View>
+            <Text style={dm.descText}>{getBadgeDescription(badgeId, language)}</Text>
+          </View>
+
+          {/* Progress */}
+          <View style={dm.section}>
+            <View style={dm.sectionHeader}>
+              <MaterialIcons name={isUnlocked ? 'check-circle' : 'trending-up'} size={16} color={isUnlocked ? '#22C55E' : badge.color} />
+              <Text style={dm.sectionTitle}>{isFr ? 'Progression' : 'Progress'}</Text>
+              <Text style={[dm.progressPercent, { color: isUnlocked ? '#22C55E' : progress.percent >= 75 ? badge.color : theme.textMuted }]}>
+                {isUnlocked ? '100%' : `${progress.percent}%`}
+              </Text>
+            </View>
+
+            <View style={dm.progressBarOuter}>
+              <View style={[dm.progressBarInner, { width: `${isUnlocked ? 100 : Math.max(3, progress.percent)}%`, backgroundColor: isUnlocked ? '#22C55E' : badge.color }]} />
+            </View>
+            <Text style={dm.progressLabel}>{isUnlocked ? (isFr ? 'Objectif atteint' : 'Goal reached') : progress.label}</Text>
+
+            {isUnlocked && unlockedAt ? (
+              <View style={dm.unlockedRow}>
+                <MaterialIcons name="celebration" size={16} color={badge.color} />
+                <Text style={[dm.unlockedText, { color: badge.color }]}>
+                  {isFr ? 'Debloque le' : 'Unlocked on'}{' '}
+                  {new Date(unlockedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {/* Tips (only if not unlocked) */}
+          {!isUnlocked && tips.length > 0 ? (
+            <View style={dm.section}>
+              <View style={dm.sectionHeader}>
+                <MaterialIcons name="lightbulb" size={16} color="#F59E0B" />
+                <Text style={dm.sectionTitle}>{isFr ? 'Conseils' : 'Tips'}</Text>
+              </View>
+              {tips.map((tip, i) => (
+                <View key={i} style={dm.tipRow}>
+                  <View style={[dm.tipIcon, { backgroundColor: tip.color + '12' }]}>
+                    <MaterialIcons name={tip.icon as any} size={14} color={tip.color} />
+                  </View>
+                  <Text style={dm.tipText}>{tip.text}</Text>
+                </View>
+              ))}
+            </View>
+          ) : null}
+
+          {/* Unlocked celebration */}
+          {isUnlocked ? (
+            <View style={[dm.celebrationCard, { borderColor: badge.color + '25' }]}>
+              <MaterialIcons name="emoji-events" size={28} color={badge.color} />
+              <Text style={[dm.celebrationTitle, { color: badge.color }]}>
+                {isFr ? 'Felicitations !' : 'Congratulations!'}
+              </Text>
+              <Text style={dm.celebrationText}>
+                {isFr
+                  ? `Vous avez debloque le badge "${getBadgeName(badgeId, language)}" et gagne ${badge.xpReward} XP.`
+                  : `You unlocked the "${getBadgeName(badgeId, language)}" badge and earned ${badge.xpReward} XP.`}
+              </Text>
+              <Pressable
+                style={dm.shareCardBtn}
+                onPress={() => { onClose(); router.push({ pathname: '/share-card', params: { type: 'badge', badgeId } } as any); }}
+              >
+                <MaterialIcons name="image" size={18} color="#8B5CF6" />
+                <Text style={dm.shareCardBtnText}>{isFr ? 'Partager sur les reseaux' : 'Share on Social Media'}</Text>
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View style={{ height: 32 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
+// ============================================
+// Badge tips helper
+// ============================================
+function getBadgeTips(badgeId: string, fr: boolean): { icon: string; color: string; text: string }[] {
+  const tips: Record<string, { icon: string; color: string; text: string }[]> = {
+    premier_lancer: [
+      { icon: 'sports', color: '#3B82F6', text: fr ? 'Creez votre premier match depuis la page d\'accueil.' : 'Create your first match from the home page.' },
+    ],
+    statisticien: [
+      { icon: 'sports', color: '#3B82F6', text: fr ? 'Jouez 5 matchs pour debloquer ce badge.' : 'Play 5 matches to unlock this badge.' },
+      { icon: 'share', color: '#EC4899', text: fr ? 'Partagez vos matchs avec vos partenaires.' : 'Share your matches with your partners.' },
+    ],
+    oeil_de_lynx: [
+      { icon: 'gps-fixed', color: '#8B5CF6', text: fr ? 'Travaillez votre tir regulierement pour atteindre 70%.' : 'Practice your shooting regularly to reach 70%.' },
+      { icon: 'bar-chart', color: '#3B82F6', text: fr ? 'Consultez vos stats de tir pour identifier vos faiblesses.' : 'Check your shot stats to identify weaknesses.' },
+    ],
+    roi_du_carreau: [
+      { icon: 'star', color: '#F59E0B', text: fr ? 'Notez chaque carreau dans vos matchs pour les comptabiliser.' : 'Record every carreau in your matches to count them.' },
+    ],
+    social_player: [
+      { icon: 'share', color: '#EC4899', text: fr ? 'Partagez un match avec un autre joueur inscrit dans l\'app.' : 'Share a match with another player registered in the app.' },
+    ],
+    recruteur: [
+      { icon: 'person-add', color: '#06B6D4', text: fr ? 'Invitez 3 amis a s\'inscrire avec votre code de parrainage.' : 'Invite 3 friends to sign up with your referral code.' },
+    ],
+    explorateur: [
+      { icon: 'map', color: '#14B8A6', text: fr ? 'Jouez sur 5 terrains differents et associez-les a vos matchs.' : 'Play on 5 different courts and link them to your matches.' },
+    ],
+    classe: [
+      { icon: 'leaderboard', color: '#EF4444', text: fr ? 'Rendez votre profil public et jouez regulierement.' : 'Make your profile public and play regularly.' },
+    ],
+    en_feu: [
+      { icon: 'local-fire-department', color: '#F97316', text: fr ? 'Jouez chaque jour pendant 7 jours consecutifs.' : 'Play every day for 7 consecutive days.' },
+      { icon: 'alarm', color: '#D97706', text: fr ? 'Meme un court match de 10 minutes compte.' : 'Even a short 10-minute match counts.' },
+    ],
+    fiable: [
+      { icon: 'people', color: '#3B82F6', text: fr ? 'Jouez des matchs multi-joueurs pour augmenter votre score.' : 'Play multi-player matches to increase your score.' },
+      { icon: 'groups', color: '#8B5CF6', text: fr ? 'Diversifiez vos adversaires.' : 'Diversify your opponents.' },
+    ],
+    verifie: [
+      { icon: 'visibility', color: '#7C3AED', text: fr ? 'Faites attester vos matchs par des temoins.' : 'Get your matches attested by witnesses.' },
+      { icon: 'schedule', color: '#06B6D4', text: fr ? 'Jouez regulierement et maintenez une activite constante.' : 'Play regularly and maintain consistent activity.' },
+    ],
+    temoin_fiable: [
+      { icon: 'visibility', color: '#7C3AED', text: fr ? 'Attestez les matchs d\'autres joueurs quand vous etes present.' : 'Attest other players\' matches when you are present.' },
+    ],
+    profil_complet: [
+      { icon: 'camera-alt', color: '#0EA5E9', text: fr ? 'Ajoutez photo, club, terrain, localisation, boules et carte federation.' : 'Add photo, club, court, location, boules and federation card.' },
+    ],
+    premier_diamant: [
+      { icon: 'diamond', color: '#06B6D4', text: fr ? 'Gagnez des matchs contre des adversaires de niveau superieur.' : 'Win matches against higher-level opponents.' },
+    ],
+    maitre_petanque: [
+      { icon: 'auto-awesome', color: '#9333EA', text: fr ? 'Atteignez 1800 ELO en maintenant un taux de victoire eleve.' : 'Reach 1800 ELO by maintaining a high win rate.' },
+    ],
+    specialiste: [
+      { icon: 'psychology', color: '#F59E0B', text: fr ? 'Specialisez-vous dans un role et jouez-le regulierement.' : 'Specialize in a role and play it regularly.' },
+    ],
+    boss_de_la_ville: [
+      { icon: 'location-city', color: '#DC2626', text: fr ? 'Ayez le meilleur ELO de votre ville.' : 'Have the highest ELO in your city.' },
+    ],
+    champion_du_quartier: [
+      { icon: 'home', color: '#7C3AED', text: fr ? 'Ayez le meilleur ELO de votre club.' : 'Have the highest ELO in your club.' },
+    ],
+    heros_national: [
+      { icon: 'flag', color: '#2563EB', text: fr ? 'Ayez le meilleur ELO de votre pays.' : 'Have the highest ELO in your country.' },
+    ],
+    seigneur_des_terrains: [
+      { icon: 'public', color: '#F59E0B', text: fr ? 'Ayez le meilleur ELO de votre continent.' : 'Have the highest ELO in your continent.' },
+    ],
+    maitre_universel: [
+      { icon: 'auto-awesome', color: '#FFD700', text: fr ? 'Ayez le meilleur ELO au monde.' : 'Have the highest ELO in the world.' },
+    ],
+  };
+  return tips[badgeId] || [{ icon: 'lightbulb', color: '#F59E0B', text: fr ? 'Continuez a jouer pour progresser.' : 'Keep playing to progress.' }];
+}
+
+// ============================================
+// Badge Detail Modal Styles
+// ============================================
+const dm = StyleSheet.create({
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  closeBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  content: { paddingHorizontal: 20, paddingTop: 8 },
+  hero: { borderRadius: 24, padding: 28, alignItems: 'center', marginBottom: 20, ...theme.shadows.card },
+  iconOuter: { width: 120, height: 120, borderRadius: 36, alignItems: 'center', justifyContent: 'center', marginBottom: 16, position: 'relative' },
+  iconInner: { width: 88, height: 88, borderRadius: 28, alignItems: 'center', justifyContent: 'center', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.2, shadowRadius: 16 }, android: { elevation: 10 } }) },
+  checkBadge: { position: 'absolute', bottom: 2, right: 2, width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 3, borderColor: theme.surface },
+  badgeName: { fontSize: 24, fontWeight: '800', textAlign: 'center', marginBottom: 8, letterSpacing: -0.3 },
+  catChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 5, borderRadius: 16, marginBottom: 12 },
+  catChipText: { fontSize: 12, fontWeight: '600' },
+  xpRow: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F59E0B10', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1 },
+  xpText: { fontSize: 16, fontWeight: '800', color: '#F59E0B' },
+  section: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 },
+  progressPercent: { fontSize: 14, fontWeight: '800' },
+  descText: { fontSize: 15, color: theme.textSecondary, lineHeight: 22 },
+  progressBarOuter: { height: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 5, overflow: 'hidden', marginBottom: 8 },
+  progressBarInner: { height: '100%', borderRadius: 5, minWidth: 6 },
+  progressLabel: { fontSize: 13, fontWeight: '500', color: theme.textMuted },
+  unlockedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
+  unlockedText: { fontSize: 13, fontWeight: '600' },
+  tipRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border + '30' },
+  tipIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
+  tipText: { flex: 1, fontSize: 14, color: theme.textPrimary, fontWeight: '500', lineHeight: 20 },
+  celebrationCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 24, alignItems: 'center', gap: 8, borderWidth: 1, ...theme.shadows.card },
+  celebrationTitle: { fontSize: 18, fontWeight: '800' },
+  celebrationText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
+  shareCardBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, backgroundColor: '#8B5CF6' + '12', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 14, borderWidth: 1.5, borderColor: '#8B5CF6' + '25' },
+  shareCardBtnText: { fontSize: 13, fontWeight: '700', color: '#8B5CF6' },
+});
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },

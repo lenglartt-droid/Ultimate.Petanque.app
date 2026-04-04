@@ -770,6 +770,12 @@ export default function ChallengeDetailScreen() {
               <Text style={s.shareCtaText}>{fr ? 'Partager ce defi' : 'Share this challenge'}</Text>
             </Pressable>
 
+            {/* Visual Share Card CTA */}
+            <Pressable style={({ pressed }) => [s.shareCardCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'challenge', id: challenge.id } } as any); }}>
+              <MaterialIcons name="image" size={20} color="#8B5CF6" />
+              <Text style={s.shareCardCtaText}>{fr ? 'Creer une carte visuelle' : 'Create Visual Card'}</Text>
+            </Pressable>
+
             {/* Delete */}
             {!isReadOnly ? (
               <Pressable style={({ pressed }) => [s.deleteCta, pressed && { opacity: 0.85 }]} onPress={handleDelete}>
@@ -980,6 +986,8 @@ const s = StyleSheet.create({
   editCtaText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   shareCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: theme.success, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
   shareCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  shareCardCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#8B5CF6' + '12', paddingVertical: 16, borderRadius: 18, borderWidth: 1.5, borderColor: '#8B5CF6' + '30' },
+  shareCardCtaText: { fontSize: 15, fontWeight: '700', color: '#8B5CF6' },
   deleteCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16, backgroundColor: theme.error + '10', borderWidth: 1, borderColor: theme.error + '25' },
   deleteCtaText: { fontSize: 14, fontWeight: '600', color: theme.error },
 

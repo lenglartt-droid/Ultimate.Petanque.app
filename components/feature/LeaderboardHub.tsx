@@ -24,8 +24,11 @@ import { useAuth } from '@/template';
 import { useApp } from '@/contexts/AppContext';
 import { fetchGeoLeaderboard, GeoEntry, fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
+import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
+import { fetchBoulesLeaderboard, aggregateBoulesData, sortBoulesLeaderboard, LeaderboardBoulesEntry } from '@/services/boulesLeaderboardService';
 import { getEloColor } from '@/services/eloService';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
+import { getBrandVisual, getBrandImage } from '@/constants/boulesDatabase';
 
 type HubTab = 'geo' | 'players';
 type GeoSubTab = 'cities' | 'countries' | 'continents';
@@ -61,6 +64,14 @@ export default function LeaderboardHub() {
   const [playersLoading, setPlayersLoading] = useState(false);
   const [playersLoaded, setPlayersLoaded] = useState(false);
 
+  // Clubs data
+  const [clubs, setClubs] = useState<LeaderboardClub[]>([]);
+  const [clubsLoaded, setClubsLoaded] = useState(false);
+
+  // Boules data
+  const [boulesEntries, setBoulesEntries] = useState<LeaderboardBoulesEntry[]>([]);
+  const [boulesLoaded, setBoulesLoaded] = useState(false);
+
   // Load Geo
   const loadGeo = useCallback(async () => {
     setGeoLoading(true);
@@ -89,12 +100,21 @@ export default function LeaderboardHub() {
 
   useEffect(() => { loadGeo(); }, [loadGeo]);
 
-  // Load players on tab switch
+  // Load players + clubs + boules on tab switch
   const loadPlayers = useCallback(async () => {
     if (playersLoaded) return;
     setPlayersLoading(true);
-    const { players: lbP } = await fetchLeaderboard();
-    setPlayers(lbP);
+    const [lbRes, clubsRes, boulesRes] = await Promise.all([
+      fetchLeaderboard(),
+      fetchClubLeaderboard(),
+      fetchBoulesLeaderboard(),
+    ]);
+    setPlayers(lbRes.players);
+    setClubs(sortClubLeaderboard(clubsRes.clubs, 'compositeScore'));
+    const aggregated = aggregateBoulesData(boulesRes.entries, 'brand', 'all');
+    setBoulesEntries(sortBoulesLeaderboard(aggregated, 'avgWinRate'));
+    setClubsLoaded(true);
+    setBoulesLoaded(true);
     setPlayersLoading(false);
     setPlayersLoaded(true);
   }, [playersLoaded]);
@@ -199,25 +219,7 @@ export default function LeaderboardHub() {
         ) : null}
       </LinearGradient>
 
-      {/* ===== MY GEO RANK BANNER (if available) ===== */}
-      {hubTab === 'geo' && myGeoRank && (myGeoRank.city || myGeoRank.country) ? (
-        <View style={s.myRankBanner}>
-          <MaterialIcons name="person-pin" size={16} color={theme.primary} />
-          <Text style={s.myRankLabel}>{isFr ? 'Mon rang' : 'My rank'}:</Text>
-          {myGeoRank.city ? (
-            <View style={s.myRankPill}>
-              <MaterialIcons name="location-city" size={12} color="#3B82F6" />
-              <Text style={[s.myRankPillText, { color: '#3B82F6' }]}>#{myGeoRank.city.rank} {myGeoRank.city.name}</Text>
-            </View>
-          ) : null}
-          {myGeoRank.country ? (
-            <View style={s.myRankPill}>
-              <Text style={{ fontSize: 11 }}>{getCountryFlag(myGeoRank.country.name)}</Text>
-              <Text style={[s.myRankPillText, { color: '#10B981' }]}>#{myGeoRank.country.rank}</Text>
-            </View>
-          ) : null}
-        </View>
-      ) : null}
+
 
       {/* ===== CONTENT ===== */}
       <View style={s.content}>
@@ -269,20 +271,22 @@ export default function LeaderboardHub() {
                       : entry.label;
 
                     return (
-                      <Animated.View key={entry.key} entering={FadeInDown.duration(300).delay(idx * 80)} style={[s.top3Item, { marginTop: idx === 0 ? 0 : 14 }]}>
+                      <Pressable key={entry.key} style={[s.top3Item, { marginTop: idx === 0 ? 0 : 14 }]}
+                        onPress={() => router.push({ pathname: '/city-leaderboard', params: { type: geoSubTab === 'cities' ? 'city' : geoSubTab === 'countries' ? 'country' : 'continent', value: entry.key, city: geoSubTab === 'cities' ? entry.key : undefined } } as any)}
+                      >
                         <View style={[s.top3Badge, { backgroundColor: mc + '18', borderColor: mc + '40' }]}>
                           <Text style={{ fontSize: rank === 1 ? 18 : 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
                         </View>
                         <View style={s.top3Info}>
-                          {flag ? <Text style={{ fontSize: 16 }}>{flag}</Text> : <MaterialIcons name="location-city" size={16} color={tabColor} />}
-                          <Text style={s.top3Name} numberOfLines={1}>{displayLabel}</Text>
+                          {flag ? <Text style={{ fontSize: 16, textAlign: 'center' }}>{flag}</Text> : <MaterialIcons name="location-city" size={16} color={tabColor} />}
+                          <Text style={[s.top3Name, { color: tabColor }]} numberOfLines={2}>{displayLabel}</Text>
                         </View>
                         <Text style={s.top3Elo}>{entry.avgElo}</Text>
                         <Text style={s.top3Count}>{entry.playerCount} {isFr ? 'j.' : 'p.'}</Text>
                         <View style={[s.top3Bar, { height: h, backgroundColor: mc + '20' }]}>
                           <View style={[s.top3BarFill, { backgroundColor: mc + '50', height: `${Math.min(entry.avgWinRate, 100)}%` }]} />
                         </View>
-                      </Animated.View>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -301,7 +305,9 @@ export default function LeaderboardHub() {
                   : entry.label;
 
                 return (
-                  <View key={entry.key} style={[s.geoRow, idx < geoData.slice(3, 8).length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}>
+                  <Pressable key={entry.key} style={[s.geoRow, idx < geoData.slice(3, 8).length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.border + '40' }]}
+                    onPress={() => router.push({ pathname: '/city-leaderboard', params: { type: geoSubTab === 'cities' ? 'city' : geoSubTab === 'countries' ? 'country' : 'continent', value: entry.key, city: geoSubTab === 'cities' ? entry.key : undefined } } as any)}
+                  >
                     <Text style={s.geoRankNum}>{rank}</Text>
                     <View style={s.geoRowInfo}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -316,7 +322,7 @@ export default function LeaderboardHub() {
                       <Text style={s.geoRowElo}>{entry.avgElo}</Text>
                       <Text style={s.geoRowWin}>{entry.avgWinRate}%</Text>
                     </View>
-                  </View>
+                  </Pressable>
                 );
               })}
 
@@ -346,6 +352,11 @@ export default function LeaderboardHub() {
             </View>
           ) : (
             <>
+              {/* Section Label: Top 3 ELO */}
+              <View style={s.commSectionHeader}>
+                <MaterialIcons name="diamond" size={14} color="#F59E0B" />
+                <Text style={s.commSectionLabel}>{isFr ? 'Top 3 ELO' : 'Top 3 ELO'}</Text>
+              </View>
               {/* Top 3 podium */}
               {sortedPlayers.length >= 3 ? (
                 <View style={s.podium}>
@@ -417,6 +428,65 @@ export default function LeaderboardHub() {
                   </Pressable>
                 );
               })}
+
+              {/* === TOP 3 CLUBS BY SCORE === */}
+              {clubs.length >= 3 ? (
+                <>
+                  <View style={s.commSectionHeader}>
+                    <MaterialIcons name="home" size={14} color="#D97706" />
+                    <Text style={s.commSectionLabel}>{isFr ? 'Top 3 Clubs' : 'Top 3 Clubs'}</Text>
+                  </View>
+                  {clubs.slice(0, 3).map((club, idx) => {
+                    const rank = idx + 1;
+                    const mc = ['#FFD700', '#C0C0C0', '#CD7F32'][idx];
+                    return (
+                      <Pressable key={club.id} style={s.geoRow} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
+                        <View style={[s.commMedal, { backgroundColor: mc + '18' }]}>
+                          <Text style={{ fontSize: rank === 1 ? 12 : 11 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
+                        </View>
+                        <View style={s.geoRowInfo}>
+                          <Text style={s.geoRowName} numberOfLines={1}>{club.name}</Text>
+                          <Text style={s.geoRowMeta}>{club.playerCount} {isFr ? 'joueurs' : 'players'} · {club.city || ''}</Text>
+                        </View>
+                        <View style={s.geoRowStats}>
+                          <Text style={[s.geoRowElo, { color: '#D97706' }]}>{club.stats.compositeScore}</Text>
+                          <Text style={s.geoRowWin}>{club.stats.avgWinRate}%</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </>
+              ) : null}
+
+              {/* === TOP 3 BOULES BRANDS BY WIN RATE === */}
+              {boulesEntries.length >= 3 ? (
+                <>
+                  <View style={s.commSectionHeader}>
+                    <MaterialIcons name="sports-baseball" size={14} color="#EA580C" />
+                    <Text style={s.commSectionLabel}>{isFr ? 'Top 3 Marques' : 'Top 3 Brands'}</Text>
+                  </View>
+                  {boulesEntries.slice(0, 3).map((entry, idx) => {
+                    const rank = idx + 1;
+                    const mc = ['#FFD700', '#C0C0C0', '#CD7F32'][idx];
+                    const bv = getBrandVisual(entry.brand);
+                    return (
+                      <Pressable key={entry.id} style={s.geoRow} onPress={() => router.push({ pathname: `/boules-ranking/${encodeURIComponent(entry.id)}`, params: { brand: entry.brand, mode: 'brand' } } as any)}>
+                        <View style={[s.commMedal, { backgroundColor: mc + '18' }]}>
+                          <Text style={{ fontSize: rank === 1 ? 12 : 11 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
+                        </View>
+                        <View style={s.geoRowInfo}>
+                          <Text style={s.geoRowName} numberOfLines={1}>{entry.brand}</Text>
+                          <Text style={s.geoRowMeta}>{entry.userCount} {isFr ? 'joueurs' : 'players'} · {entry.totalMatches} {isFr ? 'matchs' : 'games'}</Text>
+                        </View>
+                        <View style={s.geoRowStats}>
+                          <Text style={[s.geoRowElo, { color: '#EA580C' }]}>{entry.stats.avgWinRate}%</Text>
+                          <Text style={s.geoRowWin}>{isFr ? 'Vict.' : 'Win'}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </>
+              ) : null}
 
               {/* My rank if not visible */}
               {myPlayerRank && myPlayerRank > 10 ? (() => {
@@ -672,20 +742,21 @@ const s = StyleSheet.create({
     marginBottom: 4,
   },
   top3Info: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: 4,
-    maxWidth: '100%',
+    gap: 3,
+    width: '100%',
+    paddingHorizontal: 2,
   },
   top3Name: {
     fontSize: 12,
     fontWeight: '700',
     color: theme.textPrimary,
-    maxWidth: 80,
     textAlign: 'center',
+    lineHeight: 15,
   },
   top3Elo: {
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '800',
     color: '#8B5CF6',
   },
@@ -745,6 +816,32 @@ const s = StyleSheet.create({
     fontSize: 10,
     color: theme.success,
     fontWeight: '600',
+  },
+
+  // Community tab section headers
+  commSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    marginTop: 6,
+    borderTopWidth: 1,
+    borderTopColor: theme.border + '40',
+  },
+  commSectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: theme.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  commMedal: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // Top player
