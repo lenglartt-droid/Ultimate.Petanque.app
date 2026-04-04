@@ -770,10 +770,10 @@ export default function ChallengeDetailScreen() {
               <Text style={s.shareCtaText}>{fr ? 'Partager ce defi' : 'Share this challenge'}</Text>
             </Pressable>
 
-            {/* Visual Share Card CTA */}
+            {/* Social Media Share CTA */}
             <Pressable style={({ pressed }) => [s.shareCardCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'challenge', id: challenge.id } } as any); }}>
-              <MaterialIcons name="image" size={20} color="#8B5CF6" />
-              <Text style={s.shareCardCtaText}>{fr ? 'Creer une carte visuelle' : 'Create Visual Card'}</Text>
+              <MaterialIcons name="camera-alt" size={20} color="#8B5CF6" />
+              <Text style={s.shareCardCtaText}>{fr ? 'Partage reseaux sociaux' : 'Social Media Share'}</Text>
             </Pressable>
 
             {/* Delete */}

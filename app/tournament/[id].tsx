@@ -1026,7 +1026,7 @@ export default function TournamentDetailScreen() {
             style={styles.fabSecondary}
             onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'tournament', id: tournament.id } } as any); }}
           >
-            <MaterialIcons name="image" size={22} color="#8B5CF6" />
+            <MaterialIcons name="camera-alt" size={22} color="#8B5CF6" />
           </Pressable>
           <Pressable 
             style={styles.fabSecondary}

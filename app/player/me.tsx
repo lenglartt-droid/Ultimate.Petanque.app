@@ -905,6 +905,52 @@ export default function MyPlayerCardScreen() {
           ) : null}
         </Animated.View>
 
+        {/* ===== ROLE EVOLUTION ===== */}
+        {roleAnalysis.totalWithRoles > 0 ? (
+          <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#F97316' + '15' }]}>
+                <MaterialIcons name="swap-horiz" size={18} color="#F97316" />
+              </View>
+              <Text style={s.sectionTitle}>{language === 'fr' ? 'Evolution du Role' : 'Role Evolution'}</Text>
+            </View>
+
+            {/* Role distribution */}
+            <View style={{ gap: 10, marginBottom: 12 }}>
+              {Object.entries(roleAnalysis.roleCounts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([role, count]) => {
+                const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
+                const rc = roleIcons[role] || { icon: 'person', color: theme.textMuted };
+                return (
+                  <View key={role} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[s.perfIcon, { backgroundColor: rc.color + '15', width: 34, height: 34, borderRadius: 8 }]}>
+                      <MaterialIcons name={rc.icon as any} size={16} color={rc.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{t('roles', role)}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: rc.color }}>{pct}%</Text>
+                      </View>
+                      <View style={s.perfBarTrack}>
+                        <View style={[s.perfBarFill, { width: `${pct}%`, backgroundColor: rc.color }]} />
+                      </View>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F97316' + '10', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#F97316' + '20' }}
+              onPress={() => { Haptics.selectionAsync(); router.push('/role-performance' as any); }}
+            >
+              <MaterialIcons name="analytics" size={16} color="#F97316" />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#F97316' }}>{language === 'fr' ? 'Voir analyse complete' : 'View full analysis'}</Text>
+              <MaterialIcons name="chevron-right" size={16} color="#F97316" />
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
         {/* ===== EDIT BUTTON ===== */}
         <Animated.View entering={FadeIn.duration(400)}>
           <Pressable style={s.editProfileBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push({ pathname: '/profile', params: { edit: 'true' } } as any); }}>
@@ -1134,8 +1180,8 @@ const s = StyleSheet.create({
   tabletRight: { flex: 1 },
 
   // Hero Card
-  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 16, ...theme.shadows.card },
-  heroCardAmbassador: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 0, alignItems: 'center' as const, marginBottom: 16, overflow: 'hidden' as const, borderWidth: 1.5, borderColor: '#7C3AED' + '25', ...theme.shadows.card },
+  heroCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 24, alignItems: 'center', marginBottom: 16, ...theme.shadows.card, zIndex: 1 },
+  heroCardAmbassador: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, paddingHorizontal: 24, paddingBottom: 24, paddingTop: 0, alignItems: 'center' as const, marginBottom: 16, overflow: 'hidden' as const, borderWidth: 1.5, borderColor: '#7C3AED' + '25', ...theme.shadows.card, zIndex: 1 },
   // Ambassador prestige header
   ambPrestigeHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#7C3AED', paddingVertical: 12, paddingHorizontal: 16, marginHorizontal: -24, marginBottom: 20, width: 'auto' as any, alignSelf: 'stretch' as const },
   ambPrestigeIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const },
@@ -1198,7 +1244,7 @@ const s = StyleSheet.create({
   quickStatDivider: { width: 1, height: 28, backgroundColor: theme.border, marginHorizontal: 8 },
 
   // Section Card
-  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card, position: 'relative' as const, zIndex: 0 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 },
   sectionIconBox: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },

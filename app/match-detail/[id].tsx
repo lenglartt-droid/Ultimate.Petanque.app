@@ -709,8 +709,8 @@ export default function MatchDetailScreen() {
             style={({ pressed }) => [s.shareCardCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
             onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'match', id: match.id } } as any); }}
           >
-            <MaterialIcons name="image" size={20} color="#8B5CF6" />
-            <Text style={s.shareCardCtaText}>{fr ? 'Creer une carte visuelle' : 'Create Visual Card'}</Text>
+            <MaterialIcons name="camera-alt" size={20} color="#8B5CF6" />
+            <Text style={s.shareCardCtaText}>{fr ? 'Partage reseaux sociaux' : 'Social Media Share'}</Text>
           </Pressable>
         </View>
       </ScrollView>
