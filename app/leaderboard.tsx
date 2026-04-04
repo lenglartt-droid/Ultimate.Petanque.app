@@ -40,7 +40,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
 
-type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events' | 'trust';
+type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events';
 
 const PAGE_SIZE = 30;
 
@@ -855,9 +855,7 @@ export default function LeaderboardScreen() {
                     ? `${filteredClubs.length} ${t('leaderboard', 'publicClubsCount')}`
                     : activeTab === 'events'
                       ? `${filteredEvents.length} ${t('leaderboard', 'publicEventsCount')}`
-                      : activeTab === 'trust'
-                        ? `${filteredTrust.length} ${language === 'fr' ? 'joueurs' : 'players'}`
-                        : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
+                      : `${boulesEntries.length} ${boulesMode === 'brand' ? t('leaderboard', 'publicBoulesCount') : t('leaderboard', 'publicModelsCount')}`}
               </Text>
             </View>
           </View>
@@ -868,7 +866,6 @@ export default function LeaderboardScreen() {
               { id: 'clubs' as LeaderboardTab, label: t('leaderboard', 'tabClubs'), icon: 'home' },
               { id: 'boules' as LeaderboardTab, label: t('leaderboard', 'tabBoules'), icon: 'sports-baseball' },
               { id: 'events' as LeaderboardTab, label: t('leaderboard', 'tabEvents'), icon: 'campaign' },
-              { id: 'trust' as LeaderboardTab, label: language === 'fr' ? 'Confiance' : 'Trust', icon: 'shield' },
             ]).map(tab => (
               <Pressable
                 key={tab.id}
@@ -973,11 +970,11 @@ export default function LeaderboardScreen() {
                 style={s.searchInput}
                 placeholder={t('leaderboard', 'searchPlaceholder')}
                 placeholderTextColor="rgba(255,255,255,0.4)"
-                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : activeTab === 'trust' ? trustSearch : boulesSearch}
-                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : activeTab === 'trust' ? setTrustSearch : setBoulesSearch}
+                value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch}
+                onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch}
               />
-              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : activeTab === 'trust' ? trustSearch : boulesSearch).length > 0 ? (
-                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : activeTab === 'trust' ? setTrustSearch('') : setBoulesSearch('')} hitSlop={8}>
+              {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).length > 0 ? (
+                <Pressable onPress={() => activeTab === 'players' ? setSearch('') : activeTab === 'clubs' ? setClubSearch('') : activeTab === 'events' ? setEventSearch('') : setBoulesSearch('')} hitSlop={8}>
                   <MaterialIcons name="close" size={18} color="rgba(255,255,255,0.5)" />
                 </Pressable>
               ) : null}

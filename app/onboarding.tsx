@@ -425,6 +425,28 @@ export default function OnboardingScreen() {
   // STEP 2: PROMISE
   // ============================================
   if (step === 2) {
+    const pillars = [
+      {
+        icon: 'diamond',
+        color: '#8B5CF6',
+        title: language === 'fr' ? 'ELO + Trust Score' : 'ELO + Trust Score',
+        items: [
+          language === 'fr' ? 'Classement equitable et coherent' : 'Fair and consistent ranking',
+          language === 'fr' ? 'Chaque partie compte' : 'Every game counts',
+          language === 'fr' ? 'Fiabilite garantie' : 'Guaranteed reliability',
+        ],
+      },
+      {
+        icon: 'people',
+        color: '#10B981',
+        title: language === 'fr' ? 'Un reseau en construction' : 'A network being built',
+        items: [
+          language === 'fr' ? 'Parties reelles' : 'Real games',
+          language === 'fr' ? 'Joueurs actifs' : 'Active players',
+          language === 'fr' ? 'Donnees qui ont du sens' : 'Data that matters',
+        ],
+      },
+    ];
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
@@ -439,14 +461,53 @@ export default function OnboardingScreen() {
             </View>
             <View>
               <Text style={s.promiseTitle}>
-                {language === 'fr' ? 'Chaque tir compte.' : 'Every shot counts.'}
+                {language === 'fr' ? 'Jouez. Progressez. Rencontrez.' : 'Play. Improve. Connect.'}
               </Text>
               <Text style={s.promiseSubtitle}>
                 {language === 'fr'
-                  ? 'Suis tes matchs. Mesure ta progression. Trouve des joueurs.'
-                  : 'Track your matches. Measure your progress. Find players.'}
+                  ? "La petanque, ce n'est pas juste un score.\nC'est des parties reelles, des rencontres, et du plaisir."
+                  : "Petanque is not just a score.\nIt is real games, encounters, and fun."}
               </Text>
             </View>
+
+            {/* Value proposition */}
+            <View style={s.promiseHighlight}>
+              <MaterialIcons name="gps-fixed" size={18} color="#FCD34D" />
+              <Text style={s.promiseHighlightText}>
+                {language === 'fr'
+                  ? "Enfin un outil pour evaluer votre niveau reel, a l'echelle locale comme mondiale."
+                  : 'Finally a tool to evaluate your real level, from local to global scale.'}
+              </Text>
+            </View>
+
+            {/* Pillars */}
+            {pillars.map((p, i) => (
+              <View key={i} style={[s.promisePillar, { borderLeftColor: p.color }]}>
+                <View style={[s.promisePillarHeader]}>
+                  <View style={[s.promisePillarIcon, { backgroundColor: p.color + '20' }]}>
+                    <MaterialIcons name={p.icon as any} size={18} color={p.color} />
+                  </View>
+                  <Text style={[s.promisePillarTitle, { color: p.color }]}>{p.title}</Text>
+                </View>
+                {p.items.map((item, j) => (
+                  <View key={j} style={s.promisePillarItem}>
+                    <MaterialIcons name="check" size={14} color={p.color} />
+                    <Text style={s.promisePillarItemText}>{item}</Text>
+                  </View>
+                ))}
+              </View>
+            ))}
+
+            {/* Closing statement */}
+            <View style={s.promiseClosing}>
+              <MaterialIcons name="public" size={20} color="#60A5FA" />
+              <Text style={s.promiseClosingText}>
+                {language === 'fr'
+                  ? 'Nous sommes 12 millions de joueurs sur la planete, que le meilleur gagne !'
+                  : 'There are 12 million players on the planet, may the best win!'}
+              </Text>
+            </View>
+
             <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
@@ -1317,8 +1378,84 @@ const s = StyleSheet.create({
     color: '#94A3B8',
     textAlign: 'center',
     lineHeight: 20,
-    marginBottom: 24,
+    marginBottom: 16,
     paddingHorizontal: 8,
+  },
+  promiseHighlight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F59E0B10',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 16,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#F59E0B25',
+  },
+  promiseHighlightText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#FCD34D',
+    lineHeight: 19,
+  },
+  promisePillar: {
+    width: '100%',
+    backgroundColor: '#1E293B',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+  },
+  promisePillarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  promisePillarIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  promisePillarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  promisePillarItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 3,
+  },
+  promisePillarItemText: {
+    fontSize: 13,
+    color: '#CBD5E1',
+    fontWeight: '500',
+  },
+  promiseClosing: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#60A5FA10',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 8,
+    width: '100%',
+    borderWidth: 1,
+    borderColor: '#60A5FA20',
+  },
+  promiseClosingText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#60A5FA',
+    lineHeight: 19,
   },
 
   // --- CTAs ---
