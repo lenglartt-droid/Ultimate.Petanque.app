@@ -80,7 +80,7 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function NewPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { addPlayer, clubs, terrains } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');
   const [avatarUri, setAvatarUri] = useState<string | null>(null);
@@ -124,10 +124,12 @@ export default function NewPlayerScreen() {
   }, [terrains, terrainSearch]);
 
   // Progress
-  const progressFilled = [name.trim(), true, true].filter(Boolean).length;
-  const progressTotal = 3;
+  const progressFilled = [name.trim(), location.city].filter(Boolean).length;
+  const progressTotal = 2;
   const progressLabel = !name.trim()
     ? (t('player', 'nameIsRequired'))
+    : !location.city
+    ? (language === 'fr' ? 'Localisation requise' : 'Location required')
     : (t('tournament', 'readyToCreate'));
 
   const pickImage = async () => {
@@ -169,6 +171,7 @@ export default function NewPlayerScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('player', 'nameIsRequired')); return; }
+    if (!location.city) { Alert.alert(t('common', 'error'), language === 'fr' ? 'La localisation est obligatoire. Veuillez selectionner une ville.' : 'Location is required. Please select a city.'); return; }
     const selectedClub = clubs.find(c => c.id === clubId);
     const selectedTerrain = terrains.find(t => t.id === terrainId);
     const avatarUrl = await uploadAvatar();
@@ -183,6 +186,7 @@ export default function NewPlayerScreen() {
       phone: phone.trim() || undefined, email: email.trim() || undefined, handedness: handedness || undefined, experience: experience || undefined, boules,
       location: location.city ? { city: location.city, latitude: location.latitude, longitude: location.longitude } : undefined,
       country: location.country || 'France',
+      city: location.city || undefined,
       stats: { matchesPlayed: 0, wins: 0, losses: 0, winRate: 0, tirRate: 0, pointRate: 0, carreauRate: 0, avgPointsScored: 0, avgPointsConceded: 0 },
       createdAt: new Date().toISOString(),
     });
@@ -254,7 +258,7 @@ export default function NewPlayerScreen() {
           </SectionCard>
 
           {/* 3. Localisation */}
-          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100}>
+          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100} required>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('player', 'searchCity')} showCityOnly />
             {(() => {
               const empty = !location.latitude && !location.longitude;

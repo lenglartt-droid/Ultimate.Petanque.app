@@ -25,7 +25,6 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
 
