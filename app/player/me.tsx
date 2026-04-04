@@ -426,11 +426,11 @@ export default function MyPlayerCardScreen() {
                 </View>
               </View>
 
-              {/* ── BLOC 2b: ELO ── */}
+              {/* ── BLOC 2b: ELO (clickable → palmares) ── */}
               {selfPlayer.eloRating ? (() => {
                 const eloR = getEloRank(selfPlayer.eloRating);
                 return (
-                  <View style={s.heroSectionBlock}>
+                  <Pressable style={s.heroSectionBlock} onPress={() => router.push('/elo-awards' as any)}>
                     <View style={s.heroSectionBlockHeader}>
                       <MaterialIcons name={eloR.icon as any} size={12} color={eloR.color} />
                       <Text style={[s.heroSectionBlockLabel, { color: eloR.color }]}>ELO</Text>
@@ -441,7 +441,11 @@ export default function MyPlayerCardScreen() {
                         <Text style={{ fontSize: 13, fontWeight: '700', color: eloR.color }}>{eloR.label[language === 'fr' ? 'fr' : 'en']}</Text>
                       </View>
                     </View>
-                  </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
+                      <Text style={{ fontSize: 11, color: theme.textMuted }}>{language === 'fr' ? 'Voir mon palmares' : 'View my awards'}</Text>
+                      <MaterialIcons name="chevron-right" size={14} color={theme.textMuted} />
+                    </View>
+                  </Pressable>
                 );
               })() : null}
 
@@ -636,49 +640,6 @@ export default function MyPlayerCardScreen() {
           </View>
 
           <View style={isTablet ? s.tabletRight : undefined}>
-
-            {/* ===== ELO RATING (above preferences) ===== */}
-            {selfPlayer?.eloRating ? (() => {
-              const eloRank = getEloRank(selfPlayer.eloRating || ELO_INITIAL);
-              return (
-                <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
-                  <View style={s.sectionHeader}>
-                    <View style={[s.sectionIconBox, { backgroundColor: eloRank.color + '15' }]}>
-                      <MaterialIcons name={eloRank.icon as any} size={18} color={eloRank.color} />
-                    </View>
-                    <Text style={s.sectionTitle}>{language === 'fr' ? 'CLASSEMENT ELO' : 'ELO RANKING'}</Text>
-                  </View>
-                  <View style={{ alignItems: 'center', marginBottom: 12 }}>
-                    <Text style={{ fontSize: 40, fontWeight: '900', color: eloRank.color }}>{selfPlayer.eloRating || ELO_INITIAL}</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                      <View style={{ backgroundColor: eloRank.color + '15', paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: eloRank.color + '30' }}>
-                        <Text style={{ fontSize: 13, fontWeight: '700', color: eloRank.color }}>{eloRank.label[language === 'fr' ? 'fr' : 'en']}</Text>
-                      </View>
-                    </View>
-                  </View>
-                  {(selfPlayer.eloTireur && selfPlayer.eloTireur !== 1000) || (selfPlayer.eloPointeur && selfPlayer.eloPointeur !== 1000) || (selfPlayer.eloMilieu && selfPlayer.eloMilieu !== 1000) ? (
-                    <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
-                      {[
-                        { label: language === 'fr' ? 'Tireur' : 'Shooter', value: selfPlayer.eloTireur || 1000, color: '#F97316', icon: 'gps-fixed' as const },
-                        { label: language === 'fr' ? 'Pointeur' : 'Pointer', value: selfPlayer.eloPointeur || 1000, color: '#3B82F6', icon: 'adjust' as const },
-                        { label: language === 'fr' ? 'Milieu' : 'Middle', value: selfPlayer.eloMilieu || 1000, color: '#8B5CF6', icon: 'swap-horiz' as const },
-                      ].map((role, idx) => (
-                        <View key={idx} style={{ flex: 1, alignItems: 'center', backgroundColor: role.color + '08', borderRadius: 12, paddingVertical: 10, borderWidth: 1, borderColor: role.color + '20' }}>
-                          <MaterialIcons name={role.icon} size={16} color={role.color} />
-                          <Text style={{ fontSize: 18, fontWeight: '800', color: role.color, marginTop: 4 }}>{role.value}</Text>
-                          <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{role.label}</Text>
-                        </View>
-                      ))}
-                    </View>
-                  ) : null}
-                  <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: eloRank.color + '08', borderRadius: 12, borderWidth: 1, borderColor: eloRank.color + '20' }} onPress={() => router.push('/elo-awards' as any)}>
-                    <MaterialIcons name="emoji-events" size={16} color={eloRank.color} />
-                    <Text style={{ fontSize: 13, fontWeight: '700', color: eloRank.color }}>{language === 'fr' ? 'Voir mon palmares ELO' : 'View ELO awards'}</Text>
-                    <MaterialIcons name="chevron-right" size={16} color={eloRank.color} />
-                  </Pressable>
-                </Animated.View>
-              );
-            })() : null}
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (

@@ -22,6 +22,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
+import LeaderboardHub from '@/components/feature/LeaderboardHub';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
@@ -95,7 +96,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -325,6 +326,8 @@ export default function HomeScreen() {
     const s: HomeSection[] = [];
     s.push({ key: 'hero', data: ['hero'] });
     s.push({ key: 'actions', data: ['actions'] });
+    // Leaderboard Hub — prominent position right after actions
+    s.push({ key: 'leaderboardHub', data: ['leaderboardHub'] });
     if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
     if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
     if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
@@ -333,7 +336,6 @@ export default function HomeScreen() {
     s.push({ key: 'timeline', data: ['timeline'] });
     if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
     s.push({ key: 'adBanner1', data: ['adBanner1'] });
-    s.push({ key: 'leaderboard', data: ['leaderboard'] });
     s.push({ key: 'divider1', data: ['divider1'] });
     if (featuredAmbassadors.length > 0) {
       s.push({ key: 'ambassadors', data: ['ambassadors'] });
@@ -396,6 +398,14 @@ export default function HomeScreen() {
                 </View>
               ))}
             </View>
+          </View>
+        );
+
+      // ===== LEADERBOARD HUB =====
+      case 'leaderboardHub':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <LeaderboardHub />
           </View>
         );
 
@@ -543,9 +553,7 @@ export default function HomeScreen() {
           </View>
         );
 
-      // ===== COMMUNITY LEADERBOARD =====
-      case 'leaderboard':
-        return <View style={[st.section, isTablet && st.sectionTablet]}><CommunityLeaderboard /></View>;
+
 
       // ===== DIVIDERS =====
       case 'divider1':
