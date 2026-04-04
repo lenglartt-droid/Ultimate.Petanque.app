@@ -1,13 +1,14 @@
 /**
  * ShareCardMatch — Visual match result card for social sharing.
  * Shows score, teams, ELO, format, date, terrain.
+ * Supports dynamic color themes.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ShareCardWatermark from './ShareCardWatermark';
-import theme from '@/constants/theme';
+import { CARD_COLOR_THEMES, type CardColorTheme } from '@/services/shareCardService';
 import type { Match } from '@/types/petanque';
 
 interface Props {
@@ -18,10 +19,12 @@ interface Props {
   eloColor?: string;
   terrainName?: string;
   language?: 'fr' | 'en';
+  colorTheme?: CardColorTheme;
 }
 
-export default function ShareCardMatch({ match, playerName, eloRating, eloRankLabel, eloColor, terrainName, language = 'fr' }: Props) {
+export default function ShareCardMatch({ match, playerName, eloRating, eloRankLabel, eloColor, terrainName, language = 'fr', colorTheme = 'dark' }: Props) {
   const fr = language === 'fr';
+  const ct = CARD_COLOR_THEMES[colorTheme];
   const isWinnerA = match.winner === 'A';
   const winGrad: [string, string] = ['#22C55E', '#16A34A'];
   const loseGrad: [string, string] = ['#EF4444', '#DC2626'];
@@ -30,32 +33,32 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={['#0F172A', '#1E293B']} style={s.bg}>
+      <LinearGradient colors={ct.gradients} style={s.bg}>
         {/* Header */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <MaterialIcons name="sports" size={16} color="#F59E0B" />
-            <Text style={s.headerLabel}>MATCH</Text>
+            <MaterialIcons name="sports" size={16} color={ct.accent} />
+            <Text style={[s.headerLabel, { color: ct.accent }]}>MATCH</Text>
           </View>
           <View style={s.headerRight}>
-            <Text style={s.dateText}>{dateStr}</Text>
-            {durationStr ? <Text style={s.durationText}>{durationStr}</Text> : null}
+            <Text style={[s.dateText, { color: ct.textSecondary }]}>{dateStr}</Text>
+            {durationStr ? <Text style={[s.durationText, { color: ct.textSecondary }]}>{durationStr}</Text> : null}
           </View>
         </View>
 
         {/* Format + Mode */}
         <View style={s.metaRow}>
           <View style={s.metaChip}>
-            <MaterialIcons name="group" size={12} color="#94A3B8" />
-            <Text style={s.metaText}>{match.format}</Text>
+            <MaterialIcons name="group" size={12} color={ct.textSecondary} />
+            <Text style={[s.metaText, { color: ct.textSecondary }]}>{match.format}</Text>
           </View>
-          <View style={[s.metaChip, match.mode === 'Tournoi' ? { backgroundColor: '#F59E0B20' } : null]}>
-            <MaterialIcons name={match.mode === 'Tournoi' ? 'emoji-events' : 'fitness-center'} size={12} color={match.mode === 'Tournoi' ? '#F59E0B' : '#94A3B8'} />
-            <Text style={[s.metaText, match.mode === 'Tournoi' ? { color: '#F59E0B' } : null]}>{match.mode}</Text>
+          <View style={[s.metaChip, match.mode === 'Tournoi' ? { backgroundColor: ct.accent + '20' } : null]}>
+            <MaterialIcons name={match.mode === 'Tournoi' ? 'emoji-events' : 'fitness-center'} size={12} color={match.mode === 'Tournoi' ? ct.accent : ct.textSecondary} />
+            <Text style={[s.metaText, match.mode === 'Tournoi' ? { color: ct.accent } : { color: ct.textSecondary }]}>{match.mode}</Text>
           </View>
           {match.tournamentName ? (
-            <View style={[s.metaChip, { backgroundColor: '#F59E0B15' }]}>
-              <Text style={[s.metaText, { color: '#F59E0B' }]} numberOfLines={1}>{match.tournamentName}</Text>
+            <View style={[s.metaChip, { backgroundColor: ct.accent + '15' }]}>
+              <Text style={[s.metaText, { color: ct.accent }]} numberOfLines={1}>{match.tournamentName}</Text>
             </View>
           ) : null}
         </View>
@@ -66,13 +69,13 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
             <LinearGradient colors={isWinnerA ? winGrad : loseGrad} style={s.scoreBadge}>
               <Text style={s.scoreNum}>{match.teamA.score}</Text>
             </LinearGradient>
-            <Text style={s.teamLabel}>{fr ? 'EQUIPE A' : 'TEAM A'}</Text>
-            <Text style={s.teamNames} numberOfLines={2}>{match.teamA.playerNames.join(', ')}</Text>
+            <Text style={[s.teamLabel, { color: ct.textSecondary }]}>{fr ? 'EQUIPE A' : 'TEAM A'}</Text>
+            <Text style={[s.teamNames, { color: ct.textPrimary }]} numberOfLines={2}>{match.teamA.playerNames.join(', ')}</Text>
           </View>
 
           <View style={s.vsCol}>
             <View style={s.vsCircle}>
-              <Text style={s.vsText}>VS</Text>
+              <Text style={[s.vsText, { color: ct.textSecondary }]}>VS</Text>
             </View>
             {isWinnerA ? (
               <View style={s.winArrow}><MaterialIcons name="arrow-back" size={14} color="#22C55E" /></View>
@@ -85,38 +88,37 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
             <LinearGradient colors={!isWinnerA ? winGrad : loseGrad} style={s.scoreBadge}>
               <Text style={s.scoreNum}>{match.teamB.score}</Text>
             </LinearGradient>
-            <Text style={s.teamLabel}>{fr ? 'EQUIPE B' : 'TEAM B'}</Text>
-            <Text style={s.teamNames} numberOfLines={2}>{match.teamB.playerNames.join(', ')}</Text>
+            <Text style={[s.teamLabel, { color: ct.textSecondary }]}>{fr ? 'EQUIPE B' : 'TEAM B'}</Text>
+            <Text style={[s.teamNames, { color: ct.textPrimary }]} numberOfLines={2}>{match.teamB.playerNames.join(', ')}</Text>
           </View>
         </View>
 
         {/* Menes count */}
         {match.menes.length > 0 ? (
           <View style={s.menesRow}>
-            <MaterialIcons name="format-list-numbered" size={14} color="#64748B" />
-            <Text style={s.menesText}>{match.menes.length} {fr ? 'menes' : 'ends'}</Text>
+            <MaterialIcons name="format-list-numbered" size={14} color={ct.textSecondary} />
+            <Text style={[s.menesText, { color: ct.textSecondary }]}>{match.menes.length} {fr ? 'menes' : 'ends'}</Text>
           </View>
         ) : null}
 
         {/* Player info footer */}
         <View style={s.footer}>
           <View style={s.footerLeft}>
-            {playerName ? <Text style={s.playerName}>{playerName}</Text> : null}
+            {playerName ? <Text style={[s.playerName, { color: ct.textPrimary }]}>{playerName}</Text> : null}
             {eloRating ? (
-              <View style={[s.eloBadge, { backgroundColor: (eloColor || '#94A3B8') + '20' }]}>
-                <Text style={[s.eloText, { color: eloColor || '#94A3B8' }]}>ELO {eloRating}</Text>
+              <View style={[s.eloBadge, { backgroundColor: (eloColor || ct.textSecondary) + '20' }]}>
+                <Text style={[s.eloText, { color: eloColor || ct.textSecondary }]}>ELO {eloRating}</Text>
               </View>
             ) : null}
           </View>
           {terrainName ? (
             <View style={s.terrainChip}>
-              <MaterialIcons name="place" size={12} color="#64748B" />
-              <Text style={s.terrainText} numberOfLines={1}>{terrainName}</Text>
+              <MaterialIcons name="place" size={12} color={ct.textSecondary} />
+              <Text style={[s.terrainText, { color: ct.textSecondary }]} numberOfLines={1}>{terrainName}</Text>
             </View>
           ) : null}
         </View>
 
-        {/* Watermark */}
         <ShareCardWatermark variant="light" size="sm" />
       </LinearGradient>
     </View>
@@ -128,30 +130,30 @@ const s = StyleSheet.create({
   bg: { padding: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerLabel: { fontSize: 11, fontWeight: '800', color: '#F59E0B', letterSpacing: 1.5 },
+  headerLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  dateText: { fontSize: 12, fontWeight: '600', color: '#94A3B8' },
-  durationText: { fontSize: 11, fontWeight: '500', color: '#64748B' },
+  dateText: { fontSize: 12, fontWeight: '600' },
+  durationText: { fontSize: 11, fontWeight: '500' },
   metaRow: { flexDirection: 'row', gap: 6, marginBottom: 20, flexWrap: 'wrap' },
   metaChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12 },
-  metaText: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
+  metaText: { fontSize: 11, fontWeight: '600' },
   scoreContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   teamCol: { flex: 1, alignItems: 'center', gap: 6 },
   scoreBadge: { width: 72, height: 72, borderRadius: 20, alignItems: 'center', justifyContent: 'center' },
   scoreNum: { fontSize: 36, fontWeight: '900', color: '#FFF' },
-  teamLabel: { fontSize: 9, fontWeight: '700', color: '#64748B', letterSpacing: 1 },
-  teamNames: { fontSize: 12, fontWeight: '600', color: '#CBD5E1', textAlign: 'center', maxWidth: 130 },
+  teamLabel: { fontSize: 9, fontWeight: '700', letterSpacing: 1 },
+  teamNames: { fontSize: 12, fontWeight: '600', textAlign: 'center', maxWidth: 130 },
   vsCol: { width: 50, alignItems: 'center', gap: 4 },
   vsCircle: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' },
-  vsText: { fontSize: 12, fontWeight: '800', color: '#64748B' },
+  vsText: { fontSize: 12, fontWeight: '800' },
   winArrow: {},
   menesRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 16 },
-  menesText: { fontSize: 12, fontWeight: '500', color: '#64748B' },
+  menesText: { fontSize: 12, fontWeight: '500' },
   footer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 14, marginBottom: 4 },
   footerLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  playerName: { fontSize: 14, fontWeight: '700', color: '#F8FAFC' },
+  playerName: { fontSize: 14, fontWeight: '700' },
   eloBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   eloText: { fontSize: 11, fontWeight: '700' },
   terrainChip: { flexDirection: 'row', alignItems: 'center', gap: 4, maxWidth: 140 },
-  terrainText: { fontSize: 11, fontWeight: '500', color: '#64748B' },
+  terrainText: { fontSize: 11, fontWeight: '500' },
 });

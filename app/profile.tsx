@@ -1707,6 +1707,20 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10, borderWidth: 1.5, borderColor: '#8B5CF6' + '25' }]}
+              onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'stats' } } as any); }}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: '#8B5CF6' + '15' }]}>
+                <MaterialIcons name="image" size={24} color="#8B5CF6" />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Carte visuelle' : 'Visual Card'}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Partager mes stats sur les reseaux' : 'Share my stats on social media'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
 
           </View>
         )}
