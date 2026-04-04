@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -34,7 +34,6 @@ function AnimatedCounter({ target, duration = 1800, suffix = '' }: { target: num
       if (!startTimeRef.current) startTimeRef.current = timestamp;
       const elapsed = timestamp - startTimeRef.current;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
       setDisplay(Math.round(eased * target));
       if (progress < 1) {
@@ -56,56 +55,6 @@ interface CommunityStats {
   tournaments: number;
   clubs: number;
   challenges: number;
-}
-
-function getTestimonials(fr: boolean) {
-  return [
-    {
-      initials: 'TM',
-      name: fr ? 'Thierry M.' : 'Thierry M.',
-      location: fr ? 'Marseille' : 'Marseille, FR',
-      color: '#2563EB',
-      quote: fr
-        ? "Enfin un outil qui me permet de voir ou j'en suis vraiment. Mes stats de tir m'ont ouvert les yeux."
-        : "Finally a tool that lets me see where I really stand. My shot stats were an eye-opener.",
-    },
-    {
-      initials: 'SL',
-      name: fr ? 'Sophie L.' : 'Sophie L.',
-      location: fr ? 'Lyon' : 'Lyon, FR',
-      color: '#10B981',
-      quote: fr
-        ? "On a trouve 3 terrains a 10 min de chez nous grace a la carte. On joue deux fois plus maintenant !"
-        : "We found 3 courts within 10 min of home thanks to the map. We play twice as much now!",
-    },
-    {
-      initials: 'JD',
-      name: fr ? 'Jean-Pierre D.' : 'Jean-Pierre D.',
-      location: fr ? 'Toulouse' : 'Toulouse, FR',
-      color: '#F59E0B',
-      quote: fr
-        ? "Le classement ELO motive tout le club. On se challenge entre nous et on progresse ensemble."
-        : "The ELO ranking motivates the whole club. We challenge each other and improve together.",
-    },
-    {
-      initials: 'MC',
-      name: fr ? 'Marc C.' : 'Marc C.',
-      location: fr ? 'Bruxelles' : 'Brussels, BE',
-      color: '#EC4899',
-      quote: fr
-        ? "En vacances en Espagne, j'ai trouve des joueurs locaux en 5 minutes. Meilleure partie de mon ete."
-        : "On holiday in Spain, I found local players in 5 minutes. Best game of my summer.",
-    },
-    {
-      initials: 'NR',
-      name: fr ? 'Nadia R.' : 'Nadia R.',
-      location: fr ? 'Montreal' : 'Montreal, CA',
-      color: '#7C3AED',
-      quote: fr
-        ? "Je debute et les conseils bases sur mes stats m'aident enormement. Simple et efficace."
-        : "I am a beginner and the advice based on my stats helps me enormously. Simple and effective.",
-    },
-  ];
 }
 
 export default function CreatorNoteScreen() {
@@ -131,7 +80,6 @@ export default function CreatorNoteScreen() {
       }
       setStatsLoaded(true);
     }).catch(() => setStatsLoaded(true));
-    // Load trust stats
     fetchSuspiciousPlayers().then(({ players: tp }) => {
       const active = tp.filter(p => p.status !== 'banned');
       if (active.length === 0) return;
@@ -159,7 +107,7 @@ export default function CreatorNoteScreen() {
         contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
+        {/* ===== HERO ===== */}
         <LinearGradient
           colors={['#0F172A', '#1E3A5F']}
           start={{ x: 0, y: 0 }}
@@ -168,19 +116,231 @@ export default function CreatorNoteScreen() {
         >
           <View style={st.heroDecoCircle1} />
           <View style={st.heroDecoCircle2} />
-          <View style={st.heroIconWrap}>
-            <MaterialIcons name="favorite" size={32} color="#F87171" />
-          </View>
-          <Text style={st.heroTitle}>{fr ? 'Note du createur' : 'Creator note'}</Text>
-          <View style={st.heroDivider} />
-          <Text style={st.heroQuote}>
+          <Text style={st.heroLine1}>
+            {fr ? 'Je ne suis pas une entreprise.' : 'I am not a company.'}
+          </Text>
+          <Text style={st.heroLine2}>
             {fr
-              ? '"Juste le jeu, et la verite du terrain."'
-              : '"Just the game, and the truth of the court."'}
+              ? 'Je suis un joueur de petanque, comme vous.'
+              : 'I am a petanque player, just like you.'}
           </Text>
         </LinearGradient>
 
-        {/* Community Stats Counter */}
+        {/* ===== THE STORY ===== */}
+        <View style={st.card}>
+          <Text style={st.bodyText}>
+            {fr
+              ? "J'ai decouvert ce sport en 2021... et comme beaucoup, j'ai appris sur le terrain.\nPuis j'ai essaye les applications existantes."
+              : "I discovered this sport in 2021... and like many, I learned on the court.\nThen I tried the existing applications."}
+          </Text>
+        </View>
+
+        {/* ===== THE PROBLEM ===== */}
+        <View style={st.card}>
+          <Text style={st.bodyText}>
+            {fr
+              ? "Elles permettent de jouer, d'enregistrer des parties... mais rapidement, une limite apparait :"
+              : "They allow you to play, record games... but quickly, a limit appears:"}
+          </Text>
+          <View style={st.problemList}>
+            <View style={st.problemItem}>
+              <View style={st.problemDot} />
+              <Text style={st.problemText}>
+                {fr ? 'Classements approximatifs' : 'Approximate rankings'}
+              </Text>
+            </View>
+            <View style={st.problemItem}>
+              <View style={st.problemDot} />
+              <Text style={st.problemText}>
+                {fr ? 'Statistiques peu exploitables' : 'Hard to use statistics'}
+              </Text>
+            </View>
+            <View style={st.problemItem}>
+              <View style={st.problemDot} />
+              <Text style={st.problemText}>
+                {fr
+                  ? 'Impossible de vraiment savoir ou l\u2019on se situe'
+                  : 'Impossible to really know where you stand'}
+              </Text>
+            </View>
+          </View>
+        </View>
+
+        {/* ===== THE SOLUTION ===== */}
+        <View style={st.solutionCard}>
+          <Text style={st.solutionText}>
+            {fr
+              ? "Alors j'ai cree l'outil que j'aurais aime avoir."
+              : "So I created the tool I wished I had."}
+          </Text>
+        </View>
+
+        {/* ===== AMBITION HEADER ===== */}
+        <View style={st.ambitionHeader}>
+          <MaterialIcons name="gps-fixed" size={20} color="#F59E0B" />
+          <Text style={st.ambitionTitle}>
+            {fr ? 'Une ambition simple' : 'A simple ambition'}
+          </Text>
+        </View>
+
+        {/* ===== PILLAR 1: RANKING ===== */}
+        <View style={[st.pillarCard, { borderLeftColor: '#2563EB' }]}>
+          <View style={[st.pillarIconWrap, { backgroundColor: '#2563EB12' }]}>
+            <MaterialIcons name="leaderboard" size={22} color="#2563EB" />
+          </View>
+          <Text style={st.pillarTitle}>
+            {fr ? 'Un classement mondial juste et equitable' : 'A fair and equitable world ranking'}
+          </Text>
+          <View style={st.pillarBullets}>
+            <PillarBullet
+              icon="diamond"
+              color="#8B5CF6"
+              text={fr
+                ? 'Systeme ELO pour refleter votre niveau reel'
+                : 'ELO system to reflect your real level'}
+            />
+            <PillarBullet
+              icon="verified-user"
+              color="#22C55E"
+              text={fr
+                ? 'Trust Score pour garantir la fiabilite'
+                : 'Trust Score to guarantee reliability'}
+            />
+            <PillarBullet
+              icon="public"
+              color="#3B82F6"
+              text={fr
+                ? 'Classement coherent du local au mondial'
+                : 'Consistent ranking from local to global'}
+            />
+          </View>
+          <View style={st.pillarFooter}>
+            <MaterialIcons name="security" size={14} color="#2563EB" />
+            <Text style={st.pillarFooterText}>
+              {fr
+                ? 'Un classement credible, transparent, difficile a manipuler.'
+                : 'A credible, transparent ranking, hard to manipulate.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ===== PILLAR 2: PROGRESS ===== */}
+        <View style={[st.pillarCard, { borderLeftColor: '#7C3AED' }]}>
+          <View style={[st.pillarIconWrap, { backgroundColor: '#7C3AED12' }]}>
+            <MaterialIcons name="trending-up" size={22} color="#7C3AED" />
+          </View>
+          <Text style={st.pillarTitle}>
+            {fr ? 'Progresser pour de vrai' : 'Real progress'}
+          </Text>
+          <View style={st.pillarBullets}>
+            <PillarBullet
+              icon="analytics"
+              color="#7C3AED"
+              text={fr
+                ? 'Analyse de vos bons coups... et de vos erreurs'
+                : 'Analysis of your good shots... and your mistakes'}
+            />
+            <PillarBullet
+              icon="tune"
+              color="#EA580C"
+              text={fr
+                ? 'Performances selon terrain, boules, contexte'
+                : 'Performance by court, boules, context'}
+            />
+            <PillarBullet
+              icon="show-chart"
+              color="#10B981"
+              text={fr
+                ? 'Suivi clair de votre progression'
+                : 'Clear tracking of your progress'}
+            />
+          </View>
+          <View style={st.pillarFooter}>
+            <MaterialIcons name="lightbulb" size={14} color="#7C3AED" />
+            <Text style={[st.pillarFooterText, { color: '#7C3AED' }]}>
+              {fr ? 'Des donnees utiles. Pas du bruit.' : 'Useful data. Not noise.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ===== PILLAR 3: PLAY EVERYWHERE ===== */}
+        <View style={[st.pillarCard, { borderLeftColor: '#10B981' }]}>
+          <View style={[st.pillarIconWrap, { backgroundColor: '#10B98112' }]}>
+            <MaterialIcons name="explore" size={22} color="#10B981" />
+          </View>
+          <Text style={st.pillarTitle}>
+            {fr ? 'Jouer partout' : 'Play everywhere'}
+          </Text>
+          <View style={st.pillarBullets}>
+            <PillarBullet
+              icon="place"
+              color="#10B981"
+              text={fr
+                ? 'Trouvez terrains et clubs facilement'
+                : 'Find courts and clubs easily'}
+            />
+            <PillarBullet
+              icon="people"
+              color="#3B82F6"
+              text={fr
+                ? 'Rencontrez des joueurs, meme en voyage'
+                : 'Meet players, even while traveling'}
+            />
+          </View>
+          <View style={st.pillarFooter}>
+            <MaterialIcons name="flight" size={14} color="#10B981" />
+            <Text style={[st.pillarFooterText, { color: '#10B981' }]}>
+              {fr ? 'Jouer plus. Rencontrer plus. Partout.' : 'Play more. Meet more. Everywhere.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ===== BY PLAYERS FOR PLAYERS ===== */}
+        <View style={st.mottoCard}>
+          <LinearGradient
+            colors={['#0F172A', '#1E293B']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={st.mottoGradient}
+          >
+            <View style={st.mottoIconRow}>
+              <MaterialIcons name="handshake" size={28} color="#F59E0B" />
+            </View>
+            <Text style={st.mottoTitle}>
+              {fr ? 'Par les joueurs, pour les joueurs' : 'By players, for players'}
+            </Text>
+            <View style={st.mottoPoints}>
+              <Text style={st.mottoLine}>{fr ? 'Des parties reelles.' : 'Real games.'}</Text>
+              <Text style={st.mottoLine}>{fr ? 'Des joueurs actifs.' : 'Active players.'}</Text>
+              <Text style={st.mottoLine}>{fr ? 'Des donnees fiables.' : 'Reliable data.'}</Text>
+            </View>
+            <View style={st.mottoDivider} />
+            <Text style={st.mottoHighlight}>
+              {fr ? 'Moins de volume. Plus de qualite.' : 'Less volume. More quality.'}
+            </Text>
+          </LinearGradient>
+        </View>
+
+        {/* ===== IF YOU WANT ===== */}
+        <View style={st.card}>
+          <Text style={st.sectionLabel}>
+            {fr ? 'Si vous voulez :' : 'If you want to:'}
+          </Text>
+          <View style={st.checkList}>
+            <CheckItem text={fr ? 'Connaitre votre vrai niveau' : 'Know your real level'} />
+            <CheckItem text={fr ? 'Progresser concretement' : 'Make real progress'} />
+            <CheckItem text={fr ? 'Jouer partout dans le monde' : 'Play everywhere in the world'} />
+          </View>
+          <View style={st.emphasisBlock}>
+            <Text style={st.emphasisText}>
+              {fr
+                ? 'Alors cette application est faite pour vous.'
+                : 'Then this application is made for you.'}
+            </Text>
+          </View>
+        </View>
+
+        {/* ===== COMMUNITY STATS ===== */}
         {statsLoaded ? (
           <View style={st.statsCard}>
             <View style={st.statsHeader}>
@@ -251,7 +411,7 @@ export default function CreatorNoteScreen() {
           </View>
         ) : null}
 
-        {/* Community Health Section (moved from leaderboard) */}
+        {/* ===== COMMUNITY HEALTH ===== */}
         {trustStats.total > 0 ? (
           <View style={st.card}>
             <View style={st.statsHeader}>
@@ -283,181 +443,23 @@ export default function CreatorNoteScreen() {
           </View>
         ) : null}
 
-        {/* Section 1: Identity */}
-        <View style={st.card}>
-          <Text style={st.bodyText}>
-            {fr
-              ? 'Je ne suis pas une entreprise.\nJe suis simplement un joueur de petanque, comme vous.'
-              : 'I am not a company.\nI am simply a petanque player, just like you.'}
-          </Text>
-        </View>
-
-        {/* Section 2: Story */}
-        <View style={st.card}>
-          <View style={st.sectionIcon}>
-            <MaterialIcons name="auto-stories" size={20} color="#2563EB" />
-          </View>
-          <Text style={st.bodyText}>
-            {fr
-              ? "J'ai decouvert ce sport en 2021. Depuis, il ne m'a plus quitte. Comme beaucoup, j'ai appris sur le terrain, avec des amis, des inconnus, des conseils parfois justes... parfois biaises. Et tres vite, une idee s'est imposee : pourquoi n'existe-t-il pas un outil simple, accessible a tous, pour vraiment progresser et se situer ?"
-              : "I discovered this sport in 2021. Since then, it has never left me. Like many, I learned on the court, with friends, strangers, advice sometimes accurate... sometimes biased. And very quickly, an idea took hold: why isn't there a simple tool, accessible to everyone, to truly improve and know where you stand?"}
-          </Text>
-        </View>
-
-        {/* Section 3: Not a developer */}
-        <View style={st.card}>
-          <Text style={st.bodyText}>
-            {fr
-              ? "Je ne suis pas developpeur. Je ne travaille pas dans l'informatique.\nMais j'ai decide de creer cette application malgre tout, en y investissant personnellement, avec une seule ambition : offrir un outil gratuit a la communaute mondiale des joueurs de petanque."
-              : "I am not a developer. I do not work in IT.\nBut I decided to create this application anyway, investing personally, with a single ambition: to offer a free tool to the global petanque community."}
-          </Text>
-        </View>
-
-        {/* Section 4: Tool features */}
-        <View style={st.card}>
-          <View style={st.sectionIcon}>
-            <MaterialIcons name="lightbulb" size={20} color="#F59E0B" />
-          </View>
-          <Text style={st.sectionLabel}>
-            {fr ? 'Un outil qui permet :' : 'A tool that allows you to:'}
-          </Text>
-          <View style={st.bulletList}>
-            <BulletItem
-              icon="leaderboard"
-              color="#2563EB"
-              text={fr
-                ? "d'avoir un classement juste, fiable et securise, au niveau local comme mondial"
-                : "have a fair, reliable and secure ranking, both locally and globally"}
-            />
-            <BulletItem
-              icon="bar-chart"
-              color="#7C3AED"
-              text={fr
-                ? "de mieux comprendre son jeu grace a des statistiques avancees (type de terrain, boules, tirs, points, duree des matchs, etc.)"
-                : "better understand your game through advanced statistics (terrain type, boules, shots, points, match duration, etc.)"}
-            />
-            <BulletItem
-              icon="track-changes"
-              color="#10B981"
-              text={fr
-                ? "d'identifier ses forces et ses axes d'amelioration"
-                : "identify your strengths and areas for improvement"}
-            />
-            <BulletItem
-              icon="psychology"
-              color="#EA580C"
-              text={fr
-                ? "de recevoir des analyses et des conseils concrets, bases sur ses propres performances"
-                : "receive analysis and concrete advice based on your own performance"}
-            />
-          </View>
-          <View style={st.emphasisBlock}>
-            <Text style={st.emphasisText}>
-              {fr
-                ? 'Mais surtout, un outil qui depasse le simple score.'
-                : 'But above all, a tool that goes beyond the simple score.'}
-            </Text>
-          </View>
-        </View>
-
-        {/* Section 5: Community call */}
-        <View style={[st.card, st.communityCard]}>
-          <View style={st.sectionIcon}>
-            <MaterialIcons name="people" size={20} color="#059669" />
-          </View>
-          <Text style={st.bodyText}>
-            {fr
-              ? 'Cette application ne peut exister que grace a vous.'
-              : 'This application can only exist thanks to you.'}
-          </Text>
-          <Text style={[st.bodyText, { marginTop: 12 }]}>
-            {fr
-              ? "Si chacun partage ses terrains favoris, les clubs qu'il represente, les tournois auxquels il participe, alors nous creons ensemble bien plus qu'une application :"
-              : "If everyone shares their favorite courts, the clubs they represent, the tournaments they participate in, then together we create much more than an application:"}
-          </Text>
-          <View style={[st.bulletList, { marginTop: 12 }]}>
-            <BulletItem
-              icon="public"
-              color="#2563EB"
-              text={fr ? 'un reseau mondial de joueurs' : 'a global network of players'}
-            />
-            <BulletItem
-              icon="connect-without-contact"
-              color="#7C3AED"
-              text={fr
-                ? "une facon plus simple de se rencontrer, chez soi comme a l'etranger"
-                : 'a simpler way to meet, at home and abroad'}
-            />
-            <BulletItem
-              icon="groups"
-              color="#10B981"
-              text={fr
-                ? "une communaute ouverte, ou l'on joue, echange et progresse ensemble"
-                : 'an open community, where we play, exchange and progress together'}
-            />
-          </View>
-        </View>
-
-        {/* Section 6: Motto */}
-        <View style={st.mottoCard}>
-          <LinearGradient
-            colors={['#0F172A', '#1E293B']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={st.mottoGradient}
-          >
-            <Text style={st.mottoLine}>{fr ? "Ici, pas de jugement." : "Here, no judgment."}</Text>
-            <Text style={st.mottoLine}>{fr ? "Pas d'ego." : "No ego."}</Text>
-            <Text style={st.mottoHighlight}>{fr ? "Juste le jeu, et la verite du terrain." : "Just the game, and the truth of the court."}</Text>
-          </LinearGradient>
-        </View>
-
-        {/* Section 7: For everyone */}
-        <View style={st.card}>
-          <Text style={st.bodyText}>
-            {fr
-              ? "Que vous soyez debutant ou joueur confirme, cette application est faite pour vous.\nPour vous aider a progresser, a comprendre votre jeu... et a prendre encore plus de plaisir a jouer."
-              : "Whether you are a beginner or an experienced player, this application is made for you.\nTo help you improve, understand your game... and enjoy playing even more."}
-          </Text>
-        </View>
-
-        {/* Section 8: Testimonials */}
-        <View style={st.card}>
-          <View style={st.sectionIcon}>
-            <MaterialIcons name="format-quote" size={20} color="#7C3AED" />
-          </View>
-          <Text style={st.sectionLabel}>
-            {fr ? 'Ils jouent, ils partagent' : 'They play, they share'}
-          </Text>
-          <View style={st.testimonialsList}>
-            {getTestimonials(fr).map((item, i) => (
-              <View key={i} style={st.testimonialRow}>
-                <View style={[st.testimonialAvatar, { backgroundColor: item.color + '18' }]}> 
-                  <Text style={[st.testimonialInitial, { color: item.color }]}>{item.initials}</Text>
-                </View>
-                <View style={st.testimonialContent}>
-                  <Text style={st.testimonialQuote}>"{item.quote}"</Text>
-                  <Text style={st.testimonialAuthor}>{item.name} {"\u2022"} {item.location}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Section 9: Free + support */}
+        {/* ===== SUPPORT ===== */}
         <View style={[st.card, st.supportCard]}>
-          <View style={st.sectionIcon}>
-            <MaterialIcons name="volunteer-activism" size={20} color="#F59E0B" />
+          <View style={st.supportIcon}>
+            <MaterialIcons name="favorite" size={22} color="#EF4444" />
           </View>
+          <Text style={st.supportTitle}>
+            {fr ? 'Soutenir le projet' : 'Support the project'}
+          </Text>
           <Text style={st.bodyText}>
             {fr
-              ? "L'application restera gratuite pour tous."
-              : "The application will remain free for everyone."}
+              ? "L'application restera gratuite."
+              : "The application will remain free."}
           </Text>
-          <Text style={[st.bodyText, { marginTop: 12 }]}>
+          <Text style={[st.bodyText, { marginTop: 8 }]}>
             {fr
-              ? "Pour celles et ceux qui souhaitent soutenir le projet et contribuer a le faire grandir, il est possible de le faire simplement en choisissant de retirer les publicites. C'est aujourd'hui la maniere la plus directe de participer a son developpement."
-              : "For those who wish to support the project and help it grow, you can do so simply by choosing to remove ads. This is currently the most direct way to contribute to its development."}
+              ? "Pour soutenir le projet, vous pouvez simplement retirer les publicites. C'est la maniere la plus directe de faire grandir cet outil independant."
+              : "To support the project, you can simply remove ads. It is the most direct way to grow this independent tool."}
           </Text>
           <Pressable
             style={({ pressed }) => [st.supportBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
@@ -465,21 +467,37 @@ export default function CreatorNoteScreen() {
           >
             <MaterialIcons name="favorite" size={18} color="#FFF" />
             <Text style={st.supportBtnText}>
-              {fr ? 'Soutenir le projet' : 'Support the project'}
+              {fr ? 'Retirer les publicites' : 'Remove ads'}
             </Text>
           </Pressable>
         </View>
 
-        {/* Section 9: Thank you */}
-        <View style={st.thanksCard}>
-          <MaterialIcons name="public" size={18} color="#2563EB" />
-          <Text style={st.thanksSubText}>
-            {fr
-              ? 'Nous sommes 12 millions de joueurs sur la planete.'
-              : 'We are 12 million players on the planet.'}
-          </Text>
+        {/* ===== CLOSING ===== */}
+        <View style={st.closingCard}>
+          <LinearGradient
+            colors={['#0F172A', '#1E3A5F']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={st.closingGradient}
+          >
+            <MaterialIcons name="public" size={28} color="#60A5FA" />
+            <Text style={st.closingLine1}>
+              {fr ? 'Des millions de joueurs.' : 'Millions of players.'}
+            </Text>
+            <Text style={st.closingLine2}>
+              {fr
+                ? 'Tres peu savent ou ils se situent.'
+                : 'Very few know where they stand.'}
+            </Text>
+            <View style={st.closingDivider} />
+            <Text style={st.closingHighlight}>
+              {fr ? 'Ici, ca change.' : 'Here, that changes.'}
+            </Text>
+          </LinearGradient>
         </View>
-        <View style={[st.thanksCard, { marginTop: -4 }]}>
+
+        {/* ===== THANK YOU ===== */}
+        <View style={st.thanksCard}>
           <MaterialIcons name="favorite" size={20} color="#F87171" />
           <Text style={st.thanksText}>
             {fr
@@ -488,7 +506,7 @@ export default function CreatorNoteScreen() {
           </Text>
         </View>
 
-        {/* Roadmap V2 CTA */}
+        {/* ===== ROADMAP CTA ===== */}
         <Pressable
           style={({ pressed }) => [st.roadmapCta, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
           onPress={() => router.push('/roadmap' as any)}
@@ -512,7 +530,7 @@ export default function CreatorNoteScreen() {
           </LinearGradient>
         </Pressable>
 
-        {/* Contact */}
+        {/* ===== CONTACT ===== */}
         <View style={st.contactCard}>
           <View style={st.contactIconWrap}>
             <MaterialIcons name="forum" size={24} color={theme.primary} />
@@ -531,23 +549,40 @@ export default function CreatorNoteScreen() {
             <Text style={st.contactBtnText}>{CONTACT_EMAIL}</Text>
           </Pressable>
         </View>
-
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-function BulletItem({ icon, color, text }: { icon: string; color: string; text: string }) {
+// ============================================
+// SUB-COMPONENTS
+// ============================================
+
+function PillarBullet({ icon, color, text }: { icon: string; color: string; text: string }) {
   return (
-    <View style={st.bulletRow}>
-      <View style={[st.bulletIcon, { backgroundColor: color + '12' }]}>
+    <View style={st.pillarBulletRow}>
+      <View style={[st.pillarBulletIcon, { backgroundColor: color + '12' }]}>
         <MaterialIcons name={icon as any} size={15} color={color} />
       </View>
-      <Text style={st.bulletText}>{text}</Text>
+      <Text style={st.pillarBulletText}>{text}</Text>
     </View>
   );
 }
 
+function CheckItem({ text }: { text: string }) {
+  return (
+    <View style={st.checkRow}>
+      <View style={st.checkBox}>
+        <MaterialIcons name="check" size={14} color="#22C55E" />
+      </View>
+      <Text style={st.checkText}>{text}</Text>
+    </View>
+  );
+}
+
+// ============================================
+// STYLES
+// ============================================
 const st = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F8FAFC' },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
@@ -557,56 +592,83 @@ const st = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16 },
 
   // Hero
-  hero: { borderRadius: 22, padding: 32, alignItems: 'center', marginTop: 16, marginBottom: 20, overflow: 'hidden', position: 'relative' },
+  hero: { borderRadius: 22, padding: 36, alignItems: 'center', marginTop: 16, marginBottom: 20, overflow: 'hidden', position: 'relative' },
   heroDecoCircle1: { position: 'absolute', top: -30, right: -20, width: 110, height: 110, borderRadius: 55, backgroundColor: 'rgba(255,255,255,0.04)' },
   heroDecoCircle2: { position: 'absolute', bottom: -20, left: -15, width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.03)' },
-  heroIconWrap: { width: 68, height: 68, borderRadius: 34, backgroundColor: 'rgba(248,113,113,0.12)', alignItems: 'center', justifyContent: 'center', marginBottom: 16, borderWidth: 2, borderColor: 'rgba(248,113,113,0.2)' },
-  heroTitle: { fontSize: 24, fontWeight: '800', color: '#FFF', textAlign: 'center', letterSpacing: -0.3 },
-  heroDivider: { width: 40, height: 2, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 1, marginVertical: 16 },
-  heroQuote: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', fontStyle: 'italic', lineHeight: 19 },
+  heroLine1: { fontSize: 16, color: 'rgba(255,255,255,0.6)', textAlign: 'center', lineHeight: 24, fontWeight: '500' },
+  heroLine2: { fontSize: 22, fontWeight: '800', color: '#FFF', textAlign: 'center', marginTop: 10, lineHeight: 30, letterSpacing: -0.3 },
 
   // Cards
   card: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
-  communityCard: { borderColor: '#10B98120', backgroundColor: '#F0FDF8' },
-  supportCard: { borderColor: '#F59E0B20', backgroundColor: '#FFFBEB' },
-
-  sectionIcon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F8FAFC', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  sectionLabel: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginBottom: 12 },
+  supportCard: { borderColor: '#EF444420', backgroundColor: '#FFF5F5', alignItems: 'center' as const },
 
   bodyText: { fontSize: 15, color: '#334155', lineHeight: 25 },
 
-  // Bullet list
-  bulletList: { gap: 10 },
-  bulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  bulletIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  bulletText: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 22 },
+  // Problem list
+  problemList: { marginTop: 16, gap: 10 },
+  problemItem: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  problemDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' },
+  problemText: { fontSize: 14, color: '#64748B', fontWeight: '500', fontStyle: 'italic' },
 
-  // Emphasis
-  emphasisBlock: { marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
-  emphasisText: { fontSize: 15, fontWeight: '700', color: '#0F172A', fontStyle: 'italic', textAlign: 'center' },
+  // Solution card
+  solutionCard: { backgroundColor: '#0F172A', borderRadius: 16, padding: 24, marginBottom: 20, alignItems: 'center' },
+  solutionText: { fontSize: 18, fontWeight: '700', color: '#FFF', textAlign: 'center', lineHeight: 26 },
 
-  // Motto
+  // Ambition header
+  ambitionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14, paddingHorizontal: 4 },
+  ambitionTitle: { fontSize: 20, fontWeight: '800', color: '#0F172A', letterSpacing: -0.3 },
+
+  // Pillar cards
+  pillarCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', borderLeftWidth: 4 },
+  pillarIconWrap: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  pillarTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 14, lineHeight: 22 },
+  pillarBullets: { gap: 10 },
+  pillarBulletRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
+  pillarBulletIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
+  pillarBulletText: { flex: 1, fontSize: 14, color: '#475569', lineHeight: 22 },
+  pillarFooter: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 16, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  pillarFooterText: { flex: 1, fontSize: 13, fontWeight: '700', color: '#2563EB', fontStyle: 'italic' },
+
+  // Motto card
   mottoCard: { marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
   mottoGradient: { padding: 28, alignItems: 'center', gap: 6 },
-  mottoLine: { fontSize: 16, color: 'rgba(255,255,255,0.65)', fontWeight: '500', textAlign: 'center' },
-  mottoHighlight: { fontSize: 17, color: '#FFF', fontWeight: '700', textAlign: 'center', marginTop: 6, fontStyle: 'italic' },
+  mottoIconRow: { marginBottom: 8 },
+  mottoTitle: { fontSize: 18, color: '#F59E0B', fontWeight: '800', textAlign: 'center', marginBottom: 8 },
+  mottoPoints: { gap: 4, marginBottom: 8 },
+  mottoLine: { fontSize: 15, color: 'rgba(255,255,255,0.7)', fontWeight: '500', textAlign: 'center' },
+  mottoDivider: { width: 40, height: 2, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 1, marginVertical: 10 },
+  mottoHighlight: { fontSize: 16, color: '#FFF', fontWeight: '700', textAlign: 'center', fontStyle: 'italic' },
+
+  // Section label
+  sectionLabel: { fontSize: 15, fontWeight: '600', color: '#0F172A', marginBottom: 12 },
+
+  // Checklist
+  checkList: { gap: 10, marginBottom: 12 },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  checkBox: { width: 28, height: 28, borderRadius: 8, backgroundColor: '#22C55E12', alignItems: 'center', justifyContent: 'center' },
+  checkText: { flex: 1, fontSize: 15, fontWeight: '600', color: '#334155', lineHeight: 22 },
+
+  // Emphasis
+  emphasisBlock: { marginTop: 4, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  emphasisText: { fontSize: 15, fontWeight: '700', color: '#0F172A', fontStyle: 'italic', textAlign: 'center' },
 
   // Support
-  supportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, backgroundColor: '#F59E0B', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14 },
+  supportIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: '#EF444412', alignItems: 'center', justifyContent: 'center', marginBottom: 12, borderWidth: 2, borderColor: '#EF444420' },
+  supportTitle: { fontSize: 18, fontWeight: '700', color: '#0F172A', marginBottom: 10 },
+  supportBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 16, backgroundColor: '#EF4444', paddingVertical: 14, paddingHorizontal: 24, borderRadius: 14 },
   supportBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  // Closing
+  closingCard: { marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
+  closingGradient: { padding: 32, alignItems: 'center', gap: 8 },
+  closingLine1: { fontSize: 16, color: 'rgba(255,255,255,0.7)', fontWeight: '500', textAlign: 'center', marginTop: 8 },
+  closingLine2: { fontSize: 15, color: 'rgba(255,255,255,0.5)', textAlign: 'center', lineHeight: 22 },
+  closingDivider: { width: 40, height: 2, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 1, marginVertical: 10 },
+  closingHighlight: { fontSize: 20, fontWeight: '800', color: '#FFF', textAlign: 'center' },
 
   // Thanks
   thanksCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 24, marginBottom: 12 },
   thanksText: { fontSize: 16, fontWeight: '700', color: '#0F172A', fontStyle: 'italic' },
-  thanksSubText: { fontSize: 14, fontWeight: '600', color: '#334155' },
-
-  // Contact
-  contactCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
-  contactIconWrap: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#2563EB10', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
-  contactTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
-  contactSub: { fontSize: 13, color: '#94A3B8', marginBottom: 16 },
-  contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
-  contactBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
 
   // Roadmap CTA
   roadmapCta: { marginBottom: 12, borderRadius: 16, overflow: 'hidden' },
@@ -615,14 +677,13 @@ const st = StyleSheet.create({
   roadmapCtaTitle: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   roadmapCtaSub: { fontSize: 12, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
 
-  // Testimonials
-  testimonialsList: { gap: 14 },
-  testimonialRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
-  testimonialAvatar: { width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', marginTop: 2 },
-  testimonialInitial: { fontSize: 14, fontWeight: '800' },
-  testimonialContent: { flex: 1 },
-  testimonialQuote: { fontSize: 14, color: '#334155', lineHeight: 21, fontStyle: 'italic' },
-  testimonialAuthor: { fontSize: 12, color: '#94A3B8', fontWeight: '600', marginTop: 4 },
+  // Contact
+  contactCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 24, alignItems: 'center', marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9' },
+  contactIconWrap: { width: 50, height: 50, borderRadius: 25, backgroundColor: '#2563EB10', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  contactTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A', marginBottom: 4 },
+  contactSub: { fontSize: 13, color: '#94A3B8', marginBottom: 16 },
+  contactBtn: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 12 },
+  contactBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
 
   // Stats counter
   statsCard: { backgroundColor: '#FFF', borderRadius: 16, padding: 20, marginBottom: 12, borderWidth: 1, borderColor: '#E2E8F0' },
