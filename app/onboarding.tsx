@@ -29,6 +29,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { trackOnboardingStep } from '@/services/onboardingAnalyticsService';
+import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
 // ============================================
 // TYPES
@@ -74,6 +75,9 @@ export default function OnboardingScreen() {
   // Profile state (post-login)
   const [username, setUsername] = useState('');
   const [role, setRole] = useState<PlayerRole | null>(null);
+  const [profileLocation, setProfileLocation] = useState<LocationData>({
+    address: '', city: '', country: 'France', latitude: 0, longitude: 0,
+  });
 
   // Gold sponsor for onboarding
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
@@ -252,14 +256,24 @@ export default function OnboardingScreen() {
       if (profileError) throw profileError;
 
       // Update player row (created by handle_new_user trigger)
+      const playerUpdate: any = {
+        name: username.trim(),
+        role: role || 'Milieu',
+        level: 'Intermédiaire',
+        updated_at: new Date().toISOString(),
+      };
+      if (profileLocation.city) {
+        playerUpdate.city = profileLocation.city;
+        playerUpdate.country = profileLocation.country || 'France';
+        playerUpdate.location = {
+          city: profileLocation.city,
+          latitude: profileLocation.latitude,
+          longitude: profileLocation.longitude,
+        };
+      }
       const { error: playerError } = await supabase
         .from('players')
-        .update({
-          name: username.trim(),
-          role: role || 'Milieu',
-          level: 'Intermédiaire',
-          updated_at: new Date().toISOString(),
-        })
+        .update(playerUpdate)
         .eq('id', user?.id);
       // Player update is non-blocking — may fail if context not yet loaded
       if (playerError) console.log('[Onboarding] Player update warning:', playerError.message);
@@ -267,11 +281,21 @@ export default function OnboardingScreen() {
       // Update local context (non-blocking, context may not have loaded player data yet)
       try {
         if (user?.id) {
-          await updatePlayer(user.id, {
+          const localUpdate: any = {
             name: username.trim(),
             role: role || 'Milieu',
             level: 'Intermédiaire',
-          });
+          };
+          if (profileLocation.city) {
+            localUpdate.city = profileLocation.city;
+            localUpdate.country = profileLocation.country || 'France';
+            localUpdate.location = {
+              city: profileLocation.city,
+              latitude: profileLocation.latitude,
+              longitude: profileLocation.longitude,
+            };
+          }
+          await updatePlayer(user.id, localUpdate);
         }
       } catch (ctxErr) {
         console.log('[Onboarding] Context update skipped:', ctxErr);
@@ -944,6 +968,29 @@ export default function OnboardingScreen() {
                   autoCorrect={false}
                   maxLength={30}
                 />
+              </View>
+
+              <View style={s.expressSection}>
+                <Text style={s.expressLabel}>{language === 'fr' ? 'TA VILLE' : 'YOUR CITY'}</Text>
+                <View style={s.locationPickerWrap}>
+                  <LocationPicker
+                    label=""
+                    value={profileLocation}
+                    onChange={setProfileLocation}
+                    placeholder={language === 'fr' ? 'Rechercher ta ville...' : 'Search your city...'}
+                    showCityOnly
+                  />
+                </View>
+                {profileLocation.city ? (
+                  <View style={s.locationConfirm}>
+                    <MaterialIcons name="check-circle" size={14} color="#10B981" />
+                    <Text style={s.locationConfirmText}>{profileLocation.city}{profileLocation.country && profileLocation.country !== 'France' ? `, ${profileLocation.country}` : ''}</Text>
+                  </View>
+                ) : (
+                  <Text style={s.locationHint}>
+                    {language === 'fr' ? 'Recommande pour apparaitre sur la carte et le classement geo' : 'Recommended to appear on the map and geo ranking'}
+                  </Text>
+                )}
               </View>
 
               <View style={s.expressSection}>
@@ -1792,5 +1839,29 @@ const s = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#FFF',
+  },
+
+  // Location picker in onboarding
+  locationPickerWrap: {
+    backgroundColor: '#1E293B',
+    borderRadius: 12,
+    overflow: 'hidden' as const,
+  },
+  locationConfirm: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginTop: 8,
+  },
+  locationConfirmText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    color: '#10B981',
+  },
+  locationHint: {
+    fontSize: 11,
+    color: '#64748B',
+    marginTop: 6,
+    fontStyle: 'italic' as const,
   },
 });

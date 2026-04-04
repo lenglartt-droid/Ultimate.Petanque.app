@@ -40,6 +40,8 @@ import * as Linking from 'expo-linking';
 import EloSection from '@/components/feature/player/EloSection';
 import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
 import { computeHeadToHeadRoleAnalysis, computeSeasonalRoleEvolution, generateRoleEvolutionPdfHtml, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
+import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
+import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -195,6 +197,8 @@ export default function PlayerDetailScreen() {
   const [inactivityDecay, setInactivityDecay] = React.useState<{ decayAmount: number; daysSince: number } | null>(null);
   const [rankHistory, setRankHistory] = React.useState<Array<{ weekStart: string; rank: number; eloRating: number; matchesPlayed: number; winRate: number }>>([]);
   const [rankHistoryLoading, setRankHistoryLoading] = React.useState(false);
+  const [geoRank, setGeoRank] = React.useState<PlayerGeoRank | null>(null);
+  const [geoRankLoading, setGeoRankLoading] = React.useState(false);
   React.useEffect(() => {
     if (!player) return;
     setEloLoading(true);
@@ -218,6 +222,14 @@ export default function PlayerDetailScreen() {
         setRankHistory(history);
         setRankHistoryLoading(false);
       }).catch(() => setRankHistoryLoading(false));
+    }
+    // Fetch geo ranking
+    if (player.isPublic) {
+      setGeoRankLoading(true);
+      fetchPlayerGeoRank(player.id).then(({ geoRank: gr }) => {
+        setGeoRank(gr);
+        setGeoRankLoading(false);
+      }).catch(() => setGeoRankLoading(false));
     }
   }, [player?.id]);
 
@@ -624,6 +636,74 @@ export default function PlayerDetailScreen() {
                     {isSelfPlayer ? (<MaterialIcons name="chevron-right" size={18} color={getTrustScoreColor(trustScore.level)} style={{ marginLeft: 'auto', marginTop: 2 }} />) : null}
                   </Pressable>
                 )
+              ) : null}
+
+              {/* ===== GEO RANKING BADGES ===== */}
+              {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
+                <Pressable style={s.geoRankCard} onPress={() => router.push('/leaderboard-geo' as any)}>
+                  <View style={s.geoRankHeader}>
+                    <View style={[s.sectionIconBox, { backgroundColor: '#3B82F615', width: 28, height: 28 }]}>
+                      <MaterialIcons name="public" size={14} color="#3B82F6" />
+                    </View>
+                    <Text style={s.geoRankTitle}>{language === 'fr' ? 'Classement Geographique' : 'Geographic Ranking'}</Text>
+                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                  </View>
+                  <View style={s.geoRankBadgesRow}>
+                    {geoRank.city ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#3B82F625' }]}>
+                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#3B82F612' }]}>
+                          <MaterialIcons name="location-city" size={16} color="#3B82F6" />
+                        </View>
+                        <View style={s.geoRankBadgeInfo}>
+                          <Text style={s.geoRankBadgeLabel}>{geoRank.city.name}</Text>
+                          <View style={s.geoRankBadgeRankRow}>
+                            <Text style={[s.geoRankBadgeRank, { color: geoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{geoRank.city.rank}</Text>
+                            <Text style={s.geoRankBadgeTotal}>/{geoRank.city.total}</Text>
+                          </View>
+                        </View>
+                        {geoRank.city.rank === 1 ? (
+                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
+                        ) : geoRank.city.rank <= 3 ? (
+                          <View style={[s.geoRankCrown, { backgroundColor: '#94A3B812' }]}><MaterialIcons name="emoji-events" size={12} color="#94A3B8" /></View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                    {geoRank.country ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#10B98125' }]}>
+                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#10B98112' }]}>
+                          <Text style={{ fontSize: 14 }}>{getCountryFlag(geoRank.country.name)}</Text>
+                        </View>
+                        <View style={s.geoRankBadgeInfo}>
+                          <Text style={s.geoRankBadgeLabel} numberOfLines={1}>{geoRank.country.name}</Text>
+                          <View style={s.geoRankBadgeRankRow}>
+                            <Text style={[s.geoRankBadgeRank, { color: geoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{geoRank.country.rank}</Text>
+                            <Text style={s.geoRankBadgeTotal}>/{geoRank.country.total}</Text>
+                          </View>
+                        </View>
+                        {geoRank.country.rank === 1 ? (
+                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                    {geoRank.continent ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#F59E0B25' }]}>
+                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#F59E0B12' }]}>
+                          <Text style={{ fontSize: 14 }}>{getContinentFlag(geoRank.continent.name)}</Text>
+                        </View>
+                        <View style={s.geoRankBadgeInfo}>
+                          <Text style={s.geoRankBadgeLabel} numberOfLines={1}>{getContinentLabel(geoRank.continent.name, language === 'fr')}</Text>
+                          <View style={s.geoRankBadgeRankRow}>
+                            <Text style={[s.geoRankBadgeRank, { color: geoRank.continent.rank <= 3 ? '#F59E0B' : '#F59E0B' }]}>#{geoRank.continent.rank}</Text>
+                            <Text style={s.geoRankBadgeTotal}>/{geoRank.continent.total}</Text>
+                          </View>
+                        </View>
+                        {geoRank.continent.rank === 1 ? (
+                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
+                        ) : null}
+                      </View>
+                    ) : null}
+                  </View>
+                </Pressable>
               ) : null}
 
               {player.isPublic && player.stats.matchesPlayed < LEADERBOARD_MIN_MATCHES ? (
@@ -1208,4 +1288,18 @@ const s = StyleSheet.create({
   mipItemTime: { fontSize: 12, color: theme.textMuted },
   mipArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
   mipCreateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
+
+  // Geo Rank
+  geoRankCard: { width: '100%' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 16, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
+  geoRankHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12 },
+  geoRankTitle: { fontSize: 12, fontWeight: '700' as const, color: theme.textSecondary, flex: 1, letterSpacing: 0.3 },
+  geoRankBadgesRow: { flexDirection: 'row' as const, gap: 8 },
+  geoRankBadge: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.surface, borderRadius: 14, padding: 10, borderWidth: 1 },
+  geoRankBadgeIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  geoRankBadgeInfo: { flex: 1 },
+  geoRankBadgeLabel: { fontSize: 10, fontWeight: '600' as const, color: theme.textSecondary, marginBottom: 2 },
+  geoRankBadgeRankRow: { flexDirection: 'row' as const, alignItems: 'baseline' as const },
+  geoRankBadgeRank: { fontSize: 18, fontWeight: '900' as const },
+  geoRankBadgeTotal: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
+  geoRankCrown: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#F59E0B12', alignItems: 'center' as const, justifyContent: 'center' as const },
 });
