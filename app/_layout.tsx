@@ -845,6 +845,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="leaderboard-geo" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="role-performance" 
                 options={{ 
                   presentation: 'card',
