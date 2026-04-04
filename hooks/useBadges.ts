@@ -96,12 +96,16 @@ export function useBadges() {
         context.eloMilieu = selfPlayer.eloMilieu || 1000;
       }
 
-      // Check if player is #1 in their city for City Champion badge
+      // Check geographic leadership badges
       try {
+        const supabaseGeo = (await import('@/template')).getSupabaseClient();
         const cityName = selfPlayer?.city || (selfPlayer?.location as any)?.city;
+        const countryName = selfPlayer?.country;
+        const clubName = selfPlayer?.club;
+
+        // City leader (#1 in city)
         if (cityName && selfPlayer?.isPublic) {
-          const supabaseCity = (await import('@/template')).getSupabaseClient();
-          const { data: cityPlayers } = await supabaseCity
+          const { data: cityPlayers } = await supabaseGeo
             .from('players')
             .select('id, elo_rating')
             .eq('city', cityName)
@@ -113,7 +117,60 @@ export function useBadges() {
             context.cityName = cityName;
           }
         }
-      } catch { /* city check failed */ }
+
+        // Club leader (#1 in club)
+        if (clubName && selfPlayer?.isPublic) {
+          const { data: clubPlayers } = await supabaseGeo
+            .from('players')
+            .select('id, elo_rating')
+            .eq('club', clubName)
+            .eq('is_public', true)
+            .order('elo_rating', { ascending: false })
+            .limit(1);
+          if (clubPlayers && clubPlayers.length > 0 && clubPlayers[0].id === user.id) {
+            context.isClubLeader = true;
+            context.clubName = clubName;
+          }
+        }
+
+        // Country leader (#1 in country)
+        if (countryName && selfPlayer?.isPublic) {
+          const { data: countryPlayers } = await supabaseGeo
+            .from('players')
+            .select('id, elo_rating')
+            .eq('country', countryName)
+            .eq('is_public', true)
+            .order('elo_rating', { ascending: false })
+            .limit(1);
+          if (countryPlayers && countryPlayers.length > 0 && countryPlayers[0].id === user.id) {
+            context.isCountryLeader = true;
+            context.countryName = countryName;
+          }
+        }
+
+        // Continent leader (#1 in continent)
+        if (countryName && selfPlayer?.isPublic) {
+          const { getContinent } = await import('@/constants/geoData');
+          const continent = getContinent(countryName);
+          const { data: allPublicPlayers } = await supabaseGeo
+            .from('players')
+            .select('id, elo_rating, country')
+            .eq('is_public', true)
+            .order('elo_rating', { ascending: false });
+          if (allPublicPlayers && allPublicPlayers.length > 0) {
+            // Filter by continent
+            const continentPlayers = allPublicPlayers.filter((p: any) => p.country && getContinent(p.country) === continent);
+            if (continentPlayers.length > 0 && continentPlayers[0].id === user.id) {
+              context.isContinentLeader = true;
+              context.continentName = continent;
+            }
+            // World leader (#1 globally)
+            if (allPublicPlayers[0].id === user.id) {
+              context.isWorldLeader = true;
+            }
+          }
+        }
+      } catch { /* geo leadership check failed */ }
 
       // Fetch witness attestations given count for Trusted Witness badge
       try {

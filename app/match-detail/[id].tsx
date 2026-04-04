@@ -704,6 +704,14 @@ export default function MatchDetailScreen() {
             <MaterialIcons name="share" size={20} color="#FFF" />
             <Text style={s.shareCtaText}>{fr ? 'Partager ce match' : 'Share this match'}</Text>
           </Pressable>
+
+          <Pressable
+            style={({ pressed }) => [s.shareCardCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+            onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'match', id: match.id } } as any); }}
+          >
+            <MaterialIcons name="image" size={20} color="#8B5CF6" />
+            <Text style={s.shareCardCtaText}>{fr ? 'Creer une carte visuelle' : 'Create Visual Card'}</Text>
+          </Pressable>
         </View>
       </ScrollView>
 
@@ -865,4 +873,6 @@ const s = StyleSheet.create({
   editCtaText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   shareCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: theme.success, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
   shareCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  shareCardCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#8B5CF6' + '12', paddingVertical: 16, borderRadius: 18, borderWidth: 1.5, borderColor: '#8B5CF6' + '30' },
+  shareCardCtaText: { fontSize: 15, fontWeight: '700', color: '#8B5CF6' },
 });
