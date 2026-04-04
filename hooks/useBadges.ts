@@ -96,6 +96,25 @@ export function useBadges() {
         context.eloMilieu = selfPlayer.eloMilieu || 1000;
       }
 
+      // Check if player is #1 in their city for City Champion badge
+      try {
+        const cityName = selfPlayer?.city || (selfPlayer?.location as any)?.city;
+        if (cityName && selfPlayer?.isPublic) {
+          const supabaseCity = (await import('@/template')).getSupabaseClient();
+          const { data: cityPlayers } = await supabaseCity
+            .from('players')
+            .select('id, elo_rating')
+            .eq('city', cityName)
+            .eq('is_public', true)
+            .order('elo_rating', { ascending: false })
+            .limit(1);
+          if (cityPlayers && cityPlayers.length > 0 && cityPlayers[0].id === user.id) {
+            context.isCityLeader = true;
+            context.cityName = cityName;
+          }
+        }
+      } catch { /* city check failed */ }
+
       // Fetch witness attestations given count for Trusted Witness badge
       try {
         const supabase = (await import('@/template')).getSupabaseClient();
