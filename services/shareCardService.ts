@@ -4,7 +4,6 @@
  * Uses react-native-view-shot + expo-sharing.
  */
 import { Platform } from 'react-native';
-import { captureRef } from 'react-native-view-shot';
 
 export type ShareCardFormat = 'square' | 'story' | 'landscape';
 
@@ -19,6 +18,7 @@ export const CARD_DIMENSIONS: Record<ShareCardFormat, { width: number; height: n
  */
 export async function captureCardAsImage(viewRef: any): Promise<string | null> {
   try {
+    const { captureRef } = require('react-native-view-shot');
     const uri = await captureRef(viewRef, {
       format: 'png',
       quality: 1,
