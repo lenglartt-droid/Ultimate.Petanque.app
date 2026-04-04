@@ -207,6 +207,64 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
       ],
     },
     {
+      id: 'geo_leaderboard',
+      category: fr ? 'Classement Geographique' : 'Geographic Ranking',
+      icon: 'public',
+      color: '#2563EB',
+      description: fr ? 'Classement par ville, pays et continent' : 'Ranking by city, country and continent',
+      questions: [
+        {
+          id: 'geo1',
+          q: fr ? 'Comment fonctionne le classement geographique ?' : 'How does the geographic ranking work?',
+          a: fr
+            ? 'Le classement geographique classe les zones (villes, pays, continents) en fonction des joueurs publics qui y sont actifs. Chaque zone est evaluee sur un score composite incluant l\'ELO moyen, le taux de victoire, le nombre de joueurs et le total de matchs. Accessible depuis la page d\'accueil (widget Classements > onglet Geographique) ou via la page dediee "Classement Geo".'
+            : 'The geographic ranking ranks zones (cities, countries, continents) based on active public players in each area. Each zone is scored using a composite metric including average ELO, win rate, player count and total matches. Accessible from the home page (Rankings widget > Geographic tab) or the dedicated "Geo Ranking" page.',
+        },
+        {
+          id: 'geo2',
+          q: fr ? 'Comment voir les classements par ville, pays et continent ?' : 'How do I view city, country and continent rankings?',
+          a: fr
+            ? 'Depuis le widget Classements sur l\'accueil, selectionnez l\'onglet Geographique puis choisissez Villes, Pays ou Continents. Le top 3 est affiche avec un podium visuel. Appuyez sur "Voir le classement geo complet" pour acceder a la page complete avec recherche et 5 criteres de tri (score composite, ELO moyen, taux de victoire, nombre de joueurs, total matchs).'
+            : 'From the Rankings widget on home, select the Geographic tab then choose Cities, Countries or Continents. The top 3 is displayed with a visual podium. Tap "See full geo ranking" to access the complete page with search and 5 sort criteria (composite score, average ELO, win rate, player count, total matches).',
+        },
+        {
+          id: 'geo3',
+          q: fr ? 'Comment voir mon rang dans ma ville, mon pays et mon continent ?' : 'How do I see my rank in my city, country and continent?',
+          a: fr
+            ? 'Votre rang geographique est affiche a 3 endroits : (1) Sur votre fiche joueur ("Ma fiche"), entre les sections ELO et Lieu. (2) Sur votre profil joueur quand un autre joueur le consulte. (3) Dans la carte de partage quand vous partagez votre fiche. Les medailles or/argent/bronze sont affichees si vous etes dans le top 3 de votre zone.'
+            : 'Your geographic rank is displayed in 3 places: (1) On your player card ("My Card"), between the ELO and Location sections. (2) On your player profile when another player views it. (3) In the share card when you share your profile. Gold/silver/bronze medals are shown if you are in the top 3 of your zone.',
+        },
+        {
+          id: 'geo4',
+          q: fr ? 'Comment apparaitre dans le classement geographique ?' : 'How do I appear in the geographic ranking?',
+          a: fr
+            ? 'Deux conditions : (1) Votre profil doit etre public (activez "Visibilite publique" depuis votre fiche joueur). (2) Votre localisation doit etre renseignee (ville et pays). La localisation est demandee lors de l\'inscription et peut etre modifiee a tout moment depuis votre profil ou la page d\'edition du joueur. L\'app utilise le reverse geocoding pour deduire automatiquement votre ville a partir de votre position.'
+            : 'Two conditions: (1) Your profile must be public (enable "Public Visibility" from your player card). (2) Your location must be set (city and country). Location is requested during registration and can be changed at any time from your profile or player edit page. The app uses reverse geocoding to automatically deduce your city from your position.',
+        },
+        {
+          id: 'geo5',
+          q: fr ? 'Quels sont les badges geographiques ?' : 'What are the geographic badges?',
+          a: fr
+            ? '5 badges de leadership geographique : "Boss de la Ville" (#1 ELO de sa ville), "Champion du Quartier" (#1 ELO de son club), "Heros National" (#1 ELO de son pays), "Seigneur des Terrains" (#1 ELO de son continent), "Maitre Universel" (#1 ELO au monde). Chaque badge est attribue automatiquement et se met a jour dynamiquement : si un autre joueur vous depasse, il recupere le badge.'
+            : '5 geographic leadership badges: "City Boss" (#1 ELO in your city), "Club Champion" (#1 ELO in your club), "National Hero" (#1 ELO in your country), "Continental Lord" (#1 ELO in your continent), "Universal Master" (#1 ELO worldwide). Each badge is awarded automatically and updates dynamically: if another player surpasses you, they get the badge.',
+        },
+        {
+          id: 'geo6',
+          q: fr ? 'Comment explorer le classement d\'une ville, d\'un pays ou d\'un continent specifique ?' : 'How do I explore the ranking of a specific city, country or continent?',
+          a: fr
+            ? 'Depuis le classement geo complet ou le widget Classements, appuyez sur n\'importe quelle zone (ville, pays ou continent) pour ouvrir sa page de detail. Vous y verrez tous les joueurs classes de cette zone avec leur ELO, taux de victoire et club. Vous pouvez basculer entre vue "All time" et "Hebdomadaire", et rechercher un joueur specifique.'
+            : 'From the full geo ranking or the Rankings widget, tap any zone (city, country or continent) to open its detail page. You will see all ranked players in that zone with their ELO, win rate and club. You can switch between "All time" and "Weekly" views, and search for a specific player.',
+        },
+        {
+          id: 'geo7',
+          q: fr ? 'Pourquoi la localisation est-elle obligatoire ?' : 'Why is location mandatory?',
+          a: fr
+            ? 'La localisation est essentielle pour le classement geographique, la carte des joueurs/terrains/clubs, et les fonctionnalites de rencontre (RDV, meetups). Sans elle, il est impossible de savoir dans quelle ville ou pays vous vous situez. L\'app ne collecte que votre ville et pays (pas d\'adresse precise). Vous pouvez modifier votre ville a tout moment.'
+            : 'Location is essential for the geographic ranking, the players/courts/clubs map, and meetup features. Without it, it is impossible to know which city or country you are in. The app only collects your city and country (not a precise address). You can change your city at any time.',
+        },
+      ],
+    },
+    {
       id: 'map_meetups',
       category: fr ? 'Carte, RDV & Rencontres' : 'Map, Meetups & Encounters',
       icon: 'map',
