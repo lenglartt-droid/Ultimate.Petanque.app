@@ -58,6 +58,7 @@ export interface Player {
   eloPointeur?: number;
   eloMilieu?: number;
   lastMatchDate?: string;
+  city?: string;
   location?: {
     latitude: number;
     longitude: number;

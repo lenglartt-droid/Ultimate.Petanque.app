@@ -25,6 +25,7 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useApp } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
 
@@ -81,7 +82,7 @@ export default function EditPlayerScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { getPlayerById, updatePlayer, deletePlayer, clubs, terrains, matches, loading: appLoading } = useApp();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
 
   const player = getPlayerById(id!);
 
@@ -129,9 +130,9 @@ export default function EditPlayerScreen() {
     return terrains.filter(tr => !s || tr.name.toLowerCase().includes(s) || tr.city.toLowerCase().includes(s));
   }, [terrains, terrainSearch]);
 
-  const progressFilled = [name.trim(), true, true].filter(Boolean).length;
-  const progressTotal = 3;
-  const progressLabel = !name.trim() ? t('player', 'nameIsRequired') : t('tournament', 'readyToCreate');
+  const progressFilled = [name.trim(), location.city].filter(Boolean).length;
+  const progressTotal = 2;
+  const progressLabel = !name.trim() ? t('player', 'nameIsRequired') : !location.city ? (language === 'fr' ? 'Localisation requise' : 'Location required') : t('tournament', 'readyToCreate');
 
   useEffect(() => {
     if (player) {
@@ -269,6 +270,7 @@ export default function EditPlayerScreen() {
 
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('player', 'nameIsRequired')); return; }
+    if (!location.city) { Alert.alert(t('common', 'error'), language === 'fr' ? 'La localisation est obligatoire. Veuillez selectionner une ville.' : 'Location is required. Please select a city.'); return; }
     const sc = clubs.find(c => c.id === clubId);
     const avatarUrl = await uploadAvatar();
     const boules = (boulesName.trim() || boulesDiameter || boulesWeight) ? {
@@ -284,6 +286,7 @@ export default function EditPlayerScreen() {
       email: email.trim() || null, handedness: handedness || null, experience: experience || null, boules,
       location: location.city ? { city: location.city, latitude: location.latitude, longitude: location.longitude } : undefined,
       country: location.country || 'France',
+      city: location.city || null,
     });
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     router.back();
@@ -350,7 +353,7 @@ export default function EditPlayerScreen() {
           </SectionCard>
 
           {/* 3. Localisation */}
-          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100}>
+          <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100} required>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('player', 'searchCity')} showCityOnly />
             {(() => {
               const empty = !location.latitude && !location.longitude;

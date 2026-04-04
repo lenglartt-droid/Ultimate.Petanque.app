@@ -51,6 +51,7 @@ export async function addPlayerOp(
       phone: player.phone,
       email: player.email,
       country: player.country,
+      city: player.city || (player.location as any)?.city || null,
       boules: player.boules,
       handedness: player.handedness,
       terrain_id: player.terrainId,
@@ -103,6 +104,7 @@ export async function updatePlayerOp(
     if (updates.level !== undefined) dbUpdates.level = updates.level;
     if (updates.location !== undefined) dbUpdates.location = updates.location;
     if (updates.country !== undefined) dbUpdates.country = updates.country;
+    if ((updates as any).city !== undefined) dbUpdates.city = (updates as any).city;
     if (updates.boules !== undefined) dbUpdates.boules = updates.boules;
     if (updates.handedness !== undefined) dbUpdates.handedness = updates.handedness || null;
     if (updates.experience !== undefined) dbUpdates.experience = updates.experience || null;

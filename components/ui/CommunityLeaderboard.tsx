@@ -573,10 +573,17 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
         )}
 
         {/* CTA */}
-        <Pressable style={s.ctaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}>
-          <Text style={s.ctaBtnText}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
-          <MaterialIcons name="arrow-forward" size={16} color="#F59E0B" />
-        </Pressable>
+        <View style={s.ctaRow}>
+          <Pressable style={s.ctaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}>
+            <Text style={s.ctaBtnText}>{t('leaderboard', 'seeFullLeaderboard')}</Text>
+            <MaterialIcons name="arrow-forward" size={16} color="#F59E0B" />
+          </Pressable>
+          <Pressable style={s.geoCtaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
+            <MaterialIcons name="public" size={14} color="#3B82F6" />
+            <Text style={s.geoCtaBtnText}>{language === 'fr' ? 'Classement Geo' : 'Geo Ranking'}</Text>
+            <MaterialIcons name="arrow-forward" size={14} color="#3B82F6" />
+          </Pressable>
+        </View>
       </View>
     </View>
   );
@@ -669,6 +676,9 @@ const s = StyleSheet.create({
   noteText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
 
   // CTA
-  ctaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, marginTop: 12, paddingVertical: 14, borderTopWidth: 1, borderTopColor: theme.border },
+  ctaRow: { marginTop: 12, borderTopWidth: 1, borderTopColor: theme.border, gap: 0 },
+  ctaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border + '50' },
   ctaBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#F59E0B' },
+  geoCtaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 12 },
+  geoCtaBtnText: { fontSize: 13, fontWeight: '600' as const, color: '#3B82F6' },
 });

@@ -34,6 +34,8 @@ import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { detectDuplicateClubs, pickBestClub, getClubMergePreview, mergeClubs, getClubMergeHistory, getClubHealthTrends, ClubDuplicateGroup } from '@/services/adminClubService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
+import { ClubsSkeleton } from '@/components/ui/AdminSkeleton';
 
 import { Platform } from 'react-native';
 
@@ -617,12 +619,16 @@ export default function AdminClubsScreen() {
         <View style={s.header}>
           <Text style={s.headerTitle}>{fr ? 'Gestion Clubs' : 'Club Management'}</Text>
         </View>
-        <View style={s.center}><ActivityIndicator size="large" color={theme.primary} /></View>
+        <AdminQuickNav currentRoute="/admin-clubs" />
+        <ScrollView style={s.scroll} showsVerticalScrollIndicator={false}>
+          <ClubsSkeleton />
+        </ScrollView>
       </SafeAreaView>
     );
   }
 
   return (
+    <PageErrorBoundary pageName="Clubs">
     <AdminGuard language={language} requiredPermission="clubs">
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
@@ -1819,6 +1825,7 @@ export default function AdminClubsScreen() {
       </Modal>
     </SafeAreaView>
     </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 
