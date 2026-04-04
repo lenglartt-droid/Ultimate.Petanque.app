@@ -14,6 +14,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
+import { fetchSuspiciousPlayers, getTrustScoreColor } from '@/services/trustScoreService';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
 
@@ -113,6 +114,7 @@ export default function CreatorNoteScreen() {
   const fr = language === 'fr';
   const [stats, setStats] = useState<CommunityStats>({ players: 0, matches: 0, terrains: 0, tournaments: 0, clubs: 0, challenges: 0 });
   const [statsLoaded, setStatsLoaded] = useState(false);
+  const [trustStats, setTrustStats] = useState<{ avg: number; verified: number; trusted: number; standard: number; total: number }>({ avg: 0, verified: 0, trusted: 0, standard: 0, total: 0 });
 
   useEffect(() => {
     const supabase = getSupabaseClient();
@@ -129,6 +131,16 @@ export default function CreatorNoteScreen() {
       }
       setStatsLoaded(true);
     }).catch(() => setStatsLoaded(true));
+    // Load trust stats
+    fetchSuspiciousPlayers().then(({ players: tp }) => {
+      const active = tp.filter(p => p.status !== 'banned');
+      if (active.length === 0) return;
+      const total = active.length;
+      const avg = Math.round(active.reduce((sum: number, p: any) => sum + p.trustScore, 0) / total);
+      let verified = 0, trusted = 0, standard = 0;
+      active.forEach((p: any) => { if (p.trustScore >= 80) verified++; else if (p.trustScore >= 65) trusted++; else standard++; });
+      setTrustStats({ avg, verified, trusted, standard, total });
+    }).catch(() => {});
   }, []);
 
   return (
@@ -235,6 +247,38 @@ export default function CreatorNoteScreen() {
               <Text style={st.statsFooterText}>
                 {fr ? 'Donnees en temps reel' : 'Real-time data'}
               </Text>
+            </View>
+          </View>
+        ) : null}
+
+        {/* Community Health Section (moved from leaderboard) */}
+        {trustStats.total > 0 ? (
+          <View style={st.card}>
+            <View style={st.statsHeader}>
+              <View style={[st.statsSectionIcon, { backgroundColor: '#3B82F612' }]}>
+                <MaterialIcons name="health-and-safety" size={18} color="#3B82F6" />
+              </View>
+              <Text style={st.statsTitle}>
+                {fr ? 'Sante de la communaute' : 'Community Health'}
+              </Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
+              {[
+                { label: fr ? 'Score moyen' : 'Avg Score', value: trustStats.avg, color: trustStats.avg >= 65 ? '#22C55E' : trustStats.avg >= 45 ? '#D97706' : '#EF4444' },
+                { label: fr ? 'Verifies' : 'Verified', value: trustStats.verified, color: '#22C55E' },
+                { label: fr ? 'Fiables' : 'Trusted', value: trustStats.trusted, color: '#3B82F6' },
+                { label: 'Standard', value: trustStats.standard, color: '#D97706' },
+              ].map((item, i) => (
+                <View key={i} style={{ flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 8 }}>
+                  <Text style={{ fontSize: 18, fontWeight: '900', color: item.color }}>{item.value}</Text>
+                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 2 }}>{item.label}</Text>
+                </View>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#F1F5F9' }}>
+              <View style={{ flex: Math.max(trustStats.verified, 0.1), backgroundColor: '#22C55E', borderRadius: 4 }} />
+              <View style={{ flex: Math.max(trustStats.trusted, 0.1), backgroundColor: '#3B82F6' }} />
+              <View style={{ flex: Math.max(trustStats.standard, 0.1), backgroundColor: '#D97706', borderRadius: 4 }} />
             </View>
           </View>
         ) : null}
