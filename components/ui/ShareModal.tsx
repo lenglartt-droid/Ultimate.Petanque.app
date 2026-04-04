@@ -30,6 +30,8 @@ import { config } from '@/constants/config';
 import { getEloRank, ELO_RANKS } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
+import { getCountryFlag, getContinentFlag } from '@/constants/geoData';
 
 const TYPE_CONFIG: Record<ShareItemType, { labelKey: string; icon: string; color: string; gradient: [string, string, string] }> = {
   player: { labelKey: 'playerLabelUpper', icon: 'person', color: '#2563EB', gradient: ['#1D4ED8', '#2563EB', '#3B82F6'] },
@@ -129,12 +131,21 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
 
   // Gold sponsor branding
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
+  // Geo rank for player shares
+  const [playerGeoRank, setPlayerGeoRank] = useState<PlayerGeoRank | null>(null);
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
       const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
       if (gold) setGoldSponsor(gold);
     });
   }, []);
+  useEffect(() => {
+    if (itemType === 'player' && visible && itemId) {
+      fetchPlayerGeoRank(itemId).then(({ geoRank }) => setPlayerGeoRank(geoRank)).catch(() => {});
+    } else {
+      setPlayerGeoRank(null);
+    }
+  }, [itemType, itemId, visible]);
 
   const typeConfig = TYPE_CONFIG[itemType];
   const typeLabelLower = t('shareModal', TYPE_LOWER_KEY[itemType]);
@@ -558,6 +569,30 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                         </View>
                       ) : null}
                       {(d.city || d.country) ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{[d.city, d.country].filter(Boolean).join(', ')}</Text></View> : null}
+                      {/* Geo rank badges */}
+                      {playerGeoRank && (playerGeoRank.city || playerGeoRank.country || playerGeoRank.continent) ? (
+                        <View style={s.geoRankShareRow}>
+                          <MaterialIcons name="public" size={11} color="#3B82F6" />
+                          {playerGeoRank.continent ? (
+                            <View style={s.geoRankSharePill}>
+                              <Text style={{ fontSize: 10 }}>{getContinentFlag(playerGeoRank.continent.name)}</Text>
+                              <Text style={[s.geoRankShareNum, { color: playerGeoRank.continent.rank <= 3 ? '#F59E0B' : '#64748B' }]}>#{playerGeoRank.continent.rank}</Text>
+                            </View>
+                          ) : null}
+                          {playerGeoRank.country ? (
+                            <View style={s.geoRankSharePill}>
+                              <Text style={{ fontSize: 10 }}>{getCountryFlag(playerGeoRank.country.name)}</Text>
+                              <Text style={[s.geoRankShareNum, { color: playerGeoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{playerGeoRank.country.rank}</Text>
+                            </View>
+                          ) : null}
+                          {playerGeoRank.city ? (
+                            <View style={s.geoRankSharePill}>
+                              <MaterialIcons name="location-city" size={10} color="#3B82F6" />
+                              <Text style={[s.geoRankShareNum, { color: playerGeoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{playerGeoRank.city.rank}</Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                       <View style={s.detailStatsBar}>
                         <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.stats.matches}</Text><Text style={s.detailStatLabel}>{fr ? 'Matchs' : 'Matches'}</Text></View>
                         <View style={s.detailStatDivider} />
@@ -1099,6 +1134,10 @@ const s = StyleSheet.create({
   contactPreviewItemMasked: { fontSize: 12, color: '#CBD5E1', fontWeight: '500', letterSpacing: 0.5 },
   detailReadOnlyRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
   detailReadOnlyText: { fontSize: 11, color: '#64748B', flex: 1 },
+  // Geo rank in share card
+  geoRankShareRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 6, flexWrap: 'wrap' as const },
+  geoRankSharePill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#F8FAFC', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#E2E8F0' },
+  geoRankShareNum: { fontSize: 12, fontWeight: '800' as const },
   // Match preview
   matchPreviewBlock: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, marginBottom: 8 },
   matchTeamCol: { flex: 1, gap: 4 },

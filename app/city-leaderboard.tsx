@@ -37,7 +37,10 @@ export default function CityLeaderboardScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { selfPlayer } = useApp();
-  const params = useLocalSearchParams<{ city?: string }>();
+  const params = useLocalSearchParams<{ city?: string; type?: string; value?: string }>();
+
+  // Support country/continent detail pages
+  const pageType = (params.type as 'city' | 'country' | 'continent') || 'city';
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -50,8 +53,8 @@ export default function CityLeaderboardScreen() {
   const [allPlayers, setAllPlayers] = useState<LeaderboardPlayer[]>([]);
   const [weeklyPlayers, setWeeklyPlayers] = useState<any[]>([]);
   const [cities, setCities] = useState<string[]>([]);
-  const [selectedCity, setSelectedCity] = useState(params.city || '');
-  const [showCityPicker, setShowCityPicker] = useState(!params.city);
+  const [selectedCity, setSelectedCity] = useState(params.city || params.value || '');
+  const [showCityPicker, setShowCityPicker] = useState(!params.city && !params.value);
   const [citySearch, setCitySearch] = useState('');
   const [search, setSearch] = useState('');
   const [mode, setMode] = useState<'alltime' | 'weekly'>('alltime');
@@ -151,8 +154,14 @@ export default function CityLeaderboardScreen() {
   const cityPlayers = useMemo(() => {
     if (!selectedCity) return [];
     const source = mode === 'weekly' ? weeklyPlayers : allPlayers;
-    let filtered = source.filter((p: any) => p.city?.toLowerCase() === selectedCity.toLowerCase());
-    // Apply geo scope filter for additional filtering
+    let filtered: any[];
+    if (pageType === 'country') {
+      filtered = source.filter((p: any) => p.country?.toLowerCase() === selectedCity.toLowerCase());
+    } else if (pageType === 'continent') {
+      filtered = source.filter((p: any) => p.country ? getContinent(p.country) === selectedCity : false);
+    } else {
+      filtered = source.filter((p: any) => p.city?.toLowerCase() === selectedCity.toLowerCase());
+    }
     if (geoScope === 'continent' && geoValue) {
       filtered = filtered.filter((p: any) => p.country ? getContinent(p.country) === geoValue : false);
     } else if (geoScope === 'country' && geoValue) {
@@ -162,7 +171,7 @@ export default function CityLeaderboardScreen() {
         if (b.stats.winRate !== a.stats.winRate) return b.stats.winRate - a.stats.winRate;
         return b.stats.matchesPlayed - a.stats.matchesPlayed;
       });
-  }, [selectedCity, mode, allPlayers, weeklyPlayers, geoScope, geoValue]);
+  }, [selectedCity, mode, allPlayers, weeklyPlayers, geoScope, geoValue, pageType]);
 
   const filteredCityPlayers = useMemo(() => {
     if (!search.trim()) return cityPlayers;
@@ -170,12 +179,27 @@ export default function CityLeaderboardScreen() {
     return cityPlayers.filter((p: any) => p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q));
   }, [cityPlayers, search]);
 
+  const availableValues = useMemo(() => {
+    if (pageType === 'country') {
+      const cs = allPlayers.map(p => p.country).filter(Boolean) as string[];
+      return [...new Set(cs)].sort();
+    }
+    if (pageType === 'continent') {
+      const cs = allPlayers.map(p => p.country ? getContinent(p.country) : null).filter(Boolean) as string[];
+      return [...new Set(cs)].sort();
+    }
+    return geoFilteredCities;
+  }, [pageType, allPlayers, geoFilteredCities]);
+
   const filteredCities = useMemo(() => {
-    const base = geoFilteredCities;
+    const base = availableValues;
     if (!citySearch.trim()) return base;
     const q = citySearch.toLowerCase().trim();
-    return base.filter(c => c.toLowerCase().includes(q));
-  }, [geoFilteredCities, citySearch]);
+    return base.filter(c => {
+      if (pageType === 'continent') return getContinentLabel(c, language === 'fr').toLowerCase().includes(q) || c.toLowerCase().includes(q);
+      return c.toLowerCase().includes(q);
+    });
+  }, [availableValues, citySearch, pageType, language]);
 
   const handleInviteToMeetup = useCallback(async (targetUserId: string, targetName: string) => {
     Haptics.selectionAsync();
@@ -319,15 +343,22 @@ export default function CityLeaderboardScreen() {
             <MaterialIcons name="arrow-back" size={24} color="#FFF" />
           </Pressable>
           <View style={{ flex: 1 }}>
-            <Text style={cs.headerTitle}>{language === 'fr' ? 'Classement par ville' : 'City Leaderboard'}</Text>
+            <Text style={cs.headerTitle}>
+              {pageType === 'country' ? (language === 'fr' ? 'Classement par pays' : 'Country Leaderboard')
+                : pageType === 'continent' ? (language === 'fr' ? 'Classement par continent' : 'Continent Leaderboard')
+                : (language === 'fr' ? 'Classement par ville' : 'City Leaderboard')}
+            </Text>
             {selectedCity ? (
-              <Text style={cs.headerSubtitle}>{selectedCity} — {filteredCityPlayers.length} {t('leaderboard', 'publicPlayersCount')}</Text>
+              <Text style={cs.headerSubtitle}>
+                {pageType === 'continent' ? getContinentLabel(selectedCity, language === 'fr') : pageType === 'country' ? `${getCountryFlag(selectedCity)} ${selectedCity}` : selectedCity}
+                {' '}— {filteredCityPlayers.length} {t('leaderboard', 'publicPlayersCount')}
+              </Text>
             ) : null}
           </View>
         </View>
 
-        {/* Geographic scope filter */}
-        <View style={cs.geoRow}>
+        {/* Geographic scope filter (hide for country/continent page types) */}
+        {pageType === 'city' ? <View style={cs.geoRow}>
           {(['world', 'continent', 'country'] as const).map(scope => {
             const isActive = geoScope === scope;
             const icons = { world: 'public', continent: 'travel-explore', country: 'flag' } as const;
@@ -360,8 +391,8 @@ export default function CityLeaderboardScreen() {
               </Pressable>
             );
           })}
-        </View>
-        {geoScope !== 'world' ? (
+        </View> : null}
+        {pageType === 'city' && geoScope !== 'world' ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
             {(geoScope === 'continent' ? uniqueContinents : uniqueCountries).map(val => {
               const isActive = geoValue === val;
@@ -380,11 +411,15 @@ export default function CityLeaderboardScreen() {
           </ScrollView>
         ) : null}
 
-        {/* City selector */}
+        {/* Value selector */}
         <Pressable style={cs.citySelector} onPress={() => setShowCityPicker(true)}>
-          <MaterialIcons name="place" size={18} color="#60A5FA" />
+          <MaterialIcons name={pageType === 'country' ? 'flag' : pageType === 'continent' ? 'public' : 'place'} size={18} color="#60A5FA" />
           <Text style={cs.citySelectorText} numberOfLines={1}>
-            {selectedCity || (language === 'fr' ? 'Choisir une ville...' : 'Choose a city...')}
+            {selectedCity
+              ? (pageType === 'continent' ? getContinentLabel(selectedCity, language === 'fr') : pageType === 'country' ? `${getCountryFlag(selectedCity)} ${selectedCity}` : selectedCity)
+              : (pageType === 'country' ? (language === 'fr' ? 'Choisir un pays...' : 'Choose a country...')
+                : pageType === 'continent' ? (language === 'fr' ? 'Choisir un continent...' : 'Choose a continent...')
+                : (language === 'fr' ? 'Choisir une ville...' : 'Choose a city...'))}
           </Text>
           <MaterialIcons name="expand-more" size={20} color="rgba(255,255,255,0.6)" />
         </Pressable>
@@ -456,12 +491,24 @@ export default function CityLeaderboardScreen() {
         )
       ) : (
         <View style={cs.emptyState}>
-          <MaterialIcons name="map" size={56} color={theme.textMuted} />
-          <Text style={cs.emptyTitle}>{language === 'fr' ? 'Selectionne une ville' : 'Select a city'}</Text>
-          <Text style={cs.emptyDesc}>{language === 'fr' ? 'Choisis une ville pour voir le classement local.' : 'Choose a city to see the local ranking.'}</Text>
+          <MaterialIcons name={pageType === 'country' ? 'flag' : pageType === 'continent' ? 'public' : 'map'} size={56} color={theme.textMuted} />
+          <Text style={cs.emptyTitle}>
+            {pageType === 'country' ? (language === 'fr' ? 'Selectionne un pays' : 'Select a country')
+              : pageType === 'continent' ? (language === 'fr' ? 'Selectionne un continent' : 'Select a continent')
+              : (language === 'fr' ? 'Selectionne une ville' : 'Select a city')}
+          </Text>
+          <Text style={cs.emptyDesc}>
+            {pageType === 'country' ? (language === 'fr' ? 'Choisis un pays pour voir le classement.' : 'Choose a country to see the ranking.')
+              : pageType === 'continent' ? (language === 'fr' ? 'Choisis un continent pour voir le classement.' : 'Choose a continent to see the ranking.')
+              : (language === 'fr' ? 'Choisis une ville pour voir le classement local.' : 'Choose a city to see the local ranking.')}
+          </Text>
           <Pressable style={cs.chooseCityBtn} onPress={() => setShowCityPicker(true)}>
-            <MaterialIcons name="place" size={18} color="#FFF" />
-            <Text style={cs.chooseCityBtnText}>{language === 'fr' ? 'Choisir une ville' : 'Choose a city'}</Text>
+            <MaterialIcons name={pageType === 'country' ? 'flag' : pageType === 'continent' ? 'public' : 'place'} size={18} color="#FFF" />
+            <Text style={cs.chooseCityBtnText}>
+              {pageType === 'country' ? (language === 'fr' ? 'Choisir un pays' : 'Choose a country')
+                : pageType === 'continent' ? (language === 'fr' ? 'Choisir un continent' : 'Choose a continent')
+                : (language === 'fr' ? 'Choisir une ville' : 'Choose a city')}
+            </Text>
           </Pressable>
         </View>
       )}
@@ -470,7 +517,11 @@ export default function CityLeaderboardScreen() {
       <Modal visible={showCityPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCityPicker(false)}>
         <SafeAreaView style={cs.modalContainer}>
           <View style={cs.modalHeader}>
-            <Text style={cs.modalTitle}>{language === 'fr' ? 'Choisir une ville' : 'Choose a city'}</Text>
+            <Text style={cs.modalTitle}>
+              {pageType === 'country' ? (language === 'fr' ? 'Choisir un pays' : 'Choose a country')
+                : pageType === 'continent' ? (language === 'fr' ? 'Choisir un continent' : 'Choose a continent')
+                : (language === 'fr' ? 'Choisir une ville' : 'Choose a city')}
+            </Text>
             <Pressable style={cs.modalClose} onPress={() => setShowCityPicker(false)}>
               <MaterialIcons name="close" size={24} color={theme.textPrimary} />
             </Pressable>
@@ -479,7 +530,7 @@ export default function CityLeaderboardScreen() {
             <MaterialIcons name="search" size={18} color={theme.textMuted} />
             <TextInput
               style={cs.modalSearchInput}
-              placeholder={language === 'fr' ? 'Rechercher une ville...' : 'Search city...'}
+              placeholder={pageType === 'country' ? (language === 'fr' ? 'Rechercher un pays...' : 'Search country...') : pageType === 'continent' ? (language === 'fr' ? 'Rechercher un continent...' : 'Search continent...') : (language === 'fr' ? 'Rechercher une ville...' : 'Search city...')}
               placeholderTextColor={theme.textMuted}
               value={citySearch}
               onChangeText={setCitySearch}
@@ -487,20 +538,31 @@ export default function CityLeaderboardScreen() {
             />
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
-            {filteredCities.map(city => {
-              const count = allPlayers.filter(p => p.city === city).length;
-              const isSelected = selectedCity === city;
+            {filteredCities.map(val => {
+              const count = pageType === 'country'
+                ? allPlayers.filter(p => p.country === val).length
+                : pageType === 'continent'
+                  ? allPlayers.filter(p => p.country ? getContinent(p.country) === val : false).length
+                  : allPlayers.filter(p => p.city === val).length;
+              const isSelected = selectedCity === val;
+              const displayName = pageType === 'continent' ? getContinentLabel(val, language === 'fr') : val;
               return (
                 <Pressable
-                  key={city}
+                  key={val}
                   style={[cs.cityItem, isSelected && cs.cityItemActive]}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedCity(city); setShowCityPicker(false); setCitySearch(''); }}
+                  onPress={() => { Haptics.selectionAsync(); setSelectedCity(val); setShowCityPicker(false); setCitySearch(''); }}
                 >
                   <View style={[cs.cityIcon, isSelected && { backgroundColor: theme.primary }]}>
-                    <MaterialIcons name="place" size={18} color={isSelected ? '#FFF' : theme.textSecondary} />
+                    {pageType === 'country' ? (
+                      <Text style={{ fontSize: 18 }}>{getCountryFlag(val)}</Text>
+                    ) : pageType === 'continent' ? (
+                      <Text style={{ fontSize: 18 }}>{getContinentFlag(val)}</Text>
+                    ) : (
+                      <MaterialIcons name="place" size={18} color={isSelected ? '#FFF' : theme.textSecondary} />
+                    )}
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={[cs.cityName, isSelected && { color: theme.primary }]}>{city}</Text>
+                    <Text style={[cs.cityName, isSelected && { color: theme.primary }]}>{displayName}</Text>
                     <Text style={cs.cityCount}>{count} {language === 'fr' ? 'joueur(s)' : 'player(s)'}</Text>
                   </View>
                   {isSelected ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}

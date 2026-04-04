@@ -27,6 +27,8 @@ import { toggleItemPublic } from '@/services/publicItemsService';
 import { getEloRank, ELO_INITIAL } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
+import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -97,6 +99,7 @@ export default function MyPlayerCardScreen() {
 
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
   const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
+  const [geoRank, setGeoRank] = React.useState<PlayerGeoRank | null>(null);
 
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
@@ -118,6 +121,12 @@ export default function MyPlayerCardScreen() {
       setAmbassadorData(amb || null);
     });
   }, [selfPlayer?.id, user?.id]);
+
+  // Load geo rank
+  React.useEffect(() => {
+    if (!selfPlayer?.isPublic || !selfPlayer?.id) return;
+    fetchPlayerGeoRank(selfPlayer.id).then(({ geoRank: gr }) => setGeoRank(gr)).catch(() => {});
+  }, [selfPlayer?.isPublic, selfPlayer?.id]);
 
   const handleTogglePublic = React.useCallback(() => {
     if (!selfPlayer || togglingPublic) return;
@@ -435,6 +444,40 @@ export default function MyPlayerCardScreen() {
                   </View>
                 );
               })() : null}
+
+              {/* ── BLOC 2c: GEO RANKING (between ELO and LIEU) ── */}
+              {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
+                <Pressable style={s.geoRankRow} onPress={() => router.push('/leaderboard-geo' as any)}>
+                  <View style={s.geoRankHeader}>
+                    <MaterialIcons name="public" size={14} color="#3B82F6" />
+                    <Text style={s.geoRankTitle}>{language === 'fr' ? 'Classement Geo' : 'Geo Ranking'}</Text>
+                    <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                  </View>
+                  <View style={s.geoRankBadges}>
+                    {geoRank.continent ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#F59E0B25' }]}>
+                        <Text style={{ fontSize: 12 }}>{getContinentFlag(geoRank.continent.name)}</Text>
+                        <Text style={[s.geoRankBadgeRank, { color: geoRank.continent.rank <= 3 ? '#F59E0B' : theme.textSecondary }]}>#{geoRank.continent.rank}</Text>
+                        <Text style={s.geoRankBadgeTotal}>/{geoRank.continent.total}</Text>
+                      </View>
+                    ) : null}
+                    {geoRank.country ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#10B98125' }]}>
+                        <Text style={{ fontSize: 12 }}>{getCountryFlag(geoRank.country.name)}</Text>
+                        <Text style={[s.geoRankBadgeRank, { color: geoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{geoRank.country.rank}</Text>
+                        <Text style={s.geoRankBadgeTotal}>/{geoRank.country.total}</Text>
+                      </View>
+                    ) : null}
+                    {geoRank.city ? (
+                      <View style={[s.geoRankBadge, { borderColor: '#3B82F625' }]}>
+                        <MaterialIcons name="location-city" size={12} color="#3B82F6" />
+                        <Text style={[s.geoRankBadgeRank, { color: geoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{geoRank.city.rank}</Text>
+                        <Text style={s.geoRankBadgeTotal}>/{geoRank.city.total}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                </Pressable>
+              ) : null}
 
               {/* ── BLOC 3: LIEU ── */}
               {(selfPlayer.club || profileTerrainName || selfPlayer.location?.city || selfPlayer.country) ? (
@@ -1261,6 +1304,15 @@ const s = StyleSheet.create({
   visibilityBadgeText: { fontSize: 12, fontWeight: '700' },
   privacyNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.warning + '08', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 12, borderWidth: 1, borderColor: theme.warning + '20' },
   privacyNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
+
+  // Geo Rank row
+  geoRankRow: { width: '100%' as const, paddingTop: 10, marginTop: 6, marginBottom: 8, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  geoRankHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 },
+  geoRankTitle: { fontSize: 11, fontWeight: '700' as const, color: '#3B82F6', flex: 1, letterSpacing: 0.3 },
+  geoRankBadges: { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 8 },
+  geoRankBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  geoRankBadgeRank: { fontSize: 15, fontWeight: '800' as const },
+  geoRankBadgeTotal: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
 
   // Edit button
   editProfileBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md, marginTop: 4, ...theme.shadows.card },
