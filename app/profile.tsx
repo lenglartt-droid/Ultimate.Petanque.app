@@ -1693,6 +1693,20 @@ export default function ProfileScreen() {
               <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
             </Pressable>
 
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => { Haptics.selectionAsync(); router.push('/trust-score' as any); }}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: '#3B82F6' + '15' }]}>
+                <MaterialIcons name="verified-user" size={24} color="#3B82F6" />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{(extraTranslations.trustScore?.viewTrustScore as any)?.[language] || 'View my trust score'}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Fiabilite et anti-triche' : 'Reliability and anti-cheat'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
 
           </View>
         )}
@@ -1936,14 +1950,7 @@ export default function ProfileScreen() {
 
             {expandedSections.community ? (
             <View style={styles.compactMenuGroup}>
-              {/* 1. Voir mon score de confiance */}
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/trust-score' as any); }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#3B82F6' + '15' }]}><MaterialIcons name="verified-user" size={16} color="#3B82F6" /></View>
-                <Text style={styles.compactMenuText}>{(extraTranslations.trustScore?.viewTrustScore as any)?.[language] || 'View my trust score'}</Text>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
-              {/* 2. Nos Ambassadeurs */}
+              {/* 1. Nos Ambassadeurs */}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Nos Ambassadeurs' : 'Our Ambassadors'}</Text>

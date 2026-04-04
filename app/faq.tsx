@@ -177,11 +177,25 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
             : 'Enable your public profile and play at least 3 public matches. Filter the leaderboard by zone (world, continent, country, city), period and criteria. Weekly leaderboard resets every Monday.',
         },
         {
+          id: 'sr6b',
+          q: fr ? 'Comment fonctionne le classement des clubs ?' : 'How does the club ranking work?',
+          a: fr
+            ? 'Le classement des clubs est base sur un score composite calcule a partir des statistiques de tous les joueurs publics du club : nombre de victoires, matchs joues, taux de tir et carreaux. Les 3 meilleurs clubs par score apparaissent dans le widget Classements (onglet Communautaire) de la page d\'accueil. Appuyez sur un club pour voir le classement complet avec tous les joueurs du club, leur ELO et leurs stats.'
+            : 'The club ranking is based on a composite score calculated from all public club players stats: wins, matches played, shot rate and carreaux. The top 3 clubs by score appear in the Rankings widget (Community tab) on the home page. Tap a club to see the full ranking with all club players, their ELO and stats.',
+        },
+        {
+          id: 'sr6c',
+          q: fr ? 'Comment fonctionne le classement par marque de boules ?' : 'How does the boules brand ranking work?',
+          a: fr
+            ? 'Le classement par marque de boules compile les victoires de tous les joueurs publics utilisant chaque marque. Les 3 marques les plus victorieuses apparaissent dans le widget Classements (onglet Communautaire) de la page d\'accueil. Pour contribuer, enregistrez vos boules dans Profil > Equipement et associez-les a vos matchs. Le classement complet par marque et modele est accessible depuis Classement > onglet Boules.'
+            : 'The boules brand ranking compiles wins from all public players using each brand. The top 3 most victorious brands appear in the Rankings widget (Community tab) on the home page. To contribute, register your boules in Profile > Equipment and link them to your matches. The full ranking by brand and model is accessible from Leaderboard > Boules tab.',
+        },
+        {
           id: 'sr7',
           q: fr ? 'Comment le classement est-il protege contre la triche ?' : 'How is the ranking protected from cheating?',
           a: fr
-            ? 'Un systeme interne de fiabilite (Trust Score) analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l\'impact des matchs si necessaire. Les activites suspectes sont limitees ou invisibilisees. Seuls les resultats fiables influencent le classement, garantissant une progression basee sur le merite.'
-            : 'An internal reliability system (Trust Score) analyzes gameplay behaviors, detects anomalies automatically and adjusts match impact if needed. Suspicious activities are limited or hidden. Only reliable results influence ranking, ensuring merit-based progression.',
+            ? 'Un systeme interne de fiabilite (Trust Score) analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l\'impact des matchs si necessaire. Les activites suspectes sont limitees ou invisibilisees. Seuls les resultats fiables influencent le classement, garantissant une progression basee sur le merite. Consultez votre score de confiance depuis Profil > Score de Confiance (sous Mon Palmares).'
+            : 'An internal reliability system (Trust Score) analyzes gameplay behaviors, detects anomalies automatically and adjusts match impact if needed. Suspicious activities are limited or hidden. Only reliable results influence ranking, ensuring merit-based progression. View your trust score from Profile > Trust Score (below My Honors).',
         },
         {
           id: 'sr8',

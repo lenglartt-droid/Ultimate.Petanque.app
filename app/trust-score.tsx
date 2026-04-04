@@ -7,11 +7,13 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
@@ -35,8 +37,44 @@ import Svg, { Circle } from 'react-native-svg';
 
 const et = extraTranslations.trustScore;
 
-function GaugeRing({ value, size = 80, color, label }: { value: number; size?: number; color: string; label: string }) {
-  const strokeWidth = 7;
+// ============================================
+// Large hero gauge
+// ============================================
+function HeroGauge({ value, size = 180, color }: { value: number; size?: number; color: string }) {
+  const strokeWidth = 12;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = radius * 2 * Math.PI;
+  const clamped = Math.max(0, Math.min(100, value));
+  const strokeDashoffset = circumference - (clamped / 100) * circumference;
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size}>
+        <Circle
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke={'rgba(255,255,255,0.08)'} strokeWidth={strokeWidth} fill="none"
+        />
+        <Circle
+          cx={size / 2} cy={size / 2} r={radius}
+          stroke={color} strokeWidth={strokeWidth + 2}
+          strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
+          strokeLinecap="round" fill="none"
+          rotation="-90" origin={`${size / 2}, ${size / 2}`}
+        />
+      </Svg>
+      <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
+        <Text style={{ fontSize: size * 0.28, fontWeight: '900', color: '#FFF', letterSpacing: -1 }}>{clamped}</Text>
+        <Text style={{ fontSize: size * 0.08, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: -2 }}>/100</Text>
+      </View>
+    </View>
+  );
+}
+
+// ============================================
+// Small gauge ring for factor breakdown
+// ============================================
+function GaugeRing({ value, size = 72, color, label }: { value: number; size?: number; color: string; label: string }) {
+  const strokeWidth = 6;
   const radius = (size - strokeWidth) / 2;
   const circumference = radius * 2 * Math.PI;
   const clamped = Math.max(0, Math.min(100, value));
@@ -46,17 +84,10 @@ function GaugeRing({ value, size = 80, color, label }: { value: number; size?: n
     <View style={{ alignItems: 'center' }}>
       <View style={{ width: size, height: size }}>
         <Svg width={size} height={size}>
-          <Circle
-            cx={size / 2} cy={size / 2} r={radius}
-            stroke={color + '15'} strokeWidth={strokeWidth} fill="none"
-          />
-          <Circle
-            cx={size / 2} cy={size / 2} r={radius}
-            stroke={color} strokeWidth={strokeWidth + 1}
+          <Circle cx={size / 2} cy={size / 2} r={radius} stroke={color + '15'} strokeWidth={strokeWidth} fill="none" />
+          <Circle cx={size / 2} cy={size / 2} r={radius} stroke={color} strokeWidth={strokeWidth + 1}
             strokeDasharray={circumference} strokeDashoffset={strokeDashoffset}
-            strokeLinecap="round" fill="none"
-            rotation="-90" origin={`${size / 2}, ${size / 2}`}
-          />
+            strokeLinecap="round" fill="none" rotation="-90" origin={`${size / 2}, ${size / 2}`} />
         </Svg>
         <View style={[StyleSheet.absoluteFill, { alignItems: 'center', justifyContent: 'center' }]}>
           <Text style={{ fontSize: size * 0.22, fontWeight: '800', color }}>{clamped}%</Text>
@@ -67,6 +98,9 @@ function GaugeRing({ value, size = 80, color, label }: { value: number; size?: n
   );
 }
 
+// ============================================
+// Factor bar for detailed breakdown
+// ============================================
 function FactorBar({ label, value, maxValue, color, icon, description }: {
   label: string; value: number; maxValue: number; color: string; icon: string; description?: string;
 }) {
@@ -90,6 +124,9 @@ function FactorBar({ label, value, maxValue, color, icon, description }: {
   );
 }
 
+// ============================================
+// Flag labels
+// ============================================
 const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color: string }> = {
   very_low_multiplayer: { fr: 'Tres peu de matchs multi-joueurs', en: 'Very few multi-player matches', icon: 'people-outline', color: '#F97316' },
   low_multiplayer: { fr: 'Peu de matchs multi-joueurs', en: 'Few multi-player matches', icon: 'people-outline', color: '#D97706' },
@@ -121,6 +158,9 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   witness_abuse_mutual_ring: { fr: 'Attestations mutuelles suspectes', en: 'Suspicious mutual attestations', icon: 'swap-horiz', color: '#F97316' },
 };
 
+// ============================================
+// MAIN
+// ============================================
 export default function TrustScoreScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
@@ -134,6 +174,13 @@ export default function TrustScoreScreen() {
   const [recomputing, setRecomputing] = useState(false);
   const [history, setHistory] = useState<TrustScoreHistoryPoint[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showHowItWorks, setShowHowItWorks] = useState(false);
+
+  const [screenW, setScreenW] = useState(() => Dimensions.get('window').width || 375);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenW(window.width));
+    return () => sub?.remove();
+  }, []);
 
   const loadTrustScore = async () => {
     if (!selfPlayer) { setLoading(false); return; }
@@ -149,7 +196,6 @@ export default function TrustScoreScreen() {
 
   useEffect(() => { loadTrustScore(); }, [selfPlayer?.id]);
 
-  // Load history
   useEffect(() => {
     if (!selfPlayer?.id) return;
     setHistoryLoading(true);
@@ -170,7 +216,6 @@ export default function TrustScoreScreen() {
     await triggerTrustScoreComputation();
     setTimeout(async () => {
       await loadTrustScore();
-      // Save history snapshot and reload
       if (selfPlayer && user) {
         const ts = await fetchTrustScore(selfPlayer.id);
         if (ts) {
@@ -183,7 +228,6 @@ export default function TrustScoreScreen() {
     }, 3000);
   };
 
-  // Extract details for gauges
   const details = trustData?.details || {};
   const multiPlayerRatio = details.multiPlayerRatio || 0;
   const uniqueOpponents = details.uniqueOpponents || 0;
@@ -192,14 +236,36 @@ export default function TrustScoreScreen() {
   const modExternal = details.modificationLogs?.external || 0;
   const matchesPerWeek = details.matchesPerWeek || 0;
   const accountAgeDays = details.accountAgeDays || 0;
-  const totalReports = details.totalReports || 0;
 
-  // Compute factor scores (approximate)
   const mpScore = Math.round(multiPlayerRatio * 0.3 * 100) / 100;
   const diversityScore = totalMatches > 0 ? Math.min(20, Math.round((uniqueOpponents / totalMatches) * 20)) : 0;
   const consistencyScore = Math.round((performanceConsistency / 100) * 20);
   const historyScore = Math.max(0, 15 - modExternal * 3);
   const frequencyScore = Math.min(10, Math.round(Math.min(matchesPerWeek, 5) / 5 * 10));
+
+  // Strengths & weaknesses
+  const strengths = useMemo(() => {
+    if (!trustData) return [];
+    const items: { label: string; icon: string; color: string }[] = [];
+    if (multiPlayerRatio >= 50) items.push({ label: isFr ? 'Bon ratio multi-joueurs' : 'Good multi-player ratio', icon: 'people', color: '#3B82F6' });
+    if (performanceConsistency >= 70) items.push({ label: isFr ? 'Performances regulieres' : 'Consistent performance', icon: 'show-chart', color: '#10B981' });
+    if (modExternal === 0) items.push({ label: isFr ? 'Historique propre' : 'Clean history', icon: 'history', color: '#14B8A6' });
+    if (accountAgeDays >= 90) items.push({ label: isFr ? 'Compte etabli' : 'Established account', icon: 'calendar-today', color: '#7C3AED' });
+    if (trustData.flags.length === 0) items.push({ label: isFr ? 'Zero alertes' : 'Zero flags', icon: 'check-circle', color: '#22C55E' });
+    if ((details.witnessedMatchCount || 0) >= 5) items.push({ label: isFr ? 'Matchs attestes' : 'Attested matches', icon: 'visibility', color: '#7C3AED' });
+    return items.slice(0, 4);
+  }, [trustData, multiPlayerRatio, performanceConsistency, modExternal, accountAgeDays, isFr]);
+
+  const weaknesses = useMemo(() => {
+    if (!trustData) return [];
+    const items: { label: string; icon: string; color: string }[] = [];
+    if (multiPlayerRatio < 30) items.push({ label: isFr ? 'Peu de matchs multi-joueurs' : 'Few multi-player matches', icon: 'people-outline', color: '#F97316' });
+    if (performanceConsistency < 50) items.push({ label: isFr ? 'Performances instables' : 'Inconsistent performance', icon: 'trending-down', color: '#EF4444' });
+    if (modExternal > 3) items.push({ label: isFr ? 'Modifications externes' : 'External modifications', icon: 'edit', color: '#F97316' });
+    if (matchesPerWeek < 1) items.push({ label: isFr ? 'Faible frequence de jeu' : 'Low play frequency', icon: 'schedule', color: '#D97706' });
+    if (accountAgeDays < 30) items.push({ label: isFr ? 'Compte recent' : 'New account', icon: 'new-releases', color: '#D97706' });
+    return items.slice(0, 3);
+  }, [trustData, multiPlayerRatio, performanceConsistency, modExternal, matchesPerWeek, accountAgeDays, isFr]);
 
   if (loading) {
     return (
@@ -220,6 +286,7 @@ export default function TrustScoreScreen() {
 
   const scoreColor = trustData ? getTrustScoreColor(trustData.level) : theme.textMuted;
   const scoreIcon = trustData ? getTrustScoreIcon(trustData.level) : 'shield';
+  const gaugeSize = Math.min(200, Math.max(150, screenW * 0.45));
 
   return (
     <SafeAreaView edges={['top']} style={st.container}>
@@ -228,7 +295,9 @@ export default function TrustScoreScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={st.headerTitle}>{(et.pageTitle as any)?.[language] || 'Trust Score'}</Text>
-        <View style={{ width: 40 }} />
+        <Pressable style={st.backBtn} onPress={() => setShowHowItWorks(!showHowItWorks)}>
+          <MaterialIcons name="help-outline" size={22} color={theme.textSecondary} />
+        </Pressable>
       </View>
 
       <ScrollView
@@ -237,9 +306,52 @@ export default function TrustScoreScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
+        {/* How It Works */}
+        {showHowItWorks ? (
+          <Animated.View entering={FadeInDown.duration(300)} style={st.howItWorksCard}>
+            <View style={st.howHeader}>
+              <MaterialIcons name="info" size={20} color="#3B82F6" />
+              <Text style={st.howTitle}>{isFr ? 'Comment ca marche ?' : 'How does it work?'}</Text>
+              <Pressable onPress={() => setShowHowItWorks(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={20} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            <Text style={st.howText}>
+              {isFr
+                ? 'Le Trust Score (0-100) mesure la fiabilite de vos statistiques. Il determine votre visibilite dans le classement et le poids de vos resultats.'
+                : 'The Trust Score (0-100) measures the reliability of your statistics. It determines your ranking visibility and result weight.'}
+            </Text>
+            <View style={st.howPillars}>
+              {[
+                { icon: 'people', color: '#3B82F6', label: isFr ? 'Matchs multi-joueurs' : 'Multi-player matches', pts: '30' },
+                { icon: 'groups', color: '#8B5CF6', label: isFr ? 'Diversite adversaires' : 'Opponent diversity', pts: '20' },
+                { icon: 'show-chart', color: '#10B981', label: isFr ? 'Coherence' : 'Consistency', pts: '20' },
+                { icon: 'history', color: '#F97316', label: isFr ? 'Historique' : 'History', pts: '15' },
+                { icon: 'schedule', color: '#06B6D4', label: isFr ? 'Frequence' : 'Frequency', pts: '10' },
+                { icon: 'calendar-today', color: '#14B8A6', label: isFr ? 'Anciennete' : 'Account age', pts: '5' },
+              ].map((p, i) => (
+                <View key={i} style={st.howPillarItem}>
+                  <View style={[st.howPillarIcon, { backgroundColor: p.color + '15' }]}>
+                    <MaterialIcons name={p.icon as any} size={14} color={p.color} />
+                  </View>
+                  <Text style={st.howPillarLabel}>{p.label}</Text>
+                  <Text style={[st.howPillarPts, { color: p.color }]}>{p.pts}pts</Text>
+                </View>
+              ))}
+            </View>
+            <View style={st.howBonusRow}>
+              <MaterialIcons name="visibility" size={14} color="#7C3AED" />
+              <Text style={st.howBonusText}>{isFr ? 'Bonus : attestations temoins (jusqu\'a +8 pts)' : 'Bonus: witness attestations (up to +8 pts)'}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
+
         {!trustData ? (
           <Animated.View entering={FadeInDown.duration(400)} style={st.noScoreCard}>
-            <MaterialIcons name="shield" size={48} color={theme.textMuted} />
+            <View style={st.noScoreIconWrap}>
+              <MaterialIcons name="shield" size={48} color={theme.textMuted} />
+            </View>
+            <Text style={st.noScoreTitle}>{isFr ? 'Pas encore de score' : 'No score yet'}</Text>
             <Text style={st.noScoreText}>{(et.noScoreYet as any)?.[language] || 'No score computed yet.'}</Text>
             <Pressable style={st.recomputeBtn} onPress={handleRecompute} disabled={recomputing}>
               {recomputing ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="refresh" size={18} color="#FFF" />}
@@ -248,60 +360,98 @@ export default function TrustScoreScreen() {
           </Animated.View>
         ) : (
           <>
-            {/* Hero Score Card */}
-            <Animated.View entering={FadeInDown.duration(400)} style={[st.heroCard, { borderColor: scoreColor + '25' }]}>
-              <View style={st.heroTop}>
-                <View style={[st.heroIconBg, { backgroundColor: scoreColor + '15' }]}>
-                  <MaterialIcons name={scoreIcon as any} size={32} color={scoreColor} />
+            {/* Hero Section with large gauge */}
+            <Animated.View entering={FadeInDown.duration(400)}>
+              <LinearGradient
+                colors={[scoreColor + '20', scoreColor + '08', theme.surface]}
+                start={{ x: 0.5, y: 0 }}
+                end={{ x: 0.5, y: 1 }}
+                style={st.heroGradient}
+              >
+                <View style={st.heroContent}>
+                  <HeroGauge value={trustData.score} size={gaugeSize} color={scoreColor} />
+                  <View style={[st.heroLevelBadge, { backgroundColor: scoreColor + '20', borderColor: scoreColor + '40' }]}>
+                    <MaterialIcons name={scoreIcon as any} size={16} color={scoreColor} />
+                    <Text style={[st.heroLevelText, { color: scoreColor }]}>{getTrustLevelLabel(trustData.level, isFr)}</Text>
+                  </View>
+                  <Text style={st.heroDesc}>{getTrustBadgeDescription(trustData.level, isFr)}</Text>
                 </View>
-                <View style={st.heroScoreCol}>
-                  <Text style={[st.heroScore, { color: scoreColor }]}>{trustData.score}</Text>
-                  <Text style={st.heroScoreMax}>/100</Text>
+
+                {/* Level bar */}
+                <View style={st.levelBar}>
+                  <View style={st.levelBarTrack}>
+                    <View style={[st.levelBarFill, { width: `${trustData.score}%`, backgroundColor: scoreColor }]} />
+                    <View style={[st.levelBarMarker, { left: '25%' }]} />
+                    <View style={[st.levelBarMarker, { left: '45%' }]} />
+                    <View style={[st.levelBarMarker, { left: '65%' }]} />
+                    <View style={[st.levelBarMarker, { left: '80%' }]} />
+                  </View>
+                  <View style={st.levelLabels}>
+                    <Text style={st.levelLabelText}>{isFr ? 'Suspect' : 'Suspicious'}</Text>
+                    <Text style={st.levelLabelText}>{isFr ? 'Surveiller' : 'Watch'}</Text>
+                    <Text style={st.levelLabelText}>Standard</Text>
+                    <Text style={st.levelLabelText}>{isFr ? 'Fiable' : 'Trusted'}</Text>
+                    <Text style={st.levelLabelText}>{isFr ? 'Verifie' : 'Verified'}</Text>
+                  </View>
                 </View>
-                <View style={[st.heroLevelBadge, { backgroundColor: scoreColor + '15', borderColor: scoreColor + '30' }]}>
-                  <Text style={[st.heroLevelText, { color: scoreColor }]}>{getTrustLevelLabel(trustData.level, isFr)}</Text>
-                </View>
-              </View>
-              <Text style={st.heroDesc}>{getTrustBadgeDescription(trustData.level, isFr)}</Text>
 
-              {/* Score bar */}
-              <View style={st.heroBarTrack}>
-                <View style={[st.heroBarFill, { width: `${trustData.score}%`, backgroundColor: scoreColor }]} />
-                {/* Level markers */}
-                <View style={[st.heroBarMarker, { left: '25%' }]} />
-                <View style={[st.heroBarMarker, { left: '45%' }]} />
-                <View style={[st.heroBarMarker, { left: '65%' }]} />
-                <View style={[st.heroBarMarker, { left: '80%' }]} />
-              </View>
-              <View style={st.heroBarLabels}>
-                <Text style={st.heroBarLabelText}>{isFr ? 'Suspect' : 'Suspicious'}</Text>
-                <Text style={st.heroBarLabelText}>{isFr ? 'A surveiller' : 'Watch'}</Text>
-                <Text style={st.heroBarLabelText}>Standard</Text>
-                <Text style={st.heroBarLabelText}>{isFr ? 'Fiable' : 'Trusted'}</Text>
-                <Text style={st.heroBarLabelText}>{isFr ? 'Verifie' : 'Verified'}</Text>
-              </View>
+                {trustData.analyzedAt ? (
+                  <Text style={st.analyzedAt}>
+                    {(et.lastAnalyzed as any)?.[language] || 'Last analyzed'}: {new Date(trustData.analyzedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                ) : null}
 
-              {trustData.analyzedAt ? (
-                <Text style={st.analyzedAt}>
-                  {(et.lastAnalyzed as any)?.[language] || 'Last analyzed'}: {new Date(trustData.analyzedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                </Text>
-              ) : null}
-
-              <Pressable style={[st.recomputeBtn, { marginTop: 12 }]} onPress={handleRecompute} disabled={recomputing}>
-                {recomputing ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="refresh" size={16} color="#FFF" />}
-                <Text style={st.recomputeBtnText}>{isFr ? 'Recalculer' : 'Recompute'}</Text>
-              </Pressable>
+                <Pressable style={[st.recomputeBtn, { alignSelf: 'center', marginTop: 12 }]} onPress={handleRecompute} disabled={recomputing}>
+                  {recomputing ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="refresh" size={16} color="#FFF" />}
+                  <Text style={st.recomputeBtnText}>{isFr ? 'Recalculer' : 'Recompute'}</Text>
+                </Pressable>
+              </LinearGradient>
             </Animated.View>
 
+            {/* Strengths & Weaknesses */}
+            {(strengths.length > 0 || weaknesses.length > 0) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(50)} style={st.swCard}>
+                <View style={st.swRow}>
+                  {strengths.length > 0 ? (
+                    <View style={st.swCol}>
+                      <View style={st.swColHeader}>
+                        <MaterialIcons name="thumb-up" size={14} color="#22C55E" />
+                        <Text style={[st.swColTitle, { color: '#22C55E' }]}>{isFr ? 'Forces' : 'Strengths'}</Text>
+                      </View>
+                      {strengths.map((s, i) => (
+                        <View key={i} style={st.swItem}>
+                          <MaterialIcons name={s.icon as any} size={13} color={s.color} />
+                          <Text style={st.swItemText}>{s.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  {weaknesses.length > 0 ? (
+                    <View style={[st.swCol, strengths.length > 0 && st.swColRight]}>
+                      <View style={st.swColHeader}>
+                        <MaterialIcons name="trending-up" size={14} color="#F97316" />
+                        <Text style={[st.swColTitle, { color: '#F97316' }]}>{isFr ? 'A ameliorer' : 'Improve'}</Text>
+                      </View>
+                      {weaknesses.map((w, i) => (
+                        <View key={i} style={st.swItem}>
+                          <MaterialIcons name={w.icon as any} size={13} color={w.color} />
+                          <Text style={st.swItemText}>{w.label}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              </Animated.View>
+            ) : null}
+
             {/* Factor Gauges */}
-            <Animated.View entering={FadeInDown.duration(400).delay(50)} style={st.sectionCard}>
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
                 <View style={[st.sectionIconBg, { backgroundColor: '#3B82F6' + '15' }]}>
                   <MaterialIcons name="pie-chart" size={18} color="#3B82F6" />
                 </View>
                 <Text style={st.sectionTitle}>{(et.breakdownTitle as any)?.[language] || 'Score Breakdown'}</Text>
               </View>
-
               <View style={st.gaugesGrid}>
                 <GaugeRing value={multiPlayerRatio} size={72} color="#3B82F6" label={(et.factorMultiPlayer as any)?.[language] || 'Multi-player'} />
                 <GaugeRing value={totalMatches > 0 ? Math.min(100, Math.round((uniqueOpponents / totalMatches) * 100)) : 0} size={72} color="#8B5CF6" label={(et.factorDiversity as any)?.[language] || 'Diversity'} />
@@ -311,7 +461,7 @@ export default function TrustScoreScreen() {
             </Animated.View>
 
             {/* Detailed Factors */}
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.sectionCard}>
+            <Animated.View entering={FadeInDown.duration(400).delay(150)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
                 <View style={[st.sectionIconBg, { backgroundColor: '#D97706' + '15' }]}>
                   <MaterialIcons name="analytics" size={18} color="#D97706" />
@@ -319,69 +469,27 @@ export default function TrustScoreScreen() {
                 <Text style={st.sectionTitle}>{(et.detailsTitle as any)?.[language] || 'Factor Details'}</Text>
               </View>
 
-              <FactorBar
-                label={(et.factorMultiPlayer as any)?.[language] || 'Multi-player matches'}
-                value={Math.round(mpScore * 100)}
-                maxValue={30}
-                color="#3B82F6"
-                icon="people"
-                description={((et.multiPlayerDesc as any)?.[language] || 'Proportion of matches with other app users ({value}%).').replace('{value}', String(multiPlayerRatio))}
-              />
-              <FactorBar
-                label={(et.factorDiversity as any)?.[language] || 'Opponent diversity'}
-                value={diversityScore}
-                maxValue={20}
-                color="#8B5CF6"
-                icon="groups"
-                description={((et.diversityDesc as any)?.[language] || '{value} unique opponents across {total} matches.').replace('{value}', String(uniqueOpponents)).replace('{total}', String(totalMatches))}
-              />
-              <FactorBar
-                label={(et.factorConsistency as any)?.[language] || 'Performance consistency'}
-                value={consistencyScore}
-                maxValue={20}
-                color="#10B981"
-                icon="show-chart"
-                description={((et.consistencyDesc as any)?.[language] || 'Stability of your performance over 4 weeks ({value}%).').replace('{value}', String(performanceConsistency))}
-              />
-              <FactorBar
-                label={(et.factorHistory as any)?.[language] || 'Modification history'}
-                value={historyScore}
-                maxValue={15}
-                color="#F97316"
-                icon="history"
-                description={((et.historyDesc as any)?.[language] || '{value} external modifications on your records.').replace('{value}', String(modExternal))}
-              />
-              <FactorBar
-                label={(et.factorPlayFrequency as any)?.[language] || 'Play frequency'}
-                value={frequencyScore}
-                maxValue={10}
-                color="#06B6D4"
-                icon="schedule"
-                description={((et.frequencyDesc as any)?.[language] || '{value} matches per week on average.').replace('{value}', String(matchesPerWeek))}
-              />
-              <FactorBar
-                label={(et.factorAccountAge as any)?.[language] || 'Account age'}
-                value={Math.min(5, Math.round(accountAgeDays / 36))}
-                maxValue={5}
-                color="#14B8A6"
-                icon="calendar-today"
-                description={((et.ageDesc as any)?.[language] || 'Account created {value} days ago.').replace('{value}', String(accountAgeDays))}
-              />
-              <FactorBar
-                label={isFr ? 'Attestations temoins' : 'Witness attestations'}
-                value={Math.min(8, (details.witnessedMatchCount || 0))}
-                maxValue={8}
-                color="#7C3AED"
-                icon="visibility"
-                description={isFr ? `${details.witnessedMatchCount || 0} matchs/defis attestes par des temoins. Bonus progressif jusqu'a 8 pts.` : `${details.witnessedMatchCount || 0} matches/challenges attested by witnesses. Progressive bonus up to 8 pts.`}
-              />
+              <FactorBar label={(et.factorMultiPlayer as any)?.[language] || 'Multi-player matches'} value={Math.round(mpScore * 100)} maxValue={30} color="#3B82F6" icon="people"
+                description={((et.multiPlayerDesc as any)?.[language] || 'Proportion of matches with other app users ({value}%).').replace('{value}', String(multiPlayerRatio))} />
+              <FactorBar label={(et.factorDiversity as any)?.[language] || 'Opponent diversity'} value={diversityScore} maxValue={20} color="#8B5CF6" icon="groups"
+                description={((et.diversityDesc as any)?.[language] || '{value} unique opponents across {total} matches.').replace('{value}', String(uniqueOpponents)).replace('{total}', String(totalMatches))} />
+              <FactorBar label={(et.factorConsistency as any)?.[language] || 'Performance consistency'} value={consistencyScore} maxValue={20} color="#10B981" icon="show-chart"
+                description={((et.consistencyDesc as any)?.[language] || 'Stability of your performance over 4 weeks ({value}%).').replace('{value}', String(performanceConsistency))} />
+              <FactorBar label={(et.factorHistory as any)?.[language] || 'Modification history'} value={historyScore} maxValue={15} color="#F97316" icon="history"
+                description={((et.historyDesc as any)?.[language] || '{value} external modifications on your records.').replace('{value}', String(modExternal))} />
+              <FactorBar label={(et.factorPlayFrequency as any)?.[language] || 'Play frequency'} value={frequencyScore} maxValue={10} color="#06B6D4" icon="schedule"
+                description={((et.frequencyDesc as any)?.[language] || '{value} matches per week on average.').replace('{value}', String(matchesPerWeek))} />
+              <FactorBar label={(et.factorAccountAge as any)?.[language] || 'Account age'} value={Math.min(5, Math.round(accountAgeDays / 36))} maxValue={5} color="#14B8A6" icon="calendar-today"
+                description={((et.ageDesc as any)?.[language] || 'Account created {value} days ago.').replace('{value}', String(accountAgeDays))} />
+              <FactorBar label={isFr ? 'Attestations temoins' : 'Witness attestations'} value={Math.min(8, (details.witnessedMatchCount || 0))} maxValue={8} color="#7C3AED" icon="visibility"
+                description={isFr ? `${details.witnessedMatchCount || 0} matchs/defis attestes. Bonus progressif jusqu'a 8 pts.` : `${details.witnessedMatchCount || 0} matches/challenges attested. Progressive bonus up to 8 pts.`} />
             </Animated.View>
 
             {/* Flags */}
-            <Animated.View entering={FadeInDown.duration(400).delay(150)} style={st.sectionCard}>
+            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
-                <View style={[st.sectionIconBg, { backgroundColor: theme.error + '15' }]}>
-                  <MaterialIcons name="flag" size={18} color={theme.error} />
+                <View style={[st.sectionIconBg, { backgroundColor: trustData.flags.length > 0 ? theme.error + '15' : theme.success + '15' }]}>
+                  <MaterialIcons name={trustData.flags.length > 0 ? 'flag' : 'check-circle'} size={18} color={trustData.flags.length > 0 ? theme.error : theme.success} />
                 </View>
                 <Text style={st.sectionTitle}>{(et.flagsTitle as any)?.[language] || 'Detected Flags'}</Text>
                 {trustData.flags.length > 0 ? (
@@ -390,7 +498,6 @@ export default function TrustScoreScreen() {
                   </View>
                 ) : null}
               </View>
-
               {trustData.flags.length === 0 ? (
                 <View style={st.noFlagsRow}>
                   <MaterialIcons name="check-circle" size={24} color={theme.success} />
@@ -412,14 +519,13 @@ export default function TrustScoreScreen() {
             </Animated.View>
 
             {/* History Chart */}
-            <Animated.View entering={FadeInDown.duration(400).delay(175)} style={st.sectionCard}>
+            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
                 <View style={[st.sectionIconBg, { backgroundColor: '#7C3AED' + '15' }]}>
                   <MaterialIcons name="timeline" size={18} color="#7C3AED" />
                 </View>
-                <Text style={st.sectionTitle}>{isFr ? 'Evolution du score' : 'Score Evolution'}</Text>
+                <Text style={st.sectionTitle}>{isFr ? 'Evolution' : 'Evolution'}</Text>
               </View>
-
               {historyLoading ? (
                 <View style={{ paddingVertical: 24, alignItems: 'center' }}>
                   <ActivityIndicator size="small" color={theme.primary} />
@@ -428,16 +534,12 @@ export default function TrustScoreScreen() {
                 <View style={{ paddingVertical: 20, alignItems: 'center', gap: 8 }}>
                   <MaterialIcons name="show-chart" size={32} color={theme.textMuted} />
                   <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: 'center', lineHeight: 19 }}>
-                    {isFr
-                      ? 'Le graphique apparaitra apres 2 semaines de donnees. Recalculez votre score regulierement.'
-                      : 'The chart will appear after 2 weeks of data. Recompute your score regularly.'}
+                    {isFr ? 'Le graphique apparaitra apres 2 semaines de donnees.' : 'The chart will appear after 2 weeks of data.'}
                   </Text>
                 </View>
               ) : (
                 <View>
-                  {/* Simple line chart using View elements */}
                   <View style={histSt.chartContainer}>
-                    {/* Y-axis labels */}
                     <View style={histSt.yAxis}>
                       <Text style={histSt.yLabel}>100</Text>
                       <Text style={histSt.yLabel}>75</Text>
@@ -445,18 +547,10 @@ export default function TrustScoreScreen() {
                       <Text style={histSt.yLabel}>25</Text>
                       <Text style={histSt.yLabel}>0</Text>
                     </View>
-                    {/* Chart area */}
                     <View style={histSt.chartArea}>
-                      {/* Grid lines */}
                       {[0, 25, 50, 75].map(v => (
                         <View key={v} style={[histSt.gridLine, { bottom: `${v}%` }]} />
                       ))}
-                      {/* Threshold zones */}
-                      <View style={[histSt.thresholdZone, { bottom: 0, height: '25%', backgroundColor: '#EF444408' }]} />
-                      <View style={[histSt.thresholdZone, { bottom: '25%', height: '20%', backgroundColor: '#F9731608' }]} />
-                      <View style={[histSt.thresholdZone, { bottom: '65%', height: '15%', backgroundColor: '#3B82F608' }]} />
-                      <View style={[histSt.thresholdZone, { bottom: '80%', height: '20%', backgroundColor: '#22C55E08' }]} />
-                      {/* Data points and connecting lines */}
                       <View style={histSt.dataPointsRow}>
                         {history.map((point, idx) => {
                           const pColor = getTrustScoreColor(point.score);
@@ -474,7 +568,6 @@ export default function TrustScoreScreen() {
                       </View>
                     </View>
                   </View>
-                  {/* X-axis labels */}
                   <View style={histSt.xAxis}>
                     {history.map((point, idx) => {
                       const d = new Date(point.weekStart);
@@ -493,28 +586,21 @@ export default function TrustScoreScreen() {
 
             {/* Inactivity Warning */}
             {trustData && trustData.details?.daysSinceLastPlay >= 14 ? (
-              <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[st.sectionCard, { borderWidth: 1, borderColor: '#F97316' + '30', backgroundColor: '#F97316' + '04' }]}>
+              <Animated.View entering={FadeInDown.duration(400).delay(300)} style={st.inactivityCard}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F97316' + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <View style={st.inactivityIcon}>
                     <MaterialIcons name="hourglass-empty" size={22} color="#F97316" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#F97316', marginBottom: 4 }}>
-                      {isFr ? 'Inactivite detectee' : 'Inactivity detected'}
-                    </Text>
-                    <Text style={{ fontSize: 13, color: theme.textSecondary, lineHeight: 19 }}>
+                    <Text style={st.inactivityTitle}>{isFr ? 'Inactivite detectee' : 'Inactivity detected'}</Text>
+                    <Text style={st.inactivityText}>
                       {isFr
-                        ? `Vous n'avez pas joue depuis ${trustData.details.daysSinceLastPlay} jours. Votre score diminue de 5 points par mois d'inactivite (plancher : 30). Jouez un match pour stopper la baisse !`
-                        : `You have not played for ${trustData.details.daysSinceLastPlay} days. Your score decreases by 5 points per month of inactivity (floor: 30). Play a match to stop the decline!`}
+                        ? `Vous n'avez pas joue depuis ${trustData.details.daysSinceLastPlay} jours. -5 pts/mois (plancher : 30).`
+                        : `You have not played for ${trustData.details.daysSinceLastPlay} days. -5 pts/month (floor: 30).`}
                     </Text>
                     {trustData.details.inactivityDecay ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 }}>
-                        <View style={{ backgroundColor: '#F97316' + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
-                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#F97316' }}>-{trustData.details.inactivityDecay.decayApplied} pts</Text>
-                        </View>
-                        <Text style={{ fontSize: 11, color: theme.textMuted }}>
-                          ({trustData.details.inactivityDecay.monthsInactive} {isFr ? 'mois' : 'months'})
-                        </Text>
+                      <View style={st.inactivityDecayBadge}>
+                        <Text style={st.inactivityDecayText}>-{trustData.details.inactivityDecay.decayApplied} pts</Text>
                       </View>
                     ) : null}
                   </View>
@@ -522,134 +608,32 @@ export default function TrustScoreScreen() {
               </Animated.View>
             ) : null}
 
-            {/* Actionable Tips — personalized based on factor scores */}
-            <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.sectionCard}>
+            {/* Actionable Tips */}
+            <Animated.View entering={FadeInDown.duration(400).delay(350)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
                 <View style={[st.sectionIconBg, { backgroundColor: theme.success + '15' }]}>
                   <MaterialIcons name="lightbulb" size={18} color={theme.success} />
                 </View>
                 <Text style={st.sectionTitle}>{(et.tipsTitle as any)?.[language] || 'Tips to Improve'}</Text>
               </View>
-
               {(() => {
-                // Build personalized tips based on factors that are below max
                 const tips: { icon: string; color: string; text: string; route?: string; actionLabel?: string; priority: number }[] = [];
-
-                // Multi-player matches (max 30)
-                if (Math.round(mpScore * 100) < 20) {
-                  tips.push({
-                    icon: 'people',
-                    color: '#3B82F6',
-                    text: isFr
-                      ? `Seulement ${multiPlayerRatio}% de matchs multi-joueurs. Partagez vos matchs avec les autres joueurs de l'app pour augmenter ce ratio.`
-                      : `Only ${multiPlayerRatio}% multi-player matches. Share your matches with other app users to increase this ratio.`,
-                    route: '/share-hub',
-                    actionLabel: isFr ? 'Partager un match' : 'Share a match',
-                    priority: 1,
-                  });
-                }
-
-                // Opponent diversity (max 20)
-                if (diversityScore < 14) {
-                  tips.push({
-                    icon: 'groups',
-                    color: '#8B5CF6',
-                    text: isFr
-                      ? `${uniqueOpponents} adversaires uniques sur ${totalMatches} matchs. Jouez contre de nouveaux adversaires pour diversifier vos donnees.`
-                      : `${uniqueOpponents} unique opponents across ${totalMatches} matches. Play against new opponents to diversify your data.`,
-                    route: '/(tabs)/directory',
-                    actionLabel: isFr ? 'Trouver des joueurs' : 'Find players',
-                    priority: 2,
-                  });
-                }
-
-                // Performance consistency (max 20)
-                if (consistencyScore < 14) {
-                  tips.push({
-                    icon: 'show-chart',
-                    color: '#10B981',
-                    text: isFr
-                      ? `Consistance a ${performanceConsistency}%. Jouez regulierement pour stabiliser vos performances et augmenter ce facteur.`
-                      : `Consistency at ${performanceConsistency}%. Play regularly to stabilize your performance and increase this factor.`,
-                    route: '/match/new',
-                    actionLabel: isFr ? 'Jouer un match' : 'Play a match',
-                    priority: 3,
-                  });
-                }
-
-                // Play frequency (max 10)
-                if (frequencyScore < 7) {
-                  tips.push({
-                    icon: 'schedule',
-                    color: '#06B6D4',
-                    text: isFr
-                      ? `${matchesPerWeek} matchs/semaine en moyenne. Jouez ${Math.max(1, 3 - matchesPerWeek)} match(s) de plus cette semaine pour ameliorer votre frequence.`
-                      : `${matchesPerWeek} matches/week average. Play ${Math.max(1, 3 - matchesPerWeek)} more match(es) this week to improve your frequency.`,
-                    route: '/match/new',
-                    actionLabel: isFr ? 'Nouveau match' : 'New match',
-                    priority: 4,
-                  });
-                }
-
-                // Witness attestations (max 8)
-                if ((details.witnessedMatchCount || 0) < 8) {
-                  const witnessed = details.witnessedMatchCount || 0;
-                  const remaining = 8 - witnessed;
-                  tips.push({
-                    icon: 'visibility',
-                    color: '#7C3AED',
-                    text: isFr
-                      ? `${witnessed}/8 matchs attestes. Invitez des temoins pour ${remaining} match(s) supplementaire(s) pour maximiser ce bonus (poids 2.0x).`
-                      : `${witnessed}/8 matches attested. Invite witnesses for ${remaining} more match(es) to maximize this bonus (2.0x weight).`,
-                    route: '/notifications-hub',
-                    actionLabel: isFr ? 'Voir attestations' : 'View attestations',
-                    priority: 5,
-                  });
-                }
-
-                // Modification history (max 15)
-                if (historyScore < 12 && modExternal > 0) {
-                  tips.push({
-                    icon: 'edit-off',
-                    color: '#F97316',
-                    text: isFr
-                      ? `${modExternal} modification(s) externe(s) detectee(s). Evitez de modifier vos matchs apres les avoir enregistres pour garder un historique propre.`
-                      : `${modExternal} external modification(s) detected. Avoid editing matches after recording to keep a clean history.`,
-                    priority: 6,
-                  });
-                }
-
-                // Account age (max 5)
-                if (accountAgeDays < 60) {
-                  tips.push({
-                    icon: 'calendar-today',
-                    color: '#14B8A6',
-                    text: isFr
-                      ? `Compte cree il y a ${accountAgeDays} jours. Ce facteur augmente naturellement avec le temps. Continuez a jouer !`
-                      : `Account created ${accountAgeDays} days ago. This factor increases naturally over time. Keep playing!`,
-                    priority: 7,
-                  });
-                }
-
-                // Sort by priority and show top 5
+                if (Math.round(mpScore * 100) < 20) tips.push({ icon: 'people', color: '#3B82F6', text: isFr ? `Seulement ${multiPlayerRatio}% de matchs multi-joueurs. Partagez vos matchs avec d'autres joueurs.` : `Only ${multiPlayerRatio}% multi-player matches. Share your matches.`, route: '/share-hub', actionLabel: isFr ? 'Partager' : 'Share', priority: 1 });
+                if (diversityScore < 14) tips.push({ icon: 'groups', color: '#8B5CF6', text: isFr ? `${uniqueOpponents} adversaires uniques. Jouez contre de nouveaux joueurs.` : `${uniqueOpponents} unique opponents. Play against new players.`, route: '/(tabs)/directory', actionLabel: isFr ? 'Annuaire' : 'Directory', priority: 2 });
+                if (consistencyScore < 14) tips.push({ icon: 'show-chart', color: '#10B981', text: isFr ? `Consistance a ${performanceConsistency}%. Jouez regulierement.` : `Consistency at ${performanceConsistency}%. Play regularly.`, route: '/match/new', actionLabel: isFr ? 'Jouer' : 'Play', priority: 3 });
+                if (frequencyScore < 7) tips.push({ icon: 'schedule', color: '#06B6D4', text: isFr ? `${matchesPerWeek} matchs/semaine. Augmentez votre frequence.` : `${matchesPerWeek} matches/week. Increase your frequency.`, route: '/match/new', actionLabel: isFr ? 'Match' : 'Match', priority: 4 });
+                if ((details.witnessedMatchCount || 0) < 8) tips.push({ icon: 'visibility', color: '#7C3AED', text: isFr ? `${details.witnessedMatchCount || 0}/8 matchs attestes. Invitez des temoins.` : `${details.witnessedMatchCount || 0}/8 attested. Invite witnesses.`, route: '/notifications-hub', actionLabel: isFr ? 'Attestations' : 'Attestations', priority: 5 });
+                if (historyScore < 12 && modExternal > 0) tips.push({ icon: 'edit-off', color: '#F97316', text: isFr ? `${modExternal} modification(s) externe(s). Evitez de modifier apres coup.` : `${modExternal} external mod(s). Avoid editing after the fact.`, priority: 6 });
                 tips.sort((a, b) => a.priority - b.priority);
-                const displayTips = tips.slice(0, 5);
-
-                // If no tips (perfect score), show congratulations
+                const displayTips = tips.slice(0, 4);
                 if (displayTips.length === 0) {
                   return (
                     <View style={{ alignItems: 'center', paddingVertical: 16, gap: 8 }}>
                       <MaterialIcons name="emoji-events" size={36} color={theme.success} />
-                      <Text style={{ fontSize: 15, fontWeight: '700', color: theme.success }}>
-                        {isFr ? 'Score excellent !' : 'Excellent score!'}
-                      </Text>
-                      <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 19 }}>
-                        {isFr ? 'Continuez a jouer regulierement pour maintenir votre score.' : 'Keep playing regularly to maintain your score.'}
-                      </Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: theme.success }}>{isFr ? 'Score excellent !' : 'Excellent score!'}</Text>
                     </View>
                   );
                 }
-
                 return displayTips.map((tip, idx) => (
                   <View key={idx} style={st.tipRow}>
                     <View style={[st.tipIcon, { backgroundColor: tip.color + '12' }]}>
@@ -658,10 +642,7 @@ export default function TrustScoreScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={st.tipText}>{tip.text}</Text>
                       {tip.route ? (
-                        <Pressable
-                          style={[st.tipActionBtn, { backgroundColor: tip.color + '10', borderColor: tip.color + '25' }]}
-                          onPress={() => router.push(tip.route as any)}
-                        >
+                        <Pressable style={[st.tipActionBtn, { backgroundColor: tip.color + '10', borderColor: tip.color + '25' }]} onPress={() => router.push(tip.route as any)}>
                           <MaterialIcons name="arrow-forward" size={14} color={tip.color} />
                           <Text style={[st.tipActionText, { color: tip.color }]}>{tip.actionLabel}</Text>
                         </Pressable>
@@ -684,31 +665,52 @@ const st = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+
+  // How it works
+  howItWorksCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#3B82F620', ...theme.shadows.card },
+  howHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  howTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  howText: { fontSize: 13, color: theme.textSecondary, lineHeight: 19, marginBottom: 14 },
+  howPillars: { gap: 6 },
+  howPillarItem: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  howPillarIcon: { width: 26, height: 26, borderRadius: 7, alignItems: 'center', justifyContent: 'center' },
+  howPillarLabel: { flex: 1, fontSize: 12, fontWeight: '600', color: theme.textPrimary },
+  howPillarPts: { fontSize: 12, fontWeight: '800' },
+  howBonusRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10, backgroundColor: '#7C3AED08', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6 },
+  howBonusText: { fontSize: 11, fontWeight: '600', color: '#7C3AED', flex: 1 },
 
   // No score
-  noScoreCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 32, alignItems: 'center', gap: 16, ...theme.shadows.card },
-  noScoreText: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 22 },
+  noScoreCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 32, alignItems: 'center', gap: 12, ...theme.shadows.card },
+  noScoreIconWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' },
+  noScoreTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  noScoreText: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
 
   // Hero
-  heroCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, ...theme.shadows.card },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 14 },
-  heroIconBg: { width: 56, height: 56, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
-  heroScoreCol: { flexDirection: 'row', alignItems: 'baseline' },
-  heroScore: { fontSize: 48, fontWeight: '900', letterSpacing: -1 },
-  heroScoreMax: { fontSize: 18, fontWeight: '600', color: theme.textMuted },
-  heroLevelBadge: { marginLeft: 'auto', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
-  heroLevelText: { fontSize: 13, fontWeight: '700' },
-  heroDesc: { fontSize: 13, color: theme.textSecondary, lineHeight: 19, marginBottom: 16 },
-  heroBarTrack: { height: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 5, overflow: 'hidden', position: 'relative' as const, marginBottom: 6 },
-  heroBarFill: { height: '100%', borderRadius: 5 },
-  heroBarMarker: { position: 'absolute' as const, top: 0, width: 2, height: '100%', backgroundColor: theme.surface },
-  heroBarLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  heroBarLabelText: { fontSize: 8, color: theme.textMuted, fontWeight: '600' },
-  analyzedAt: { fontSize: 11, color: theme.textMuted, marginTop: 12, textAlign: 'center' },
-
+  heroGradient: { borderRadius: 24, padding: 24, marginBottom: 16, ...theme.shadows.card },
+  heroContent: { alignItems: 'center', marginBottom: 16 },
+  heroLevelBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 16, borderWidth: 1, marginTop: 12, marginBottom: 8 },
+  heroLevelText: { fontSize: 14, fontWeight: '700' },
+  heroDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 19, paddingHorizontal: 12 },
+  levelBar: { marginTop: 8 },
+  levelBarTrack: { height: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 5, overflow: 'hidden', position: 'relative' },
+  levelBarFill: { height: '100%', borderRadius: 5 },
+  levelBarMarker: { position: 'absolute', top: 0, width: 2, height: '100%', backgroundColor: theme.surface },
+  levelLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 },
+  levelLabelText: { fontSize: 8, color: theme.textMuted, fontWeight: '600' },
+  analyzedAt: { fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 8 },
   recomputeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
   recomputeBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+
+  // Strengths & Weaknesses
+  swCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 16, marginBottom: 16, ...theme.shadows.card },
+  swRow: { flexDirection: 'row' },
+  swCol: { flex: 1, gap: 6 },
+  swColRight: { borderLeftWidth: 1, borderLeftColor: theme.border, paddingLeft: 14, marginLeft: 14 },
+  swColHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  swColTitle: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
+  swItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  swItemText: { fontSize: 12, fontWeight: '500', color: theme.textSecondary, flex: 1 },
 
   // Section
   sectionCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 16, marginBottom: 16, ...theme.shadows.card },
@@ -740,21 +742,28 @@ const st = StyleSheet.create({
   flagIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   flagText: { flex: 1, fontSize: 13, fontWeight: '500', color: theme.textPrimary },
 
+  // Inactivity
+  inactivityCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: '#F9731630', ...theme.shadows.card },
+  inactivityIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F97316' + '15', alignItems: 'center', justifyContent: 'center' },
+  inactivityTitle: { fontSize: 15, fontWeight: '700', color: '#F97316', marginBottom: 4 },
+  inactivityText: { fontSize: 13, color: theme.textSecondary, lineHeight: 19 },
+  inactivityDecayBadge: { backgroundColor: '#F97316' + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start', marginTop: 8 },
+  inactivityDecayText: { fontSize: 12, fontWeight: '700', color: '#F97316' },
+
   // Tips
   tipRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '30' },
   tipIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   tipText: { fontSize: 13, color: theme.textPrimary, fontWeight: '500', lineHeight: 18 },
-  tipActionBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start' as const, borderWidth: 1 },
+  tipActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start', borderWidth: 1 },
   tipActionText: { fontSize: 12, fontWeight: '700' },
 });
 
 const histSt = StyleSheet.create({
-  chartContainer: { flexDirection: 'row', height: 180, marginBottom: 4 },
+  chartContainer: { flexDirection: 'row', height: 160, marginBottom: 4 },
   yAxis: { width: 28, justifyContent: 'space-between', paddingVertical: 4 },
   yLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600', textAlign: 'right' },
   chartArea: { flex: 1, position: 'relative', marginLeft: 6, borderLeftWidth: 1, borderBottomWidth: 1, borderColor: theme.border },
   gridLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.border + '40' },
-  thresholdZone: { position: 'absolute', left: 0, right: 0 },
   dataPointsRow: { flexDirection: 'row', flex: 1, alignItems: 'stretch' },
   dataCol: { flex: 1, alignItems: 'center' },
   dataPoint: { width: 10, height: 10, borderRadius: 5, borderWidth: 2, marginTop: -5 },
