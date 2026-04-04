@@ -3,7 +3,7 @@
  * Captures React Native views as images and shares via native sheet.
  * Uses react-native-view-shot + expo-sharing.
  */
-import { Platform } from 'react-native';
+import { Platform, NativeModules } from 'react-native';
 
 export type ShareCardFormat = 'square' | 'story' | 'landscape';
 
@@ -18,6 +18,11 @@ export const CARD_DIMENSIONS: Record<ShareCardFormat, { width: number; height: n
  */
 export async function captureCardAsImage(viewRef: any): Promise<string | null> {
   try {
+    // Guard: check native module availability before require to avoid fatal Invariant Violation
+    if (Platform.OS !== 'web' && !NativeModules.RNViewShot) {
+      console.log('[ShareCard] RNViewShot native module not available in this build');
+      return null;
+    }
     const { captureRef } = require('react-native-view-shot');
     const uri = await captureRef(viewRef, {
       format: 'png',

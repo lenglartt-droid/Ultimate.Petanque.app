@@ -858,6 +858,20 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="share-card" 
+                options={{ 
+                  presentation: 'modal',
+                  animation: 'slide_from_bottom',
+                }} 
+              />
+              <Stack.Screen 
+                name="card-gallery" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             </View>
   );
