@@ -7,7 +7,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import ShareCardWatermark from './ShareCardWatermark';
-import theme from '@/constants/theme';
+import { CARD_COLOR_THEMES, type CardColorTheme } from '@/services/shareCardService';
 
 interface Props {
   playerName?: string;
@@ -27,6 +27,7 @@ interface Props {
   geoCityRank?: number;
   geoCountryRank?: number;
   language?: 'fr' | 'en';
+  colorTheme?: CardColorTheme;
 }
 
 export default function ShareCardStats({
@@ -35,28 +36,30 @@ export default function ShareCardStats({
   currentStreak, bestStreak,
   geoCity, geoCountry, geoCityRank, geoCountryRank,
   language = 'fr',
+  colorTheme = 'dark',
 }: Props) {
   const fr = language === 'fr';
+  const ct = CARD_COLOR_THEMES[colorTheme];
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={['#0F172A', '#1E293B']} style={s.bg}>
+      <LinearGradient colors={ct.gradients} style={s.bg}>
         {/* Header */}
         <View style={s.header}>
           <View style={s.headerLeft}>
-            <MaterialIcons name="bar-chart" size={16} color="#3B82F6" />
-            <Text style={s.headerLabel}>{fr ? 'MES STATS' : 'MY STATS'}</Text>
+            <MaterialIcons name="bar-chart" size={16} color={ct.accent} />
+            <Text style={[s.headerLabel, { color: ct.accent }]}>{fr ? 'MES STATS' : 'MY STATS'}</Text>
           </View>
         </View>
 
         {/* Player name + ELO */}
         <View style={s.playerRow}>
-          <Text style={s.playerName}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
+          <Text style={[s.playerName, { color: ct.textPrimary }]}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
           {eloRating ? (
-            <View style={[s.eloBadge, { backgroundColor: (eloColor || '#94A3B8') + '20' }]}>
-              <MaterialIcons name="diamond" size={12} color={eloColor || '#94A3B8'} />
-              <Text style={[s.eloText, { color: eloColor || '#94A3B8' }]}>ELO {eloRating}</Text>
-              {eloRankLabel ? <Text style={[s.eloRank, { color: eloColor || '#94A3B8' }]}>{eloRankLabel}</Text> : null}
+            <View style={[s.eloBadge, { backgroundColor: (eloColor || ct.textSecondary) + '20' }]}>
+              <MaterialIcons name="diamond" size={12} color={eloColor || ct.textSecondary} />
+              <Text style={[s.eloText, { color: eloColor || ct.textSecondary }]}>ELO {eloRating}</Text>
+              {eloRankLabel ? <Text style={[s.eloRank, { color: eloColor || ct.textSecondary }]}>{eloRankLabel}</Text> : null}
             </View>
           ) : null}
         </View>
@@ -127,9 +130,9 @@ const s = StyleSheet.create({
   bg: { padding: 24 },
   header: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 },
   headerLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerLabel: { fontSize: 11, fontWeight: '800', color: '#3B82F6', letterSpacing: 1.5 },
+  headerLabel: { fontSize: 11, fontWeight: '800', letterSpacing: 1.5 },
   playerRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 18 },
-  playerName: { fontSize: 22, fontWeight: '800', color: '#F8FAFC', flex: 1 },
+  playerName: { fontSize: 22, fontWeight: '800', flex: 1 },
   eloBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   eloText: { fontSize: 13, fontWeight: '700' },
   eloRank: { fontSize: 10, fontWeight: '600', marginLeft: 2 },
