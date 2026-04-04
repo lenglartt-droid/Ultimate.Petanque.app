@@ -39,6 +39,8 @@ export interface BadgeContext {
   eloTireur: number;
   eloPointeur: number;
   eloMilieu: number;
+  isCityLeader: boolean; // #1 in their city by ELO
+  cityName: string | null;
 }
 
 // ============================================
@@ -214,6 +216,14 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 75,
     condition: (ctx) => ctx.eloTireur >= 1300 || ctx.eloPointeur >= 1300 || ctx.eloMilieu >= 1300,
   },
+  // City Leadership Badge
+  {
+    id: 'roi_de_ville',
+    icon: 'location-city',
+    color: '#DC2626',
+    xpReward: 100,
+    condition: (ctx) => ctx.isCityLeader && !!ctx.cityName,
+  },
 ];
 
 // ============================================
@@ -238,6 +248,7 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     premier_diamant: { fr: 'Premier Diamant', en: 'First Diamond' },
     maitre_petanque: { fr: 'Maitre de la Petanque', en: 'Petanque Master' },
     specialiste: { fr: 'Specialiste', en: 'Specialist' },
+    roi_de_ville: { fr: 'Roi de Ville', en: 'City Champion' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -261,6 +272,7 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     premier_diamant: { fr: 'Atteindre 1500 ELO (rang Diamant)', en: 'Reach 1500 ELO (Diamond rank)' },
     maitre_petanque: { fr: 'Atteindre 1800 ELO (rang Maitre)', en: 'Reach 1800 ELO (Master rank)' },
     specialiste: { fr: 'Avoir un ELO de role superieur a 1300', en: 'Have a role-specific ELO above 1300' },
+    roi_de_ville: { fr: 'Etre le joueur #1 de sa ville (meilleur ELO)', en: 'Be the #1 player in your city (highest ELO)' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -368,6 +380,8 @@ export function buildBadgeContext(params: {
     eloTireur: 1000,
     eloPointeur: 1000,
     eloMilieu: 1000,
+    isCityLeader: false,
+    cityName: null,
   };
 }
 
