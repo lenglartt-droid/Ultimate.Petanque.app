@@ -357,60 +357,6 @@ export default function CityLeaderboardScreen() {
           </View>
         </View>
 
-        {/* Geographic scope filter (hide for country/continent page types) */}
-        {pageType === 'city' ? <View style={cs.geoRow}>
-          {(['world', 'continent', 'country'] as const).map(scope => {
-            const isActive = geoScope === scope;
-            const icons = { world: 'public', continent: 'travel-explore', country: 'flag' } as const;
-            const labels: Record<string, string> = {
-              world: (extraTranslations.geoScope?.world as any)?.[language] || 'World',
-              continent: (extraTranslations.geoScope?.continent as any)?.[language] || 'Continent',
-              country: (extraTranslations.geoScope?.country as any)?.[language] || 'Country',
-            };
-            return (
-              <Pressable
-                key={scope}
-                style={[cs.geoChip, isActive && cs.geoChipActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  let val = '';
-                  if (scope === 'world') val = '';
-                  else if (scope === 'continent') {
-                    if (uniqueContinents.length === 1) val = uniqueContinents[0];
-                    else if (selfPlayer?.country) val = getContinent(selfPlayer.country);
-                  }
-                  else if (scope === 'country') {
-                    if (uniqueCountries.length === 1) val = uniqueCountries[0];
-                    else if (selfPlayer?.country) val = selfPlayer.country;
-                  }
-                  updateGeoScope(scope, val);
-                }}
-              >
-                <MaterialIcons name={icons[scope] as any} size={12} color={isActive ? '#FFF' : 'rgba(255,255,255,0.5)'} />
-                <Text style={[cs.geoChipText, isActive && cs.geoChipTextActive]}>{labels[scope]}</Text>
-              </Pressable>
-            );
-          })}
-        </View> : null}
-        {pageType === 'city' && geoScope !== 'world' ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
-            {(geoScope === 'continent' ? uniqueContinents : uniqueCountries).map(val => {
-              const isActive = geoValue === val;
-              return (
-                <Pressable
-                  key={val}
-                  style={[cs.geoValueChip, isActive && cs.geoValueChipActive]}
-                  onPress={() => { Haptics.selectionAsync(); updateGeoScope(geoScope, isActive ? '' : val); }}
-                >
-                  <Text style={[cs.geoValueChipText, isActive && cs.geoValueChipTextActive]} numberOfLines={1}>
-                    {geoScope === 'continent' ? `${getContinentFlag(val)} ${getContinentLabel(val, language === 'fr')}` : `${getCountryFlag(val)} ${val}`}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        ) : null}
-
         {/* Value selector */}
         <Pressable style={cs.citySelector} onPress={() => setShowCityPicker(true)}>
           <MaterialIcons name={pageType === 'country' ? 'flag' : pageType === 'continent' ? 'public' : 'place'} size={18} color="#60A5FA" />

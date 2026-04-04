@@ -429,7 +429,7 @@ export default function OnboardingScreen() {
       {
         icon: 'diamond',
         color: '#8B5CF6',
-        title: language === 'fr' ? 'ELO + Trust Score' : 'ELO + Trust Score',
+        title: 'ELO + Trust Score',
         items: [
           language === 'fr' ? 'Classement equitable et coherent' : 'Fair and consistent ranking',
           language === 'fr' ? 'Chaque partie compte' : 'Every game counts',
@@ -439,7 +439,7 @@ export default function OnboardingScreen() {
       {
         icon: 'people',
         color: '#10B981',
-        title: language === 'fr' ? 'Un reseau en construction' : 'A network being built',
+        title: language === 'fr' ? 'La communaute lui donne vie' : 'The community brings it to life',
         items: [
           language === 'fr' ? 'Parties reelles' : 'Real games',
           language === 'fr' ? 'Joueurs actifs' : 'Active players',
@@ -451,17 +451,15 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <ScrollView contentContainerStyle={s.promiseContent} showsVerticalScrollIndicator={false}>
-            <View style={s.promiseImageWrap}>
-              <Image
-                source={require('@/assets/images/app-logo.png')}
-                style={s.promiseImage}
-                contentFit="contain"
-                transition={200}
-              />
-            </View>
+            <Image
+              source={require('@/assets/images/app-logo.png')}
+              style={s.promiseLogoNoBorder}
+              contentFit="contain"
+              transition={200}
+            />
             <View>
               <Text style={s.promiseTitle}>
-                {language === 'fr' ? 'Jouez. Progressez. Rencontrez.' : 'Play. Improve. Connect.'}
+                {language === 'fr' ? 'Votre vrai niveau, enfin.' : 'Your real level, finally.'}
               </Text>
               <Text style={s.promiseSubtitle}>
                 {language === 'fr'
@@ -489,6 +487,13 @@ export default function OnboardingScreen() {
                   </View>
                   <Text style={[s.promisePillarTitle, { color: p.color }]}>{p.title}</Text>
                 </View>
+                {i === 1 ? (
+                  <Text style={[s.promisePillarItemText, { marginBottom: 8, fontStyle: 'italic', color: '#94A3B8' }]}>
+                    {language === 'fr'
+                      ? "Ce projet n'est pas une base de donnees figee.\nC'est la communaute qui lui donne vie."
+                      : "This project is not a static database.\nThe community brings it to life."}
+                  </Text>
+                ) : null}
                 {p.items.map((item, j) => (
                   <View key={j} style={s.promisePillarItem}>
                     <MaterialIcons name="check" size={14} color={p.color} />
@@ -1357,14 +1362,10 @@ const s = StyleSheet.create({
     paddingTop: 20,
     paddingHorizontal: 24,
   },
-  promiseImageWrap: {
-    width: 150,
-    height: 150,
+  promiseLogoNoBorder: {
+    width: 120,
+    height: 120,
     marginBottom: 16,
-  },
-  promiseImage: {
-    width: '100%',
-    height: '100%',
   },
   promiseTitle: {
     fontSize: 26,

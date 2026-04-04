@@ -41,6 +41,13 @@ export interface BadgeContext {
   eloMilieu: number;
   isCityLeader: boolean; // #1 in their city by ELO
   cityName: string | null;
+  isClubLeader: boolean; // #1 in their club by ELO
+  clubName: string | null;
+  isCountryLeader: boolean; // #1 in their country by ELO
+  countryName: string | null;
+  isContinentLeader: boolean; // #1 in their continent by ELO
+  continentName: string | null;
+  isWorldLeader: boolean; // #1 worldwide by ELO
 }
 
 // ============================================
@@ -216,13 +223,41 @@ export const BADGES: BadgeDefinition[] = [
     xpReward: 75,
     condition: (ctx) => ctx.eloTireur >= 1300 || ctx.eloPointeur >= 1300 || ctx.eloMilieu >= 1300,
   },
-  // City Leadership Badge
+  // Geographic Leadership Badges
   {
-    id: 'roi_de_ville',
+    id: 'boss_de_la_ville',
     icon: 'location-city',
     color: '#DC2626',
     xpReward: 100,
     condition: (ctx) => ctx.isCityLeader && !!ctx.cityName,
+  },
+  {
+    id: 'champion_du_quartier',
+    icon: 'home',
+    color: '#7C3AED',
+    xpReward: 75,
+    condition: (ctx) => ctx.isClubLeader && !!ctx.clubName,
+  },
+  {
+    id: 'heros_national',
+    icon: 'flag',
+    color: '#2563EB',
+    xpReward: 150,
+    condition: (ctx) => ctx.isCountryLeader && !!ctx.countryName,
+  },
+  {
+    id: 'seigneur_des_terrains',
+    icon: 'public',
+    color: '#F59E0B',
+    xpReward: 200,
+    condition: (ctx) => ctx.isContinentLeader && !!ctx.continentName,
+  },
+  {
+    id: 'maitre_universel',
+    icon: 'auto-awesome',
+    color: '#FFD700',
+    xpReward: 300,
+    condition: (ctx) => ctx.isWorldLeader,
   },
 ];
 
@@ -248,7 +283,11 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     premier_diamant: { fr: 'Premier Diamant', en: 'First Diamond' },
     maitre_petanque: { fr: 'Maitre de la Petanque', en: 'Petanque Master' },
     specialiste: { fr: 'Specialiste', en: 'Specialist' },
-    roi_de_ville: { fr: 'Roi de Ville', en: 'City Champion' },
+    boss_de_la_ville: { fr: 'Boss de la Ville', en: 'City Boss' },
+    champion_du_quartier: { fr: 'Champion du Quartier', en: 'Club Champion' },
+    heros_national: { fr: 'Heros National', en: 'National Hero' },
+    seigneur_des_terrains: { fr: 'Seigneur des Terrains', en: 'Continental Lord' },
+    maitre_universel: { fr: 'Maitre Universel', en: 'Universal Master' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -272,7 +311,11 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     premier_diamant: { fr: 'Atteindre 1500 ELO (rang Diamant)', en: 'Reach 1500 ELO (Diamond rank)' },
     maitre_petanque: { fr: 'Atteindre 1800 ELO (rang Maitre)', en: 'Reach 1800 ELO (Master rank)' },
     specialiste: { fr: 'Avoir un ELO de role superieur a 1300', en: 'Have a role-specific ELO above 1300' },
-    roi_de_ville: { fr: 'Etre le joueur #1 de sa ville (meilleur ELO)', en: 'Be the #1 player in your city (highest ELO)' },
+    boss_de_la_ville: { fr: 'Etre le joueur #1 de sa ville (meilleur ELO)', en: 'Be the #1 player in your city (highest ELO)' },
+    champion_du_quartier: { fr: 'Etre le joueur #1 de son club (meilleur ELO)', en: 'Be the #1 player in your club (highest ELO)' },
+    heros_national: { fr: 'Etre le joueur #1 de son pays (meilleur ELO)', en: 'Be the #1 player in your country (highest ELO)' },
+    seigneur_des_terrains: { fr: 'Etre le joueur #1 de son continent (meilleur ELO)', en: 'Be the #1 player in your continent (highest ELO)' },
+    maitre_universel: { fr: 'Etre le joueur #1 au monde (meilleur ELO)', en: 'Be the #1 player in the world (highest ELO)' },
   };
   return descs[badgeId]?.[lang] || '';
 }
@@ -382,6 +425,13 @@ export function buildBadgeContext(params: {
     eloMilieu: 1000,
     isCityLeader: false,
     cityName: null,
+    isClubLeader: false,
+    clubName: null,
+    isCountryLeader: false,
+    countryName: null,
+    isContinentLeader: false,
+    continentName: null,
+    isWorldLeader: false,
   };
 }
 
