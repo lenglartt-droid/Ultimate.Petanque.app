@@ -3,7 +3,7 @@
  */
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { isUserAmbassador } from '@/services/ambassadorService';
 import { fetchTrustScore } from '@/services/trustScoreService';
 import {
@@ -18,7 +18,7 @@ import {
 
 export function useBadges() {
   const { user } = useAuth();
-  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useApp();
+  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useAppData();
 
   const [badges, setBadges] = useState<UserBadge[]>([]);
   const [xp, setXp] = useState(0);

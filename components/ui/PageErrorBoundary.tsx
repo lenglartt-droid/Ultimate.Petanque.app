@@ -10,6 +10,7 @@ import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import theme from '@/constants/theme';
+import { initSentry } from '@/services/sentryService';
 
 interface PageErrorBoundaryProps {
   children: React.ReactNode;
@@ -34,6 +35,13 @@ export default class PageErrorBoundary extends React.Component<PageErrorBoundary
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error(`[PageErrorBoundary:${this.props.pageName || 'unknown'}]`, error.message, errorInfo.componentStack?.substring(0, 400));
+    // Report to Sentry in production
+    try {
+      const Sentry = require('@/services/sentryService');
+      if (Sentry.captureException) {
+        Sentry.captureException(error, { extra: { pageName: this.props.pageName, componentStack: errorInfo.componentStack?.substring(0, 1000) } });
+      }
+    } catch { /* Sentry not available */ }
   }
 
   handleRetry = () => {
@@ -62,8 +70,8 @@ export default class PageErrorBoundary extends React.Component<PageErrorBoundary
           <Text style={s.title}>Oops</Text>
           <Text style={s.message}>
             {this.props.pageName
-              ? `Something went wrong on "${this.props.pageName}".`
-              : 'Something went wrong on this page.'}
+              ? `An error occurred on "${this.props.pageName}". You can retry or go back.`
+              : 'Something went wrong on this page. You can retry or go back.'}
           </Text>
           {__DEV__ && this.state.error ? (
             <View style={s.errorBox}>
