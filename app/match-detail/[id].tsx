@@ -27,6 +27,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Match } from '@/types/petanque';
 import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
+import { useAlert } from '@/template';
 import {
   getMatchValidationLevel,
   getValidationColor,
@@ -53,6 +54,8 @@ export default function MatchDetailScreen() {
   const [showShareModal, setShowShareModal] = useState(false);
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
   const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const { showAlert } = useAlert();
 
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
@@ -705,6 +708,52 @@ export default function MatchDetailScreen() {
             <Text style={s.shareCtaText}>{fr ? 'Partager ce match' : 'Share this match'}</Text>
           </Pressable>
 
+          <Pressable
+            style={({ pressed }) => [s.pdfCta, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }, exportingPdf && { opacity: 0.6 }]}
+            onPress={async () => {
+              if (exportingPdf) return;
+              Haptics.selectionAsync();
+              setExportingPdf(true);
+              try {
+                const teamAStr = match.teamA.playerNames.join(', ');
+                const teamBStr = match.teamB.playerNames.join(', ');
+                const menesHtml = (match.menes || []).map((m, i) => `<tr><td>#${i+1}</td><td>${m.teamAPoints || 0}</td><td>${m.teamBPoints || 0}</td></tr>`).join('');
+                const actionsHtml = (match.playerActions || []).map(pa => {
+                  const tr = pa.actions.tirs > 0 ? Math.round((pa.actions.tirsSuccess/pa.actions.tirs)*100) : 0;
+                  const pr = pa.actions.points > 0 ? Math.round((pa.actions.pointsSuccess/pa.actions.points)*100) : 0;
+                  return `<tr><td>${pa.playerName}</td><td>${pa.actions.tirsSuccess}/${pa.actions.tirs} (${tr}%)</td><td>${pa.actions.pointsSuccess}/${pa.actions.points} (${pr}%)</td><td>${pa.actions.carreaux}</td></tr>`;
+                }).join('');
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:sans-serif;padding:24px;color:#1E293B}h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;color:#64748B;margin-top:24px;border-bottom:2px solid #E2E8F0;padding-bottom:6px}.score{font-size:48px;font-weight:900;text-align:center;margin:20px 0}.win{color:#10B981}.loss{color:#EF4444}.meta{display:flex;gap:16px;color:#64748B;font-size:13px;margin-bottom:16px}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{padding:8px 12px;border:1px solid #E2E8F0;text-align:center;font-size:13px}th{background:#F1F5F9;font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:0.5px}.result{text-align:center;font-size:18px;font-weight:700;padding:8px 16px;border-radius:8px;display:inline-block}</style></head><body><h1>${fr ? 'Rapport de Match' : 'Match Report'}</h1><div class="meta"><span>${dateStr}</span><span>${t('formats', match.format)}</span><span>${isTournament ? (match.tournamentName || t('modes', 'tournament')) : t('modes', 'training')}</span>${match.duration > 0 ? `<span>${match.duration} min</span>` : ''}</div><div class="score"><span class="${isWin ? 'win' : 'loss'}">${match.teamA.score}</span> - <span class="${!isWin ? 'win' : 'loss'}">${match.teamB.score}</span></div><table><tr><th>${fr ? 'Mon equipe' : 'My Team'}</th><th>${fr ? 'Adversaire' : 'Opponent'}</th></tr><tr><td>${teamAStr}</td><td>${teamBStr}</td></tr></table>${menesHtml ? `<h2>${t('match', 'menesCount')} (${match.menes?.length || 0})</h2><table><tr><th>Mene</th><th>${fr ? 'Equipe A' : 'Team A'}</th><th>${fr ? 'Equipe B' : 'Team B'}</th></tr>${menesHtml}</table>` : ''}${actionsHtml ? `<h2>${t('match', 'playerActions')}</h2><table><tr><th>${fr ? 'Joueur' : 'Player'}</th><th>Tir</th><th>Point</th><th>Carreaux</th></tr>${actionsHtml}</table>` : ''}<p style="margin-top:24px;color:#94A3B8;font-size:11px;text-align:center">Ultimate Petanque - ${new Date().toLocaleDateString(locale)}</p></body></html>`;
+                const fileName = `match_report_${new Date(match.date).toISOString().slice(0,10)}.pdf`;
+                if (Platform.OS === 'web') {
+                  const pw = window.open('', '_blank');
+                  if (pw) { pw.document.write(html); pw.document.close(); pw.print(); }
+                } else {
+                  const PrintModule = require('expo-print');
+                  const FSModule = require('expo-file-system');
+                  const SharingModule = require('expo-sharing');
+                  const { uri } = await PrintModule.printToFileAsync({ html });
+                  const newUri = `${FSModule.cacheDirectory}${fileName}`;
+                  await FSModule.moveAsync({ from: uri, to: newUri });
+                  if (await SharingModule.isAvailableAsync()) {
+                    await SharingModule.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+                  }
+                }
+              } catch (e: any) {
+                showAlert(fr ? 'Erreur' : 'Error', e.message || fr ? 'Erreur lors de la generation' : 'Generation error');
+              } finally {
+                setExportingPdf(false);
+              }
+            }}
+            disabled={exportingPdf}
+          >
+            {exportingPdf ? (
+              <ActivityIndicator size="small" color="#FFF" />
+            ) : (
+              <MaterialIcons name="picture-as-pdf" size={20} color="#FFF" />
+            )}
+            <Text style={s.pdfCtaText}>{fr ? 'Rapport PDF' : 'PDF Report'}</Text>
+          </Pressable>
 
         </View>
       </ScrollView>
@@ -867,5 +916,7 @@ const s = StyleSheet.create({
   editCtaText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   shareCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.success, paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: theme.success, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
   shareCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  pdfCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
+  pdfCtaText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
 
 });

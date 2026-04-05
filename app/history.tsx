@@ -102,6 +102,11 @@ export default function HistoryScreen() {
   const [meetupTerrainFilter, setMeetupTerrainFilter] = useState<string>('all');
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodOption>('all');
   const [showPeriodModal, setShowPeriodModal] = useState(false);
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+  const [filterResult, setFilterResult] = useState<'all' | 'win' | 'loss'>('all');
+  const [filterFormat, setFilterFormat] = useState<string>('all');
+  const [filterOpponent, setFilterOpponent] = useState<string>('');
+  const [filterTerrain, setFilterTerrain] = useState<string>('all');
   const [viewingMatch, setViewingMatch] = useState<Match | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
   const [showChallengeShareRequest, setShowChallengeShareRequest] = useState(false);
@@ -302,9 +307,25 @@ export default function HistoryScreen() {
 
     let items: { type: 'match' | 'series' | 'challenge' | 'meetup'; data: Match | SeriesGroup | Challenge | (Meetup & { _source: 'created' | 'invited'; _acceptedCount?: number }); date: string }[] = [];
     
+    // Advanced filter function
+    const applyAdvancedFilters = (matchList: Match[]): Match[] => {
+      let result = matchList;
+      if (filterResult === 'win') result = result.filter(m => m.winner === 'A');
+      else if (filterResult === 'loss') result = result.filter(m => m.winner === 'B');
+      if (filterFormat !== 'all') result = result.filter(m => m.format === filterFormat);
+      if (filterOpponent.trim()) {
+        const q = filterOpponent.trim().toLowerCase();
+        result = result.filter(m => m.teamB.playerNames.some(n => n.toLowerCase().includes(q)) || m.teamA.playerNames.some(n => n.toLowerCase().includes(q)));
+      }
+      if (filterTerrain !== 'all') result = result.filter(m => m.terrainId === filterTerrain);
+      return result;
+    };
+
     if (contentFilter === 'all') {
       // Show everything including meetups
-      const groupedTraining = groupMatchesBySeries(trainingMatches);
+      const advTraining = applyAdvancedFilters(trainingMatches);
+      const advTournament = applyAdvancedFilters(tournamentMatches);
+      const groupedTraining = groupMatchesBySeries(advTraining);
       groupedTraining.forEach(item => {
         if ('seriesId' in item) {
           items.push({ type: 'series', data: item as SeriesGroup, date: item.date });
@@ -312,7 +333,7 @@ export default function HistoryScreen() {
           items.push({ type: 'match', data: item as Match, date: item.date });
         }
       });
-      tournamentMatches.forEach(m => {
+      advTournament.forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
       filteredChallengesData.forEach(c => {
@@ -322,9 +343,10 @@ export default function HistoryScreen() {
         items.push({ type: 'meetup', data: m, date: m.date });
       });
     } else if (contentFilter === 'training') {
-      // Apply training sub-filter
+      // Apply training sub-filter + advanced filters
+      const advStandalone = applyAdvancedFilters(standaloneTraining);
       if (trainingSubFilter === 'all') {
-        standaloneTraining.forEach(m => {
+        advStandalone.forEach(m => {
           items.push({ type: 'match', data: m, date: m.date });
         });
         seriesGroups.forEach(s => {
@@ -334,7 +356,7 @@ export default function HistoryScreen() {
           items.push({ type: 'challenge', data: c, date: c.date });
         });
       } else if (trainingSubFilter === 'matches') {
-        standaloneTraining.forEach(m => {
+        advStandalone.forEach(m => {
           items.push({ type: 'match', data: m, date: m.date });
         });
       } else if (trainingSubFilter === 'series') {
@@ -347,7 +369,7 @@ export default function HistoryScreen() {
         });
       }
     } else if (contentFilter === 'tournament') {
-      tournamentMatches.forEach(m => {
+      applyAdvancedFilters(tournamentMatches).forEach(m => {
         items.push({ type: 'match', data: m, date: m.date });
       });
     } else if (contentFilter === 'shared') {
@@ -420,7 +442,7 @@ export default function HistoryScreen() {
         challengesCount: filteredChallengesData.length,
       },
     };
-  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups, sharedMatchIds, sharedChallengeIds]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups, sharedMatchIds, sharedChallengeIds, filterResult, filterFormat, filterOpponent, filterTerrain]);
 
   // Meetup sub-filter stats
   const meetupSubStats = useMemo(() => {
@@ -792,17 +814,105 @@ export default function HistoryScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={styles.headerTitle}>{t('history', 'history')}</Text>
-        <Pressable 
-          style={styles.periodBtn}
-          onPress={() => {
-            Haptics.selectionAsync();
-            setShowPeriodModal(true);
-          }}
-        >
-          <MaterialIcons name="event" size={18} color={theme.primary} />
-          <Text style={styles.periodBtnText}>{selectedPeriodLabel}</Text>
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          <Pressable
+            style={[styles.periodBtn, showAdvancedFilters && { backgroundColor: theme.accent + '15' }]}
+            onPress={() => { Haptics.selectionAsync(); setShowAdvancedFilters(!showAdvancedFilters); }}
+          >
+            <MaterialIcons name="filter-list" size={18} color={showAdvancedFilters ? theme.accent : theme.textMuted} />
+            {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all') ? (
+              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent, position: 'absolute', top: 6, right: 6 }} />
+            ) : null}
+          </Pressable>
+          <Pressable 
+            style={styles.periodBtn}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowPeriodModal(true);
+            }}
+          >
+            <MaterialIcons name="event" size={18} color={theme.primary} />
+            <Text style={styles.periodBtnText}>{selectedPeriodLabel}</Text>
+          </Pressable>
+        </View>
       </View>
+
+      {/* Advanced Filters Bar */}
+      {showAdvancedFilters ? (
+        <View style={styles.advancedFiltersBar}>
+          {/* Result filter */}
+          <View style={styles.advFilterRow}>
+            <Text style={styles.advFilterLabel}>{language === 'fr' ? 'Resultat' : 'Result'}</Text>
+            <View style={styles.advFilterChips}>
+              {([{ id: 'all', label: language === 'fr' ? 'Tous' : 'All' }, { id: 'win', label: language === 'fr' ? 'Victoires' : 'Wins' }, { id: 'loss', label: language === 'fr' ? 'Defaites' : 'Losses' }] as const).map(f => (
+                <Pressable key={f.id} style={[styles.advFilterChip, filterResult === f.id && styles.advFilterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterResult(f.id); }}>
+                  <Text style={[styles.advFilterChipText, filterResult === f.id && styles.advFilterChipTextActive]}>{f.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+          {/* Format filter */}
+          <View style={styles.advFilterRow}>
+            <Text style={styles.advFilterLabel}>Format</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.advFilterChips}>
+              {([{ id: 'all', label: language === 'fr' ? 'Tous' : 'All' }, { id: 'Tête-à-Tête', label: 'Tete-a-tete' }, { id: 'Doublette', label: 'Doublette' }, { id: 'Triplette', label: 'Triplette' }]).map(f => (
+                <Pressable key={f.id} style={[styles.advFilterChip, filterFormat === f.id && styles.advFilterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterFormat(f.id); }}>
+                  <Text style={[styles.advFilterChipText, filterFormat === f.id && styles.advFilterChipTextActive]}>{f.label}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+          {/* Terrain filter */}
+          {(() => {
+            const uniqueTerrains = Array.from(new Set(matches.filter(m => m.terrainId).map(m => m.terrainId!))).map(tid => {
+              const tr = terrains.find(t => t.id === tid);
+              return tr ? { id: tr.id, name: tr.name } : null;
+            }).filter(Boolean) as { id: string; name: string }[];
+            if (uniqueTerrains.length === 0) return null;
+            return (
+              <View style={styles.advFilterRow}>
+                <Text style={styles.advFilterLabel}>{language === 'fr' ? 'Terrain' : 'Terrain'}</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.advFilterChips}>
+                  <Pressable style={[styles.advFilterChip, filterTerrain === 'all' && styles.advFilterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterTerrain('all'); }}>
+                    <Text style={[styles.advFilterChipText, filterTerrain === 'all' && styles.advFilterChipTextActive]}>{language === 'fr' ? 'Tous' : 'All'}</Text>
+                  </Pressable>
+                  {uniqueTerrains.map(tr => (
+                    <Pressable key={tr.id} style={[styles.advFilterChip, filterTerrain === tr.id && styles.advFilterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterTerrain(tr.id); }}>
+                      <Text style={[styles.advFilterChipText, filterTerrain === tr.id && styles.advFilterChipTextActive]} numberOfLines={1}>{tr.name}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              </View>
+            );
+          })()}
+          {/* Opponent search */}
+          <View style={styles.advFilterRow}>
+            <Text style={styles.advFilterLabel}>{language === 'fr' ? 'Adversaire' : 'Opponent'}</Text>
+            <View style={styles.advSearchBar}>
+              <MaterialIcons name="search" size={16} color={theme.textMuted} />
+              <TextInput
+                style={styles.advSearchInput}
+                placeholder={language === 'fr' ? 'Nom du joueur...' : 'Player name...'}
+                placeholderTextColor={theme.textMuted}
+                value={filterOpponent}
+                onChangeText={setFilterOpponent}
+              />
+              {filterOpponent.length > 0 ? (
+                <Pressable onPress={() => setFilterOpponent('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={14} color={theme.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+          </View>
+          {/* Reset */}
+          {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all') ? (
+            <Pressable style={styles.advResetBtn} onPress={() => { Haptics.selectionAsync(); setFilterResult('all'); setFilterFormat('all'); setFilterOpponent(''); setFilterTerrain('all'); }}>
+              <MaterialIcons name="refresh" size={14} color={theme.accent} />
+              <Text style={styles.advResetBtnText}>{language === 'fr' ? 'Reinitialiser les filtres' : 'Reset filters'}</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* Filter Chips */}
       <View style={styles.filtersContainer}>
@@ -2139,6 +2249,19 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
   },
   periodBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  // Advanced filters
+  advancedFiltersBar: { backgroundColor: theme.surface, paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border, gap: 8 },
+  advFilterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  advFilterLabel: { fontSize: 10, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, width: 60 },
+  advFilterChips: { flexDirection: 'row' as const, gap: 6, paddingRight: 8 },
+  advFilterChip: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 16, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  advFilterChipActive: { backgroundColor: theme.accent + '15', borderColor: theme.accent },
+  advFilterChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
+  advFilterChipTextActive: { color: theme.accent, fontWeight: '700' as const },
+  advSearchBar: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, borderWidth: 1, borderColor: theme.border },
+  advSearchInput: { flex: 1, fontSize: 13, color: theme.textPrimary, padding: 0 },
+  advResetBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 8, backgroundColor: theme.accent + '08', borderRadius: 10, borderWidth: 1, borderColor: theme.accent + '20' },
+  advResetBtnText: { fontSize: 12, fontWeight: '600' as const, color: theme.accent },
   
   // Filters
   filtersContainer: {
