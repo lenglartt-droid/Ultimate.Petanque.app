@@ -1,6 +1,6 @@
 /**
  * Terrain Review Service
- * Handles CRUD for terrain reviews (5-star ratings + comments).
+ * Handles CRUD for terrain reviews (5-star ratings + comments + photos).
  */
 import { getSupabaseClient } from '@/template';
 
@@ -12,6 +12,7 @@ export interface TerrainReview {
   playerName?: string;
   rating: number;
   comment?: string;
+  photoUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -44,6 +45,7 @@ export async function fetchTerrainReviews(terrainId: string): Promise<{ reviews:
       playerName: r.player_name,
       rating: r.rating,
       comment: r.comment,
+      photoUrl: r.photo_url || undefined,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     }));
@@ -83,6 +85,7 @@ export async function submitTerrainReview(params: {
   playerName?: string;
   rating: number;
   comment?: string;
+  photoUrl?: string;
 }): Promise<{ review: TerrainReview | null; error: string | null }> {
   try {
     const supabase = getSupabaseClient();
@@ -95,6 +98,7 @@ export async function submitTerrainReview(params: {
         player_name: params.playerName || null,
         rating: params.rating,
         comment: params.comment || null,
+        photo_url: params.photoUrl || null,
         updated_at: new Date().toISOString(),
       }, { onConflict: 'terrain_id,user_id' })
       .select()
@@ -110,6 +114,7 @@ export async function submitTerrainReview(params: {
       playerName: data.player_name,
       rating: data.rating,
       comment: data.comment,
+      photoUrl: data.photo_url || undefined,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };
@@ -160,6 +165,7 @@ export async function getMyReview(terrainId: string, userId: string): Promise<Te
       playerName: data.player_name,
       rating: data.rating,
       comment: data.comment,
+      photoUrl: data.photo_url || undefined,
       createdAt: data.created_at,
       updatedAt: data.updated_at,
     };

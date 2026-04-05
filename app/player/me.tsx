@@ -106,10 +106,12 @@ export default function MyPlayerCardScreen() {
 
   // ELO history for sparkline
   const [eloHistory, setEloHistory] = React.useState<any[]>([]);
+  const [roleElos, setRoleElos] = React.useState<{ tireur: number; pointeur: number; milieu: number } | null>(null);
   React.useEffect(() => {
     if (!selfPlayer?.id) return;
-    const { fetchEloHistory: fetchHist } = require('@/services/eloService');
+    const { fetchEloHistory: fetchHist, fetchPlayerRoleElos } = require('@/services/eloService');
     fetchHist(selfPlayer.id, 30).then(({ history }: any) => setEloHistory(history)).catch(() => {});
+    fetchPlayerRoleElos(selfPlayer.id).then((re: any) => setRoleElos(re)).catch(() => {});
   }, [selfPlayer?.id]);
 
   const eloChartData = React.useMemo(() => {
@@ -150,6 +152,21 @@ export default function MyPlayerCardScreen() {
     if (!selfPlayer?.isPublic || !selfPlayer?.id) return;
     fetchPlayerGeoRank(selfPlayer.id).then(({ geoRank: gr }) => setGeoRank(gr)).catch(() => {});
   }, [selfPlayer?.isPublic, selfPlayer?.id]);
+
+  // Direct contact toggle (independent of public profile toggle)
+  const [togglingContacts, setTogglingContacts] = React.useState(false);
+  const handleToggleContactVisibility = React.useCallback(async () => {
+    if (!selfPlayer || togglingContacts) return;
+    Haptics.selectionAsync();
+    setTogglingContacts(true);
+    const newVal = !(selfPlayer.showContactPublic ?? false);
+    try {
+      await updatePlayer(selfPlayer.id, { showContactPublic: newVal });
+    } catch (e: any) {
+      showAlert(t('common', 'error'), e.message);
+    }
+    setTogglingContacts(false);
+  }, [selfPlayer, togglingContacts, updatePlayer, showAlert, t]);
 
   const handleTogglePublic = React.useCallback(() => {
     if (!selfPlayer || togglingPublic) return;
@@ -475,6 +492,17 @@ export default function MyPlayerCardScreen() {
                           height={40}
                           language={language}
                         />
+                      </View>
+                    ) : null}
+                    {/* ELO by Role */}
+                    {roleElos ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 6 }}>
+                        {[{ label: 'Tireur', value: roleElos.tireur, color: '#F97316', icon: 'gps-fixed' }, { label: 'Pointeur', value: roleElos.pointeur, color: '#3B82F6', icon: 'adjust' }, { label: 'Milieu', value: roleElos.milieu, color: '#8B5CF6', icon: 'swap-horiz' }].map(r => (
+                          <View key={r.label} style={{ alignItems: 'center', backgroundColor: r.color + '08', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                            <MaterialIcons name={r.icon as any} size={10} color={r.color} />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: r.color }}>{r.value}</Text>
+                          </View>
+                        ))}
                       </View>
                     ) : null}
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
@@ -965,34 +993,70 @@ export default function MyPlayerCardScreen() {
           ))}
         </View>
 
-        {/* ===== VISIBILITY ===== */}
+        {/* ===== SIMPLIFIED VISIBILITY ===== */}
         <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: (isPublic ? theme.success : theme.textMuted) + '15' }]}>
               <MaterialIcons name={isPublic ? 'public' : 'lock'} size={18} color={isPublic ? theme.success : theme.textMuted} />
             </View>
-            <Text style={s.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
+            <Text style={s.sectionTitle}>{language === 'fr' ? 'VISIBILITE' : 'VISIBILITY'}</Text>
           </View>
 
-          <Pressable style={s.visibilityRow} onPress={handleTogglePublic} disabled={togglingPublic}>
+          {/* Toggle 1: Community Visibility — auto-save */}
+          <Pressable
+            style={s.visibilityRow}
+            onPress={async () => {
+              if (!selfPlayer || togglingPublic) return;
+              Haptics.selectionAsync();
+              setTogglingPublic(true);
+              const newVal = !isPublic;
+              const { error } = await toggleItemPublic('players', selfPlayer.id, newVal);
+              if (error) { showAlert(t('common', 'error'), error); }
+              else { setIsPublic(newVal); setItemPublic('players', selfPlayer.id, newVal); }
+              setTogglingPublic(false);
+            }}
+            disabled={togglingPublic}
+          >
+            <View style={[{ width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginRight: 12, backgroundColor: (isPublic ? theme.success : theme.textMuted) + '15' }]}>
+              <MaterialIcons name={isPublic ? 'public' : 'lock'} size={20} color={isPublic ? theme.success : theme.textMuted} />
+            </View>
             <View style={s.visibilityInfo}>
-              <Text style={s.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
-              <Text style={s.visibilityDesc}>{isPublic ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}</Text>
+              <Text style={s.visibilityTitle}>{language === 'fr' ? 'Visibilite communaute' : 'Community Visibility'}</Text>
+              <Text style={s.visibilityDesc}>{isPublic ? (language === 'fr' ? 'Visible dans l\'annuaire et sur la carte' : 'Visible in directory and on map') : (language === 'fr' ? 'Masque de l\'annuaire et de la carte' : 'Hidden from directory and map')}</Text>
             </View>
-            <View style={[s.visibilityBadge, { backgroundColor: isPublic ? theme.success + '20' : theme.textMuted + '15' }]}>
-              <Text style={[s.visibilityBadgeText, { color: isPublic ? theme.success : theme.textMuted }]}>{isPublic ? t('map', 'publicLabel') : t('map', 'privateLabel')}</Text>
-            </View>
+            {togglingPublic ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <View style={[s.visibilityBadge, { backgroundColor: isPublic ? theme.success + '20' : theme.textMuted + '15' }]}>
+                <Text style={[s.visibilityBadgeText, { color: isPublic ? theme.success : theme.textMuted }]}>{isPublic ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}</Text>
+              </View>
+            )}
           </Pressable>
 
-          {isPublic ? (
-            <View style={s.privacyNote}>
-              <MaterialIcons name="shield" size={14} color={theme.warning} />
-              <Text style={s.privacyNoteText}>
-                {selfPlayer.showContactPublic
-                  ? t('preview', 'contactsVisibleOnMap')
-                  : t('preview', 'contactsHiddenOnMap')}
-              </Text>
-            </View>
+          {/* Toggle 2: Contact Info Visibility — auto-save, only when community visible */}
+          {isPublic && (selfPlayer.phone || selfPlayer.email) ? (
+            <Pressable style={s.contactToggleCard} onPress={handleToggleContactVisibility} disabled={togglingContacts}>
+              <View style={[s.contactToggleIcon, { backgroundColor: (selfPlayer.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                <MaterialIcons name={selfPlayer.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={18} color={selfPlayer.showContactPublic ? theme.success : theme.textMuted} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.contactToggleTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
+                <Text style={s.contactToggleDesc}>
+                  {selfPlayer.showContactPublic
+                    ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire' : 'Email and phone visible in directory')
+                    : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire' : 'Email and phone hidden in directory')}
+                </Text>
+              </View>
+              {togglingContacts ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <View style={[s.contactToggleBadge, { backgroundColor: (selfPlayer.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                  <Text style={[s.contactToggleBadgeText, { color: selfPlayer.showContactPublic ? theme.success : theme.textMuted }]}>
+                    {selfPlayer.showContactPublic ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           ) : null}
         </View>
 
@@ -1139,7 +1203,6 @@ export default function MyPlayerCardScreen() {
                       value={previewShowContacts}
                       onValueChange={(val) => {
                         setPreviewShowContacts(val);
-                        if (selfPlayer) updatePlayer(selfPlayer.id, { showContactPublic: val });
                       }}
                       trackColor={{ false: theme.border, true: theme.success + '60' }}
                       thumbColor={previewShowContacts ? theme.success : theme.textMuted}
@@ -1356,6 +1419,12 @@ const s = StyleSheet.create({
   visibilityBadgeText: { fontSize: 12, fontWeight: '700' },
   privacyNote: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.warning + '08', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 12, borderWidth: 1, borderColor: theme.warning + '20' },
   privacyNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
+  contactToggleCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginTop: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 1, borderColor: theme.border },
+  contactToggleIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  contactToggleTitle: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
+  contactToggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  contactToggleBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  contactToggleBadgeText: { fontSize: 12, fontWeight: '700' as const },
 
   // Geo Rank row
   geoRankRow: { width: '100%' as const, paddingTop: 10, marginTop: 6, marginBottom: 8, borderTopWidth: 1, borderTopColor: theme.border + '40' },
