@@ -31,7 +31,7 @@ import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/se
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMeetupsForTerrain, Meetup } from '@/services/meetupService';
 import { TextInput } from 'react-native';
-import { fetchTerrainReviews, submitTerrainReview, deleteTerrainReview, computeRatingStats, TerrainReview, TerrainRatingStats } from '@/services/terrainReviewService';
+import { fetchTerrainReviews, submitTerrainReview, deleteTerrainReview, computeRatingStats, TerrainReview, TerrainRatingStats, fetchReviewVotes, voteOnReview, ReviewVoteCounts, flagReview } from '@/services/terrainReviewService';
 import { uploadImageToStorage } from '@/services/storageService';
 import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
@@ -213,6 +213,8 @@ export default function TerrainDetailScreen() {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [frequentPlayers, setFrequentPlayers] = useState<Array<{ id: string; name: string; matchCount: number; avatar?: string }>>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [reviewVotes, setReviewVotes] = useState<Map<string, ReviewVoteCounts>>(new Map());
+  const [votingReviewId, setVotingReviewId] = useState<string | null>(null);
 
   // Clubs using this terrain (many-to-many: clubs.terrain_id + terrain.club_id)
   const [linkedClubs, setLinkedClubs] = useState<{ id: string; name: string; city?: string; logo?: string }[]>([]);
@@ -247,7 +249,7 @@ export default function TerrainDetailScreen() {
     // Ratings are now from the reviews table
   }, [terrain?.id, allMatches.length]);
 
-  // Fetch terrain reviews
+  // Fetch terrain reviews + votes
   useEffect(() => {
     if (!terrain?.id) return;
     fetchTerrainReviews(terrain.id).then(({ reviews: revs }) => {
@@ -257,8 +259,22 @@ export default function TerrainDetailScreen() {
         const mine = revs.find(r => r.userId === user.id);
         if (mine) setMyReview(mine);
       }
+      // Fetch votes after reviews load
+      fetchReviewVotes(terrain.id, user?.id).then(votes => setReviewVotes(votes));
     });
   }, [terrain?.id, user?.id]);
+
+  const handleVote = React.useCallback(async (reviewId: string, voteType: 'helpful' | 'not_helpful') => {
+    if (!user || votingReviewId) return;
+    setVotingReviewId(reviewId);
+    Haptics.selectionAsync();
+    const { error } = await voteOnReview(reviewId, user.id, voteType);
+    if (!error && terrain) {
+      const updated = await fetchReviewVotes(terrain.id, user.id);
+      setReviewVotes(updated);
+    }
+    setVotingReviewId(null);
+  }, [user, votingReviewId, terrain]);
 
   // Photo upload handler
   const handleAddPhoto = React.useCallback(() => {
@@ -622,6 +638,13 @@ export default function TerrainDetailScreen() {
             <Text style={styles.quickInfoLabel}>{t('terrain', 'covered')}</Text>
           </View>
           <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.parking ? '#6366F1' + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name="local-parking" size={20} color={terrain.parking ? '#6366F1' : theme.textMuted} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.parking ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'parking')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
             <View style={[styles.quickInfoIcon, { backgroundColor: terrain.publicAccess ? theme.success + '15' : theme.error + '15' }]}>
               <MaterialIcons name={terrain.publicAccess ? 'public' : 'lock'} size={20} color={terrain.publicAccess ? theme.success : theme.error} />
             </View>
@@ -828,10 +851,29 @@ export default function TerrainDetailScreen() {
           )}
           {/* Review list (up to 5) */}
           {terrainReviews.slice(0, 5).map(rev => {
-            const hasPlayedHere = allMatches.some(m => m.terrainId === terrain.id && [...m.teamA.players, ...m.teamB.players].some(pid => {
+            const matchesOnTerrain = allMatches.filter(m => m.terrainId === terrain.id && [...m.teamA.players, ...m.teamB.players].some(pid => {
               const p = allPlayers.find(pl => pl.id === pid);
               return p && (p as any).userId === rev.userId;
             }));
+            const hasPlayedHere = matchesOnTerrain.length > 0;
+            // Confidence score: based on matches on this terrain + account age + review content
+            const confidenceScore = (() => {
+              let score = 0;
+              // Matches played on this terrain (max 40 pts)
+              score += Math.min(matchesOnTerrain.length * 10, 40);
+              // Account age bonus (max 30 pts: 1pt per month, up to 30 months)
+              const accountAgeMonths = Math.floor((Date.now() - new Date(rev.createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000));
+              score += Math.min(accountAgeMonths, 30);
+              // Has comment (10 pts)
+              if (rev.comment && rev.comment.length > 10) score += 10;
+              // Has photo (10 pts)
+              if (rev.photoUrl) score += 10;
+              // Verified player (10 pts)
+              if (hasPlayedHere) score += 10;
+              return Math.min(score, 100);
+            })();
+            const confidenceColor = confidenceScore >= 70 ? '#10B981' : confidenceScore >= 40 ? '#F59E0B' : '#94A3B8';
+            const confidenceLabel = confidenceScore >= 70 ? (language === 'fr' ? 'Fiable' : 'Reliable') : confidenceScore >= 40 ? (language === 'fr' ? 'Moyen' : 'Medium') : (language === 'fr' ? 'Faible' : 'Low');
             return (
             <View key={rev.id} style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 8, ...theme.shadows.card }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
@@ -839,7 +881,7 @@ export default function TerrainDetailScreen() {
                   <Text style={{ fontSize: 14, fontWeight: '700', color: theme.primary }}>{(rev.playerName || '?').charAt(0)}</Text>
                 </View>
                 <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                     <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{rev.playerName || (language === 'fr' ? 'Anonyme' : 'Anonymous')}</Text>
                     {hasPlayedHere ? (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#10B98112', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
@@ -847,6 +889,10 @@ export default function TerrainDetailScreen() {
                         <Text style={{ fontSize: 9, fontWeight: '700', color: '#10B981' }}>{language === 'fr' ? 'Verifie' : 'Verified'}</Text>
                       </View>
                     ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: confidenceColor + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: confidenceColor + '25' }}>
+                      <MaterialIcons name="shield" size={9} color={confidenceColor} />
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: confidenceColor }}>{confidenceScore} - {confidenceLabel}</Text>
+                    </View>
                   </View>
                   <Text style={{ fontSize: 11, color: theme.textMuted }}>{new Date(rev.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
                 </View>
@@ -860,32 +906,63 @@ export default function TerrainDetailScreen() {
                   <Image source={{ uri: rev.photoUrl }} style={{ width: '100%', height: 160, borderRadius: 12 }} contentFit="cover" transition={200} />
                 </Pressable>
               ) : null}
-              {/* Report button */}
-              {user && rev.userId !== user.id ? (
-                <Pressable
-                  onPress={() => {
-                    Alert.alert(
-                      language === 'fr' ? 'Signaler cet avis' : 'Report this review',
-                      language === 'fr' ? 'Cet avis sera examine par notre equipe de moderation.' : 'This review will be examined by our moderation team.',
-                      [
-                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
-                        { text: language === 'fr' ? 'Signaler' : 'Report', style: 'destructive', onPress: () => {
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                          showAlert(
-                            language === 'fr' ? 'Signalement envoye' : 'Report sent',
-                            language === 'fr' ? 'Merci, notre equipe examinera cet avis.' : 'Thanks, our team will review this.'
-                          );
-                        }},
-                      ]
-                    );
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-end' }}
-                  hitSlop={8}
-                >
-                  <MaterialIcons name="flag" size={12} color={theme.textMuted} />
-                  <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Signaler' : 'Report'}</Text>
-                </Pressable>
-              ) : null}
+              {/* Voting + Report Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                {/* Helpful / Not Helpful Votes */}
+                {user ? (() => {
+                  const vc = reviewVotes.get(rev.id) || { helpful: 0, notHelpful: 0, userVote: null };
+                  const isVoting = votingReviewId === rev.id;
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Pressable
+                        onPress={() => handleVote(rev.id, 'helpful')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'helpful' ? '#22C55E15' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'helpful' ? '#22C55E30' : 'transparent' }}
+                        disabled={isVoting}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="thumb-up" size={13} color={vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted} />
+                        {vc.helpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted }}>{vc.helpful}</Text> : null}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleVote(rev.id, 'not_helpful')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'not_helpful' ? '#EF444415' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'not_helpful' ? '#EF444430' : 'transparent' }}
+                        disabled={isVoting}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="thumb-down" size={13} color={vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted} />
+                        {vc.notHelpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted }}>{vc.notHelpful}</Text> : null}
+                      </Pressable>
+                    </View>
+                  );
+                })() : <View />}
+                {/* Report button */}
+                {user && rev.userId !== user.id ? (
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert(
+                        language === 'fr' ? 'Signaler cet avis' : 'Report this review',
+                        language === 'fr' ? 'Cet avis sera examine par notre equipe de moderation.' : 'This review will be examined by our moderation team.',
+                        [
+                          { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                          { text: language === 'fr' ? 'Signaler' : 'Report', style: 'destructive', onPress: async () => {
+                            const { error: flagErr } = await flagReview(rev.id);
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            showAlert(
+                              language === 'fr' ? 'Signalement envoye' : 'Report sent',
+                              language === 'fr' ? 'Merci, notre equipe examinera cet avis.' : 'Thanks, our team will review this.'
+                            );
+                          }},
+                        ]
+                      );
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="flag" size={12} color={theme.textMuted} />
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Signaler' : 'Report'}</Text>
+                  </Pressable>
+                ) : <View />}
+              </View>
               {/* Delete own review */}
               {user && rev.userId === user.id ? (
                 <Pressable
@@ -908,7 +985,7 @@ export default function TerrainDetailScreen() {
                       ]
                     );
                   }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-end' }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, alignSelf: 'flex-end' }}
                   hitSlop={8}
                 >
                   <MaterialIcons name="delete-outline" size={12} color={theme.error} />
@@ -1602,14 +1679,16 @@ const styles = StyleSheet.create({
   },
   quickInfoGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.lg,
     padding: 16,
     marginBottom: 24,
+    rowGap: 14,
     ...theme.shadows.card,
   },
   quickInfoItem: {
-    flex: 1,
+    width: '20%',
     alignItems: 'center',
     gap: 6,
   },

@@ -6,6 +6,23 @@ import { getSupabaseClient } from '@/template';
 import { Match, Player, Tournament } from '@/types/petanque';
 import { getEloRank } from '@/services/eloService';
 
+export interface MemberAnalytics {
+  id: string;
+  name: string;
+  avatar?: string;
+  elo: number;
+  role: string;
+  matchesPlayed: number;
+  wins: number;
+  winRate: number;
+  tirRate: number;
+  pointRate: number;
+  carreaux: number;
+  contributionScore: number; // 0-100 composite
+  lastMatchDate?: string;
+  monthlyMatches: Array<{ month: string; count: number }>;
+}
+
 export interface ClubAnalytics {
   // Members
   totalMembers: number;
@@ -27,6 +44,12 @@ export interface ClubAnalytics {
   roleDistribution: Array<{ role: string; count: number; pct: number }>;
   // Activity
   matchesByMonth: Array<{ month: string; count: number }>;
+  // National averages for comparison
+  nationalAvgElo: number;
+  nationalAvgWinRate: number;
+  nationalAvgMatchesPerMember: number;
+  // Individual member analytics
+  memberAnalytics: MemberAnalytics[];
 }
 
 export async function fetchClubAnalytics(
@@ -170,6 +193,85 @@ export async function fetchClubAnalytics(
     .map(([role, count]) => ({ role, count, pct: totalRoles > 0 ? Math.round((count / totalRoles) * 100) : 0 }))
     .sort((a, b) => b.count - a.count);
 
+  // Fetch national averages from all public players
+  let nationalAvgElo = 1000;
+  let nationalAvgWinRate = 50;
+  let nationalAvgMatchesPerMember = 5;
+  try {
+    const supabase = getSupabaseClient();
+    const { data: publicPlayers } = await supabase
+      .from('players')
+      .select('elo_rating, stats')
+      .eq('is_public', true);
+    if (publicPlayers && publicPlayers.length > 0) {
+      const natElo = publicPlayers.reduce((s: number, p: any) => s + (p.elo_rating || 1000), 0) / publicPlayers.length;
+      const natWr = publicPlayers.reduce((s: number, p: any) => s + (p.stats?.winRate || 0), 0) / publicPlayers.length;
+      const natMp = publicPlayers.reduce((s: number, p: any) => s + (p.stats?.matchesPlayed || 0), 0) / publicPlayers.length;
+      nationalAvgElo = Math.round(natElo);
+      nationalAvgWinRate = Math.round(natWr * 10) / 10;
+      nationalAvgMatchesPerMember = Math.round(natMp * 10) / 10;
+    }
+  } catch { /* silent */ }
+
+  // Individual member analytics
+  const memberAnalytics: MemberAnalytics[] = members.map(m => {
+    const mData = memberMatchMap.get(m.id) || { wins: 0, matches: 0 };
+    // Compute shot stats from playerActions
+    let tirs = 0, tirsSuccess = 0, pts = 0, ptsSuccess = 0, carreaux = 0;
+    let lastMatch: string | undefined;
+    const monthlyMap = new Map<string, number>();
+    allMatches.forEach(match => {
+      const involved = [...match.teamA.players, ...match.teamB.players].includes(m.id);
+      if (!involved) return;
+      const md = new Date(match.date);
+      const mk = `${md.getFullYear()}-${String(md.getMonth() + 1).padStart(2, '0')}`;
+      monthlyMap.set(mk, (monthlyMap.get(mk) || 0) + 1);
+      if (!lastMatch || match.date > lastMatch) lastMatch = match.date;
+      if (match.playerActions) {
+        const pa = match.playerActions.find(a => a.playerId === m.id);
+        if (pa) {
+          tirs += pa.actions.tirs;
+          tirsSuccess += pa.actions.tirsSuccess;
+          pts += pa.actions.points;
+          ptsSuccess += pa.actions.pointsSuccess;
+          carreaux += pa.actions.carreaux;
+        }
+      }
+    });
+    const tirRate = tirs > 0 ? Math.round((tirsSuccess / tirs) * 100) : 0;
+    const pointRate = pts > 0 ? Math.round((ptsSuccess / pts) * 100) : 0;
+    const winRate = mData.matches > 0 ? Math.round((mData.wins / mData.matches) * 100) : 0;
+    // Contribution score: 40% ELO norm + 30% win rate + 20% activity + 10% carreaux
+    const eloNorm = Math.min(((m.eloRating || 1000) - 800) / 12, 100);
+    const activityNorm = Math.min((mData.matches / Math.max(totalMatches / members.length, 1)) * 100, 100);
+    const carreauNorm = Math.min(carreaux * 10, 100);
+    const contributionScore = Math.round(eloNorm * 0.4 + winRate * 0.3 + activityNorm * 0.2 + carreauNorm * 0.1);
+    // Monthly matches last 6 months
+    const monthlyMatches: Array<{ month: string; count: number }> = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const mk = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const ml = d.toLocaleDateString('fr-FR', { month: 'short' });
+      monthlyMatches.push({ month: ml, count: monthlyMap.get(mk) || 0 });
+    }
+    return {
+      id: m.id,
+      name: m.name,
+      avatar: m.avatar,
+      elo: m.eloRating || 1000,
+      role: m.role || 'Milieu',
+      matchesPlayed: mData.matches,
+      wins: mData.wins,
+      winRate,
+      tirRate,
+      pointRate,
+      carreaux,
+      contributionScore,
+      lastMatchDate: lastMatch,
+      monthlyMatches,
+    };
+  }).sort((a, b) => b.contributionScore - a.contributionScore);
+
   return {
     totalMembers: members.length,
     activeMembersThisMonth: activeMemberIds.size,
@@ -185,5 +287,9 @@ export async function fetchClubAnalytics(
     tournamentsThisYear,
     roleDistribution,
     matchesByMonth,
+    nationalAvgElo,
+    nationalAvgWinRate,
+    nationalAvgMatchesPerMember,
+    memberAnalytics,
   };
 }

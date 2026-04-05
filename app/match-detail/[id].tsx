@@ -26,7 +26,8 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Match } from '@/types/petanque';
-import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
+import Svg, { Circle, Line, G, Polygon, Text as SvgText, Polyline, Rect } from 'react-native-svg';
+import { Dimensions } from 'react-native';
 import { useAlert } from '@/template';
 import {
   getMatchValidationLevel,
@@ -56,6 +57,12 @@ export default function MatchDetailScreen() {
   const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
   const { showAlert } = useAlert();
+
+  const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
+    return () => sub?.remove();
+  }, []);
 
   useEffect(() => {
     fetchAmbassadors().then(({ ambassadors }) => {
@@ -444,7 +451,67 @@ export default function MatchDetailScreen() {
               <Text style={s.cardTitle}>{t('match', 'menesCount')} ({match.menes.length})</Text>
             </View>
 
-            {/* Visual mene chart */}
+            {/* Score Evolution Line Chart */}
+            {match.menes.length >= 2 ? (() => {
+              const chartW = Math.min(screenWidth - 64, 340);
+              const chartH = 120;
+              const padL = 28;
+              const padR = 12;
+              const padT = 16;
+              const padB = 24;
+              const innerW = chartW - padL - padR;
+              const innerH = chartH - padT - padB;
+              const cumulativeA: number[] = [];
+              const cumulativeB: number[] = [];
+              match.menes!.forEach((m, i) => {
+                cumulativeA.push((cumulativeA[i - 1] || 0) + (m.teamAPoints || 0));
+                cumulativeB.push((cumulativeB[i - 1] || 0) + (m.teamBPoints || 0));
+              });
+              const maxScore = Math.max(...cumulativeA, ...cumulativeB, 13);
+              const stepX = match.menes!.length > 1 ? innerW / (match.menes!.length - 1) : innerW;
+              const getY = (val: number) => padT + innerH - (val / maxScore) * innerH;
+              const getX = (idx: number) => padL + idx * stepX;
+              const polyA = cumulativeA.map((v, i) => `${getX(i)},${getY(v)}`).join(' ');
+              const polyB = cumulativeB.map((v, i) => `${getX(i)},${getY(v)}`).join(' ');
+              return (
+                <View style={{ alignItems: 'center', marginBottom: 14 }}>
+                  <Svg width={chartW} height={chartH}>
+                    {/* Grid lines */}
+                    {[0, 0.25, 0.5, 0.75, 1].map((pct, i) => (
+                      <Line key={i} x1={padL} y1={padT + innerH * (1 - pct)} x2={chartW - padR} y2={padT + innerH * (1 - pct)} stroke={theme.border} strokeWidth={0.5} strokeDasharray={i > 0 && i < 4 ? '3,3' : undefined} />
+                    ))}
+                    {/* Y-axis labels */}
+                    <SvgText x={padL - 4} y={padT + 4} fontSize="9" fill={theme.textMuted} textAnchor="end" fontWeight="600">{maxScore}</SvgText>
+                    <SvgText x={padL - 4} y={padT + innerH + 4} fontSize="9" fill={theme.textMuted} textAnchor="end" fontWeight="600">0</SvgText>
+                    {/* X-axis labels */}
+                    {match.menes!.map((_, i) => (
+                      <SvgText key={i} x={getX(i)} y={chartH - 4} fontSize="8" fill={theme.textMuted} textAnchor="middle" fontWeight="600">M{i + 1}</SvgText>
+                    ))}
+                    {/* Lines */}
+                    <Polyline points={polyB} fill="none" stroke={theme.error} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.85} />
+                    <Polyline points={polyA} fill="none" stroke={theme.success} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+                    {/* Dots */}
+                    {cumulativeA.map((v, i) => <Circle key={`a${i}`} cx={getX(i)} cy={getY(v)} r={3.5} fill={theme.success} stroke="#FFF" strokeWidth={2} />)}
+                    {cumulativeB.map((v, i) => <Circle key={`b${i}`} cx={getX(i)} cy={getY(v)} r={3.5} fill={theme.error} stroke="#FFF" strokeWidth={2} />)}
+                    {/* End score labels */}
+                    <SvgText x={getX(cumulativeA.length - 1) + 4} y={getY(cumulativeA[cumulativeA.length - 1]) - 6} fontSize="11" fill={theme.success} fontWeight="800">{cumulativeA[cumulativeA.length - 1]}</SvgText>
+                    <SvgText x={getX(cumulativeB.length - 1) + 4} y={getY(cumulativeB[cumulativeB.length - 1]) + 14} fontSize="11" fill={theme.error} fontWeight="800">{cumulativeB[cumulativeB.length - 1]}</SvgText>
+                  </Svg>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 10, height: 3, borderRadius: 1.5, backgroundColor: theme.success }} />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: theme.success }}>{fr ? 'Mon equipe' : 'My team'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 10, height: 3, borderRadius: 1.5, backgroundColor: theme.error }} />
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: theme.error }}>{fr ? 'Adversaire' : 'Opponent'}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })() : null}
+
+            {/* Visual mene chart (bar) */}
             <View style={s.meneChart}>
               {match.menes.map((mene, idx) => {
                 const cumulA = match.menes!.slice(0, idx + 1).reduce((sum, m) => sum + (m.teamAPoints || 0), 0);
