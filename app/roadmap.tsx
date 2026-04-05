@@ -48,24 +48,6 @@ const FEATURES: FeatureDef[] = [
     descEn: 'Real-time match tracking for remote spectators.',
   },
   {
-    id: 'social_feed',
-    icon: 'dynamic-feed',
-    color: '#2563EB',
-    labelFr: 'Feed Social',
-    labelEn: 'Social Feed',
-    descFr: 'Timeline communautaire : resultats, badges, photos de terrain.',
-    descEn: 'Community timeline: results, badges, court photos.',
-  },
-  {
-    id: 'tournament_mgmt',
-    icon: 'emoji-events',
-    color: '#F59E0B',
-    labelFr: 'Gestion Tournois',
-    labelEn: 'Tournament Management',
-    descFr: 'Tableaux automatiques, inscriptions en ligne, brackets live.',
-    descEn: 'Automatic brackets, online registration, live brackets.',
-  },
-  {
     id: 'messaging',
     icon: 'chat',
     color: '#10B981',
@@ -83,24 +65,7 @@ const FEATURES: FeatureDef[] = [
     descFr: 'Plans sur 4-8 semaines avec defis quotidiens progressifs.',
     descEn: '4-8 week plans with progressive daily challenges.',
   },
-  {
-    id: 'seasonal_leagues',
-    icon: 'military-tech',
-    color: '#0891B2',
-    labelFr: 'Ligues saisonnieres',
-    labelEn: 'Seasonal Leagues',
-    descFr: 'Competitions automatisees avec matchmaking ELO et recompenses.',
-    descEn: 'Automated competitions with ELO matchmaking and rewards.',
-  },
-  {
-    id: 'video_analysis',
-    icon: 'videocam',
-    color: '#EC4899',
-    labelFr: 'Analyse video',
-    labelEn: 'Video Analysis',
-    descFr: 'Enregistrer ses tirs, annoter la technique, partager des clips.',
-    descEn: 'Record your shots, annotate technique, share clips.',
-  },
+
 ];
 
 // ============================================

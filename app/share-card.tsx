@@ -459,6 +459,17 @@ export default function ShareCardScreen() {
       // Fetch club leaderboard for stats
       const { clubs: lbClubs } = await fetchClubLeaderboard();
       const lbClub = lbClubs.find(c => c.id === clubIdParam);
+      // Get club players for top 3
+      const clubPlayersList = players.filter((p: any) => p.clubId === clubIdParam || (p.club && club.name && p.club === club.name));
+      const topClubPlayers = clubPlayersList
+        .sort((a: any, b: any) => (b.stats?.winRate || 0) - (a.stats?.winRate || 0))
+        .slice(0, 3)
+        .map((p: any) => ({ name: p.name, winRate: p.stats?.winRate || 0, eloRating: p.eloRating, role: p.role }));
+      // Get upcoming/active tournaments for this club
+      const clubTournaments = tournaments.filter((t: any) => t.clubId === clubIdParam && (t.status === 'A venir' || t.status === 'À venir' || t.status === 'En cours'))
+        .sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        .slice(0, 3)
+        .map((t: any) => ({ name: t.name, date: t.date, status: t.status, format: t.format }));
       // Fetch geo rank
       let geoRankData: any = null;
       try {
@@ -481,7 +492,8 @@ export default function ShareCardScreen() {
       } catch {}
       setClubCardData({
         club,
-        topPlayers: lbClub?.topPlayers || [],
+        topPlayers: topClubPlayers.length > 0 ? topClubPlayers : (lbClub?.topPlayers || []),
+        upcomingTournaments: clubTournaments,
         totalMatches: lbClub?.totalMatches || 0,
         avgWinRate: lbClub?.stats?.avgWinRate || 0,
         avgTirRate: lbClub?.stats?.avgTirRate || 0,
@@ -1089,7 +1101,8 @@ export default function ShareCardScreen() {
             facilities={cd.club.facilities}
             description={cd.club.description}
             geoRank={cd.geoRank}
-            topPlayers={cd.topPlayers.map((p: any) => ({ name: p.name, winRate: p.winRate, eloRating: p.eloRating }))}
+            topPlayers={cd.topPlayers.map((p: any) => ({ name: p.name, winRate: p.winRate, eloRating: p.eloRating, role: p.role }))}
+            upcomingTournaments={(cd as any).upcomingTournaments}
             totalMatches={cd.totalMatches}
             avgWinRate={cd.avgWinRate}
             avgTirRate={cd.avgTirRate}

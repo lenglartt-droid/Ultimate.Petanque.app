@@ -61,17 +61,17 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
 const s = StyleSheet.create({
   container: {
     alignItems: 'center',
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 10,
+    paddingBottom: 6,
     marginTop: 'auto' as any,
   },
   containerSm: {
-    paddingTop: 6,
-    paddingBottom: 2,
+    paddingTop: 8,
+    paddingBottom: 4,
   },
   containerXs: {
-    paddingTop: 3,
-    paddingBottom: 1,
+    paddingTop: 6,
+    paddingBottom: 3,
   },
   absolute: {
     position: 'absolute',
