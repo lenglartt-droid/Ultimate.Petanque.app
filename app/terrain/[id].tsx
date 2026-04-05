@@ -21,7 +21,7 @@ import { Image } from 'expo-image';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
@@ -37,7 +37,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, tournaments, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData, loading: appLoading } = useApp();
+  const { tournaments, loading: appLoading } = useAppData();
+  const { getTerrainById, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {

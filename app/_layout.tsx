@@ -14,6 +14,7 @@ import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
 import { isATTPromptNeeded } from '@/services/trackingService';
 import DevPerformanceOverlay from '@/components/ui/DevPerformanceOverlay';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { checkUserBanStatus, BanInfo } from '@/services/banCheckService';
 import BanScreen from '@/components/ui/BanScreen';
 import { initSentry } from '@/services/sentryService';
@@ -236,6 +237,7 @@ function LayoutInner() {
   }
 
   return (
+            <PageErrorBoundary pageName="App">
             <View style={{ flex: 1 }}>
             <StatusBar style="dark" />
             <MaintenanceBanner />
@@ -258,7 +260,7 @@ function LayoutInner() {
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',
-                }} 
+                }}
               />
               <Stack.Screen 
                 name="club/[id]" 
@@ -279,7 +281,7 @@ function LayoutInner() {
                 options={{ 
                   presentation: 'modal',
                   animation: 'slide_from_bottom',
-                }} 
+                }}
               />
               <Stack.Screen 
                 name="match/[id]" 
@@ -876,5 +878,6 @@ function LayoutInner() {
             </Stack>
             {__DEV__ ? <DevPerformanceOverlay /> : null}
             </View>
+            </PageErrorBoundary>
   );
 }

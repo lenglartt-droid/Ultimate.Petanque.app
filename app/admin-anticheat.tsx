@@ -13,7 +13,7 @@ import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppUI } from '@/contexts/AppContext';
 import {
   fetchSuspiciousPlayers, updateSuspiciousStatus, updateTrustScore,
   getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore,
@@ -31,7 +31,7 @@ export default function AdminAntiCheatScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { isAdmin } = useApp();
+  const { isAdmin } = useAppUI();
   const isFr = language === 'fr';
 
   const [players, setPlayers] = useState<any[]>([]);

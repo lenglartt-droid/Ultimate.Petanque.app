@@ -23,7 +23,7 @@ import * as Haptics from '@/services/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -80,7 +80,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 
 export default function NewTerrainScreen() {
   const insets = useSafeAreaInsets();
-  const { addTerrain, clubs } = useApp();
+  const { clubs } = useAppData();
+  const { addTerrain } = useAppActions();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
   const { user } = useAuth();

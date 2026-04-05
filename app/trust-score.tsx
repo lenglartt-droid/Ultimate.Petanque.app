@@ -17,7 +17,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import {
   fetchTrustScore,
   computeQuickTrustScore,
@@ -165,7 +165,7 @@ export default function TrustScoreScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { selfPlayer, matches } = useApp();
+  const { selfPlayer, matches } = useAppData();
   const isFr = language === 'fr';
 
   const [trustData, setTrustData] = useState<TrustScoreData | null>(null);

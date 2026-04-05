@@ -17,7 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
@@ -121,12 +121,13 @@ export default function PlayerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, selfPlayer, matches, getSharedPermission, loading: appLoading, boulesSets, players, challenges: allChallenges, isPremium } = useApp();
+  const { selfPlayer, matches, boulesSets, players, challenges: allChallenges, isPremium, loading: appLoading } = useAppData();
+  const { getPlayerById, getMatchesByPlayer, getClubById, getTerrainById, deletePlayer, updatePlayer, getSharedPermission } = useAppActions();
 
   const player = getPlayerById(id!);
   const playerMatches = getMatchesByPlayer(id!);
   const recentMatches = playerMatches.slice(0, 5);
-  const { clubs, terrains: allTerrains } = useApp();
+  const { clubs, terrains: allTerrains } = useAppData();
   const clubEntity = player?.clubId ? getClubById(player.clubId) : null;
   const terrainEntity = player?.terrainId ? getTerrainById(player.terrainId) : null;
   const clubDisplayName = clubEntity?.name || player?.club || null;
@@ -180,7 +181,7 @@ export default function PlayerDetailScreen() {
       setAmbassadorData(amb || null);
     });
   }, [id, player]);
-  const { updatePlayer: updatePlayerFn } = useApp();
+  const { updatePlayer: updatePlayerFn } = useAppActions();
   const [refreshing, setRefreshing] = React.useState(false);
   const [exportingRoleEvo, setExportingRoleEvo] = React.useState(false);
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
@@ -250,7 +251,7 @@ export default function PlayerDetailScreen() {
     return getEloRank(elo);
   }, [player?.eloRating]);
 
-  const { refreshData } = useApp();
+  const { refreshData } = useAppActions();
 
   // Use InteractionManager-based deferred render instead of arbitrary timeout
   const belowFoldReady = (() => {

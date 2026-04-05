@@ -28,7 +28,7 @@ import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -98,7 +98,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function EditClubScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getClubById, updateClub, terrains, loading: appLoading } = useApp();
+  const { terrains, loading: appLoading } = useAppData();
+  const { getClubById, updateClub } = useAppActions();
   const { t, language } = useLanguage();
   const { showAlert } = useAlert();
 

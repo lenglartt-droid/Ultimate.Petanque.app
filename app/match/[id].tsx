@@ -20,7 +20,7 @@ import * as Haptics from '@/services/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, PlayerRole } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Match, PlayerAction, DetailedShotRecord, RoleSegment } from '@/types/petanque';
 import { getRoleColor, getRoleIcon } from '@/services/roleAnalysisService';
@@ -48,7 +48,8 @@ interface MeneEdit {
 export default function EditMatchScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getMatchById, updateMatch, deleteMatch, players, matches, terrains, tournaments, boulesSets, loading: appLoading, isSharedItem, getSharedPermission, refreshData } = useApp();
+  const { players, matches, terrains, tournaments, boulesSets, loading: appLoading } = useAppData();
+  const { getMatchById, updateMatch, deleteMatch, isSharedItem, getSharedPermission, refreshData } = useAppActions();
   const { user } = useAuth();
   const { t, language } = useLanguage();
 

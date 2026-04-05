@@ -17,7 +17,7 @@ import * as Haptics from '@/services/haptics';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getSupabaseClient } from '@/template';
 import { useAuth, useAlert } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppUI, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isIapAvailable, initIap, getRemoveAdsProduct, purchaseRemoveAds, restorePurchases, endIapConnection } from '@/services/iapService';
 import theme from '@/constants/theme';
@@ -26,7 +26,8 @@ export default function RemoveAdsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { isPremium, setIsPremium } = useApp();
+  const { isPremium } = useAppUI();
+  const { setIsPremium } = useAppActions();
   const { language } = useLanguage();
   const supabase = getSupabaseClient();
 
