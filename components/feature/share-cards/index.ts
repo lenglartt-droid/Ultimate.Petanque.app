@@ -9,4 +9,6 @@ export { default as ShareCardPalmares } from './ShareCardPalmares';
 export { default as ShareCardEventLeaderboard } from './ShareCardEventLeaderboard';
 export { default as ShareCardLeague } from './ShareCardLeague';
 export { default as ShareCardWeeklyDigest } from './ShareCardWeeklyDigest';
+export { default as ShareCardMilestone } from './ShareCardMilestone';
+export { default as ShareCardClub } from './ShareCardClub';
 export { default as ShareCardWatermark } from './ShareCardWatermark';

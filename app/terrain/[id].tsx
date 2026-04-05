@@ -19,8 +19,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 
 import * as Haptics from '@/services/haptics';
+import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
-import config from '@/constants/config';
+import { config } from '@/constants/config';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
@@ -29,6 +30,10 @@ import MergePickerModal from '@/components/ui/MergePickerModal';
 import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getMeetupsForTerrain, Meetup } from '@/services/meetupService';
+import { TextInput } from 'react-native';
+import { fetchTerrainReviews, submitTerrainReview, deleteTerrainReview, computeRatingStats, TerrainReview, TerrainRatingStats } from '@/services/terrainReviewService';
+import { uploadImageToStorage } from '@/services/storageService';
+import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
@@ -38,7 +43,7 @@ export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
   const { tournaments, loading: appLoading } = useAppData();
-  const { getTerrainById, deleteTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData } = useAppActions();
+  const { getTerrainById, deleteTerrain, updateTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -193,8 +198,137 @@ export default function TerrainDetailScreen() {
   const [meetups, setMeetups] = useState<Meetup[]>([]);
   const [meetupsLoading, setMeetupsLoading] = useState(false);
 
+  // Player ratings / reviews state
+  const [terrainRating, setTerrainRating] = useState<TerrainRatingStats>({ avg: 0, count: 0, distribution: [0, 0, 0, 0, 0] });
+  const [terrainReviews, setTerrainReviews] = useState<TerrainReview[]>([]);
+  const [myReview, setMyReview] = useState<TerrainReview | null>(null);
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [showPhotoGallery, setShowPhotoGallery] = useState(false);
+  const [galleryIndex, setGalleryIndex] = useState(0);
+  const [reviewRating, setReviewRating] = useState(0);
+  const [reviewComment, setReviewComment] = useState('');
+  const [submittingReview, setSubmittingReview] = useState(false);
+  const [frequentPlayers, setFrequentPlayers] = useState<Array<{ id: string; name: string; matchCount: number; avatar?: string }>>([]);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+
   // Clubs using this terrain (many-to-many: clubs.terrain_id + terrain.club_id)
   const [linkedClubs, setLinkedClubs] = useState<{ id: string; name: string; city?: string; logo?: string }[]>([]);
+
+  // Compute terrain statistics from matches
+  const { matches: allMatches } = useAppData();
+  const { players: allPlayers } = useAppData();
+  useEffect(() => {
+    if (!terrain?.id) return;
+    // Count matches at this terrain
+    const terrainMatches = allMatches.filter(m => m.terrainId === terrain.id);
+    // Compute frequent players
+    const playerCounts: Record<string, { count: number; name: string; avatar?: string }> = {};
+    terrainMatches.forEach(m => {
+      [...m.teamA.players, ...m.teamB.players].forEach((pid, idx) => {
+        if (!playerCounts[pid]) {
+          const inA = m.teamA.players.includes(pid);
+          const nameIdx = inA ? m.teamA.players.indexOf(pid) : m.teamB.players.indexOf(pid);
+          const names = inA ? m.teamA.playerNames : m.teamB.playerNames;
+          const playerData = allPlayers.find(p => p.id === pid);
+          playerCounts[pid] = { count: 0, name: names[nameIdx] || 'Joueur', avatar: playerData?.avatar };
+        }
+        playerCounts[pid].count++;
+      });
+    });
+    const sorted = Object.entries(playerCounts)
+      .map(([id, d]) => ({ id, ...d }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6);
+    setFrequentPlayers(sorted);
+    // Match count for activity display
+    // Ratings are now from the reviews table
+  }, [terrain?.id, allMatches.length]);
+
+  // Fetch terrain reviews
+  useEffect(() => {
+    if (!terrain?.id) return;
+    fetchTerrainReviews(terrain.id).then(({ reviews: revs }) => {
+      setTerrainReviews(revs);
+      setTerrainRating(computeRatingStats(revs));
+      if (user?.id) {
+        const mine = revs.find(r => r.userId === user.id);
+        if (mine) setMyReview(mine);
+      }
+    });
+  }, [terrain?.id, user?.id]);
+
+  // Photo upload handler
+  const handleAddPhoto = React.useCallback(() => {
+    if (!terrain || !canEdit || uploadingPhoto) return;
+    Alert.alert(
+      language === 'fr' ? 'Ajouter une photo' : 'Add Photo',
+      '',
+      [
+        { text: language === 'fr' ? 'Appareil photo' : 'Camera', onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') { showAlert(language === 'fr' ? 'Permission requise' : 'Permission required', language === 'fr' ? 'Acces a la camera requis' : 'Camera access required'); return; }
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+          if (!result.canceled && result.assets[0]) uploadTerrainPhoto(result.assets[0].uri);
+        }},
+        { text: language === 'fr' ? 'Galerie' : 'Gallery', onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') { showAlert(language === 'fr' ? 'Permission requise' : 'Permission required', language === 'fr' ? 'Acces a la galerie requis' : 'Gallery access required'); return; }
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.8 });
+          if (!result.canceled && result.assets[0]) uploadTerrainPhoto(result.assets[0].uri);
+        }},
+        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+      ]
+    );
+  }, [terrain, canEdit, uploadingPhoto]);
+
+  const uploadTerrainPhoto = React.useCallback(async (uri: string) => {
+    if (!terrain || !user) return;
+    setUploadingPhoto(true);
+    try {
+      const url = await uploadImageToStorage('terrain-photos', `terrain-photos/${terrain.id}/${Date.now()}`, uri);
+      if (url) {
+        const updatedPhotos = [...(terrain.photos || []), url];
+        await updateTerrain(terrain.id, { photos: updatedPhotos });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      } else {
+        showAlert(language === 'fr' ? 'Erreur' : 'Error', language === 'fr' ? 'Echec du telechargement' : 'Upload failed');
+      }
+    } catch (e: any) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', e.message);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }, [terrain, user, updateTerrain, showAlert, language]);
+
+  const handleSubmitReview = React.useCallback(async () => {
+    if (!terrain || !user || reviewRating === 0 || submittingReview) return;
+    setSubmittingReview(true);
+    const selfPlayer = allPlayers.find(p => p.userId === user.id);
+    const { review, error: err } = await submitTerrainReview({
+      terrainId: terrain.id,
+      userId: user.id,
+      playerId: selfPlayer?.id,
+      playerName: selfPlayer?.name || user.username || user.email,
+      rating: reviewRating,
+      comment: reviewComment.trim() || undefined,
+    });
+    setSubmittingReview(false);
+    if (err) {
+      showAlert(language === 'fr' ? 'Erreur' : 'Error', err);
+    } else if (review) {
+      setMyReview(review);
+      setTerrainReviews(prev => {
+        const filtered = prev.filter(r => r.userId !== user.id);
+        const updated = [review, ...filtered];
+        setTerrainRating(computeRatingStats(updated));
+        return updated;
+      });
+      setShowReviewModal(false);
+      setReviewRating(0);
+      setReviewComment('');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    }
+  }, [terrain, user, reviewRating, reviewComment, submittingReview, showAlert, language, allPlayers]);
 
   useEffect(() => {
     if (terrain?.id) {
@@ -324,13 +458,19 @@ export default function TerrainDetailScreen() {
         {/* Photo Gallery */}
         {hasPhotos ? (
           <View style={styles.photoSection}>
-            <Image
-              source={{ uri: terrain.photos![currentPhotoIndex] }}
-              style={styles.mainPhoto}
-              contentFit="cover"
-              transition={200}
-              cachePolicy="memory-disk"
-            />
+            <Pressable onPress={() => { setGalleryIndex(currentPhotoIndex); setShowPhotoGallery(true); }}>
+              <Image
+                source={{ uri: terrain.photos![currentPhotoIndex] }}
+                style={styles.mainPhoto}
+                contentFit="cover"
+                transition={200}
+                cachePolicy="memory-disk"
+              />
+              <View style={{ position: 'absolute', top: 12, right: 12, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <MaterialIcons name="fullscreen" size={16} color="#FFF" />
+                <Text style={{ fontSize: 12, fontWeight: '600', color: '#FFF' }}>{terrain.photos!.length}</Text>
+              </View>
+            </Pressable>
             {terrain.photos!.length > 1 && (
               <View style={styles.photoIndicators}>
                 {terrain.photos!.map((_, index) => (
@@ -367,11 +507,29 @@ export default function TerrainDetailScreen() {
                     />
                   </Pressable>
                 ))}
+                {canEdit && !isSharedItem ? (
+                  <Pressable
+                    style={[styles.thumbnail, { backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed' }]}
+                    onPress={handleAddPhoto}
+                    disabled={uploadingPhoto}
+                  >
+                    {uploadingPhoto ? <ActivityIndicator size="small" color={theme.primary} /> : <MaterialIcons name="add-a-photo" size={20} color={theme.primary} />}
+                  </Pressable>
+                ) : null}
               </ScrollView>
             )}
           </View>
         ) : (
           <View style={styles.heroSection}>
+            {canEdit && !isSharedItem ? (
+              <Pressable
+                style={{ position: 'absolute', top: 8, right: 8, width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', zIndex: 1 }}
+                onPress={handleAddPhoto}
+                disabled={uploadingPhoto}
+              >
+                {uploadingPhoto ? <ActivityIndicator size="small" color={theme.primary} /> : <MaterialIcons name="add-a-photo" size={20} color={theme.primary} />}
+              </Pressable>
+            ) : null}
             <View style={[styles.terrainIcon, { backgroundColor: colors.bg }]}>
               <MaterialIcons name={typeConfig.icon as any} size={56} color="#FFF" />
             </View>
@@ -405,6 +563,18 @@ export default function TerrainDetailScreen() {
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
           </View>
         )}
+
+        {/* Environment badge */}
+        {(terrain as any).environment ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: (terrain as any).environment === 'indoor' ? theme.accent + '12' : theme.success + '12', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: (terrain as any).environment === 'indoor' ? theme.accent + '25' : theme.success + '25' }}>
+              <MaterialIcons name={(terrain as any).environment === 'indoor' ? 'home' : 'wb-sunny'} size={18} color={(terrain as any).environment === 'indoor' ? theme.accent : theme.success} />
+              <Text style={{ fontSize: 14, fontWeight: '600', color: (terrain as any).environment === 'indoor' ? theme.accent : theme.success }}>
+                {(terrain as any).environment === 'indoor' ? (language === 'fr' ? 'Interieur' : 'Indoor') : (language === 'fr' ? 'Exterieur' : 'Outdoor')}
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Quick Info */}
         <View style={styles.quickInfoGrid}>
@@ -584,6 +754,161 @@ export default function TerrainDetailScreen() {
         </View>
 
         </View>
+
+        {/* Reviews & Ratings Section */}
+        <View style={styles.section}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'AVIS ET NOTES' : 'REVIEWS & RATINGS'}</Text>
+            {user ? (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  if (myReview) { setReviewRating(myReview.rating); setReviewComment(myReview.comment || ''); }
+                  setShowReviewModal(true);
+                }}
+              >
+                <MaterialIcons name={myReview ? 'edit' : 'rate-review'} size={14} color="#F59E0B" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{myReview ? (language === 'fr' ? 'Modifier' : 'Edit') : (language === 'fr' ? 'Donner un avis' : 'Write Review')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {/* Rating display */}
+          {terrainRating.count > 0 ? (
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, fontWeight: '900', color: '#F59E0B' }}>{terrainRating.avg}</Text>
+                  <View style={{ flexDirection: 'row', gap: 2, marginTop: 4 }}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <MaterialIcons key={star} name={star <= Math.round(terrainRating.avg) ? 'star' : 'star-border'} size={14} color="#F59E0B" />
+                    ))}
+                  </View>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{terrainRating.count} {language === 'fr' ? 'avis' : 'reviews'}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  {[5, 4, 3, 2, 1].map(level => (
+                    <View key={level} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, width: 8 }}>{level}</Text>
+                      <View style={{ flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${terrainRating.count > 0 ? (terrainRating.distribution[level - 1] / terrainRating.count) * 100 : 0}%`, backgroundColor: '#F59E0B', borderRadius: 3 }} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 24, alignItems: 'center', ...theme.shadows.card, marginBottom: 12 }}>
+              <MaterialIcons name="star-border" size={36} color={theme.textMuted} />
+              <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun avis pour le moment' : 'No reviews yet'}</Text>
+            </View>
+          )}
+          {/* Review list (up to 5) */}
+          {terrainReviews.slice(0, 5).map(rev => (
+            <View key={rev.id} style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 8, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.primary }}>{(rev.playerName || '?').charAt(0)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{rev.playerName || (language === 'fr' ? 'Anonyme' : 'Anonymous')}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted }}>{new Date(rev.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 1 }}>
+                  {[1, 2, 3, 4, 5].map(s => <MaterialIcons key={s} name={s <= rev.rating ? 'star' : 'star-border'} size={14} color="#F59E0B" />)}
+                </View>
+              </View>
+              {rev.comment ? <Text style={{ fontSize: 13, color: theme.textPrimary, lineHeight: 19 }}>{rev.comment}</Text> : null}
+              {/* Report button */}
+              {user && rev.userId !== user.id ? (
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      language === 'fr' ? 'Signaler cet avis' : 'Report this review',
+                      language === 'fr' ? 'Cet avis sera examine par notre equipe de moderation.' : 'This review will be examined by our moderation team.',
+                      [
+                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                        { text: language === 'fr' ? 'Signaler' : 'Report', style: 'destructive', onPress: () => {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          showAlert(
+                            language === 'fr' ? 'Signalement envoye' : 'Report sent',
+                            language === 'fr' ? 'Merci, notre equipe examinera cet avis.' : 'Thanks, our team will review this.'
+                          );
+                        }},
+                      ]
+                    );
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-end' }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="flag" size={12} color={theme.textMuted} />
+                  <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Signaler' : 'Report'}</Text>
+                </Pressable>
+              ) : null}
+              {/* Delete own review */}
+              {user && rev.userId === user.id ? (
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      language === 'fr' ? 'Supprimer votre avis ?' : 'Delete your review?',
+                      '',
+                      [
+                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                        { text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+                          await deleteTerrainReview(rev.id);
+                          setMyReview(null);
+                          setTerrainReviews(prev => {
+                            const updated = prev.filter(r => r.id !== rev.id);
+                            setTerrainRating(computeRatingStats(updated));
+                            return updated;
+                          });
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        }},
+                      ]
+                    );
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, alignSelf: 'flex-end' }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="delete-outline" size={12} color={theme.error} />
+                  <Text style={{ fontSize: 10, color: theme.error }}>{language === 'fr' ? 'Supprimer' : 'Delete'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+          ))}
+        </View>
+
+        {/* Terrain Activity & Frequent Players */}
+        {frequentPlayers.length > 0 ? (
+          <View style={styles.section}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <Text style={styles.sectionTitle}>{language === 'fr' ? 'ACTIVITE DU TERRAIN' : 'TERRAIN ACTIVITY'}</Text>
+            </View>
+            {/* Frequent players */}
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <MaterialIcons name="people" size={16} color={theme.primary} />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Joueurs frequents' : 'Frequent Players'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                {frequentPlayers.map((fp) => (
+                  <Pressable key={fp.id} style={{ alignItems: 'center', width: 60 }} onPress={() => router.push(`/player/${fp.id}` as any)}>
+                    <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', marginBottom: 4 }}>
+                      {fp.avatar ? (
+                        <Image source={{ uri: fp.avatar }} style={{ width: 44, height: 44, borderRadius: 22 }} contentFit="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.primary }}>{fp.name.charAt(0)}</Text>
+                      )}
+                    </View>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textPrimary, textAlign: 'center' }} numberOfLines={1}>{fp.name.split(' ')[0]}</Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted }}>{fp.count} {language === 'fr' ? 'm.' : 'g.'}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {/* Upcoming Meetups */}
         <View style={styles.section}>
@@ -856,6 +1181,127 @@ export default function TerrainDetailScreen() {
                 )}
               </Pressable>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Photo Gallery Fullscreen Modal */}
+      <Modal visible={showPhotoGallery} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)' }}>
+          <SafeAreaView style={{ flex: 1 }}>
+            {/* Gallery Header */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12 }}>
+              <Pressable onPress={() => setShowPhotoGallery(false)} hitSlop={8} style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="close" size={24} color="#FFF" />
+              </Pressable>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: '#FFF' }}>{galleryIndex + 1} / {terrain.photos?.length || 0}</Text>
+              {canEdit && !isSharedItem ? (
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      language === 'fr' ? 'Supprimer cette photo ?' : 'Delete this photo?',
+                      '',
+                      [
+                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                        { text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+                          const updatedPhotos = (terrain.photos || []).filter((_: any, i: number) => i !== galleryIndex);
+                          await updateTerrain(terrain.id, { photos: updatedPhotos });
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          if (galleryIndex >= updatedPhotos.length && galleryIndex > 0) setGalleryIndex(galleryIndex - 1);
+                          if (updatedPhotos.length === 0) setShowPhotoGallery(false);
+                        }},
+                      ]
+                    );
+                  }}
+                  hitSlop={8}
+                  style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(239,68,68,0.2)', alignItems: 'center', justifyContent: 'center' }}
+                >
+                  <MaterialIcons name="delete" size={22} color="#EF4444" />
+                </Pressable>
+              ) : <View style={{ width: 40 }} />}
+            </View>
+            {/* Photo Display */}
+            <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 8 }}>
+              {terrain.photos && terrain.photos[galleryIndex] ? (
+                <Image
+                  source={{ uri: terrain.photos[galleryIndex] }}
+                  style={{ width: '100%', height: '80%', borderRadius: 12 }}
+                  contentFit="contain"
+                  transition={200}
+                  cachePolicy="memory-disk"
+                />
+              ) : null}
+            </View>
+            {/* Navigation arrows */}
+            {terrain.photos && terrain.photos.length > 1 ? (
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 32, paddingBottom: 24 }}>
+                <Pressable
+                  onPress={() => { if (galleryIndex > 0) { setGalleryIndex(galleryIndex - 1); Haptics.selectionAsync(); } }}
+                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: galleryIndex > 0 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' }}
+                  disabled={galleryIndex === 0}
+                >
+                  <MaterialIcons name="chevron-left" size={32} color={galleryIndex > 0 ? '#FFF' : 'rgba(255,255,255,0.2)'} />
+                </Pressable>
+                <Pressable
+                  onPress={() => { if (galleryIndex < (terrain.photos?.length || 1) - 1) { setGalleryIndex(galleryIndex + 1); Haptics.selectionAsync(); } }}
+                  style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: galleryIndex < (terrain.photos?.length || 1) - 1 ? 'rgba(255,255,255,0.15)' : 'rgba(255,255,255,0.05)', alignItems: 'center', justifyContent: 'center' }}
+                  disabled={galleryIndex >= (terrain.photos?.length || 1) - 1}
+                >
+                  <MaterialIcons name="chevron-right" size={32} color={galleryIndex < (terrain.photos?.length || 1) - 1 ? '#FFF' : 'rgba(255,255,255,0.2)'} />
+                </Pressable>
+              </View>
+            ) : null}
+            {/* Thumbnail strip */}
+            {terrain.photos && terrain.photos.length > 1 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
+                {terrain.photos.map((photo: string, idx: number) => (
+                  <Pressable key={idx} onPress={() => setGalleryIndex(idx)} style={{ width: 52, height: 52, borderRadius: 8, overflow: 'hidden', borderWidth: 2, borderColor: idx === galleryIndex ? theme.primary : 'transparent' }}>
+                    <Image source={{ uri: photo }} style={{ width: '100%', height: '100%' }} contentFit="cover" />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+          </SafeAreaView>
+        </View>
+      </Modal>
+
+      {/* Review Modal */
+      <Modal visible={showReviewModal} animationType="slide" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: theme.textPrimary }}>{myReview ? (language === 'fr' ? 'Modifier votre avis' : 'Edit Review') : (language === 'fr' ? 'Donner un avis' : 'Write Review')}</Text>
+              <Pressable onPress={() => { setShowReviewModal(false); setReviewRating(0); setReviewComment(''); }} hitSlop={8}>
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <Text style={{ fontSize: 14, color: theme.textSecondary, marginBottom: 12 }}>{language === 'fr' ? 'Votre note' : 'Your rating'}</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 20 }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <Pressable key={star} onPress={() => { setReviewRating(star); Haptics.selectionAsync(); }} hitSlop={4}>
+                  <MaterialIcons name={star <= reviewRating ? 'star' : 'star-border'} size={40} color="#F59E0B" />
+                </Pressable>
+              ))}
+            </View>
+            <Text style={{ fontSize: 14, color: theme.textSecondary, marginBottom: 8 }}>{language === 'fr' ? 'Commentaire (optionnel)' : 'Comment (optional)'}</Text>
+            <TextInput
+              style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, fontSize: 15, color: theme.textPrimary, minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: theme.border, marginBottom: 20 }}
+              placeholder={language === 'fr' ? 'Partagez votre experience...' : 'Share your experience...'}
+              placeholderTextColor={theme.textMuted}
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              multiline
+              maxLength={500}
+            />
+            <Pressable
+              style={({ pressed }) => [{ backgroundColor: reviewRating > 0 ? theme.primary : theme.textMuted, borderRadius: 14, paddingVertical: 16, alignItems: 'center', opacity: pressed ? 0.85 : 1 }]}
+              onPress={handleSubmitReview}
+              disabled={reviewRating === 0 || submittingReview}
+            >
+              {submittingReview ? <ActivityIndicator color="#FFF" /> : (
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFF' }}>{myReview ? (language === 'fr' ? 'Mettre a jour' : 'Update') : (language === 'fr' ? 'Publier' : 'Submit')}</Text>
+              )}
+            </Pressable>
           </View>
         </View>
       </Modal>

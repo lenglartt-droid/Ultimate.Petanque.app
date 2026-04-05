@@ -77,7 +77,7 @@ export default function ShareCardSponsoredEvent({
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: info */}
             <View style={{ flex: 1, justifyContent: 'center', paddingRight: 10 }}>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF', marginBottom: 4 }} numberOfLines={2}>{title}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF', marginBottom: 4, flexShrink: 1 }} numberOfLines={2}>{title}</Text>
               {ambassadorName ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 }}>
                   <MaterialIcons name="verified" size={9} color="rgba(255,255,255,0.6)" />
@@ -159,13 +159,13 @@ export default function ShareCardSponsoredEvent({
         </View>
 
         {/* Title */}
-        <Text style={{ fontSize: titleSize, fontWeight: '900', color: '#FFF', marginBottom: isStory ? 8 : 6, lineHeight: titleSize * 1.2 }} numberOfLines={3}>{title}</Text>
+        <Text style={{ fontSize: titleSize, fontWeight: '900', color: '#FFF', marginBottom: isStory ? 8 : 6, lineHeight: titleSize * 1.2, flexShrink: 1 }} numberOfLines={isStory ? 3 : 2}>{title}</Text>
 
         {/* Ambassador */}
         {ambassadorName ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 14 : 10 }}>
             <MaterialIcons name="verified" size={isStory ? 14 : 12} color="rgba(255,255,255,0.6)" />
-            <Text style={{ fontSize: isStory ? 13 : 11, fontWeight: '600', color: 'rgba(255,255,255,0.75)' }}>{fr ? 'Par' : 'By'} {ambassadorName}</Text>
+            <Text style={{ fontSize: isStory ? 13 : 11, fontWeight: '600', color: 'rgba(255,255,255,0.75)' }} numberOfLines={1}>{fr ? 'Par' : 'By'} {ambassadorName}</Text>
           </View>
         ) : null}
 
@@ -245,5 +245,5 @@ export default function ShareCardSponsoredEvent({
 const s = StyleSheet.create({
   card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
   infoPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  infoPillText: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.8)' },
+  infoPillText: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.8)', flexShrink: 1 },
 });

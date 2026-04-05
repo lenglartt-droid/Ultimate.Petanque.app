@@ -121,7 +121,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: name + result */}
             <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: ct.textPrimary, marginBottom: 5, lineHeight: 17 }} numberOfLines={2}>{tournament.name}</Text>
+              <Text style={{ fontSize: 14, fontWeight: '900', color: ct.textPrimary, marginBottom: 5, lineHeight: 17, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
               {resultCfg ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: resultCfg.color + '30', borderRadius: 10, paddingVertical: 5, paddingHorizontal: 8, marginBottom: 5 }}>
                   <MaterialIcons name={resultCfg.icon as any} size={14} color={resultCfg.color} />
@@ -129,7 +129,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
                 </View>
               ) : null}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
-                {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
+                {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text> : null}
                 {eloRating ? (
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: (eloColor || '#94A3B8') + '20', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
                     <Text style={{ fontSize: 8, fontWeight: '700', color: eloColor || '#94A3B8' }}>ELO {eloRating}{eloRankLabel ? ` ${eloRankLabel}` : ''}</Text>
@@ -219,7 +219,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
         </View>
 
         {/* Tournament Name */}
-        <Text style={{ fontSize: nameSize, fontWeight: '900', color: ct.textPrimary, marginBottom: isStory ? 14 : 10, letterSpacing: -0.3, lineHeight: nameSize * 1.25 }} numberOfLines={2}>{tournament.name}</Text>
+        <Text style={{ fontSize: nameSize, fontWeight: '900', color: ct.textPrimary, marginBottom: isStory ? 14 : 10, letterSpacing: -0.3, lineHeight: nameSize * 1.25, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
 
         {/* Result Badge */}
         {resultCfg ? (
@@ -270,13 +270,13 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
                   {tm.tournamentPhase ? (
                     <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B', width: isStory ? 50 : 40 }} numberOfLines={1}>{tm.tournamentPhase}</Text>
                   ) : null}
-                  <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textPrimary, flex: 1 }} numberOfLines={1}>{tm.teamANames.join(', ')}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textPrimary, flex: 1, flexShrink: 1 }} numberOfLines={1}>{tm.teamANames.join(', ')}</Text>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
                     <Text style={{ fontSize: 9, fontWeight: '800', color: won ? '#22C55E' : ct.textPrimary }}>{tm.scoreA}</Text>
                     <Text style={{ fontSize: 7, color: '#64748B' }}>-</Text>
                     <Text style={{ fontSize: 9, fontWeight: '800', color: !won ? '#EF4444' : ct.textPrimary }}>{tm.scoreB}</Text>
                   </View>
-                  <Text style={{ fontSize: 8, fontWeight: '500', color: '#64748B', flex: 1, textAlign: 'right' }} numberOfLines={1}>{tm.teamBNames.join(', ')}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '500', color: '#64748B', flex: 1, textAlign: 'right', flexShrink: 1 }} numberOfLines={1}>{tm.teamBNames.join(', ')}</Text>
                 </View>
               );
             })}
@@ -303,7 +303,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
         {/* Footer */}
         <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-            {playerName ? <Text style={{ fontSize: 11, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
+            {playerName ? <Text style={{ fontSize: 11, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text> : null}
             {eloRating ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: (eloColor || '#94A3B8') + '20', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                 <MaterialIcons name="diamond" size={9} color={eloColor || '#94A3B8'} />
@@ -330,5 +330,5 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
 const s = StyleSheet.create({
   card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7 },
-  metaValue: { fontSize: 10, fontWeight: '600', color: '#CBD5E1CC', maxWidth: 80 },
+  metaValue: { fontSize: 10, fontWeight: '600', color: '#CBD5E1CC', maxWidth: 80, flexShrink: 1 },
 });
