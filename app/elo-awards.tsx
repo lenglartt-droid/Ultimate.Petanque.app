@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -8,7 +8,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeasonEntry, EloHistoryEntry, ELO_INITIAL, ELO_RANKS, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
-import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress } from '@/services/globalRankingService';
+import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress, LeagueTier } from '@/services/globalRankingService';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -51,6 +51,12 @@ export default function EloAwardsScreen() {
   const currentRank = getEloRank(currentElo);
   const currentLeague = getLeagueTier(currentElo);
   const leagueProgress = getLeagueProgress(currentElo);
+
+  const [chartWidth, setChartWidth] = useState(() => Math.max(1, (Dimensions.get('window').width || 375) - 64));
+  useEffect(() => {
+    const sub = Dimensions.addEventListener('change', ({ window }) => setChartWidth(Math.max(1, window.width - 64)));
+    return () => sub?.remove();
+  }, []);
 
   // Current season stats
   const currentSeasonStats = useMemo(() => {
@@ -218,6 +224,177 @@ export default function EloAwardsScreen() {
         </View>
         </Animated.View>
 
+        {/* ===== ELO HISTORY CHART ===== */}
+        {eloHistory.length >= 2 ? (() => {
+          const reversed = [...eloHistory].reverse(); // oldest first
+          const points = reversed.map(h => h.eloAfter);
+          const minElo = Math.min(...points, ...LEAGUE_TIERS.filter(t => t.minElo <= Math.max(...points) + 100).map(t => t.minElo)) - 30;
+          const maxElo = Math.max(...points) + 50;
+          const eloRange = Math.max(maxElo - minElo, 50);
+          const cw = chartWidth;
+          const ch = 180;
+          const padL = 36;
+          const padR = 8;
+          const padT = 12;
+          const padB = 24;
+          const graphW = cw - padL - padR;
+          const graphH = ch - padT - padB;
+          const xStep = points.length > 1 ? graphW / (points.length - 1) : graphW;
+          const toY = (elo: number) => padT + graphH - ((elo - minElo) / eloRange) * graphH;
+          const toX = (idx: number) => padL + idx * xStep;
+
+          // Build SVG-like path using Views
+          const tierLines = LEAGUE_TIERS.filter(t => t.minElo > minElo && t.minElo < maxElo);
+
+          // Detect promotion/relegation points
+          const milestones: { idx: number; type: 'promotion' | 'relegation'; tier: LeagueTier }[] = [];
+          for (let i = 1; i < reversed.length; i++) {
+            const prevTier = getLeagueTier(reversed[i - 1].eloAfter);
+            const curTier = getLeagueTier(reversed[i].eloAfter);
+            if (prevTier.id !== curTier.id) {
+              milestones.push({ idx: i, type: curTier.minElo > prevTier.minElo ? 'promotion' : 'relegation', tier: curTier });
+            }
+          }
+
+          return (
+            <Animated.View entering={FadeInDown.duration(400).delay(50)}>
+              <View style={st.chartCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                  <MaterialIcons name="show-chart" size={18} color={currentLeague.color} />
+                  <Text style={st.sectionTitle}>{isFr ? 'Progression ELO' : 'ELO Progression'}</Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted, marginLeft: 'auto' }}>{reversed.length} {isFr ? 'matchs' : 'matches'}</Text>
+                </View>
+
+                <View style={{ width: cw, height: ch, position: 'relative' }}>
+                  {/* League tier threshold lines */}
+                  {tierLines.map(tier => {
+                    const y = toY(tier.minElo);
+                    if (y < padT || y > ch - padB) return null;
+                    return (
+                      <View key={tier.id} style={{ position: 'absolute', top: y, left: padL, right: padR }}>
+                        <View style={{ height: 1, backgroundColor: tier.color + '25' }} />
+                        <View style={{ position: 'absolute', right: 0, top: -10, flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: tier.color + '15', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                          <Text style={{ fontSize: 6 }}>{tier.emblem}</Text>
+                          <Text style={{ fontSize: 7, fontWeight: '700', color: tier.color }}>{tier.minElo}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  {/* Y-axis labels */}
+                  {[0, 0.25, 0.5, 0.75, 1].map(pct => {
+                    const elo = Math.round(minElo + eloRange * (1 - pct));
+                    const y = padT + graphH * pct;
+                    return (
+                      <View key={pct} style={{ position: 'absolute', top: y - 6, left: 0, width: padL - 4, alignItems: 'flex-end' }}>
+                        <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '500' }}>{elo}</Text>
+                      </View>
+                    );
+                  })}
+
+                  {/* Grid lines */}
+                  {[0.25, 0.5, 0.75].map(pct => (
+                    <View key={`grid-${pct}`} style={{ position: 'absolute', top: padT + graphH * pct, left: padL, right: padR, height: 1, backgroundColor: theme.border + '30' }} />
+                  ))}
+
+                  {/* Line segments */}
+                  {points.map((elo, i) => {
+                    if (i === 0) return null;
+                    const x1 = toX(i - 1);
+                    const y1 = toY(points[i - 1]);
+                    const x2 = toX(i);
+                    const y2 = toY(elo);
+                    const dx = x2 - x1;
+                    const dy = y2 - y1;
+                    const len = Math.sqrt(dx * dx + dy * dy);
+                    const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                    const isWin = reversed[i].won;
+                    return (
+                      <View
+                        key={`line-${i}`}
+                        style={{
+                          position: 'absolute',
+                          top: y1,
+                          left: x1,
+                          width: len,
+                          height: 2,
+                          backgroundColor: isWin ? '#22C55E' : '#EF4444',
+                          transform: [{ rotate: `${angle}deg` }],
+                          transformOrigin: 'left center',
+                          opacity: 0.7,
+                        }}
+                      />
+                    );
+                  })}
+
+                  {/* Data points */}
+                  {points.map((elo, i) => {
+                    const x = toX(i);
+                    const y = toY(elo);
+                    const milestone = milestones.find(m => m.idx === i);
+                    const isLast = i === points.length - 1;
+                    const dotSize = milestone ? 10 : isLast ? 8 : 4;
+                    const dotColor = milestone ? milestone.tier.color : (reversed[i].won ? '#22C55E' : '#EF4444');
+                    return (
+                      <View
+                        key={`dot-${i}`}
+                        style={{
+                          position: 'absolute',
+                          top: y - dotSize / 2,
+                          left: x - dotSize / 2,
+                          width: dotSize,
+                          height: dotSize,
+                          borderRadius: dotSize / 2,
+                          backgroundColor: dotColor,
+                          borderWidth: milestone || isLast ? 2 : 0,
+                          borderColor: milestone ? '#FFF' : (isLast ? currentLeague.color : 'transparent'),
+                          zIndex: milestone || isLast ? 10 : 1,
+                        }}
+                      >
+                        {/* Milestone label */}
+                        {milestone ? (
+                          <View style={{ position: 'absolute', bottom: dotSize + 2, left: -20, width: 50, alignItems: 'center' }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 1, backgroundColor: milestone.tier.color + '20', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                              <MaterialIcons name={milestone.type === 'promotion' ? 'arrow-upward' : 'arrow-downward'} size={7} color={milestone.type === 'promotion' ? '#22C55E' : '#EF4444'} />
+                              <Text style={{ fontSize: 6 }}>{milestone.tier.emblem}</Text>
+                            </View>
+                          </View>
+                        ) : null}
+                        {/* Last point label */}
+                        {isLast ? (
+                          <View style={{ position: 'absolute', bottom: dotSize + 2, left: -16, width: 40, alignItems: 'center' }}>
+                            <View style={{ backgroundColor: currentLeague.color, paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 8, fontWeight: '800', color: '#FFF' }}>{elo}</Text>
+                            </View>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })}
+                </View>
+
+                {/* Legend */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 8, justifyContent: 'center' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 8, height: 3, borderRadius: 1.5, backgroundColor: '#22C55E' }} />
+                    <Text style={{ fontSize: 9, color: theme.textMuted }}>{isFr ? 'Victoire' : 'Win'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 8, height: 3, borderRadius: 1.5, backgroundColor: '#EF4444' }} />
+                    <Text style={{ fontSize: 9, color: theme.textMuted }}>{isFr ? 'Defaite' : 'Loss'}</Text>
+                  </View>
+                  {milestones.length > 0 ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: currentLeague.color, borderWidth: 1.5, borderColor: '#FFF' }} />
+                      <Text style={{ fontSize: 9, color: theme.textMuted }}>{isFr ? 'Changement' : 'Tier change'}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            </Animated.View>
+          );
+        })() : null}
+
         {/* Placement Badge */}
         {isInPlacement(currentSeasonStats.matchesPlayed) ? (
           <View style={[st.heroCard, { borderColor: '#F59E0B20', marginBottom: 16 }]}>
@@ -323,30 +500,33 @@ export default function EloAwardsScreen() {
           <View>
             <Text style={st.sectionTitleOuter}>{t('leaderboard', 'eloSeasons')}</Text>
             {seasons.map((season, idx) => {
-              const rank = getEloRank(season.finalElo);
-              const peakRank = getEloRank(season.peakElo);
+              const seasonLeague = getLeagueTier(season.finalElo);
+              const peakLeague = getLeagueTier(season.peakElo);
               const winRate = season.matchesPlayed > 0 ? Math.round((season.wins / season.matchesPlayed) * 100) : 0;
               return (
                 <View key={season.id}>
-                  <View style={[st.seasonCard, { borderLeftColor: rank.color }]}>
-                    <View style={st.seasonHeader}>
-                      <View style={[st.seasonYearBadge, { backgroundColor: rank.color + '15' }]}>
-                        <MaterialIcons name={rank.icon as any} size={16} color={rank.color} />
-                        <Text style={[st.seasonYear, { color: rank.color }]}>{season.seasonYear}</Text>
+                  <View style={st.seasonCard}>
+                    {/* League gradient header */}
+                    <LinearGradient colors={[seasonLeague.gradient[0] + '18', seasonLeague.gradient[1] + '08']} style={st.seasonGradientHeader}>
+                      <View style={st.seasonHeader}>
+                        <View style={[st.seasonEmblemWrap, { backgroundColor: seasonLeague.color + '20', borderColor: seasonLeague.color + '30' }]}>
+                          <Text style={{ fontSize: 18 }}>{seasonLeague.emblem}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[st.seasonYear, { color: seasonLeague.color }]}>{season.seasonYear}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '600', color: seasonLeague.color + '90' }}>{isFr ? seasonLeague.name.fr : seasonLeague.name.en}</Text>
+                        </View>
+                        <LinearGradient colors={seasonLeague.gradient} style={st.seasonEloBadge}>
+                          <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF' }}>{season.finalElo}</Text>
+                          <Text style={{ fontSize: 8, fontWeight: '600', color: 'rgba(255,255,255,0.6)' }}>ELO</Text>
+                        </LinearGradient>
                       </View>
-                      <View style={{ flex: 1 }} />
-                      <View style={[st.seasonRankBadge, { backgroundColor: rank.color + '12', borderColor: rank.color + '30' }]}>
-                        <Text style={[st.seasonRankText, { color: rank.color }]}>{rank.label[isFr ? 'fr' : 'en']}</Text>
-                      </View>
-                    </View>
+                    </LinearGradient>
                     <View style={st.seasonStats}>
                       <View style={st.seasonStat}>
-                        <Text style={[st.seasonStatValue, { color: rank.color }]}>{season.finalElo}</Text>
-                        <Text style={st.seasonStatLabel}>{t('leaderboard', 'eloFinalElo')}</Text>
-                      </View>
-                      <View style={st.seasonStat}>
-                        <Text style={[st.seasonStatValue, { color: peakRank.color }]}>{season.peakElo}</Text>
+                        <Text style={[st.seasonStatValue, { color: peakLeague.color }]}>{season.peakElo}</Text>
                         <Text style={st.seasonStatLabel}>{t('leaderboard', 'eloPeakElo')}</Text>
+                        <Text style={{ fontSize: 7, marginTop: 1 }}>{peakLeague.emblem}</Text>
                       </View>
                       <View style={st.seasonStat}>
                         <Text style={st.seasonStatValue}>{season.matchesPlayed}</Text>
@@ -355,6 +535,10 @@ export default function EloAwardsScreen() {
                       <View style={st.seasonStat}>
                         <Text style={[st.seasonStatValue, { color: theme.success }]}>{winRate}%</Text>
                         <Text style={st.seasonStatLabel}>{t('palmares', 'victoires')}</Text>
+                      </View>
+                      <View style={st.seasonStat}>
+                        <Text style={[st.seasonStatValue, { color: season.wins > 0 ? '#22C55E' : theme.textMuted }]}>{season.wins}</Text>
+                        <Text style={st.seasonStatLabel}>{isFr ? 'V' : 'W'}</Text>
                       </View>
                     </View>
                     {/* Role ELOs */}
@@ -416,6 +600,7 @@ const st = StyleSheet.create({
   heroStatDivider: { width: 1, height: 28, backgroundColor: theme.border },
   sectionTitle: { fontSize: 13, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
   sectionTitleOuter: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginTop: 8, marginBottom: 12 },
+  chartCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 16, ...theme.shadows.card, overflow: 'hidden' as const },
   tiersCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 16, ...theme.shadows.card },
   tierRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: 'transparent' },
   tierGradientBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
@@ -434,14 +619,14 @@ const st = StyleSheet.create({
   emptyCard: { alignItems: 'center', paddingVertical: 40, backgroundColor: theme.surface, borderRadius: 16, ...theme.shadows.card },
   emptyTitle: { fontSize: 16, fontWeight: '600', color: theme.textPrimary, marginTop: 12 },
   emptyDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', marginTop: 4, paddingHorizontal: 24 },
-  seasonCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10, borderLeftWidth: 4 },
-  seasonHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  seasonYearBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12 },
-  seasonYear: { fontSize: 16, fontWeight: '800' },
-  seasonRankBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
-  seasonRankText: { fontSize: 12, fontWeight: '700' },
-  seasonStats: { flexDirection: 'row', gap: 8 },
-  seasonStat: { flex: 1, alignItems: 'center' },
+  seasonCard: { backgroundColor: theme.surface, borderRadius: 18, marginBottom: 12, overflow: 'hidden' as const, ...theme.shadows.card },
+  seasonGradientHeader: { paddingHorizontal: 14, paddingVertical: 12, borderTopLeftRadius: 18, borderTopRightRadius: 18 },
+  seasonHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  seasonEmblemWrap: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5 },
+  seasonYear: { fontSize: 18, fontWeight: '900' as const },
+  seasonEloBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, alignItems: 'center' as const },
+  seasonStats: { flexDirection: 'row' as const, gap: 8, padding: 14, paddingTop: 12 },
+  seasonStat: { flex: 1, alignItems: 'center' as const },
   seasonStatValue: { fontSize: 17, fontWeight: '800', color: theme.textPrimary },
   seasonStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600' },
   seasonRoles: { flexDirection: 'row', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
