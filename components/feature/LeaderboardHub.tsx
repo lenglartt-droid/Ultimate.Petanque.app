@@ -163,7 +163,7 @@ export default function LeaderboardHub() {
             <MaterialIcons name="leaderboard" size={22} color="#F59E0B" />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={s.title}>{isFr ? 'Classements' : 'Rankings'}</Text>
+            <Text style={s.title}>{isFr ? 'Classement' : 'Ranking'}</Text>
             <Text style={s.subtitle}>
               {totalPlayers} {isFr ? 'joueurs dans' : 'players in'} {cities.length} {isFr ? 'villes' : 'cities'}
             </Text>
@@ -523,36 +523,31 @@ export default function LeaderboardHub() {
 
         {/* ===== FOOTER CTAs ===== */}
         <View style={s.footerCta}>
-          <Pressable
-            style={s.primaryCta}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push(hubTab === 'geo' ? '/leaderboard-geo' : '/leaderboard' as any);
-            }}
-          >
-            <MaterialIcons name={hubTab === 'geo' ? 'public' : 'emoji-events'} size={16} color="#F59E0B" />
-            <Text style={s.primaryCtaText}>
-              {hubTab === 'geo'
-                ? (isFr ? 'Voir le classement geo complet' : 'See full geo ranking')
-                : (isFr ? 'Voir le classement complet' : 'See full leaderboard')}
-            </Text>
-            <MaterialIcons name="arrow-forward" size={16} color="#F59E0B" />
-          </Pressable>
-          <Pressable
-            style={s.secondaryCta}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push(hubTab === 'geo' ? '/leaderboard' : '/leaderboard-geo' as any);
-            }}
-          >
-            <MaterialIcons name={hubTab === 'geo' ? 'emoji-events' : 'public'} size={14} color={theme.textSecondary} />
-            <Text style={s.secondaryCtaText}>
-              {hubTab === 'geo'
-                ? (isFr ? 'Classement communautaire' : 'Community leaderboard')
-                : (isFr ? 'Classement geographique' : 'Geographic ranking')}
-            </Text>
-            <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
-          </Pressable>
+          <View style={s.footerCtaRow}>
+            <Pressable
+              style={s.footerCtaLink}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/leaderboard-geo' as any);
+              }}
+            >
+              <MaterialIcons name="public" size={14} color={hubTab === 'geo' ? '#F59E0B' : theme.textSecondary} />
+              <Text style={[s.footerCtaLinkText, hubTab === 'geo' && { color: '#F59E0B' }]}>{isFr ? 'Geo complet' : 'Full Geo'}</Text>
+              <MaterialIcons name="chevron-right" size={14} color={hubTab === 'geo' ? '#F59E0B' : theme.textMuted} />
+            </Pressable>
+            <View style={s.footerCtaDivider} />
+            <Pressable
+              style={s.footerCtaLink}
+              onPress={() => {
+                Haptics.selectionAsync();
+                router.push('/leaderboard' as any);
+              }}
+            >
+              <MaterialIcons name="emoji-events" size={14} color={hubTab === 'players' ? '#F59E0B' : theme.textSecondary} />
+              <Text style={[s.footerCtaLinkText, hubTab === 'players' && { color: '#F59E0B' }]}>{isFr ? 'Communautaire' : 'Community'}</Text>
+              <MaterialIcons name="chevron-right" size={14} color={hubTab === 'players' ? '#F59E0B' : theme.textMuted} />
+            </Pressable>
+          </View>
         </View>
       </View>
     </View>
@@ -1016,5 +1011,27 @@ const s = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: theme.textSecondary,
+  },
+  footerCtaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  footerCtaLink: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 12,
+  },
+  footerCtaLinkText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  footerCtaDivider: {
+    width: 1,
+    height: 20,
+    backgroundColor: theme.border,
   },
 });

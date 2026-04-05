@@ -34,6 +34,7 @@ import { ProgressionModal } from '@/components/feature/stats/ProgressionModal';
 import { ItemPickerModal } from '@/components/feature/stats/ItemPickerModal';
 
 type StatsCategory = 'performance' | 'tir' | 'point' | 'errors';
+type ContextFilter = 'all' | 'training' | 'tournament';
 
 const TIME_FILTER_KEYS: { id: TimeFilter; key: string }[] = [
   { id: 'today', key: 'today' },
@@ -83,12 +84,13 @@ export default function StatsScreen() {
 
   const [timeFilter, setTimeFilter] = useState<TimeFilter>(() => { const valid: TimeFilter[] = ['today', 'week', 'month', '3months', '6months', 'year', 'all']; if (timeFilterParam && valid.includes(timeFilterParam as TimeFilter)) return timeFilterParam as TimeFilter; return 'all'; });
   const [category, setCategory] = useState<StatsCategory>('performance');
+  const [contextFilter, setContextFilter] = useState<ContextFilter>('all');
   const [showProgressionModal, setShowProgressionModal] = useState(false);
   const [progressionFilter, setProgressionFilter] = useState<ProgressionFilter>('8weeks');
   const [chartTooltip, setChartTooltip] = useState<{ chart: string; index: number } | null>(null);
 
   // ── Item filter (extracted hook) ───────────────────────
-  const timeFilteredMatches = filterByTime(matches, timeFilter);
+  const timeFilteredMatches = filterByTime(matches, timeFilter).filter(m => contextFilter === 'all' ? true : contextFilter === 'tournament' ? m.mode === 'Tournoi' : m.mode === 'Entraînement');
   const timeFilteredChallenges = filterByTime(challenges, timeFilter);
 
   const {
@@ -151,6 +153,16 @@ export default function StatsScreen() {
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterBar}>
           {TIME_FILTERS.map(filter => (<Pressable key={filter.id} style={[styles.filterPill, timeFilter === filter.id && styles.filterPillActive]} onPress={() => { Haptics.selectionAsync(); setTimeFilter(filter.id); }}><Text style={[styles.filterPillText, timeFilter === filter.id && styles.filterPillTextActive]}>{filter.label}</Text></Pressable>))}
         </ScrollView>
+
+        {/* Context filter */}
+        <View style={styles.contextFilterBar}>
+          {([{ id: 'all' as ContextFilter, label: t('common', 'all'), icon: 'select-all' }, { id: 'training' as ContextFilter, label: t('home', 'training'), icon: 'fitness-center' }, { id: 'tournament' as ContextFilter, label: t('home', 'tournament'), icon: 'emoji-events' }] as const).map(cf => (
+            <Pressable key={cf.id} style={[styles.contextPill, contextFilter === cf.id && styles.contextPillActive]} onPress={() => { Haptics.selectionAsync(); setContextFilter(cf.id); }}>
+              <MaterialIcons name={cf.icon as any} size={13} color={contextFilter === cf.id ? '#FFF' : theme.textSecondary} />
+              <Text style={[styles.contextPillText, contextFilter === cf.id && styles.contextPillTextActive]}>{cf.label}</Text>
+            </Pressable>
+          ))}
+        </View>
 
         <View style={styles.itemFilterBar}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.itemFilterScroll}>
@@ -257,6 +269,11 @@ const styles = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 8 },
   scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  contextFilterBar: { flexDirection: 'row', paddingHorizontal: 16, gap: 8, marginBottom: 8 },
+  contextPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  contextPillActive: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+  contextPillText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  contextPillTextActive: { color: '#FFF' },
   emptyState:{alignItems:'center',paddingVertical:40},
   emptyImage:{width:160,height:160,marginBottom:8},
   emptyTitle:{fontSize:20,fontWeight:'700',color:theme.textPrimary,marginTop:8},

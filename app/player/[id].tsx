@@ -794,6 +794,14 @@ export default function PlayerDetailScreen() {
           if (!h2h || h2h.totalMatches === 0) return null;
           return (
             <View style={s.sectionCard}>
+              {/* H2H Share Card button */}
+              <Pressable
+                style={{ position: 'absolute', top: 14, right: 14, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#8B5CF6' + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#8B5CF6' + '25', zIndex: 2 }}
+                onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'h2h', opponentId: player.id } } as any); }}
+              >
+                <MaterialIcons name="camera-alt" size={12} color="#8B5CF6" />
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6' }}>{language === 'fr' ? 'Partage RS F-a-F' : 'Social H2H'}</Text>
+              </Pressable>
               <View style={s.sectionHeader}>
                 <View style={[s.sectionIconBox, { backgroundColor: '#EC489915' }]}><MaterialIcons name="compare-arrows" size={18} color="#EC4899" /></View>
                 <Text style={s.sectionTitle}>{language === 'fr' ? 'Face-a-face par role' : 'Head-to-Head by Role'}</Text>

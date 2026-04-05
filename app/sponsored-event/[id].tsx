@@ -967,6 +967,17 @@ export default function SponsoredEventDetailScreen() {
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
 
+              <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); router.push({ pathname: '/share-card', params: { type: 'sponsored-event', id: event?.id } } as any); }}>
+                <View style={[s.shareOptionIcon, { backgroundColor: '#A855F715' }]}>
+                  <MaterialIcons name="camera-alt" size={22} color="#A855F7" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Fiche reseaux sociaux' : 'Social Media Card'}</Text>
+                  <Text style={s.shareOptionDesc}>{language === 'fr' ? 'Image avec QR code pour Instagram, TikTok, Facebook' : 'Image with QR code for Instagram, TikTok, Facebook'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </Pressable>
+
               <Pressable style={({ pressed }) => [s.shareOption, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]} onPress={() => { setShowShareModal(false); router.push('/share-hub' as any); }}>
                 <View style={[s.shareOptionIcon, { backgroundColor: '#22C55E15' }]}>
                   <MaterialIcons name="qr-code-2" size={22} color="#22C55E" />

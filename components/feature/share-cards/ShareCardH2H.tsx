@@ -34,10 +34,18 @@ interface H2HRecord {
   lastMatchDate?: string;
 }
 
+interface H2HMatchResult {
+  date: string;
+  won: boolean;
+  scoreA: number;
+  scoreB: number;
+}
+
 interface Props {
   playerA: PlayerH2HData;
   playerB: PlayerH2HData;
   record: H2HRecord;
+  recentH2H?: H2HMatchResult[];
   language?: 'fr' | 'en';
   colorTheme?: CardColorTheme;
   format?: ShareCardFormat;
@@ -100,8 +108,81 @@ function PlayerHeader({ player, side, ct, compact }: { player: PlayerH2HData; si
   );
 }
 
+function TrendLine({ results, colorA, colorB, compact }: { results: H2HMatchResult[]; colorA: string; colorB: string; compact?: boolean }) {
+  if (results.length < 2) return null;
+  const dotSize = compact ? 5 : 7;
+  const lineW = compact ? 6 : 10;
+
+  // Compute cumulative score: +1 for win, -1 for loss
+  const cumulative = results.reduce<number[]>((acc, r) => {
+    const prev = acc.length > 0 ? acc[acc.length - 1] : 0;
+    acc.push(prev + (r.won ? 1 : -1));
+    return acc;
+  }, []);
+  const minVal = Math.min(0, ...cumulative);
+  const maxVal = Math.max(0, ...cumulative);
+  const range = Math.max(1, maxVal - minVal);
+  const chartH = compact ? 18 : 28;
+
+  return (
+    <View style={{ alignItems: 'center', gap: compact ? 2 : 4 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+        {results.map((r, i) => (
+          <React.Fragment key={i}>
+            {i > 0 ? <View style={{ width: lineW, height: 1.5, backgroundColor: 'rgba(255,255,255,0.06)' }} /> : null}
+            <View style={{ width: dotSize, height: dotSize, borderRadius: dotSize / 2, backgroundColor: r.won ? colorA : colorB, borderWidth: 1, borderColor: r.won ? colorA + '80' : colorB + '80' }} />
+          </React.Fragment>
+        ))}
+      </View>
+      {/* Mini elevation chart */}
+      <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: chartH, gap: 1 }}>
+        {cumulative.map((val, i) => {
+          const normalized = (val - minVal) / range;
+          const barH = Math.max(2, normalized * chartH);
+          const isPositive = val >= 0;
+          return (
+            <View key={i} style={{ width: compact ? 4 : 6, height: barH, borderRadius: compact ? 1.5 : 2, backgroundColor: isPositive ? colorA + '40' : colorB + '40' }} />
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function FormBadge({ results, fr, colorA, colorB, compact }: { results: H2HMatchResult[]; fr: boolean; colorA: string; colorB: string; compact?: boolean }) {
+  if (results.length === 0) return null;
+  let streak = 0;
+  const streakWon = results[results.length - 1]?.won;
+  for (let i = results.length - 1; i >= 0; i--) {
+    if (results[i].won === streakWon) streak++;
+    else break;
+  }
+  const last5 = results.slice(-5);
+  const fs = compact ? 7 : 9;
+
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: compact ? 5 : 8 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: compact ? 1 : 2 }}>
+        <Text style={{ fontSize: compact ? 6 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.2)', marginRight: 2 }}>{fr ? 'FORME' : 'FORM'}</Text>
+        {last5.map((r, i) => (
+          <View key={i} style={{ width: compact ? 10 : 14, height: compact ? 12 : 16, borderRadius: compact ? 2 : 3, backgroundColor: r.won ? colorA + '25' : colorB + '25', alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: fs, fontWeight: '900', color: r.won ? colorA : colorB }}>{r.won ? 'V' : 'D'}</Text>
+          </View>
+        ))}
+      </View>
+      {streak >= 2 ? (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: (streakWon ? colorA : colorB) + '18', paddingHorizontal: compact ? 4 : 6, paddingVertical: compact ? 1.5 : 2.5, borderRadius: 6, borderWidth: 1, borderColor: (streakWon ? colorA : colorB) + '30' }}>
+          <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '800', color: streakWon ? colorA : colorB }}>
+            {streak}{streakWon ? 'V' : 'D'} {fr ? 'serie' : 'streak'}
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 export default function ShareCardH2H({
-  playerA, playerB, record,
+  playerA, playerB, record, recentH2H,
   language = 'fr', colorTheme = 'dark', format = 'square',
 }: Props) {
   const fr = language === 'fr';
@@ -162,6 +243,12 @@ export default function ShareCardH2H({
               <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 2 }}>
                 <Text style={{ fontSize: 7, color: 'rgba(255,255,255,0.25)' }}>{record.totalMatches} {fr ? 'matchs' : 'matches'}</Text>
               </View>
+              {recentH2H && recentH2H.length >= 2 ? (
+                <View style={{ marginTop: 4, gap: 3, alignItems: 'center' }}>
+                  <TrendLine results={recentH2H} colorA={colorA} colorB={colorB} compact />
+                  <FormBadge results={recentH2H} fr={fr} colorA={colorA} colorB={colorB} compact />
+                </View>
+              ) : null}
             </View>
           </View>
           <ShareCardWatermark variant="light" size="sm" />
@@ -216,6 +303,15 @@ export default function ShareCardH2H({
           </View>
           <Text style={{ fontSize: isStory ? 10 : 8, color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
         </View>
+
+        {/* Trend line + Form indicator */}
+        {recentH2H && recentH2H.length >= 2 ? (
+          <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 10, gap: isStory ? 8 : 5, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12, paddingVertical: isStory ? 10 : 7, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
+            <Text style={{ fontSize: isStory ? 8 : 7, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>{fr ? 'TENDANCE' : 'TREND'}</Text>
+            <TrendLine results={recentH2H} colorA={colorA} colorB={colorB} compact={!isStory} />
+            <FormBadge results={recentH2H} fr={fr} colorA={colorA} colorB={colorB} compact={!isStory} />
+          </View>
+        ) : null}
 
         {/* Comparison bars */}
         <View style={{ marginBottom: isStory ? 14 : 10 }}>

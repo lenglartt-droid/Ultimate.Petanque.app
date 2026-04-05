@@ -51,6 +51,45 @@ const ATELIER_LABELS: Record<string, { fr: string; en: string; icon: string }> =
   tir_but: { fr: 'Tir de but', en: 'Jack shot', icon: 'stars' },
 };
 
+function ShotByShot({ shots, ct, compact }: { shots: Array<{ number: number; success: boolean; carreau?: boolean }>; ct: any; compact?: boolean }) {
+  if (!shots || shots.length === 0) return null;
+  const dotSize = compact ? 7 : 10;
+  const gapSize = compact ? 1.5 : 2.5;
+  const fs = compact ? 5 : 7;
+  return (
+    <View style={{ gap: compact ? 2 : 4 }}>
+      <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5 }}>TIR PAR TIR</Text>
+      <View style={{ flexDirection: 'row', gap: gapSize, flexWrap: 'wrap', alignItems: 'center' }}>
+        {shots.map((s, i) => (
+          <View key={i} style={{ alignItems: 'center', gap: 1 }}>
+            <View style={{
+              width: dotSize, height: dotSize, borderRadius: dotSize / 2,
+              backgroundColor: s.carreau ? '#F59E0B' : s.success ? '#22C55E' : '#EF4444',
+              borderWidth: s.carreau ? 1.5 : 0,
+              borderColor: s.carreau ? '#FDE68A' : 'transparent',
+            }} />
+            <Text style={{ fontSize: fs, fontWeight: '600', color: ct.textSecondary }}>{i + 1}</Text>
+          </View>
+        ))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: compact ? 4 : 6, marginTop: compact ? 1 : 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <View style={{ width: compact ? 5 : 6, height: compact ? 5 : 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
+          <Text style={{ fontSize: fs, color: ct.textSecondary }}>{shots.filter(s => s.success && !s.carreau).length} ok</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <View style={{ width: compact ? 5 : 6, height: compact ? 5 : 6, borderRadius: 3, backgroundColor: '#F59E0B' }} />
+          <Text style={{ fontSize: fs, color: ct.textSecondary }}>{shots.filter(s => s.carreau).length} C</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+          <View style={{ width: compact ? 5 : 6, height: compact ? 5 : 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+          <Text style={{ fontSize: fs, color: ct.textSecondary }}>{shots.filter(s => !s.success).length} miss</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 function AtelierScoreRow({ atelierId, score, maxScore, ct, compact }: { atelierId: string; score: number; maxScore: number; ct: any; compact?: boolean }) {
   const info = ATELIER_LABELS[atelierId];
   if (!info) return null;
@@ -101,6 +140,8 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
   const hasAteliers = isPrecision && challenge.atelierScores && Object.keys(challenge.atelierScores).length > 0;
   const pd = playersData || {};
   const opponentInfo = challenge.opponentId ? pd[challenge.opponentId] : undefined;
+
+  const has10TirsShots = !isPrecision && challenge.shots && challenge.shots.length > 0;
 
   const isStory = format === 'story';
   const isLandscape = format === 'landscape';
@@ -158,6 +199,9 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
                     <AtelierScoreRow key={aid} atelierId={aid} score={score as number} maxScore={20} ct={ct} compact />
                   ))}
                 </View>
+              ) : null}
+              {has10TirsShots ? (
+                <ShotByShot shots={challenge.shots!.map((s, i) => ({ number: i + 1, success: s.success, carreau: s.carreau }))} ct={ct} compact />
               ) : null}
               {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
               {eloRating ? (
@@ -236,6 +280,13 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
             {Object.entries(challenge.atelierScores!).map(([aid, score]) => (
               <AtelierScoreRow key={aid} atelierId={aid} score={score as number} maxScore={20} ct={ct} />
             ))}
+          </View>
+        ) : null}
+
+        {/* Shot-by-shot for 10 tirs */}
+        {has10TirsShots ? (
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 10 : 8, marginBottom: isStory ? 12 : 8 }}>
+            <ShotByShot shots={challenge.shots!.map((s, i) => ({ number: i + 1, success: s.success, carreau: s.carreau }))} ct={ct} compact={!isStory} />
           </View>
         ) : null}
 
