@@ -394,7 +394,7 @@ export default function HistoryScreen() {
       }
       listData.push(item as HistoryItem);
       contentCount++;
-      if (contentCount % AD_INTERVAL === 0) {
+      if (contentCount === 5 || (contentCount > 5 && (contentCount - 5) % 12 === 0)) {
         listData.push({ type: 'ad', date: item.date, adIndex: contentCount });
       }
     });

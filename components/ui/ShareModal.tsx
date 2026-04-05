@@ -853,9 +853,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     </View>
                     <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                   </Pressable>
-                </Animated.View>
-
-                {/* Social media card — same style as other options */}
+                {/* Social media share — same style as other options */}
                 {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player' || itemType === 'club' || itemType === 'terrain') ? (
                   <Pressable
                     style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]}
@@ -863,8 +861,10 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       Haptics.selectionAsync();
                       handleClose();
                       setTimeout(() => {
-                        const shareType = itemType === 'player' ? 'stats' : itemType;
-                        router.push({ pathname: '/share-card', params: { type: shareType, id: itemId } } as any);
+                        const shareType = itemType === 'player' ? 'stats' : itemType === 'club' ? 'stats' : itemType;
+                        const shareParams: any = { type: shareType, id: itemId };
+                        if (itemType === 'club') shareParams.clubId = itemId;
+                        router.push({ pathname: '/share-card', params: shareParams } as any);
                       }, 300);
                     }}
                   >
@@ -872,12 +872,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                       <MaterialIcons name="camera-alt" size={22} color="#8B5CF6" />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.optionTitle}>{fr ? 'Carte reseaux sociaux' : 'Social Media Card'}</Text>
+                      <Text style={s.optionTitle}>{fr ? 'Partage reseaux sociaux' : 'Social Media Share'}</Text>
                       <Text style={s.optionDesc}>{fr ? 'Image pour Instagram, TikTok, Facebook...' : 'Image for Instagram, TikTok, Facebook...'}</Text>
                     </View>
                     <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                   </Pressable>
                 ) : null}
+                </Animated.View>
 
                 {/* Read-only info */}
                 <View style={s.infoRow}>
