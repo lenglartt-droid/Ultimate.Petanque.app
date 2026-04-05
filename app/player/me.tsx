@@ -1043,8 +1043,8 @@ export default function MyPlayerCardScreen() {
                 <Text style={s.contactToggleTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
                 <Text style={s.contactToggleDesc}>
                   {selfPlayer.showContactPublic
-                    ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire' : 'Email and phone visible in directory')
-                    : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire' : 'Email and phone hidden in directory')}
+                    ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire et sur la carte' : 'Email and phone visible in directory and on map')
+                    : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire et sur la carte' : 'Email and phone hidden in directory and on map')}
                 </Text>
               </View>
               {togglingContacts ? (

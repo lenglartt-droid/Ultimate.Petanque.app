@@ -43,6 +43,7 @@ import {
   PlayerReport,
   ReportedPlayerDetail,
 } from '@/services/moderationService';
+import { fetchFlaggedReviews, moderateReview, deleteTerrainReview } from '@/services/terrainReviewService';
 import { getEloRank } from '@/services/eloService';
 import { getAllAppeals, respondToAppeal, BanAppeal } from '@/services/banAppealService';
 import { logAdminAction } from '@/services/adminActivityLogService';
@@ -142,16 +143,23 @@ export default function AdminModerationScreen() {
   const [respondingAppeal, setRespondingAppeal] = useState<string | null>(null);
   const [activeAppealId, setActiveAppealId] = useState<string | null>(null);
 
+  // Review moderation state
+  const [flaggedReviews, setFlaggedReviews] = useState<Array<any>>([]);
+  const [showReviewMod, setShowReviewMod] = useState(false);
+  const [moderatingReview, setModeratingReview] = useState<string | null>(null);
+
   const loadData = useCallback(async () => {
     try {
-      const [reportsResult, statsResult, appealsResult] = await Promise.all([
+      const [reportsResult, statsResult, appealsResult, flaggedResult] = await Promise.all([
         getPlayerReports(100),
         getReportStats(),
         getAllAppeals(50),
+        fetchFlaggedReviews(),
       ]);
       setReports(reportsResult.reports);
       setStats(statsResult);
       setAppeals(appealsResult.appeals || []);
+      setFlaggedReviews(flaggedResult.reviews || []);
     } catch (e) {
       console.log('Error loading moderation data:', e);
     } finally {
@@ -340,6 +348,141 @@ export default function AdminModerationScreen() {
             </View>
           </View>
         </Animated.View>
+
+        {/* ===== REVIEW MODERATION SECTION ===== */}
+        {flaggedReviews.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(20)}>
+            <Pressable
+              style={[s.appealsBanner, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}
+              onPress={() => { Haptics.selectionAsync(); setShowReviewMod(!showReviewMod); }}
+            >
+              <View style={[s.appealsBannerIcon, { backgroundColor: '#FEE2E2' }]}>
+                <MaterialIcons name="rate-review" size={20} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.appealsBannerTitle, { color: '#991B1B' }]}>
+                  {flaggedReviews.length} {fr ? 'avis signale(s)' : 'flagged review(s)'}
+                </Text>
+                <Text style={[s.appealsBannerDesc, { color: '#B91C1C' }]}>{fr ? 'Cliquez pour moderer' : 'Click to moderate'}</Text>
+              </View>
+              <MaterialIcons name={showReviewMod ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showReviewMod ? (
+              <View style={{ gap: 8, marginBottom: 14 }}>
+                {flaggedReviews.map((rev) => (
+                  <View key={rev.id} style={[s.reportCard, { borderLeftColor: rev.moderationStatus === 'hidden' ? '#94A3B8' : '#EF4444' }]}>
+                    <View style={s.reportHeader}>
+                      <View style={[s.reportAvatarPlaceholder, { backgroundColor: '#FEE2E2' }]}>
+                        <MaterialIcons name="star" size={18} color="#F59E0B" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.reportPlayerName}>{rev.playerName || (fr ? 'Anonyme' : 'Anonymous')}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <View style={{ flexDirection: 'row', gap: 1 }}>
+                            {[1, 2, 3, 4, 5].map(st => <MaterialIcons key={st} name={st <= rev.rating ? 'star' : 'star-border'} size={11} color="#F59E0B" />)}
+                          </View>
+                          {rev.terrainName ? (
+                            <Text style={{ fontSize: 10, color: '#64748B' }}>{rev.terrainName}</Text>
+                          ) : null}
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
+                        <MaterialIcons name="flag" size={11} color="#EF4444" />
+                        <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444' }}>{rev.flagCount}x</Text>
+                      </View>
+                    </View>
+                    {rev.comment ? (
+                      <View style={[s.reportDetails, { marginTop: 0 }]}>
+                        <MaterialIcons name="format-quote" size={13} color="#94A3B8" />
+                        <Text style={s.reportDetailsText} numberOfLines={4}>{rev.comment}</Text>
+                      </View>
+                    ) : null}
+                    {rev.photoUrl ? (
+                      <View style={{ marginTop: 6, marginBottom: 6 }}>
+                        <Image source={{ uri: rev.photoUrl }} style={{ width: '100%', height: 100, borderRadius: 10 }} contentFit="cover" transition={200} />
+                      </View>
+                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 8 }}>
+                      <MaterialIcons name="calendar-today" size={10} color="#94A3B8" />
+                      <Text style={{ fontSize: 10, color: '#94A3B8' }}>{new Date(rev.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                      <View style={{ marginLeft: 8, backgroundColor: rev.moderationStatus === 'hidden' ? '#F1F5F9' : rev.moderationStatus === 'approved' ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: rev.moderationStatus === 'hidden' ? '#64748B' : rev.moderationStatus === 'approved' ? '#10B981' : '#D97706' }}>
+                          {rev.moderationStatus === 'hidden' ? (fr ? 'Masque' : 'Hidden') : rev.moderationStatus === 'approved' ? (fr ? 'Approuve' : 'Approved') : (fr ? 'Signale' : 'Flagged')}
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={s.reportActions}>
+                      <Pressable
+                        style={[s.actionBtnView, { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}
+                        onPress={async () => {
+                          setModeratingReview(rev.id);
+                          const { error } = await moderateReview(rev.id, 'approved');
+                          if (!error) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            setFlaggedReviews(prev => prev.map(r => r.id === rev.id ? { ...r, moderationStatus: 'approved', flagged: false } : r));
+                          } else { showAlert(fr ? 'Erreur' : 'Error', error); }
+                          setModeratingReview(null);
+                        }}
+                        disabled={moderatingReview === rev.id}
+                      >
+                        {moderatingReview === rev.id ? <ActivityIndicator size="small" color="#10B981" /> : (
+                          <><MaterialIcons name="check-circle" size={14} color="#10B981" /><Text style={[s.actionBtnViewText, { color: '#10B981' }]}>{fr ? 'Approuver' : 'Approve'}</Text></>
+                        )}
+                      </Pressable>
+                      <Pressable
+                        style={[s.actionBtnAction, { backgroundColor: '#64748B' }]}
+                        onPress={async () => {
+                          setModeratingReview(rev.id);
+                          const { error } = await moderateReview(rev.id, 'hidden');
+                          if (!error) {
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            setFlaggedReviews(prev => prev.map(r => r.id === rev.id ? { ...r, moderationStatus: 'hidden' } : r));
+                          } else { showAlert(fr ? 'Erreur' : 'Error', error); }
+                          setModeratingReview(null);
+                        }}
+                        disabled={moderatingReview === rev.id}
+                      >
+                        <MaterialIcons name="visibility-off" size={14} color="#FFF" />
+                        <Text style={s.actionBtnActionText}>{fr ? 'Masquer' : 'Hide'}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={s.actionBtnDelete}
+                        onPress={() => {
+                          Alert.alert(
+                            fr ? 'Supprimer cet avis ?' : 'Delete this review?',
+                            fr ? 'Action irreversible.' : 'This cannot be undone.',
+                            [
+                              { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                              { text: fr ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+                                const { error } = await deleteTerrainReview(rev.id);
+                                if (!error) {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  setFlaggedReviews(prev => prev.filter(r => r.id !== rev.id));
+                                } else { showAlert(fr ? 'Erreur' : 'Error', error); }
+                              }},
+                            ]
+                          );
+                        }}
+                      >
+                        <MaterialIcons name="delete-outline" size={16} color="#EF4444" />
+                      </Pressable>
+                    </View>
+                    {rev.terrainId ? (
+                      <Pressable
+                        style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 8, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F1F5F9' }}
+                        onPress={() => router.push(`/terrain/${rev.terrainId}` as any)}
+                      >
+                        <MaterialIcons name="open-in-new" size={12} color="#64748B" />
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#64748B' }}>{fr ? 'Voir le terrain' : 'View terrain'}</Text>
+                      </Pressable>
+                    ) : null}
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
 
         {/* Pending Appeals Banner */}
         {appeals.filter(a => a.status === 'pending').length > 0 ? (

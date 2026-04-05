@@ -5,6 +5,7 @@
 import { getSupabaseClient } from '@/template';
 import { Match, Player, Tournament } from '@/types/petanque';
 import { getEloRank } from '@/services/eloService';
+import { computeMemberRoleTrend } from '@/services/clubMemberRoleService';
 
 export interface MemberAnalytics {
   id: string;
@@ -21,6 +22,7 @@ export interface MemberAnalytics {
   contributionScore: number; // 0-100 composite
   lastMatchDate?: string;
   monthlyMatches: Array<{ month: string; count: number }>;
+  roleTrend: Array<{ month: string; roles: Record<string, number>; dominant: string }>;
 }
 
 export interface ClubAnalytics {
@@ -254,6 +256,9 @@ export async function fetchClubAnalytics(
       const ml = d.toLocaleDateString('fr-FR', { month: 'short' });
       monthlyMatches.push({ month: ml, count: monthlyMap.get(mk) || 0 });
     }
+    // Compute role trend for this member
+    const roleTrend = computeMemberRoleTrend(m.id, allMatches, 6);
+
     return {
       id: m.id,
       name: m.name,
@@ -269,6 +274,7 @@ export async function fetchClubAnalytics(
       contributionScore,
       lastMatchDate: lastMatch,
       monthlyMatches,
+      roleTrend,
     };
   }).sort((a, b) => b.contributionScore - a.contributionScore);
 
