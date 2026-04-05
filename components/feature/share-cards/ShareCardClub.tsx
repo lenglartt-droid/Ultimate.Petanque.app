@@ -23,6 +23,13 @@ interface TopPlayerInfo {
   role?: string;
 }
 
+interface TournamentInfo {
+  name: string;
+  date: string;
+  status: string;
+  format?: string;
+}
+
 interface MemberRoleInfo {
   name: string;
   role: string;
@@ -44,6 +51,7 @@ interface Props {
   geoRank?: GeoRankInfo | null;
   topPlayers?: TopPlayerInfo[];
   memberRoles?: MemberRoleInfo[];
+  upcomingTournaments?: TournamentInfo[];
   totalMatches?: number;
   avgWinRate?: number;
   avgTirRate?: number;
@@ -86,7 +94,7 @@ function GeoRankBadges({ geoRank, compact }: { geoRank?: GeoRankInfo | null; com
 
 export default function ShareCardClub({
   clubName, city, country, logo, membersCount, foundedYear, membershipCost,
-  facilities, description, geoRank, topPlayers, memberRoles,
+  facilities, description, geoRank, topPlayers, memberRoles, upcomingTournaments,
   totalMatches, avgWinRate, avgTirRate, avgCarreauRate, isVerified,
   language = 'fr', colorTheme = 'dark', format = 'square',
 }: Props) {
@@ -252,8 +260,30 @@ export default function ShareCardClub({
           </View>
         ) : null}
 
+        {/* Upcoming Tournaments */}
+        {upcomingTournaments && upcomingTournaments.length > 0 ? (
+          <View style={{ marginBottom: isStory ? 10 : 6 }}>
+            <Text style={{ fontSize: 8, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5, marginBottom: 5, textTransform: 'uppercase' }}>{fr ? 'Tournois' : 'Tournaments'}</Text>
+            <View style={{ gap: 3 }}>
+              {upcomingTournaments.slice(0, 3).map((t, i) => {
+                const tDate = new Date(t.date);
+                const statusColor = t.status === 'En cours' ? '#22C55E' : '#3B82F6';
+                return (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 }}>
+                    <View style={{ width: 18, height: 18, borderRadius: 5, backgroundColor: statusColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="emoji-events" size={9} color={statusColor} />
+                    </View>
+                    <Text style={{ fontSize: 8, fontWeight: '700', color: ct.textPrimary, flex: 1 }} numberOfLines={1}>{t.name}</Text>
+                    <Text style={{ fontSize: 7, fontWeight: '600', color: statusColor }}>{tDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
+
         {/* Geo + Founded */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, alignItems: 'center' }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, alignItems: 'center', marginBottom: isStory ? 0 : 4 }}>
           {foundedYear ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 5 }}>
               <MaterialIcons name="calendar-today" size={8} color={ct.textSecondary} />

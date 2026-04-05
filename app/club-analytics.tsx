@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
@@ -18,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { fetchClubAnalytics, ClubAnalytics } from '@/services/clubAnalyticsService';
 import { getEloRank } from '@/services/eloService';
+import { Platform } from 'react-native';
 
 function MiniBarChart({ data, width, height, color }: { data: Array<{ label: string; value: number }>; width: number; height: number; color: string }) {
   if (data.length === 0) return null;
@@ -218,6 +220,45 @@ export default function ClubAnalyticsScreen() {
             </View>
           </View>
 
+          {/* National Average Comparison */}
+          <View style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#3B82F6' + '15' }]}>
+                <MaterialIcons name="compare-arrows" size={18} color="#3B82F6" />
+              </View>
+              <Text style={s.sectionTitle}>{fr ? 'Comparaison nationale' : 'National Comparison'}</Text>
+            </View>
+            {[
+              { label: fr ? 'ELO moyen' : 'Avg ELO', club: analytics.avgElo, national: analytics.nationalAvgElo, icon: 'diamond', color: '#8B5CF6' },
+              { label: fr ? 'Taux victoire' : 'Win Rate', club: analytics.avgWinRate, national: analytics.nationalAvgWinRate, icon: 'emoji-events', color: theme.success, suffix: '%' },
+              { label: fr ? 'Matchs/membre' : 'Matches/member', club: analytics.totalMembers > 0 ? Math.round((analytics.totalMatches / analytics.totalMembers) * 10) / 10 : 0, national: analytics.nationalAvgMatchesPerMember, icon: 'sports', color: theme.primary },
+            ].map((item, idx) => {
+              const diff = item.club - item.national;
+              const isAbove = diff > 0;
+              return (
+                <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, borderBottomWidth: idx < 2 ? 1 : 0, borderBottomColor: theme.border + '60' }}>
+                  <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: item.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name={item.icon as any} size={18} color={item.color} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{item.label}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: item.color }}>{item.club}{item.suffix || ''}</Text>
+                      <Text style={{ fontSize: 11, color: theme.textMuted }}>vs</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary }}>{item.national}{item.suffix || ''}</Text>
+                    </View>
+                  </View>
+                  <View style={{ backgroundColor: isAbove ? '#22C55E15' : '#EF444415', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <MaterialIcons name={isAbove ? 'arrow-upward' : 'arrow-downward'} size={12} color={isAbove ? '#22C55E' : '#EF4444'} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isAbove ? '#22C55E' : '#EF4444' }}>{isAbove ? '+' : ''}{Math.round(diff * 10) / 10}{item.suffix || ''}</Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+
           {/* Top 5 Members */}
           <View style={s.sectionCard}>
             <View style={s.sectionHeader}>
@@ -290,6 +331,97 @@ export default function ClubAnalyticsScreen() {
               );
             })}
           </View>
+
+          {/* Export CSV Button */}
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#10B981', paddingVertical: 16, borderRadius: 14, marginBottom: 10, ...theme.shadows.card }}
+            onPress={async () => {
+              if (!analytics || !club) return;
+              try {
+                const rows: string[] = [];
+                // Header
+                rows.push(`"${club.name} - ${fr ? 'Rapport Analytique' : 'Analytics Report'}"`);
+                rows.push('');
+                rows.push(`${fr ? 'Metrique' : 'Metric'},${fr ? 'Valeur' : 'Value'}`);
+                rows.push(`${fr ? 'Membres' : 'Members'},${analytics.totalMembers}`);
+                rows.push(`${fr ? 'Actifs ce mois' : 'Active this month'},${analytics.activeMembersThisMonth}`);
+                rows.push(`${fr ? 'ELO moyen' : 'Avg ELO'},${analytics.avgElo}`);
+                rows.push(`${fr ? 'Taux victoire' : 'Win Rate'},${analytics.avgWinRate}%`);
+                rows.push(`${fr ? 'Total matchs' : 'Total Matches'},${analytics.totalMatches}`);
+                rows.push(`${fr ? 'Tournois joues' : 'Tournaments Played'},${analytics.tournamentsPlayed}`);
+                rows.push('');
+                rows.push(`${fr ? 'ELO moyen national' : 'National Avg ELO'},${analytics.nationalAvgElo}`);
+                rows.push(`${fr ? 'Taux victoire national' : 'National Win Rate'},${analytics.nationalAvgWinRate}%`);
+                rows.push('');
+                // Top members
+                rows.push(`${fr ? 'Rang' : 'Rank'},${fr ? 'Joueur' : 'Player'},ELO,${fr ? 'Matchs' : 'Matches'},${fr ? 'Victoires' : 'Win Rate'}`);
+                analytics.topMembers.forEach((m, i) => {
+                  rows.push(`${i + 1},"${m.name}",${m.elo},${m.matches},${m.winRate}%`);
+                });
+                rows.push('');
+                // Role distribution
+                rows.push(`${fr ? 'Role' : 'Role'},${fr ? 'Joueurs' : 'Players'},%`);
+                analytics.roleDistribution.forEach(r => {
+                  rows.push(`${r.role},${r.count},${r.pct}%`);
+                });
+                rows.push('');
+                // Matches by month
+                rows.push(`${fr ? 'Mois' : 'Month'},${fr ? 'Matchs' : 'Matches'}`);
+                analytics.matchesByMonth.forEach(m => {
+                  rows.push(`${m.month},${m.count}`);
+                });
+                const csv = rows.join('\n');
+                if (Platform.OS === 'web') {
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `analytics_${club.name.replace(/\s+/g, '_').slice(0, 20)}.csv`; a.click();
+                  URL.revokeObjectURL(url);
+                } else {
+                  const FSModule = require('expo-file-system');
+                  const SharingModule = require('expo-sharing');
+                  const fileName = `analytics_${club.name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.csv`;
+                  const fileUri = `${FSModule.cacheDirectory}${fileName}`;
+                  await FSModule.writeAsStringAsync(fileUri, csv, { encoding: FSModule.EncodingType.UTF8 });
+                  if (await SharingModule.isAvailableAsync()) {
+                    await SharingModule.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
+                  }
+                }
+              } catch (e) { console.log('CSV export error:', e); }
+            }}
+          >
+            <MaterialIcons name="table-chart" size={20} color="#FFF" />
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Exporter en CSV' : 'Export CSV'}</Text>
+          </Pressable>
+
+          {/* Export PDF Button */}
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: '#6366F1', paddingVertical: 16, borderRadius: 14, marginBottom: 14, ...theme.shadows.card }}
+            onPress={async () => {
+              if (!analytics || !club) return;
+              try {
+                const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${club.name} - Analytics</title><style>body{font-family:system-ui;max-width:800px;margin:0 auto;padding:24px;color:#1E293B}h1{font-size:24px;margin-bottom:4px}h2{font-size:18px;margin-top:24px;margin-bottom:12px;color:#475569;border-bottom:2px solid #E2E8F0;padding-bottom:6px}.grid{display:flex;gap:16px;flex-wrap:wrap}.card{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:12px;padding:16px;flex:1;min-width:140px;text-align:center}.card .value{font-size:28px;font-weight:800;color:#1E40AF}.card .label{font-size:12px;color:#64748B;margin-top:4px}table{width:100%;border-collapse:collapse;margin-top:8px}th,td{text-align:left;padding:8px 12px;border-bottom:1px solid #E2E8F0}th{background:#F1F5F9;font-weight:600;font-size:12px;color:#475569;text-transform:uppercase}td{font-size:14px}.compare{display:flex;gap:8px;align-items:center}.above{color:#22C55E;font-weight:700}.below{color:#EF4444;font-weight:700}.footer{margin-top:32px;text-align:center;color:#94A3B8;font-size:11px}</style></head><body><h1>${club.name}</h1><p style="color:#64748B;margin-bottom:24px">${fr ? 'Rapport analytique' : 'Analytics Report'} - ${new Date().toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</p><div class="grid"><div class="card"><div class="value">${analytics.totalMembers}</div><div class="label">${fr ? 'Membres' : 'Members'}</div></div><div class="card"><div class="value">${analytics.avgElo}</div><div class="label">${fr ? 'ELO moyen' : 'Avg ELO'}</div></div><div class="card"><div class="value">${analytics.avgWinRate}%</div><div class="label">${fr ? 'Taux victoire' : 'Win Rate'}</div></div><div class="card"><div class="value">${analytics.totalMatches}</div><div class="label">${fr ? 'Matchs total' : 'Total Matches'}</div></div></div><h2>${fr ? 'Comparaison nationale' : 'National Comparison'}</h2><table><tr><th>${fr ? 'Metrique' : 'Metric'}</th><th>Club</th><th>${fr ? 'Moyenne nationale' : 'National Avg'}</th><th>${fr ? 'Diff' : 'Diff'}</th></tr><tr><td>${fr ? 'ELO moyen' : 'Avg ELO'}</td><td><strong>${analytics.avgElo}</strong></td><td>${analytics.nationalAvgElo}</td><td class="${analytics.avgElo >= analytics.nationalAvgElo ? 'above' : 'below'}">${analytics.avgElo >= analytics.nationalAvgElo ? '+' : ''}${analytics.avgElo - analytics.nationalAvgElo}</td></tr><tr><td>${fr ? 'Taux victoire' : 'Win Rate'}</td><td><strong>${analytics.avgWinRate}%</strong></td><td>${analytics.nationalAvgWinRate}%</td><td class="${analytics.avgWinRate >= analytics.nationalAvgWinRate ? 'above' : 'below'}">${analytics.avgWinRate >= analytics.nationalAvgWinRate ? '+' : ''}${Math.round((analytics.avgWinRate - analytics.nationalAvgWinRate) * 10) / 10}%</td></tr></table><h2>${fr ? 'Top 5 Joueurs' : 'Top 5 Players'}</h2><table><tr><th>#</th><th>${fr ? 'Joueur' : 'Player'}</th><th>ELO</th><th>${fr ? 'Matchs' : 'Matches'}</th><th>${fr ? 'Victoires' : 'Win Rate'}</th></tr>${analytics.topMembers.map((m, i) => `<tr><td>${i + 1}</td><td>${m.name}</td><td><strong>${m.elo}</strong></td><td>${m.matches}</td><td>${m.winRate}%</td></tr>`).join('')}</table><h2>${fr ? 'Distribution des roles' : 'Role Distribution'}</h2><table><tr><th>${fr ? 'Role' : 'Role'}</th><th>${fr ? 'Joueurs' : 'Players'}</th><th>%</th></tr>${analytics.roleDistribution.map(r => `<tr><td>${r.role}</td><td>${r.count}</td><td>${r.pct}%</td></tr>`).join('')}</table><div class="footer">Ultimate Petanque - ${new Date().toISOString().slice(0, 10)}</div></body></html>`;
+                if (Platform.OS === 'web') {
+                  const pw = window.open('', '_blank');
+                  if (pw) { pw.document.write(html); pw.document.close(); pw.print(); }
+                } else {
+                  const PrintModule = require('expo-print');
+                  const SharingModule = require('expo-sharing');
+                  const FSModule = require('expo-file-system');
+                  const { uri } = await PrintModule.printToFileAsync({ html });
+                  const fileName = `analytics_${club.name.replace(/\s+/g, '_').slice(0, 20)}_${new Date().toISOString().slice(0, 10)}.pdf`;
+                  const newUri = `${FSModule.cacheDirectory}${fileName}`;
+                  await FSModule.moveAsync({ from: uri, to: newUri });
+                  if (await SharingModule.isAvailableAsync()) {
+                    await SharingModule.shareAsync(newUri, { mimeType: 'application/pdf', dialogTitle: fileName });
+                  }
+                }
+              } catch (e) { console.log('Analytics PDF export error:', e); }
+            }}
+          >
+            <MaterialIcons name="picture-as-pdf" size={20} color="#FFF" />
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Exporter en PDF' : 'Export PDF'}</Text>
+          </Pressable>
 
           {/* Tournament Stats */}
           <View style={s.sectionCard}>

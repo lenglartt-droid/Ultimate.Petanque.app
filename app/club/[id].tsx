@@ -635,6 +635,29 @@ export default function ClubDetailScreen() {
           </View>
           {club.description ? <Text style={styles.clubDescription}>{club.description}</Text> : null}
 
+          {/* Quick Stats - integrated in Hero Card */}
+          <View style={styles.heroStatsBar}>
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{club.membersCount}</Text>
+              <Text style={styles.heroStatLabel}>{t('club', 'members')}</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{club.foundedYear || '-'}</Text>
+              <Text style={styles.heroStatLabel}>{t('club', 'founded')}</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{clubTournaments.length}</Text>
+              <Text style={styles.heroStatLabel}>{t('club', 'tournamentsLabel')}</Text>
+            </View>
+            <View style={styles.heroStatDivider} />
+            <View style={styles.heroStatItem}>
+              <Text style={styles.heroStatValue}>{club.membershipCost ? `${club.membershipCost}\u20AC` : '-'}</Text>
+              <Text style={styles.heroStatLabel}>{t('club', 'membership')}</Text>
+            </View>
+          </View>
+
           {/* Geographic Ranking */}
           {clubGeoRank && (clubGeoRank.city || clubGeoRank.country || clubGeoRank.continent) ? (
             <View style={styles.geoRankSection}>
@@ -770,25 +793,7 @@ export default function ClubDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Quick Stats */}
-        <Animated.View entering={FadeInDown.duration(400).delay(100)} style={styles.quickStats}>
-          <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{club.membersCount}</Text>
-            <Text style={styles.quickStatLabel}>{t('club', 'members')}</Text>
-          </View>
-          <View style={[styles.quickStatItem, styles.quickStatBorder]}>
-            <Text style={styles.quickStatValue}>{club.foundedYear}</Text>
-            <Text style={styles.quickStatLabel}>{t('club', 'founded')}</Text>
-          </View>
-          <View style={[styles.quickStatItem, styles.quickStatBorder]}>
-            <Text style={styles.quickStatValue}>{clubTournaments.length}</Text>
-            <Text style={styles.quickStatLabel}>{t('club', 'tournamentsLabel')}</Text>
-          </View>
-          <View style={styles.quickStatItem}>
-            <Text style={styles.quickStatValue}>{club.membershipCost ? `${club.membershipCost}€` : '-'}</Text>
-            <Text style={styles.quickStatLabel}>{t('club', 'membership')}</Text>
-          </View>
-        </Animated.View>
+
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
@@ -1065,7 +1070,7 @@ export default function ClubDetailScreen() {
                 <View style={styles.visibilityInfo}>
                   <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
                   <Text style={styles.visibilityDesc}>
-                    {club.showContactPublic ? (language === 'fr' ? 'Email et telephone visibles' : 'Email and phone visible') : (language === 'fr' ? 'Email et telephone masques' : 'Email and phone hidden')}
+                    {club.showContactPublic ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire et sur la carte' : 'Email and phone visible in directory and on map') : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire et sur la carte' : 'Email and phone hidden in directory and on map')}
                   </Text>
                 </View>
                 <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
@@ -1446,11 +1451,11 @@ const styles = StyleSheet.create({
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
-  quickStats: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 24, ...theme.shadows.card },
-  quickStatItem: { flex: 1, alignItems: 'center', gap: 4 },
-  quickStatBorder: { borderLeftWidth: 1, borderLeftColor: theme.border },
-  quickStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
-  quickStatLabel: { fontSize: 11, color: theme.textSecondary },
+  heroStatsBar: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, paddingVertical: 14, paddingHorizontal: 12, marginTop: 14, width: '100%' as any },
+  heroStatItem: { flex: 1, alignItems: 'center' as const },
+  heroStatValue: { fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary },
+  heroStatLabel: { fontSize: 10, color: theme.textSecondary, marginTop: 2 },
+  heroStatDivider: { width: 1, height: 28, backgroundColor: theme.border, marginHorizontal: 4 },
   locationCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
   locationInfo: { marginBottom: 8 },
   locationAddress: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
