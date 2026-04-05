@@ -32,6 +32,7 @@ import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventSer
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
+import { useScrollPrefetch } from '@/hooks/useFlatListOptimizers';
 import { getEloRank, getEloColor, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
@@ -519,6 +520,16 @@ export default function DirectoryScreen() {
       setVisibleCount(prev => prev + PAGE_SIZE);
     }
   }, [hasMore]);
+
+  // Scroll-ahead image prefetch for avatars and terrain photos
+  const getItemImageUrl = useCallback((item: any) => {
+    if (!item) return undefined;
+    if (activeTab === 'players') return item.avatar;
+    if (activeTab === 'terrains') return item.photos?.[0];
+    return undefined;
+  }, [activeTab]);
+  const scrollPrefetch = useScrollPrefetch(getItemImageUrl, 10);
+  useEffect(() => { scrollPrefetch.setData(paginatedData); }, [paginatedData]);
 
   const clearFilters = useCallback(() => {
     if (activeTab === 'players') {
@@ -1082,6 +1093,8 @@ export default function DirectoryScreen() {
             windowSize={5}
             maxToRenderPerBatch={10}
             initialNumToRender={10}
+            onViewableItemsChanged={scrollPrefetch.onViewableItemsChanged}
+            viewabilityConfig={scrollPrefetch.viewabilityConfig}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -1128,6 +1141,8 @@ export default function DirectoryScreen() {
             windowSize={5}
             maxToRenderPerBatch={10}
             initialNumToRender={15}
+            onViewableItemsChanged={scrollPrefetch.onViewableItemsChanged}
+            viewabilityConfig={scrollPrefetch.viewabilityConfig}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
