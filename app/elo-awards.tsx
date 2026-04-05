@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Dimensions } from 'react-native';
+import { View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator, Dimensions, Modal, Platform } from 'react-native';
+import Svg, { Polygon, Line, Circle, Text as SvgText, G } from 'react-native-svg';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -11,6 +12,107 @@ import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeason
 import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress, LeagueTier } from '@/services/globalRankingService';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+
+// ===================== DUAL RADAR CHART =====================
+interface DualRadarPoint {
+  label: string;
+  valueA: number; // 0-100 normalized
+  valueB: number;
+  rawA: string;
+  rawB: string;
+}
+
+function polarToCart(cx: number, cy: number, r: number, idx: number, total: number): [number, number] {
+  const angle = -Math.PI / 2 + (2 * Math.PI * idx) / total;
+  return [cx + r * Math.cos(angle), cy + r * Math.sin(angle)];
+}
+
+const DualRadarChart = React.memo(function DualRadarChart({
+  data,
+  size = 260,
+  colorA = '#3B82F6',
+  colorB = '#F59E0B',
+  labelA,
+  labelB,
+}: {
+  data: DualRadarPoint[];
+  size?: number;
+  colorA?: string;
+  colorB?: string;
+  labelA: string;
+  labelB: string;
+}) {
+  const n = data.length;
+  if (n < 3) return null;
+  const cx = size / 2;
+  const cy = size / 2;
+  const maxR = size / 2 - 40;
+  const labelR = maxR + 26;
+  const gridLevels = 4;
+
+  const grids = Array.from({ length: gridLevels }, (_, level) => {
+    const r = (maxR * (level + 1)) / gridLevels;
+    return Array.from({ length: n }, (_, i) => {
+      const [x, y] = polarToCart(cx, cy, r, i, n);
+      return `${x},${y}`;
+    }).join(' ');
+  });
+
+  const axes = Array.from({ length: n }, (_, i) => {
+    const [x, y] = polarToCart(cx, cy, maxR, i, n);
+    return { x1: cx, y1: cy, x2: x, y2: y };
+  });
+
+  const makePolygon = (key: 'valueA' | 'valueB') =>
+    data.map((d, i) => {
+      const r = (maxR * Math.min(d[key], 100)) / 100;
+      const [x, y] = polarToCart(cx, cy, r, i, n);
+      return { x, y };
+    });
+
+  const polyA = makePolygon('valueA');
+  const polyB = makePolygon('valueB');
+  const strA = polyA.map(p => `${p.x},${p.y}`).join(' ');
+  const strB = polyB.map(p => `${p.x},${p.y}`).join(' ');
+
+  const labels = data.map((d, i) => {
+    const [x, y] = polarToCart(cx, cy, labelR, i, n);
+    let anchor: 'middle' | 'start' | 'end' = 'middle';
+    if (x < cx - 10) anchor = 'end';
+    else if (x > cx + 10) anchor = 'start';
+    return { x, y: y + 3, label: d.label, anchor };
+  });
+
+  return (
+    <View style={{ alignItems: 'center' }}>
+      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        {grids.map((pts, i) => (
+          <Polygon key={`g${i}`} points={pts} fill="none" stroke={theme.border} strokeWidth={i === gridLevels - 1 ? 1.5 : 0.7} strokeDasharray={i < gridLevels - 1 ? '3,3' : undefined} opacity={i === gridLevels - 1 ? 0.6 : 0.3} />
+        ))}
+        {axes.map((a, i) => (
+          <Line key={`ax${i}`} x1={a.x1} y1={a.y1} x2={a.x2} y2={a.y2} stroke={theme.border} strokeWidth={0.7} opacity={0.35} />
+        ))}
+        <Polygon points={strA} fill={colorA} fillOpacity={0.15} stroke={colorA} strokeWidth={2} strokeLinejoin="round" />
+        <Polygon points={strB} fill={colorB} fillOpacity={0.15} stroke={colorB} strokeWidth={2} strokeLinejoin="round" strokeDasharray="6,3" />
+        {polyA.map((p, i) => <Circle key={`dA${i}`} cx={p.x} cy={p.y} r={4} fill={colorA} stroke="#FFF" strokeWidth={2} />)}
+        {polyB.map((p, i) => <Circle key={`dB${i}`} cx={p.x} cy={p.y} r={3.5} fill={colorB} stroke="#FFF" strokeWidth={1.5} />)}
+        {labels.map((l, i) => (
+          <SvgText key={`lb${i}`} x={l.x} y={l.y} textAnchor={l.anchor} fontSize={10} fontWeight="700" fill={theme.textSecondary}>{l.label}</SvgText>
+        ))}
+      </Svg>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16, marginTop: 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ width: 14, height: 3, borderRadius: 1.5, backgroundColor: colorA }} />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colorA }}>{labelA}</Text>
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          <View style={{ width: 14, height: 3, borderRadius: 1.5, backgroundColor: colorB, borderStyle: 'dashed' }} />
+          <Text style={{ fontSize: 11, fontWeight: '700', color: colorB }}>{labelB}</Text>
+        </View>
+      </View>
+    </View>
+  );
+});
 
 interface SeasonAward {
   id: string;
@@ -32,6 +134,11 @@ export default function EloAwardsScreen() {
   const [eloHistory, setEloHistory] = useState<EloHistoryEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // Season comparison state
+  const [showCompare, setShowCompare] = useState(false);
+  const [compareA, setCompareA] = useState<string | null>(null);
+  const [compareB, setCompareB] = useState<string | null>(null);
+
   useEffect(() => {
     if (!selfPlayer) { setLoading(false); return; }
     const load = async () => {
@@ -51,6 +158,67 @@ export default function EloAwardsScreen() {
   const currentRank = getEloRank(currentElo);
   const currentLeague = getLeagueTier(currentElo);
   const leagueProgress = getLeagueProgress(currentElo);
+
+  // Auto-select first two seasons for comparison when loaded
+  useEffect(() => {
+    if (seasons.length >= 2 && !compareA && !compareB) {
+      setCompareA(seasons[0].id);
+      setCompareB(seasons[1].id);
+    } else if (seasons.length === 1 && !compareA) {
+      setCompareA(seasons[0].id);
+    }
+  }, [seasons]);
+
+  // Build comparison data
+  const comparisonData = useMemo(() => {
+    if (!compareA || !compareB) return null;
+    const sA = seasons.find(s => s.id === compareA);
+    const sB = seasons.find(s => s.id === compareB);
+    if (!sA || !sB) return null;
+
+    const maxElo = Math.max(sA.finalElo, sB.finalElo, sA.peakElo, sB.peakElo, 1200);
+    const maxMatches = Math.max(sA.matchesPlayed, sB.matchesPlayed, 10);
+    const wrA = sA.matchesPlayed > 0 ? Math.round((sA.wins / sA.matchesPlayed) * 100) : 0;
+    const wrB = sB.matchesPlayed > 0 ? Math.round((sB.wins / sB.matchesPlayed) * 100) : 0;
+
+    const normalize = (val: number, max: number) => Math.min(100, Math.round((val / max) * 100));
+
+    const radarData: DualRadarPoint[] = [
+      { label: 'ELO', valueA: normalize(sA.finalElo, maxElo), valueB: normalize(sB.finalElo, maxElo), rawA: String(sA.finalElo), rawB: String(sB.finalElo) },
+      { label: 'Peak', valueA: normalize(sA.peakElo, maxElo), valueB: normalize(sB.peakElo, maxElo), rawA: String(sA.peakElo), rawB: String(sB.peakElo) },
+      { label: isFr ? 'Matchs' : 'Matches', valueA: normalize(sA.matchesPlayed, maxMatches), valueB: normalize(sB.matchesPlayed, maxMatches), rawA: String(sA.matchesPlayed), rawB: String(sB.matchesPlayed) },
+      { label: isFr ? 'Victoires' : 'Win %', valueA: wrA, valueB: wrB, rawA: `${wrA}%`, rawB: `${wrB}%` },
+    ];
+
+    // Add role ELOs if available
+    const maxRoleElo = Math.max(
+      sA.eloTireur || 0, sB.eloTireur || 0,
+      sA.eloPointeur || 0, sB.eloPointeur || 0,
+      sA.eloMilieu || 0, sB.eloMilieu || 0,
+      1200
+    );
+    const hasRoles = (sA.eloTireur && sA.eloTireur !== 1000) || (sB.eloTireur && sB.eloTireur !== 1000)
+      || (sA.eloPointeur && sA.eloPointeur !== 1000) || (sB.eloPointeur && sB.eloPointeur !== 1000)
+      || (sA.eloMilieu && sA.eloMilieu !== 1000) || (sB.eloMilieu && sB.eloMilieu !== 1000);
+
+    if (hasRoles) {
+      radarData.push(
+        { label: isFr ? 'Tireur' : 'Shooter', valueA: normalize(sA.eloTireur || 1000, maxRoleElo), valueB: normalize(sB.eloTireur || 1000, maxRoleElo), rawA: String(sA.eloTireur || 1000), rawB: String(sB.eloTireur || 1000) },
+        { label: isFr ? 'Pointeur' : 'Pointer', valueA: normalize(sA.eloPointeur || 1000, maxRoleElo), valueB: normalize(sB.eloPointeur || 1000, maxRoleElo), rawA: String(sA.eloPointeur || 1000), rawB: String(sB.eloPointeur || 1000) },
+        { label: isFr ? 'Milieu' : 'Middle', valueA: normalize(sA.eloMilieu || 1000, maxRoleElo), valueB: normalize(sB.eloMilieu || 1000, maxRoleElo), rawA: String(sA.eloMilieu || 1000), rawB: String(sB.eloMilieu || 1000) },
+      );
+    }
+
+    // Compute deltas for progression indicators
+    const deltas = [
+      { label: 'ELO', delta: sB.finalElo - sA.finalElo, valA: sA.finalElo, valB: sB.finalElo, suffix: '' },
+      { label: 'Peak', delta: sB.peakElo - sA.peakElo, valA: sA.peakElo, valB: sB.peakElo, suffix: '' },
+      { label: isFr ? 'Matchs' : 'Matches', delta: sB.matchesPlayed - sA.matchesPlayed, valA: sA.matchesPlayed, valB: sB.matchesPlayed, suffix: '' },
+      { label: isFr ? 'Victoires' : 'Win %', delta: wrB - wrA, valA: wrA, valB: wrB, suffix: '%' },
+    ];
+
+    return { seasonA: sA, seasonB: sB, radarData, deltas };
+  }, [compareA, compareB, seasons, isFr]);
 
   const [chartWidth, setChartWidth] = useState(() => Math.max(1, (Dimensions.get('window').width || 375) - 64));
   useEffect(() => {
@@ -495,6 +663,202 @@ export default function EloAwardsScreen() {
           )}
         </View>
 
+        {/* ===== SEASON COMPARISON ===== */}
+        {seasons.length >= 2 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+            <Pressable
+              style={cmpSt.trigger}
+              onPress={() => setShowCompare(true)}
+            >
+              <LinearGradient colors={['#3B82F610', '#F59E0B10']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={cmpSt.triggerGradient}>
+                <View style={cmpSt.triggerLeft}>
+                  <View style={cmpSt.triggerIconBg}>
+                    <MaterialIcons name="compare-arrows" size={20} color="#3B82F6" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={cmpSt.triggerTitle}>{isFr ? 'Comparer les saisons' : 'Compare seasons'}</Text>
+                    <Text style={cmpSt.triggerDesc}>{isFr ? 'Radar chart, ELO, roles, progression' : 'Radar chart, ELO, roles, progression'}</Text>
+                  </View>
+                </View>
+                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+              </LinearGradient>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        {/* Season Comparison Modal */}
+        <Modal visible={showCompare} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowCompare(false)}>
+          <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: theme.backgroundSecondary }}>
+            <View style={cmpSt.modalHeader}>
+              <Text style={cmpSt.modalTitle}>{isFr ? 'Comparaison de saisons' : 'Season comparison'}</Text>
+              <Pressable style={cmpSt.modalClose} onPress={() => setShowCompare(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textPrimary} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
+              {/* Season selectors */}
+              <View style={cmpSt.selRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={cmpSt.selLabel}>{isFr ? 'Saison A' : 'Season A'}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {seasons.map(s => {
+                      const active = compareA === s.id;
+                      const tierA = getLeagueTier(s.finalElo);
+                      return (
+                        <Pressable key={s.id} style={[cmpSt.selChip, active && { backgroundColor: '#3B82F615', borderColor: '#3B82F660' }]} onPress={() => { if (s.id !== compareB) setCompareA(s.id); }}>
+                          <Text style={{ fontSize: 10 }}>{tierA.emblem}</Text>
+                          <Text style={[cmpSt.selChipText, active && { color: '#3B82F6', fontWeight: '800' }]}>{s.seasonYear}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+                <View style={cmpSt.selSwap}>
+                  <Pressable style={cmpSt.swapBtn} onPress={() => { const tmp = compareA; setCompareA(compareB); setCompareB(tmp); }}>
+                    <MaterialIcons name="swap-horiz" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[cmpSt.selLabel, { textAlign: 'right' }]}>{isFr ? 'Saison B' : 'Season B'}</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, justifyContent: 'flex-end' }}>
+                    {seasons.map(s => {
+                      const active = compareB === s.id;
+                      const tierB = getLeagueTier(s.finalElo);
+                      return (
+                        <Pressable key={s.id} style={[cmpSt.selChip, active && { backgroundColor: '#F59E0B15', borderColor: '#F59E0B60' }]} onPress={() => { if (s.id !== compareA) setCompareB(s.id); }}>
+                          <Text style={{ fontSize: 10 }}>{tierB.emblem}</Text>
+                          <Text style={[cmpSt.selChipText, active && { color: '#F59E0B', fontWeight: '800' }]}>{s.seasonYear}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              </View>
+
+              {/* Radar chart */}
+              {comparisonData ? (
+                <View style={cmpSt.radarCard}>
+                  <DualRadarChart
+                    data={comparisonData.radarData}
+                    size={Math.min(chartWidth, 280)}
+                    colorA="#3B82F6"
+                    colorB="#F59E0B"
+                    labelA={String(comparisonData.seasonA.seasonYear)}
+                    labelB={String(comparisonData.seasonB.seasonYear)}
+                  />
+                </View>
+              ) : (
+                <View style={cmpSt.radarCard}>
+                  <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: 'center' }}>{isFr ? 'Selectionnez 2 saisons differentes' : 'Select 2 different seasons'}</Text>
+                </View>
+              )}
+
+              {/* Detailed comparison table */}
+              {comparisonData ? (
+                <View style={cmpSt.tableCard}>
+                  <View style={cmpSt.tableHeaderRow}>
+                    <View style={{ flex: 2 }} />
+                    <View style={cmpSt.tableColHeader}>
+                      <LinearGradient colors={getLeagueTier(comparisonData.seasonA.finalElo).gradient} style={cmpSt.tableSeasonBadge}>
+                        <Text style={cmpSt.tableSeasonYear}>{comparisonData.seasonA.seasonYear}</Text>
+                      </LinearGradient>
+                    </View>
+                    <View style={cmpSt.tableColHeader}>
+                      <LinearGradient colors={getLeagueTier(comparisonData.seasonB.finalElo).gradient} style={cmpSt.tableSeasonBadge}>
+                        <Text style={cmpSt.tableSeasonYear}>{comparisonData.seasonB.seasonYear}</Text>
+                      </LinearGradient>
+                    </View>
+                    <View style={[cmpSt.tableColHeader, { flex: 1.2 }]}>
+                      <Text style={cmpSt.tableDeltaHeader}>+/-</Text>
+                    </View>
+                  </View>
+
+                  {comparisonData.radarData.map((rd, idx) => {
+                    const delta = parseFloat(rd.rawB) - parseFloat(rd.rawA);
+                    const isPercent = rd.rawA.includes('%');
+                    const deltaStr = isPercent
+                      ? `${delta >= 0 ? '+' : ''}${delta}%`
+                      : `${delta >= 0 ? '+' : ''}${delta}`;
+                    const deltaColor = delta > 0 ? '#22C55E' : delta < 0 ? '#EF4444' : theme.textMuted;
+                    return (
+                      <View key={idx} style={[cmpSt.tableRow, idx % 2 === 0 && { backgroundColor: theme.backgroundSecondary + '60' }]}>
+                        <View style={{ flex: 2 }}>
+                          <Text style={cmpSt.tableRowLabel}>{rd.label}</Text>
+                        </View>
+                        <View style={cmpSt.tableCell}>
+                          <Text style={[cmpSt.tableCellValue, { color: '#3B82F6' }]}>{rd.rawA}</Text>
+                        </View>
+                        <View style={cmpSt.tableCell}>
+                          <Text style={[cmpSt.tableCellValue, { color: '#F59E0B' }]}>{rd.rawB}</Text>
+                        </View>
+                        <View style={[cmpSt.tableCell, { flex: 1.2 }]}>
+                          <View style={[cmpSt.deltaBadge, { backgroundColor: deltaColor + '12' }]}>
+                            <MaterialIcons name={delta > 0 ? 'arrow-upward' : delta < 0 ? 'arrow-downward' : 'remove'} size={10} color={deltaColor} />
+                            <Text style={[cmpSt.deltaText, { color: deltaColor }]}>{deltaStr}</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+
+                  {/* League tier comparison row */}
+                  <View style={cmpSt.tierCompareRow}>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      {(() => { const tA = getLeagueTier(comparisonData.seasonA.finalElo); return (
+                        <View style={{ alignItems: 'center', gap: 4 }}>
+                          <Text style={{ fontSize: 24 }}>{tA.emblem}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: tA.color }}>{isFr ? tA.name.fr : tA.name.en}</Text>
+                        </View>
+                      ); })()}
+                    </View>
+                    <View style={{ alignItems: 'center', paddingHorizontal: 12 }}>
+                      <MaterialIcons name="arrow-forward" size={18} color={theme.textMuted} />
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center' }}>
+                      {(() => { const tB = getLeagueTier(comparisonData.seasonB.finalElo); return (
+                        <View style={{ alignItems: 'center', gap: 4 }}>
+                          <Text style={{ fontSize: 24 }}>{tB.emblem}</Text>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: tB.color }}>{isFr ? tB.name.fr : tB.name.en}</Text>
+                        </View>
+                      ); })()}
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Progression indicators summary */}
+              {comparisonData ? (
+                <View style={cmpSt.progressionCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                    <MaterialIcons name="trending-up" size={16} color="#22C55E" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>{isFr ? 'Indicateurs de progression' : 'Progression indicators'}</Text>
+                  </View>
+                  <View style={cmpSt.progressionGrid}>
+                    {comparisonData.deltas.map((d, i) => {
+                      const isPos = d.delta > 0;
+                      const isNeg = d.delta < 0;
+                      const color = isPos ? '#22C55E' : isNeg ? '#EF4444' : theme.textMuted;
+                      const pct = d.valA > 0 ? Math.round(Math.abs(d.delta) / d.valA * 100) : 0;
+                      return (
+                        <View key={i} style={cmpSt.progressionItem}>
+                          <Text style={cmpSt.progressionLabel}>{d.label}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialIcons name={isPos ? 'arrow-upward' : isNeg ? 'arrow-downward' : 'remove'} size={14} color={color} />
+                            <Text style={[cmpSt.progressionValue, { color }]}>{isPos ? '+' : ''}{d.delta}{d.suffix}</Text>
+                          </View>
+                          {pct > 0 ? (
+                            <Text style={[cmpSt.progressionPct, { color: color + '90' }]}>{isPos ? '+' : '-'}{pct}%</Text>
+                          ) : null}
+                        </View>
+                      );
+                    })}
+                  </View>
+                </View>
+              ) : null}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
+
         {/* Season History */}
         {seasons.length > 0 ? (
           <View>
@@ -631,4 +995,43 @@ const st = StyleSheet.create({
   seasonStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600' },
   seasonRoles: { flexDirection: 'row', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
   roleBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+});
+
+// Comparison styles
+const cmpSt = StyleSheet.create({
+  trigger: { marginBottom: 16, borderRadius: 16, overflow: 'hidden' as const, ...theme.shadows.card },
+  triggerGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, padding: 16, borderRadius: 16, backgroundColor: theme.surface },
+  triggerLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flex: 1 },
+  triggerIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#3B82F612', alignItems: 'center' as const, justifyContent: 'center' as const },
+  triggerTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  triggerDesc: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  modalHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 14, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalTitle: { fontSize: 18, fontWeight: '800' as const, color: theme.textPrimary },
+  modalClose: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  selRow: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, marginBottom: 16 },
+  selLabel: { fontSize: 11, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 8 },
+  selChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  selChipText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  selSwap: { paddingTop: 24, alignItems: 'center' as const },
+  swapBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.surface, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: theme.border },
+  radarCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 16, alignItems: 'center' as const, ...theme.shadows.card },
+  tableCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 14, marginBottom: 16, ...theme.shadows.card },
+  tableHeaderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '40' },
+  tableColHeader: { flex: 1, alignItems: 'center' as const },
+  tableSeasonBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10 },
+  tableSeasonYear: { fontSize: 13, fontWeight: '900' as const, color: '#FFF' },
+  tableDeltaHeader: { fontSize: 11, fontWeight: '700' as const, color: theme.textMuted },
+  tableRow: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingVertical: 10, paddingHorizontal: 6, borderRadius: 10 },
+  tableRowLabel: { fontSize: 12, fontWeight: '600' as const, color: theme.textPrimary },
+  tableCell: { flex: 1, alignItems: 'center' as const },
+  tableCellValue: { fontSize: 14, fontWeight: '800' as const },
+  deltaBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  deltaText: { fontSize: 11, fontWeight: '800' as const },
+  tierCompareRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, paddingTop: 14, marginTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '30' },
+  progressionCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, ...theme.shadows.card },
+  progressionGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
+  progressionItem: { width: '47%' as any, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, alignItems: 'center' as const, gap: 4 },
+  progressionLabel: { fontSize: 10, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  progressionValue: { fontSize: 20, fontWeight: '900' as const },
+  progressionPct: { fontSize: 10, fontWeight: '600' as const },
 });
