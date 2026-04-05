@@ -236,33 +236,39 @@ export default function HomeScreen() {
     } catch { /* silent */ }
   }, [user?.id]);
 
-  // === INITIAL LOAD ===
+  // === INITIAL LOAD — Phased: critical first, deferred second ===
   useEffect(() => {
-    const loadAll = async () => {
+    const loadCritical = async () => {
+      // Phase 1: Load only what's needed for above-the-fold content
       await Promise.all([
         loadWeeklyRank(),
-        loadAmbassadors(),
-        loadMeetups(),
-        loadUpcomingEvents(),
         loadWitnessRequests(),
       ]);
       setInitialLoading(false);
+
+      // Phase 2: Defer non-critical data (below-fold) by 1.5s
+      setTimeout(async () => {
+        await Promise.all([
+          loadAmbassadors(),
+          loadMeetups(),
+          loadUpcomingEvents(),
+        ]);
+      }, 1500);
     };
-    loadAll();
+    loadCritical();
   }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests]);
 
-  // Polling
+  // Polling — unified into single interval to reduce timer overhead
   useEffect(() => {
-    const interval = setInterval(loadWitnessRequests, 30000);
+    const pollAll = () => {
+      loadWitnessRequests();
+      getPendingInvitationsCount().then(setPendingInviteCount);
+    };
+    // Initial load of pending invites
+    getPendingInvitationsCount().then(setPendingInviteCount);
+    const interval = setInterval(pollAll, 30000);
     return () => clearInterval(interval);
   }, [loadWitnessRequests]);
-
-  useEffect(() => {
-    const loadPending = () => { getPendingInvitationsCount().then(setPendingInviteCount); };
-    loadPending();
-    const interval = setInterval(loadPending, 30000);
-    return () => clearInterval(interval);
-  }, []);
 
   useEffect(() => { preloadInterstitial(); }, []);
 

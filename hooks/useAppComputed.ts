@@ -123,13 +123,22 @@ export function computeChallengeStats(challenges: Challenge[]): ChallengeStats {
   };
 }
 
+// Cache: avoids recomputing if arrays have the same length + same last item
+let _pwsCache: { pLen: number; mLen: number; mLastId: string; result: Player[] } | null = null;
+
 export function computePlayersWithStats(players: Player[], matches: Match[]): Player[] {
   if (matches.length === 0) return players;
-  return players.map(player => {
+  const mLastId = matches.length > 0 ? matches[0].id : '';
+  if (_pwsCache && _pwsCache.pLen === players.length && _pwsCache.mLen === matches.length && _pwsCache.mLastId === mLastId) {
+    return _pwsCache.result;
+  }
+  const result = players.map(player => {
     const newStats = calculatePlayerStatsFromMatches(matches, player.id, player.stats);
     if (newStats === player.stats) return player;
     return { ...player, stats: newStats };
   });
+  _pwsCache = { pLen: players.length, mLen: matches.length, mLastId, result };
+  return result;
 }
 
 export function computeSelfPlayer(playersWithStats: Player[], userId: string | undefined): Player | null {
@@ -137,9 +146,21 @@ export function computeSelfPlayer(playersWithStats: Player[], userId: string | u
   return playersWithStats.find(p => p.id === userId) || null;
 }
 
+let _cwmCache: { cLen: number; pLen: number; result: Club[] } | null = null;
+
 export function computeClubsWithMemberCount(clubs: Club[], players: Player[]): Club[] {
-  return clubs.map(club => {
-    const memberCount = players.filter(p => p.clubId === club.id).length;
+  if (_cwmCache && _cwmCache.cLen === clubs.length && _cwmCache.pLen === players.length) {
+    return _cwmCache.result;
+  }
+  // Build a map to avoid O(clubs × players) filter calls
+  const clubCounts = new Map<string, number>();
+  players.forEach(p => {
+    if (p.clubId) clubCounts.set(p.clubId, (clubCounts.get(p.clubId) || 0) + 1);
+  });
+  const result = clubs.map(club => {
+    const memberCount = clubCounts.get(club.id) || 0;
     return { ...club, membersCount: Math.max(memberCount, club.membersCount || 0) };
   });
+  _cwmCache = { cLen: clubs.length, pLen: players.length, result };
+  return result;
 }

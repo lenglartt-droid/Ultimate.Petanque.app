@@ -186,9 +186,9 @@ export default function ShareCardPalmares({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 18;
-  const maxSeasons = isStory ? 5 : 3;
-  const maxTournamentsPerSeason = isStory ? 4 : 3;
+  const pad = isStory ? 24 : 14;
+  const maxSeasons = isStory ? 5 : 2;
+  const maxTournamentsPerSeason = isStory ? 4 : 2;
 
   return (
     <View style={s.card}>
@@ -306,7 +306,7 @@ export default function ShareCardPalmares({
             ) : null}
           </View>
         </View>
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
       </LinearGradient>
     </View>
   );

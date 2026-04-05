@@ -252,11 +252,11 @@ export default function PlayerDetailScreen() {
 
   const { refreshData } = useApp();
 
-  const [belowFoldReady, setBelowFoldReady] = React.useState(false);
-  React.useEffect(() => {
-    const timer = setTimeout(() => setBelowFoldReady(true), 250);
-    return () => clearTimeout(timer);
-  }, []);
+  // Use InteractionManager-based deferred render instead of arbitrary timeout
+  const belowFoldReady = (() => {
+    const { useDeferredRender } = require('@/hooks/useDeferredRender');
+    return useDeferredRender(0);
+  })();
 
   const handleRefresh = React.useCallback(async () => {
     setRefreshing(true);
