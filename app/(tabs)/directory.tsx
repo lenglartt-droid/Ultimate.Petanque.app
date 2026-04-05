@@ -34,6 +34,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { useScrollPrefetch } from '@/hooks/useFlatListOptimizers';
 import { getEloRank, getEloColor, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
+import { computeQuickTrustScore, getTrustScoreColor, getLevelFromScore } from '@/services/trustScoreService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
 import { useAuth, useAlert } from '@/template';
@@ -1723,6 +1724,19 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
           <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><Text style={[styles.tagText, { color: theme.primary }]}>{t('roles', item.role)}</Text></View>
           {item.experience ? <View style={[styles.tag, { backgroundColor: '#9333EA' + '15' }]}><Text style={[styles.tagText, { color: '#9333EA' }]}>{t('player', item.experience === 'less_than_1' ? 'experienceLessThan1' : item.experience === '1_to_3' ? 'experience1to3' : item.experience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')}</Text></View> : null}
           <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{item.stats.winRate}%</Text></View>
+          {(() => {
+            const ts = computeQuickTrustScore({ stats: item.stats, createdAt: item.createdAt });
+            if (ts.score < 45) {
+              const tsColor = getTrustScoreColor(ts.level);
+              return (
+                <View style={[styles.tag, { backgroundColor: tsColor + '12', borderWidth: 1, borderColor: tsColor + '25' }]}>
+                  <MaterialIcons name="shield" size={9} color={tsColor} />
+                  <Text style={[styles.tagText, { color: tsColor }]}>{ts.score}</Text>
+                </View>
+              );
+            }
+            return null;
+          })()}
         </View>
         {(item.location?.latitude || item.location?.longitude) ? (
           <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name } } as any); }} hitSlop={4}>
@@ -1839,6 +1853,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.lighting ? <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="lightbulb" size={10} color={theme.warning} /></View> : null}
           {item.covered ? <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="roofing" size={10} color={theme.primary} /></View> : null}
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
+          {(item as any).parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
         </View>
       </View>
       {item.location?.latitude && item.location?.longitude ? <MapLinkButton lat={item.location.latitude} lng={item.location.longitude} name={item.name} /> : null}

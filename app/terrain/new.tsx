@@ -95,6 +95,7 @@ export default function NewTerrainScreen() {
   const [publicAccess, setPublicAccess] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
+  const [parking, setParking] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [photos, setPhotos] = useState<string[]>([]);
   const [location, setLocation] = useState<LocationData>({ address: '', city: '', country: 'France', latitude: 0, longitude: 0 });
@@ -164,7 +165,7 @@ export default function NewTerrainScreen() {
       await addTerrain({
         name: name.trim(), address: location.address.trim(), city: location.city.trim(),
         location: { latitude: location.latitude, longitude: location.longitude },
-        type, description: description.trim() || undefined, facilities: [],
+        type, description: description.trim() || undefined, facilities: [], parking,
         clubId, clubName: sc?.name, isPublic: false, publicAccess,
         courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,
       });
@@ -349,6 +350,17 @@ export default function NewTerrainScreen() {
                   </View>
                 </View>
                 <Switch value={covered} onValueChange={setCovered} trackColor={{ false: theme.border, true: theme.accent + '50' }} thumbColor={covered ? theme.accent : theme.textMuted} />
+              </View>
+              <View style={styles.featureDivider} />
+              <View style={styles.featureRow}>
+                <View style={styles.featureInfo}>
+                  <MaterialIcons name="local-parking" size={22} color="#6366F1" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.featureTitle}>{t('terrain', 'parking')}</Text>
+                    <Text style={styles.featureDesc}>{t('terrain', 'parkingDesc')}</Text>
+                  </View>
+                </View>
+                <Switch value={parking} onValueChange={setParking} trackColor={{ false: theme.border, true: '#6366F1' + '50' }} thumbColor={parking ? '#6366F1' : theme.textMuted} />
               </View>
             </View>
           </SectionCard>

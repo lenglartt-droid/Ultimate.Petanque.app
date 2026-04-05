@@ -12,6 +12,7 @@ export interface GeoEntry {
   avgElo: number;
   totalMatches: number;
   avgWinRate: number;
+  avgTrustScore: number;
   topPlayer?: { name: string; elo: number };
   flag?: string;
 }
@@ -23,6 +24,7 @@ interface PlayerRow {
   elo_rating: number;
   stats: any;
   is_public: boolean;
+  id: string;
 }
 
 export interface PlayerGeoRank {
@@ -124,8 +126,23 @@ export async function fetchGeoLeaderboard(): Promise<{
     // Fetch all public players with stats
     const { data: players, error } = await supabase
       .from('players')
-      .select('name, city, country, elo_rating, stats, is_public')
+      .select('id, name, city, country, elo_rating, stats, is_public')
       .eq('is_public', true);
+
+    // Fetch trust scores for all public players
+    const playerIds = (players || []).map((p: any) => p.id);
+    let trustMap = new Map<string, number>();
+    if (playerIds.length > 0) {
+      try {
+        const { data: trustData } = await supabase
+          .from('suspicious_players')
+          .select('player_id, trust_score')
+          .in('player_id', playerIds);
+        if (trustData) {
+          trustData.forEach((t: any) => trustMap.set(t.player_id, t.trust_score));
+        }
+      } catch { /* silent */ }
+    }
 
     if (error) throw error;
 
@@ -170,6 +187,9 @@ export async function fetchGeoLeaderboard(): Promise<{
         const avgWinRate = Math.round((totalWinRate / group.length) * 10) / 10;
         const topPlayer = group.reduce((best, p) =>
           (p.elo_rating || 1000) > (best.elo_rating || 1000) ? p : best, group[0]);
+        // Compute average trust score (default 50 if no score found)
+        const totalTrust = group.reduce((sum, p) => sum + (trustMap.get(p.id) ?? 50), 0);
+        const avgTrustScore = Math.round(totalTrust / group.length);
 
         entries.push({
           key,
@@ -178,6 +198,7 @@ export async function fetchGeoLeaderboard(): Promise<{
           avgElo,
           totalMatches,
           avgWinRate,
+          avgTrustScore,
           topPlayer: { name: topPlayer.name, elo: topPlayer.elo_rating || 1000 },
           flag: getFlag ? getFlag(key) : undefined,
         });
@@ -196,6 +217,10 @@ export async function fetchGeoLeaderboard(): Promise<{
       const topPlayer = group.reduce((best, p) =>
         (p.elo_rating || 1000) > (best.elo_rating || 1000) ? p : best, group[0]);
 
+      // Compute average trust score for city
+      const totalTrust = group.reduce((sum, p) => sum + (trustMap.get(p.id) ?? 50), 0);
+      const avgTrustScore = Math.round(totalTrust / group.length);
+
       cityEntries.push({
         key: city,
         label: city,
@@ -203,6 +228,7 @@ export async function fetchGeoLeaderboard(): Promise<{
         avgElo,
         totalMatches,
         avgWinRate,
+        avgTrustScore,
         topPlayer: { name: topPlayer.name, elo: topPlayer.elo_rating || 1000 },
         flag: undefined,
       });
