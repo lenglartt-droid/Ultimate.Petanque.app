@@ -225,9 +225,9 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 18;
-  const scoreBadgeSize = isStory ? 100 : 80;
-  const scoreFontSize = isStory ? 42 : 34;
+  const pad = isStory ? 24 : 14;
+  const scoreBadgeSize = isStory ? 100 : 68;
+  const scoreFontSize = isStory ? 42 : 30;
 
   return (
     <View style={s.card}>
@@ -352,7 +352,7 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
             ) : null}
           </View>
         </View>
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
       </LinearGradient>
     </View>
   );

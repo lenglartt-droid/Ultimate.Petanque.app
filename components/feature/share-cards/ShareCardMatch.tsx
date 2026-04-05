@@ -335,7 +335,7 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
   // === SQUARE (default) ===
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 18, justifyContent: 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
@@ -439,7 +439,7 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
             ) : null}
           </View>
         </View>
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size="xs" />
       </LinearGradient>
     </View>
   );
