@@ -302,7 +302,7 @@ export const TEST_DATA_FLOW = {
     {
       step: 6,
       source: 'UI Components',
-      action: 'Access selfPlayer via useApp()',
+      action: 'Access selfPlayer via useAppData()',
       result: 'Display selfPlayer data correctly',
     },
   ],

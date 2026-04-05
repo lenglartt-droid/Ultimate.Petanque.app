@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import MergeComparisonModal, { MergeField } from './MergeComparisonModal';
@@ -92,7 +92,8 @@ function buildTournamentFields(current: Tournament, other: Tournament, t: (s: st
 export default function MergePickerModal({ visible, onClose, itemType, currentItemId, deleteSourceAfterMerge = true }: MergePickerModalProps) {
   const { t } = useLanguage();
   const { showAlert } = useAlert();
-  const { players, clubs, terrains, tournaments, matches, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useApp();
+  const { players, clubs, terrains, tournaments, matches } = useAppData();
+  const { updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useAppActions();
 
   const [search, setSearch] = useState('');
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);

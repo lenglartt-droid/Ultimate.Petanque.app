@@ -18,7 +18,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import SharedBadge from '@/components/ui/SharedBadge';
@@ -41,11 +41,8 @@ import { getSupabaseClient } from '@/template';
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const {
-    matches, terrains, boulesSets, tournaments,
-    isSharedItem, getSharedPermission, refreshData,
-    loading: appLoading,
-  } = useApp();
+  const { matches, terrains, boulesSets, tournaments, loading: appLoading } = useAppData();
+  const { isSharedItem, getSharedPermission, refreshData } = useAppActions();
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const fr = language === 'fr';

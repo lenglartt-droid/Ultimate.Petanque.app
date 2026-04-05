@@ -9,7 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort } from '@/services/leaderboardService';
 import { getEloRank, getEloColor } from '@/services/eloService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
@@ -29,7 +29,7 @@ const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
 export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersToggled?: (open: boolean) => void }) {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
 
   const [activeTab, setActiveTab] = useState<WidgetTab>('players');
 

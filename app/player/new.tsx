@@ -23,7 +23,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { COMMON_COUNTRIES, getCountryFlag } from '@/constants/geoData';
@@ -79,7 +79,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 
 export default function NewPlayerScreen() {
   const insets = useSafeAreaInsets();
-  const { addPlayer, clubs, terrains } = useApp();
+  const { clubs, terrains } = useAppData();
+  const { addPlayer } = useAppActions();
   const { t, language } = useLanguage();
   const [name, setName] = useState('');
   const [nickname, setNickname] = useState('');

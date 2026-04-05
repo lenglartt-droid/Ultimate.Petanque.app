@@ -19,7 +19,7 @@ import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
 import RadarChart from '@/components/ui/RadarChart';
 import AdBanner from '@/components/ui/AdBanner';
@@ -30,7 +30,7 @@ export default function BoulesRankingScreen() {
   const { id, brand: brandParam, model: modelParam, mode: modeParam } = useLocalSearchParams<{ id: string; brand: string; model?: string; mode?: string }>();
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
 
   const brandName = brandParam ? decodeURIComponent(brandParam) : '';
   const modelName = modelParam ? decodeURIComponent(modelParam) : undefined;

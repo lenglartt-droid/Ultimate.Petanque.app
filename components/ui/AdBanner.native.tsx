@@ -9,7 +9,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { AD_UNIT_IDS } from '@/services/adService';
-import { useApp } from '@/contexts/AppContext';
+import { useAppUI } from '@/contexts/AppContext';
 import { canShowPersonalizedAds } from '@/services/trackingService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -147,7 +147,7 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
   const [goldLoaded, setGoldLoaded] = useState(false);
   let isPremium = false;
-  try { isPremium = useApp().isPremium; } catch { /* outside provider */ }
+  try { isPremium = useAppUI().isPremium; } catch { /* outside provider */ }
 
   useEffect(() => {
     // Load gold sponsor first, then ads module as fallback

@@ -22,7 +22,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { uploadImageToStorage } from '@/services/storageService';
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -89,7 +89,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 
 export default function NewClubScreen() {
   const insets = useSafeAreaInsets();
-  const { addClub, terrains } = useApp();
+  const { terrains } = useAppData();
+  const { addClub } = useAppActions();
   const { t, language } = useLanguage();
   const { showAlert } = useAlert();
 

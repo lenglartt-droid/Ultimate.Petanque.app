@@ -23,7 +23,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import RadarChart from '@/components/ui/RadarChart';
 import { getRoleColor, getRoleIcon, generateRoleExportData } from '@/services/roleAnalysisService';
@@ -47,7 +47,7 @@ interface RoleAggregation {
 
 export default function RolePerformanceScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, selfPlayer } = useApp();
+  const { matches, selfPlayer } = useAppData();
   const { t, language } = useLanguage();
   const fr = language === 'fr';
 

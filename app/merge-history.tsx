@@ -17,7 +17,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions } from '@/contexts/AppContext';
 import { getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog } from '@/services/mergeHistoryService';
 
 type FilterType = 'all' | 'player' | 'club' | 'terrain' | 'tournament';
@@ -32,7 +32,7 @@ const TYPE_CONFIG: Record<string, { icon: string; color: string }> = {
 export default function MergeHistoryScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
-  const { refreshData } = useApp();
+  const { refreshData } = useAppActions();
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
