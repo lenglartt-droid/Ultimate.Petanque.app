@@ -20,7 +20,7 @@ import { redeemShareCode, ShareItemType } from '@/services/shareService';
 import { findMeetupByCode } from '@/services/meetupService';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions } from '@/contexts/AppContext';
 import { useToast } from '@/components/ui/Toast';
 
 const ROUTE_MAP: Record<ShareItemType, string> = {
@@ -68,7 +68,7 @@ interface AutoSavedItem {
 export default function RedeemShareScreen() {
   const { showAlert } = useAlert();
   const { t } = useLanguage();
-  const { refreshData } = useApp();
+  const { refreshData } = useAppActions();
   const { showToast } = useToast();
   const params = useLocalSearchParams<{ deepLinkCode?: string; deepLinkType?: string }>();
   const [code, setCode] = useState('');

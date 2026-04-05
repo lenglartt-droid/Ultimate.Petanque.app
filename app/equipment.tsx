@@ -22,7 +22,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as ImagePicker from 'expo-image-picker';
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { BoulesSet } from '@/types/petanque';
@@ -132,7 +132,8 @@ function RadarChart({ setA, setB, labels, size, colorA, colorB }: {
 
 export default function EquipmentScreen() {
   const insets = useSafeAreaInsets();
-  const { boulesSets, addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet, matches, challenges } = useApp();
+  const { boulesSets, matches, challenges } = useAppData();
+  const { addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet } = useAppActions();
   const { t, language } = useLanguage();
   const { user } = useAuth();
 

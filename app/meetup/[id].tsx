@@ -19,7 +19,7 @@ import * as Haptics from '@/services/haptics';
 import * as Clipboard from 'expo-clipboard';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -72,7 +72,7 @@ export default function MeetupDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string; code?: string }>();
   const params = useLocalSearchParams<{ id: string; code?: string }>();
   const insets = useSafeAreaInsets();
-  const { terrains } = useApp();
+  const { terrains } = useAppData();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();

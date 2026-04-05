@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import {
@@ -44,7 +44,7 @@ type WizardStep = 'preset' | 'config' | 'preview';
 
 export default function ExportScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, tournaments, players, userStats } = useApp();
+  const { matches, challenges, tournaments, players, userStats } = useAppData();
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();

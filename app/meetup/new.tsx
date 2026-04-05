@@ -18,7 +18,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from '@/services/haptics';
 import * as Clipboard from 'expo-clipboard';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import { createMeetup, scheduleMeetupReminder, getInvitableUsers, inviteUsersToMeetup, InvitableUser } from '@/services/meetupService';
@@ -26,7 +26,7 @@ import { useAuth } from '@/template';
 
 export default function NewMeetupScreen() {
   const insets = useSafeAreaInsets();
-  const { terrains } = useApp();
+  const { terrains } = useAppData();
   const { t, language } = useLanguage();
   const { showAlert } = useAlert();
   const params = useLocalSearchParams<{ terrainId?: string }>();
