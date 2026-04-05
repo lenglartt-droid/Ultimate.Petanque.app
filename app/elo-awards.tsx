@@ -814,13 +814,22 @@ export default function EloAwardsScreen() {
 
         {/* Share League Rank CTA */}
         <Animated.View entering={FadeInDown.duration(400).delay(85)}>
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 16 }}>
           <Pressable
-            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: currentLeague.color + '12', borderRadius: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: currentLeague.color + '25' }}
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: currentLeague.color + '12', borderRadius: 14, paddingVertical: 12, borderWidth: 1, borderColor: currentLeague.color + '25' }}
             onPress={() => router.push({ pathname: '/share-card', params: { type: 'league' } } as any)}
           >
-            <MaterialIcons name="share" size={16} color={currentLeague.color} />
-            <Text style={{ fontSize: 13, fontWeight: '700', color: currentLeague.color }}>{t('leaderboard', 'eloShareLeague')}</Text>
+            <MaterialIcons name="share" size={14} color={currentLeague.color} />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: currentLeague.color }}>{t('leaderboard', 'eloShareLeague')}</Text>
           </Pressable>
+          <Pressable
+            style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F59E0B12', borderRadius: 14, paddingVertical: 12, borderWidth: 1, borderColor: '#F59E0B25' }}
+            onPress={() => router.push({ pathname: '/share-card', params: { type: 'milestone' } } as any)}
+          >
+            <MaterialIcons name="emoji-events" size={14} color="#F59E0B" />
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{t('leaderboard', 'milestoneCardTitle')}</Text>
+          </Pressable>
+        </View>
         </Animated.View>
 
         {/* Placement Badge */}

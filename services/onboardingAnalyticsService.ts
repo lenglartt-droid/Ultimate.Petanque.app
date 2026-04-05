@@ -7,17 +7,22 @@
 
 import { getSupabaseClient } from '@/template';
 
+// Step order:
+// 0: Splash, 1: Language, 2: Promise, 3: Sponsor,
+// 4: Leagues, 5: TrustScore, 6: Features, 7: Map,
+// 8: Login CTA, 9: Profile, 10: Referral
 const STEP_NAMES: Record<number, string> = {
   0: 'splash',
   1: 'language',
   2: 'promise',
   3: 'sponsor',
-  4: 'features',
-  5: 'leagues',
-  6: 'map',
-  7: 'login_cta',
-  8: 'profile',
-  9: 'referral',
+  4: 'leagues',
+  5: 'trustscore',
+  6: 'features',
+  7: 'map',
+  8: 'login_cta',
+  9: 'profile',
+  10: 'referral',
 };
 
 /**
@@ -101,14 +106,14 @@ export async function getOnboardingStepAnalytics(): Promise<OnboardingAnalytics>
 
     const stepLabels: Record<number, string> = {
       0: 'Splash', 1: 'Language', 2: 'Promise', 3: 'Sponsor',
-      4: 'Features', 5: 'Leagues', 6: 'Map Discovery', 7: 'Login CTA', 8: 'Profile', 9: 'Referral',
+      4: 'ELO Leagues', 5: 'TrustScore & Anti-cheat', 6: 'Features', 7: 'Map Discovery', 8: 'Login CTA', 9: 'Express Profile', 10: 'Referral',
     };
 
     const steps: StepAnalytics[] = [];
     let worstDropoff = 0;
     let worstDropoffName: string | null = null;
 
-    for (let i = 0; i <= 9; i++) {
+    for (let i = 0; i <= 10; i++) {
       let entered = 0;
       let completed = 0;
       let skipped = 0;
