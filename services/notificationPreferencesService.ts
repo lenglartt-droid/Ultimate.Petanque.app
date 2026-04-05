@@ -12,6 +12,11 @@ export interface NotificationPreferences {
   ranking_changed: boolean;
   share_request: boolean;
   event_reminder: boolean;
+  weekly_digest: boolean;
+  league_promotion: boolean;
+  inactivity_warning: boolean;
+  witness_request: boolean;
+  badge_unlock: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -20,6 +25,11 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   ranking_changed: true,
   share_request: true,
   event_reminder: true,
+  weekly_digest: true,
+  league_promotion: true,
+  inactivity_warning: true,
+  witness_request: true,
+  badge_unlock: true,
 };
 
 /**
