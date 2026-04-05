@@ -1,3 +1,4 @@
+
 import React from 'react';
 import {
   View,
@@ -42,6 +43,8 @@ import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest } from '@/services/clubClaimService';
 import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
+import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
+import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
 
 
 export default function ClubDetailScreen() {
@@ -101,6 +104,18 @@ export default function ClubDetailScreen() {
   const [newCoAdminPerm, setNewCoAdminPerm] = React.useState<CoAdminPermission>('edit');
   const [updatingPermId, setUpdatingPermId] = React.useState<string | null>(null);
 
+  // Club member invitations state
+  const [showInviteModal, setShowInviteModal] = React.useState(false);
+  const [clubInvitations, setClubInvitations] = React.useState<ClubInvitation[]>([]);
+  const [invitingPlayerId, setInvitingPlayerId] = React.useState<string | null>(null);
+  const [inviteSearch, setInviteSearch] = React.useState('');
+  const [inviteFilteredPlayers, setInviteFilteredPlayers] = React.useState<typeof players>([]);
+
+  // Club member roles state
+  const [memberRoles, setMemberRoles] = React.useState<ClubMemberRoleEntry[]>([]);
+  const [showRoleModal, setShowRoleModal] = React.useState<{ playerId: string; playerName: string; currentRole?: ClubMemberRole } | null>(null);
+  const [assigningRole, setAssigningRole] = React.useState(false);
+
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
@@ -115,7 +130,7 @@ export default function ClubDetailScreen() {
   const [clubCardType, setClubCardType] = React.useState<'image' | 'pdf'>('image');
   const [uploadingCard, setUploadingCard] = React.useState(false);
   const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
-  const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375);
+  // const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375); // This variable `screenWidth2` is unused.
 
   // Geo ranking state for club
   const [clubGeoRank, setClubGeoRank] = React.useState<{ city?: { rank: number; total: number }; country?: { rank: number; total: number }; continent?: { rank: number; total: number }; world?: { rank: number; total: number } } | null>(null);
@@ -142,6 +157,64 @@ export default function ClubDetailScreen() {
       setClubGeoRank(Object.keys(result).length > 0 ? result : null);
     }).catch(() => {});
   }, [club?.id, club?.isPublic, club?.city, club?.country]);
+
+  // Load club member roles
+  React.useEffect(() => {
+    if (!id) return;
+    fetchClubMemberRoles(id).then(({ roles }) => setMemberRoles(roles));
+  }, [id]);
+
+  // Load club invitations for owner or co-admin
+  React.useEffect(() => {
+    if (!id || !user?.id) return;
+    const isOwner = club?.userId === user.id;
+    const isCo = (club as any)?.adminUserIds?.includes?.(user.id);
+    if (!isOwner && !isCo) return;
+    getClubInvitations(id).then(invs => setClubInvitations(invs.filter(i => i.status === 'pending')));
+  }, [id, user?.id, club?.userId]);
+
+  // Filter players for invite modal search
+  React.useEffect(() => {
+    if (!showInviteModal) return;
+    const q = inviteSearch.trim().toLowerCase();
+    const memberIds = new Set(clubPlayers.map(p => p.id));
+    const pendingInviteIds = new Set(clubInvitations.map(i => i.invitedPlayerId));
+    const filtered = players
+      .filter(p => !memberIds.has(p.id)) // exclude existing members
+      .filter(p => !q || p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q))
+      .slice(0, 20)
+      .map(p => ({ ...p, _isInvited: pendingInviteIds.has(p.id) }));
+    setInviteFilteredPlayers(filtered as any);
+  }, [inviteSearch, showInviteModal, players, clubPlayers, clubInvitations]);
+
+  const handleInvitePlayer = React.useCallback(async (player: any) => {
+    if (!club || !user || invitingPlayerId) return;
+    setInvitingPlayerId(player.id);
+    const alreadyInvited = await hasBeenInvited(club.id, player.id);
+    if (alreadyInvited) {
+      showAlert(language === 'fr' ? 'Deja invite' : 'Already invited', language === 'fr' ? 'Ce joueur a deja une invitation en attente.' : 'This player already has a pending invitation.');
+      setInvitingPlayerId(null);
+      return;
+    }
+    const { invitation, error: err } = await sendClubInvitation({
+      clubId: club.id,
+      clubName: club.name,
+      clubLogo: club.logo,
+      playerId: player.id,
+      playerName: player.name,
+      playerUserId: player.userId,
+      inviterUserId: user.id,
+      inviterName: user.username || user.email,
+    });
+    setInvitingPlayerId(null);
+    if (err) {
+      showAlert(t('common', 'error'), err);
+    } else {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(language === 'fr' ? 'Invitation envoyee' : 'Invitation sent', `${player.name} ${language === 'fr' ? 'a ete invite a rejoindre' : 'has been invited to join'} ${club.name}`);
+      if (invitation) setClubInvitations(prev => [invitation, ...prev]);
+    }
+  }, [club, user, invitingPlayerId, showAlert, language, t]);
 
   const isFavorite = id ? isFavoriteClub(id) : false;
 
@@ -443,32 +516,41 @@ export default function ClubDetailScreen() {
           <Pressable style={styles.shareButton} onPress={handleOpenSharePreview}>
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
-          {canEdit && (
-            <Pressable style={styles.editButton} onPress={() => setShowMergePicker(true)}>
-              <MaterialIcons name="compare-arrows" size={22} color={theme.accent} />
-            </Pressable>
-          )}
-          <Pressable 
-            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]} 
+          <Pressable
+            style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
             onPress={handleToggleFavorite}
           >
-            <MaterialIcons 
-              name={isFavorite ? 'favorite' : 'favorite-border'} 
-              size={22} 
-              color={isFavorite ? theme.error : theme.textSecondary} 
+            <MaterialIcons
+              name={isFavorite ? 'favorite' : 'favorite-border'}
+              size={22}
+              color={isFavorite ? theme.error : theme.textSecondary}
             />
           </Pressable>
           {canEdit && (
-            <Pressable 
-              style={styles.editButton} 
+            <Pressable
+              style={styles.editButton}
               onPress={() => router.push(`/club/edit/${id}`)}
             >
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
-          {canEdit && !isSharedItem && (
-            <Pressable style={styles.deleteButton} onPress={handleDelete}>
-              <MaterialIcons name="delete" size={22} color={theme.error} />
+          {canEdit && (
+            <Pressable
+              style={styles.editButton}
+              onPress={() => {
+                Haptics.selectionAsync();
+                Alert.alert(
+                  language === 'fr' ? 'Actions avancees' : 'Advanced Actions',
+                  '',
+                  [
+                    { text: language === 'fr' ? 'Fusionner avec un autre club' : 'Merge with another club', onPress: () => setShowMergePicker(true) },
+                    ...(!isSharedItem ? [{ text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive' as const, onPress: handleDelete }] : []),
+                    { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' as const },
+                  ]
+                );
+              }}
+            >
+              <MaterialIcons name="more-vert" size={22} color={theme.textSecondary} />
             </Pressable>
           )}
         </View>
@@ -697,7 +779,7 @@ export default function ClubDetailScreen() {
               <Text style={styles.locationAddress}>{club.address}</Text>
               <Text style={styles.locationCity}>{club.city}</Text>
             </View>
-            <Pressable 
+            <Pressable
               style={styles.mapButton}
               onPress={() => {
                 const lat = club.location?.latitude;
@@ -743,15 +825,51 @@ export default function ClubDetailScreen() {
 
         </View>
 
+        {/* Members + Invite Section */}
         <View style={isTablet ? styles.tabletRow : undefined}>
-        {clubPlayers.length > 0 && (
+        {clubPlayers.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
+              {canEdit && !isSharedItem ? (
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}
+                  onPress={() => { Haptics.selectionAsync(); setInviteSearch(''); setShowInviteModal(true); }}
+                >
+                  <MaterialIcons name="person-add" size={14} color={theme.primary} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>{language === 'fr' ? 'Inviter' : 'Invite'}</Text>
+                </Pressable>
+              ) : null}
             </View>
+            {/* Pending invitations */}
+            {clubInvitations.length > 0 ? (
+              <View style={{ marginBottom: 10 }}>
+                {clubInvitations.map(inv => (
+                  <View key={inv.id} style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#F59E0B08', borderRadius: 12, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: '#F59E0B20', gap: 10 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 16, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="schedule" size={16} color="#F59E0B" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{inv.invitedPlayerName}</Text>
+                      <Text style={{ fontSize: 11, color: '#F59E0B', fontWeight: '500' }}>{language === 'fr' ? 'Invitation en attente' : 'Invitation pending'}</Text>
+                    </View>
+                    <Pressable
+                      style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: theme.error + '10', alignItems: 'center', justifyContent: 'center' }}
+                      onPress={async () => {
+                        await removeInvitation(inv.id);
+                        setClubInvitations(prev => prev.filter(i => i.id !== inv.id));
+                        Haptics.selectionAsync();
+                      }}
+                    >
+                      <MaterialIcons name="close" size={14} color={theme.error} />
+                    </Pressable>
+                  </View>
+                ))}
+              </View>
+            ) : null}
             {clubPlayers.slice(0, 5).map(player => (
-              <Pressable 
-                key={player.id} 
+              <Pressable
+                key={player.id}
                 style={styles.memberCard}
                 onPress={() => router.push(`/player/${player.id}`)}
               >
@@ -762,23 +880,66 @@ export default function ClubDetailScreen() {
                 </View>
                 <View style={styles.memberInfo}>
                   <Text style={styles.memberName}>{player.name}</Text>
-                  <Text style={styles.memberRole}>{player.role}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={styles.memberRole}>{player.role}</Text>
+                    {(() => {
+                      const mr = memberRoles.find(r => r.playerId === player.id);
+                      if (!mr || mr.role === 'player') return null;
+                      const rc = getRoleConfig(mr.role);
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: rc.color + '12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 }}>
+                          <MaterialIcons name={rc.icon as any} size={10} color={rc.color} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: rc.color }}>{getRoleLabel(mr.role, language === 'fr')}</Text>
+                        </View>
+                      );
+                    })()}
+                  </View>
                 </View>
                 <View style={styles.memberStats}>
+                  {canEdit && !isSharedItem ? (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        const currentMr = memberRoles.find(r => r.playerId === player.id);
+                        setShowRoleModal({ playerId: player.id, playerName: player.name, currentRole: currentMr?.role as ClubMemberRole | undefined });
+                      }}
+                      hitSlop={8}
+                      style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: theme.primary + '08', alignItems: 'center', justifyContent: 'center' }}
+                    >
+                      <MaterialIcons name="badge" size={14} color={theme.primary} />
+                    </Pressable>
+                  ) : null}
                   <Text style={styles.memberWinRate}>{player.stats.winRate}%</Text>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </View>
               </Pressable>
             ))}
           </Animated.View>
-        )}
+        ) : canEdit && !isSharedItem ? (
+          <Animated.View entering={FadeIn.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>{t('club', 'membersCount')} (0)</Text>
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}
+                onPress={() => { Haptics.selectionAsync(); setInviteSearch(''); setShowInviteModal(true); }}
+              >
+                <MaterialIcons name="person-add" size={14} color={theme.primary} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>{language === 'fr' ? 'Inviter' : 'Invite'}</Text>
+              </Pressable>
+            </View>
+            <View style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.card }}>
+              <MaterialIcons name="people-outline" size={40} color={theme.textMuted} />
+              <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun membre' : 'No members'}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
           <Animated.View entering={FadeIn.duration(400).delay(450)} style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
-              <Pressable 
+              <Pressable
                 key={tournament.id}
                 style={styles.tournamentCard}
                 onPress={() => router.push(`/tournament/${tournament.id}`)}
@@ -829,10 +990,14 @@ export default function ClubDetailScreen() {
           <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
             <Pressable
               style={styles.visibilityCard}
-              onPress={() => {
+              onPress={async () => {
                 Haptics.selectionAsync();
                 const newVal = !(club.showContactPublic ?? false);
-                updateClub(club.id, { showContactPublic: newVal });
+                try {
+                  await updateClub(club.id, { showContactPublic: newVal });
+                } catch (e: any) {
+                  showAlert(t('common', 'error'), e.message);
+                }
               }}
             >
               <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
@@ -1023,342 +1188,87 @@ export default function ClubDetailScreen() {
                   <Text style={styles.claimButtonTitle}>{t('club', 'claimThisClub')}</Text>
                   <Text style={styles.claimButtonDesc}>{t('club', 'claimDesc')}</Text>
                 </View>
-                <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
             )}
           </Animated.View>
         ) : null}
-
-        {/* Co-Admin Management - only for owner */}
-        {canEdit && !isSharedItem && club.userId === user?.id ? (
-          <Animated.View entering={FadeIn.duration(400).delay(580)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'CO-GESTION' : 'CO-MANAGEMENT'}</Text>
-            <View style={styles.coAdminCard}>
-              <View style={styles.coAdminHeader}>
-                <View style={styles.coAdminHeaderIcon}>
-                  <MaterialIcons name="group-add" size={20} color="#7C3AED" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.coAdminHeaderTitle}>{language === 'fr' ? 'Administrateurs du club' : 'Club administrators'}</Text>
-                  <Text style={styles.coAdminHeaderDesc}>{language === 'fr' ? 'Ajoutez des co-admins pour gerer ce club' : 'Add co-admins to manage this club'}</Text>
-                </View>
-                <Pressable
-                  style={styles.coAdminAddBtn}
-                  onPress={() => { Haptics.selectionAsync(); setShowCoAdminModal(true); setCoAdminEmail(''); }}
-                >
-                  <MaterialIcons name="person-add" size={18} color="#7C3AED" />
-                </Pressable>
-              </View>
-              {coAdmins.length === 0 ? (
-                <Text style={styles.coAdminEmpty}>{language === 'fr' ? 'Aucun co-admin. Vous etes le seul gestionnaire.' : 'No co-admins. You are the sole manager.'}</Text>
-              ) : (
-                coAdmins.map(ca => {
-                  const permColors: Record<string, { bg: string; color: string; label: string }> = {
-                    read: { bg: '#94A3B815', color: '#94A3B8', label: language === 'fr' ? 'Lecture' : 'Read' },
-                    edit: { bg: '#3B82F615', color: '#3B82F6', label: language === 'fr' ? 'Edition' : 'Edit' },
-                    full: { bg: '#10B98115', color: '#10B981', label: language === 'fr' ? 'Complet' : 'Full' },
-                  };
-                  const pc = permColors[ca.permission] || permColors.edit;
-                  return (
-                    <View key={ca.id} style={styles.coAdminItem}>
-                      <View style={styles.coAdminAvatar}>
-                        <Text style={styles.coAdminAvatarText}>{(ca.username || ca.email).charAt(0).toUpperCase()}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.coAdminName}>{ca.username || ca.email}</Text>
-                        <Text style={styles.coAdminEmail}>{ca.email}</Text>
-                      </View>
-                      <Pressable
-                        style={[styles.coAdminPermBadge, { backgroundColor: pc.bg }]}
-                        onPress={async () => {
-                          const nextPerm: CoAdminPermission = ca.permission === 'read' ? 'edit' : ca.permission === 'edit' ? 'full' : 'read';
-                          setUpdatingPermId(ca.id);
-                          Haptics.selectionAsync();
-                          const { error } = await updateCoAdminPermission(club.id, ca.id, nextPerm);
-                          setUpdatingPermId(null);
-                          if (!error) {
-                            setCoAdmins(prev => prev.map(a => a.id === ca.id ? { ...a, permission: nextPerm } : a));
-                          }
-                        }}
-                        disabled={updatingPermId === ca.id}
-                      >
-                        {updatingPermId === ca.id ? <ActivityIndicator size="small" color={pc.color} /> : (
-                          <Text style={[styles.coAdminPermText, { color: pc.color }]}>{pc.label}</Text>
-                        )}
-                      </Pressable>
-                      <Pressable
-                        style={styles.coAdminRemoveBtn}
-                        onPress={() => {
-                          Alert.alert(
-                            language === 'fr' ? 'Retirer ce co-admin ?' : 'Remove co-admin?',
-                            `${ca.username || ca.email}`,
-                            [
-                              { text: t('common', 'cancel'), style: 'cancel' },
-                              { text: language === 'fr' ? 'Retirer' : 'Remove', style: 'destructive', onPress: async () => {
-                                const { error } = await removeClubCoAdmin(club.id, ca.id);
-                                if (error) showAlert(t('common', 'error'), error);
-                                else {
-                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                  setCoAdmins(prev => prev.filter(a => a.id !== ca.id));
-                                }
-                              }},
-                            ]
-                          );
-                        }}
-                      >
-                        <MaterialIcons name="close" size={16} color="#EF4444" />
-                      </Pressable>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          </Animated.View>
-        ) : isCoAdmin ? (
-          <Animated.View entering={FadeIn.duration(400).delay(580)} style={styles.section}>
-            <View style={styles.coAdminBadgeCard}>
-              <MaterialIcons name="admin-panel-settings" size={20} color="#7C3AED" />
-              <Text style={styles.coAdminBadgeText}>{language === 'fr' ? 'Vous etes co-administrateur de ce club' : 'You are a co-admin of this club'}</Text>
-            </View>
-          </Animated.View>
-        ) : null}
-
-        {/* Modification Logs - only visible to owner */}
-        <ModificationLogsSection
-          itemType="club"
-          itemId={id!}
-          isOwner={!isSharedItem && !!user?.id}
-        />
       </ScrollView>
 
-      {/* ===== PUBLIC PREVIEW MODAL ===== */}
-      <Modal visible={showPublicPreview} animationType="slide" transparent>
-        <View style={styles.pvOverlay}>
-          <View style={styles.pvModal}>
-            <View style={styles.pvHeader}>
-              <View style={[styles.pvHeaderIcon, { backgroundColor: theme.success + '15' }]}>
-                <MaterialIcons name="public" size={22} color={theme.success} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{t('preview', 'publicClubTitle')}</Text>
-                <Text style={styles.pvHeaderSub}>{t('preview', 'publicClubDesc')}</Text>
-              </View>
-              <Pressable style={styles.pvCloseBtn} onPress={() => setShowPublicPreview(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-
-            <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={styles.pvCard}>
-                <View style={styles.pvAvatarRow}>
-                  <View style={styles.pvAvatarClub}>
-                    <MaterialIcons name="home" size={28} color="#FFF" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.pvName}>{club.name}</Text>
-                    {club.foundedYear ? <Text style={styles.pvNickname}>{t('preview', 'foundedIn')} {club.foundedYear}</Text> : null}
-                  </View>
-                </View>
-
-                <View style={styles.pvLocationRow}>
-                  <MaterialIcons name="place" size={14} color={theme.textSecondary} />
-                  <Text style={styles.pvLocationText}>{club.address ? `${club.address}, ` : ''}{club.city}</Text>
-                </View>
-
-                {club.facilities && club.facilities.length > 0 ? (
-                  <View style={styles.pvInfoRow}>
-                    {club.facilities.slice(0, 4).map((f, i) => (
-                      <View key={i} style={styles.pvInfoPill}>
-                        <MaterialIcons name="check-circle" size={12} color={theme.success} />
-                        <Text style={[styles.pvInfoText, { color: theme.success }]}>{t('facilityLabels', f) || f}</Text>
-                      </View>
-                    ))}
-                  </View>
-                ) : null}
-
-                {previewShowContacts && (club.contactEmail || club.contactPhone) ? (
-                  <View style={styles.pvContactRow}>
-                    {club.contactPhone ? (
-                      <View style={styles.pvContactPill}>
-                        <MaterialIcons name="phone" size={12} color={theme.primary} />
-                        <Text style={styles.pvContactText}>{club.contactPhone}</Text>
-                      </View>
-                    ) : null}
-                    {club.contactEmail ? (
-                      <View style={styles.pvContactPill}>
-                        <MaterialIcons name="email" size={12} color={theme.primary} />
-                        <Text style={styles.pvContactText}>{club.contactEmail}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                ) : null}
-
-                <View style={styles.pvStatsRow}>
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{club.membersCount}</Text>
-                    <Text style={styles.pvStatLabel}>{t('club', 'members')}</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{clubTournaments.length}</Text>
-                    <Text style={styles.pvStatLabel}>{t('club', 'tournamentsLabel')}</Text>
-                  </View>
-                  <View style={styles.pvStatDivider} />
-                  <View style={styles.pvStatItem}>
-                    <Text style={styles.pvStatValue}>{club.membershipCost ? `${club.membershipCost}€` : '-'}</Text>
-                    <Text style={styles.pvStatLabel}>{t('club', 'membership')}</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Contact Toggle */}
-              {(club.contactEmail || club.contactPhone) ? (
-                <View style={styles.pvToggleCard}>
-                  <View style={styles.pvToggleRow}>
-                    <View style={[styles.pvToggleIcon, { backgroundColor: (previewShowContacts ? theme.success : theme.textMuted) + '15' }]}>
-                      <MaterialIcons name={previewShowContacts ? 'contact-phone' : 'phone-disabled'} size={18} color={previewShowContacts ? theme.success : theme.textMuted} />
+      {/* Assign Role Modal */}
+      <Modal visible={showRoleModal !== null} animationType="fade" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <View style={{ backgroundColor: theme.surface, borderRadius: 20, padding: 24, maxWidth: 400, alignSelf: 'center', width: '100%' }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 4 }}>{language === 'fr' ? 'Attribuer un role' : 'Assign Role'}</Text>
+            <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 16 }}>{showRoleModal?.playerName}</Text>
+            <View style={{ gap: 8 }}>
+              {CLUB_ROLES.map(r => {
+                const isActive = showRoleModal?.currentRole === r.id;
+                return (
+                  <Pressable
+                    key={r.id}
+                    style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 14, backgroundColor: isActive ? r.color + '12' : theme.backgroundSecondary, borderWidth: isActive ? 1.5 : 1, borderColor: isActive ? r.color + '40' : theme.border, opacity: pressed ? 0.85 : 1 }]}
+                    onPress={async () => {
+                      if (!showRoleModal || !club || !user || assigningRole) return;
+                      setAssigningRole(true);
+                      const player = clubPlayers.find(p => p.id === showRoleModal.playerId);
+                      if (r.id === 'player') {
+                        const existing = memberRoles.find(mr => mr.playerId === showRoleModal.playerId);
+                        if (existing) {
+                          await removeMemberRole(existing.id);
+                          setMemberRoles(prev => prev.filter(mr => mr.id !== existing.id));
+                        }
+                      } else {
+                        const { entry } = await assignMemberRole({
+                          clubId: club.id,
+                          playerId: showRoleModal.playerId,
+                          userId: (player as any)?.userId || user.id,
+                          role: r.id,
+                          assignedBy: user.id,
+                        });
+                        if (entry) {
+                          setMemberRoles(prev => {
+                            const filtered = prev.filter(mr => mr.playerId !== showRoleModal.playerId);
+                            return [...filtered, entry];
+                          });
+                        }
+                      }
+                      setAssigningRole(false);
+                      setShowRoleModal(null);
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    }}
+                    disabled={assigningRole}
+                  >
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: r.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name={r.icon as any} size={18} color={r.color} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.pvToggleTitle}>{t('preview', 'showContacts')}</Text>
-                      <Text style={styles.pvToggleDesc}>{previewShowContacts
-                        ? t('preview', 'contactsVisibleClub')
-                        : t('preview', 'contactsHiddenClub')
-                      }</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? r.labelFr : r.labelEn}</Text>
                     </View>
-                    <Switch
-                      value={previewShowContacts}
-                      onValueChange={(val) => {
-                        setPreviewShowContacts(val);
-                        if (club) updateClub(club.id, { showContactPublic: val } as any);
-                      }}
-                      trackColor={{ false: theme.border, true: theme.success + '60' }}
-                      thumbColor={previewShowContacts ? theme.success : theme.textMuted}
-                    />
-                  </View>
-                </View>
-              ) : null}
-
-              <View style={styles.pvNote}>
-                <MaterialIcons name="map" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>{t('preview', 'geoNoteClub')}</Text>
-              </View>
-            </ScrollView>
-
-            <View style={styles.pvActions}>
-              <Pressable style={styles.pvCancelBtn} onPress={() => setShowPublicPreview(false)}>
-                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable style={[styles.pvConfirmBtn, { backgroundColor: isPublicState ? theme.error : theme.success }]} onPress={handleConfirmPublic} disabled={togglingPublic}>
-                {togglingPublic ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <MaterialIcons name={isPublicState ? 'lock' : 'public'} size={18} color="#FFF" />
-                    <Text style={styles.pvConfirmText}>{isPublicState
-                      ? t('preview', 'makePrivate')
-                      : t('preview', 'makePublic')
-                    }</Text>
-                  </>
-                )}
-              </Pressable>
+                    {isActive ? <MaterialIcons name="check-circle" size={20} color={r.color} /> : null}
+                  </Pressable>
+                );
+              })}
             </View>
+            <Pressable
+              style={{ marginTop: 16, alignItems: 'center', paddingVertical: 12, backgroundColor: theme.backgroundSecondary, borderRadius: 12 }}
+              onPress={() => setShowRoleModal(null)}
+            >
+              <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textSecondary }}>{language === 'fr' ? 'Annuler' : 'Cancel'}</Text>
+            </Pressable>
           </View>
         </View>
       </Modal>
 
-      {/* ShareModal handles the full share flow including contact toggle */}
-
+      {/* Share Modal */}
       <ShareModal
         visible={showShareModal}
         onClose={() => setShowShareModal(false)}
         itemType="club"
-        itemId={id!}
+        itemId={club.id}
         itemName={club.name}
       />
 
-      {/* Co-Admin Add Modal */}
-      <Modal visible={showCoAdminModal} animationType="slide" transparent onRequestClose={() => setShowCoAdminModal(false)}>
-        <View style={styles.pvOverlay}>
-          <View style={[styles.pvModal, { maxHeight: '50%' }]}>
-            <View style={styles.pvHeader}>
-              <View style={[styles.pvHeaderIcon, { backgroundColor: '#7C3AED15' }]}>
-                <MaterialIcons name="person-add" size={22} color="#7C3AED" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{language === 'fr' ? 'Ajouter un co-admin' : 'Add co-admin'}</Text>
-                <Text style={styles.pvHeaderSub}>{language === 'fr' ? 'Entrez l\'email du co-administrateur' : 'Enter the co-admin email address'}</Text>
-              </View>
-              <Pressable style={styles.pvCloseBtn} onPress={() => setShowCoAdminModal(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
-              </Pressable>
-            </View>
-            <View style={{ padding: 20 }}>
-              <View style={[styles.claimInput, { marginBottom: 12 }]}>
-                <MaterialIcons name="email" size={18} color={theme.textMuted} />
-                <View style={{ flex: 1 }}>
-                  <TextInput
-                    style={[styles.claimInputField, { minHeight: 20 }]}
-                    placeholder="email@example.com"
-                    placeholderTextColor={theme.textMuted}
-                    value={coAdminEmail}
-                    onChangeText={setCoAdminEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                </View>
-              </View>
-              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 8 }}>{language === 'fr' ? 'Niveau de permission' : 'Permission level'}</Text>
-              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
-                {([{ key: 'read' as CoAdminPermission, icon: 'visibility', label: language === 'fr' ? 'Lecture seule' : 'Read only', desc: language === 'fr' ? 'Voir le club' : 'View club', color: '#94A3B8' }, { key: 'edit' as CoAdminPermission, icon: 'edit', label: language === 'fr' ? 'Edition' : 'Edit', desc: language === 'fr' ? 'Modifier infos' : 'Edit info', color: '#3B82F6' }, { key: 'full' as CoAdminPermission, icon: 'admin-panel-settings', label: language === 'fr' ? 'Complet' : 'Full', desc: language === 'fr' ? 'Gestion totale' : 'Full control', color: '#10B981' }]).map(p => {
-                  const isActive = newCoAdminPerm === p.key;
-                  return (
-                    <Pressable key={p.key} style={[{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: isActive ? p.color : theme.border, backgroundColor: isActive ? p.color + '10' : theme.backgroundSecondary }]} onPress={() => { Haptics.selectionAsync(); setNewCoAdminPerm(p.key); }}>
-                      <MaterialIcons name={p.icon as any} size={20} color={isActive ? p.color : theme.textMuted} />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? p.color : theme.textSecondary, marginTop: 4 }}>{p.label}</Text>
-                      <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{p.desc}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
-            <View style={styles.pvActions}>
-              <Pressable style={styles.pvCancelBtn} onPress={() => setShowCoAdminModal(false)}>
-                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.pvConfirmBtn, { backgroundColor: '#7C3AED' }, (!coAdminEmail.trim() || addingCoAdmin) && { opacity: 0.5 }]}
-                onPress={async () => {
-                  if (!coAdminEmail.trim() || addingCoAdmin) return;
-                  setAddingCoAdmin(true);
-                  const { coAdmin, error } = await addClubCoAdmin(club.id, coAdminEmail.trim(), newCoAdminPerm);
-                  setAddingCoAdmin(false);
-                  if (error === 'user_not_found') {
-                    showAlert(t('common', 'error'), language === 'fr' ? 'Utilisateur introuvable avec cet email.' : 'No user found with this email.');
-                  } else if (error === 'is_owner') {
-                    showAlert(t('common', 'error'), language === 'fr' ? 'Cet utilisateur est deja proprietaire.' : 'This user is already the owner.');
-                  } else if (error === 'already_coadmin') {
-                    showAlert(t('common', 'error'), language === 'fr' ? 'Deja co-admin de ce club.' : 'Already a co-admin of this club.');
-                  } else if (error) {
-                    showAlert(t('common', 'error'), error);
-                  } else if (coAdmin) {
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    setCoAdmins(prev => [...prev, coAdmin]);
-                    setShowCoAdminModal(false);
-                    setCoAdminEmail('');
-                    setNewCoAdminPerm('edit');
-                  }
-                }}
-                disabled={!coAdminEmail.trim() || addingCoAdmin}
-              >
-                {addingCoAdmin ? <ActivityIndicator size="small" color="#FFF" /> : (
-                  <><MaterialIcons name="person-add" size={18} color="#FFF" /><Text style={styles.pvConfirmText}>{language === 'fr' ? 'Ajouter' : 'Add'}</Text></>
-                )}
-              </Pressable>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
+      {/* Merge Picker Modal */}
       <MergePickerModal
         visible={showMergePicker}
         onClose={() => setShowMergePicker(false)}
@@ -1366,245 +1276,91 @@ export default function ClubDetailScreen() {
         currentItemId={id!}
       />
 
-      {/* Claim Modal */}
-      <Modal visible={showClaimModal} animationType="slide" transparent>
-        <View style={styles.pvOverlay}>
-          <View style={styles.pvModal}>
-            <View style={styles.pvHeader}>
-              <View style={[styles.pvHeaderIcon, { backgroundColor: '#2563EB15' }]}>
-                <MaterialIcons name="verified-user" size={22} color="#2563EB" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.pvHeaderTitle}>{t('club', 'claimThisClub')}</Text>
-                <Text style={styles.pvHeaderSub}>{t('club', 'claimDesc')}</Text>
-              </View>
-              <Pressable style={styles.pvCloseBtn} onPress={() => setShowClaimModal(false)} hitSlop={8}>
-                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+      {/* Invite Members Modal */}
+      <Modal visible={showInviteModal} animationType="slide" transparent>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', paddingBottom: 20 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: theme.textPrimary }}>{language === 'fr' ? 'Inviter des joueurs' : 'Invite Players'}</Text>
+              <Pressable onPress={() => setShowInviteModal(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </Pressable>
             </View>
-            <ScrollView style={styles.pvScroll} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
-              <View style={styles.pvCard}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 8 }}>{t('club', 'claimMessage')}</Text>
-                <View style={styles.claimInput}>
-                  <MaterialIcons name="message" size={18} color={theme.textMuted} style={{ marginTop: 2 }} />
-                  <View style={{ flex: 1 }}>
-                    <TextInput
-                      style={styles.claimInputField}
-                      placeholder={t('club', 'claimMessagePlaceholder')}
-                      placeholderTextColor={theme.textMuted}
-                      multiline
-                      numberOfLines={4}
-                      value={claimMessage}
-                      onChangeText={setClaimMessage}
-                      maxLength={500}
-                    />
-                  </View>
-                </View>
-                <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'right', marginTop: 4 }}>{claimMessage.length}/500</Text>
-              </View>
-
-              {/* Proof upload section */}
-              <View style={styles.pvCard}>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginBottom: 4 }}>{t('club', 'claimProofLabel')}</Text>
-                <Text style={{ fontSize: 12, color: theme.textSecondary, marginBottom: 12 }}>{t('club', 'claimProofDesc')}</Text>
-                {claimProofUri ? (
-                  <View style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: theme.border }}>
-                    <Pressable onPress={() => claimProofType === 'pdf' ? Linking.openURL(claimProofUrl || claimProofUri) : setShowProofFullscreen(claimProofUri)}>
-                      {claimProofType === 'pdf' ? (
-                        <View style={{ width: '100%', height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 6 }}>
-                          <MaterialIcons name="picture-as-pdf" size={40} color={theme.error} />
-                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{t('club', 'claimProofPdf')}</Text>
-                          <Text style={{ fontSize: 11, color: theme.textSecondary }}>{t('club', 'claimProofTapToOpen')}</Text>
-                        </View>
-                      ) : (
-                        <Image source={{ uri: claimProofUri }} style={{ width: '100%', height: 160 }} contentFit="cover" transition={200} />
-                      )}
-                    </Pressable>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8, backgroundColor: '#F0FDF4', borderTopWidth: 1, borderTopColor: theme.border }}>
-                      <MaterialIcons name="check-circle" size={16} color={theme.success} />
-                      <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: theme.success }}>{t('club', 'claimProofUploaded')}</Text>
-                      <Pressable
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: theme.error + '10', borderRadius: 8 }}
-                        onPress={() => { setClaimProofUri(null); setClaimProofUrl(null); setClaimProofType('image'); }}
-                      >
-                        <MaterialIcons name="close" size={14} color={theme.error} />
-                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.error }}>{t('club', 'claimProofRemove')}</Text>
-                      </Pressable>
-                    </View>
-                  </View>
-                ) : uploadingProof ? (
-                  <View style={{ alignItems: 'center', paddingVertical: 32, backgroundColor: theme.backgroundSecondary, borderRadius: 12 }}>
-                    <ActivityIndicator size="large" color={theme.primary} />
-                    <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 8 }}>{t('club', 'claimProofUploading')}</Text>
-                  </View>
-                ) : (
-                  <Pressable
-                    style={{ alignItems: 'center', paddingVertical: 24, backgroundColor: theme.backgroundSecondary, borderRadius: 12, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#2563EB30', gap: 8 }}
-                    onPress={() => {
-                      Alert.alert(
-                        t('club', 'claimProofLabel'),
-                        t('club', 'claimProofDesc'),
-                        [
-                          { text: t('player', 'fromCamera'), onPress: async () => {
-                            const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                            if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'cameraPermission')); return; }
-                            const result = await ImagePicker.launchCameraAsync({ quality: 0.85 });
-                            if (!result.canceled && result.assets[0]) {
-                              setUploadingProof(true);
-                              const uri = result.assets[0].uri;
-                              const url = await uploadImageToStorage('club-cards', `claims/${user?.id}/${Date.now()}`, uri);
-                              setUploadingProof(false);
-                              if (url) { setClaimProofUri(uri); setClaimProofUrl(url); setClaimProofType('image'); }
-                              else { showAlert(t('common', 'error'), t('club', 'errorUploadClubCard')); }
-                            }
-                          }},
-                          { text: t('player', 'fromGallery'), onPress: async () => {
-                            const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                            if (status !== 'granted') { showAlert(t('profile', 'permissionRequired'), t('profile', 'galleryPermission')); return; }
-                            const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.85 });
-                            if (!result.canceled && result.assets[0]) {
-                              setUploadingProof(true);
-                              const uri = result.assets[0].uri;
-                              const url = await uploadImageToStorage('club-cards', `claims/${user?.id}/${Date.now()}`, uri);
-                              setUploadingProof(false);
-                              if (url) { setClaimProofUri(uri); setClaimProofUrl(url); setClaimProofType('image'); }
-                              else { showAlert(t('common', 'error'), t('club', 'errorUploadClubCard')); }
-                            }
-                          }},
-                          { text: t('player', 'fromFiles'), onPress: async () => {
-                            try {
-                              const DocumentPicker = require('expo-document-picker');
-                              const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
-                              if (!result.canceled && result.assets && result.assets[0]) {
-                                setUploadingProof(true);
-                                const asset = result.assets[0];
-                                const isPdf = asset.mimeType === 'application/pdf' || asset.name?.toLowerCase().endsWith('.pdf');
-                                const ext = isPdf ? 'pdf' : (asset.name?.split('.').pop()?.toLowerCase() || 'jpg');
-                                const storagePath = `claims/${user?.id}/${Date.now()}.${ext}`;
-                                let base64Data: string;
-                                if (Platform.OS === 'web') {
-                                  const response = await fetch(asset.uri);
-                                  const blob = await response.blob();
-                                  base64Data = await new Promise<string>((resolve) => {
-                                    const reader = new FileReader();
-                                    reader.onloadend = () => { const r = reader.result as string; resolve(r.split(',')[1]); };
-                                    reader.readAsDataURL(blob);
-                                  });
-                                } else {
-                                  const FileSystem = require('expo-file-system');
-                                  base64Data = await FileSystem.readAsStringAsync(asset.uri, { encoding: FileSystem.EncodingType.Base64 });
-                                }
-                                const { error: uploadError } = await supabase.storage.from('club-cards').upload(storagePath, decode(base64Data), { contentType: asset.mimeType || (isPdf ? 'application/pdf' : 'image/jpeg'), upsert: true });
-                                if (uploadError) throw uploadError;
-                                const { data: urlData } = supabase.storage.from('club-cards').getPublicUrl(storagePath);
-                                setUploadingProof(false);
-                                if (urlData?.publicUrl) {
-                                  setClaimProofUri(asset.uri);
-                                  setClaimProofUrl(urlData.publicUrl);
-                                  setClaimProofType(isPdf ? 'pdf' : 'image');
-                                } else {
-                                  showAlert(t('common', 'error'), t('club', 'errorUploadClubCard'));
-                                }
-                              }
-                            } catch (e: any) {
-                              setUploadingProof(false);
-                              console.log('Error picking document for claim proof:', e);
-                              showAlert(t('common', 'error'), e.message || t('club', 'errorUploadClubCard'));
-                            }
-                          }},
-                          { text: t('common', 'cancel'), style: 'cancel' },
-                        ]
-                      );
-                    }}
-                  >
-                    <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: '#2563EB12', alignItems: 'center', justifyContent: 'center' }}>
-                      <MaterialIcons name="add-a-photo" size={24} color="#2563EB" />
-                    </View>
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#2563EB' }}>{t('club', 'claimAddProof')}</Text>
+            <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 14, gap: 10, borderWidth: 1, borderColor: theme.border }}>
+                <MaterialIcons name="search" size={20} color={theme.textMuted} />
+                <TextInput
+                  style={{ flex: 1, height: 44, fontSize: 15, color: theme.textPrimary }}
+                  placeholder={language === 'fr' ? 'Rechercher un joueur...' : 'Search players...'}
+                  placeholderTextColor={theme.textMuted}
+                  value={inviteSearch}
+                  onChangeText={setInviteSearch}
+                  autoFocus
+                />
+                {inviteSearch.length > 0 ? (
+                  <Pressable onPress={() => setInviteSearch('')} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
                   </Pressable>
-                )}
+                ) : null}
               </View>
-
-              <View style={styles.pvNote}>
-                <MaterialIcons name="info-outline" size={16} color={theme.primary} />
-                <Text style={styles.pvNoteText}>
-                  {language === 'fr'
-                    ? 'Le proprietaire actuel recevra votre demande et pourra accepter ou refuser le transfert. En cas de transfert, il conservera un badge Contributeur.'
-                    : 'The current owner will receive your request and can accept or decline the transfer. If accepted, they will keep a Contributor badge.'}
-                </Text>
-              </View>
+            </View>
+            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+              {inviteFilteredPlayers.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                  <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
+                  <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun joueur trouve' : 'No players found'}</Text>
+                </View>
+              ) : null}
+              {(inviteFilteredPlayers as any[]).map((player: any) => {
+                const isMember = clubPlayers.some(cp => cp.id === player.id);
+                const isInvited = player._isInvited || clubInvitations.some(i => i.invitedPlayerId === player.id);
+                return (
+                  <View key={player.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                      {player.avatar ? (
+                        <Image source={{ uri: player.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+                      ) : (
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.primary }}>{player.name.charAt(0)}</Text>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{player.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                        {player.club ? <Text style={{ fontSize: 12, color: theme.textSecondary }} numberOfLines={1}>{player.club}</Text> : null}
+                        {player.city ? <Text style={{ fontSize: 12, color: theme.textMuted }}>{player.city}</Text> : null}
+                      </View>
+                    </View>
+                    {isMember ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.success + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                        <MaterialIcons name="check-circle" size={14} color={theme.success} />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.success }}>{language === 'fr' ? 'Membre' : 'Member'}</Text>
+                      </View>
+                    ) : isInvited ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                        <MaterialIcons name="schedule" size={14} color="#F59E0B" />
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#F59E0B' }}>{language === 'fr' ? 'Invite' : 'Invited'}</Text>
+                      </View>
+                    ) : (
+                      <Pressable
+                        style={({ pressed }) => [{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, opacity: pressed ? 0.85 : 1 }]}
+                        onPress={() => handleInvitePlayer(player)}
+                        disabled={invitingPlayerId === player.id}
+                      >
+                        {invitingPlayerId === player.id ? (
+                          <ActivityIndicator size="small" color="#FFF" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="person-add" size={14} color="#FFF" />
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{language === 'fr' ? 'Inviter' : 'Invite'}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
             </ScrollView>
-            <View style={styles.pvActions}>
-              <Pressable style={styles.pvCancelBtn} onPress={() => setShowClaimModal(false)}>
-                <Text style={styles.pvCancelText}>{t('common', 'cancel')}</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.pvConfirmBtn, { backgroundColor: '#2563EB' }]}
-                onPress={async () => {
-                  if (!club || !user?.id || !club.userId) return;
-                  setSubmittingClaim(true);
-                  const { error } = await submitClubClaim({
-                    clubId: club.id,
-                    currentOwnerId: club.userId,
-                    requesterUserId: user.id,
-                    requesterName: user.username || user.email,
-                    requesterEmail: user.email,
-                    message: claimMessage.trim() || undefined,
-                    proofUrl: claimProofUrl || undefined,
-                  });
-                  setSubmittingClaim(false);
-                  if (error === 'claim_already_pending') {
-                    showAlert(t('common', 'error'), t('club', 'claimAlreadyPending'));
-                  } else if (error) {
-                    showAlert(t('common', 'error'), error);
-                  } else {
-                    setClaimStatus('pending');
-                    setShowClaimModal(false);
-                    setClaimMessage('');
-                    setClaimProofUri(null);
-                    setClaimProofUrl(null);
-                    setClaimProofType('image');
-                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                    showAlert(t('club', 'claimSent'), t('club', 'claimSentDesc'));
-                  }
-                }}
-                disabled={submittingClaim}
-              >
-                {submittingClaim ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <MaterialIcons name="send" size={18} color="#FFF" />
-                    <Text style={styles.pvConfirmText}>{t('club', 'claimSubmit')}</Text>
-                  </>
-                )}
-              </Pressable>
-            </View>
           </View>
-        </View>
-      </Modal>
-
-      {/* Proof Fullscreen Modal */}
-      <Modal visible={!!showProofFullscreen} animationType="fade" transparent onRequestClose={() => setShowProofFullscreen(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
-          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setShowProofFullscreen(null)}>
-            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="close" size={28} color="#FFF" />
-            </View>
-          </Pressable>
-          {showProofFullscreen ? <Image source={{ uri: showProofFullscreen }} style={{ width: screenWidth, height: screenWidth * 1.4 }} contentFit="contain" transition={200} /> : null}
-        </View>
-      </Modal>
-
-      {/* Club Card Fullscreen Modal */}
-      <Modal visible={showCardFullscreen} animationType="fade" transparent onRequestClose={() => setShowCardFullscreen(false)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.95)', alignItems: 'center', justifyContent: 'center' }}>
-          <Pressable style={{ position: 'absolute', top: 50, right: 20, zIndex: 10 }} onPress={() => setShowCardFullscreen(false)}>
-            <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="close" size={28} color="#FFF" />
-            </View>
-          </Pressable>
-          {clubCardUrl ? <Image source={{ uri: clubCardUrl }} style={{ width: screenWidth, height: screenWidth * 1.4 }} contentFit="contain" transition={200} /> : null}
         </View>
       </Modal>
     </SafeAreaView>
@@ -1612,711 +1368,109 @@ export default function ClubDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  headerActions: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  saveButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: theme.accent + '15',
-    borderRadius: 20,
-  },
-  shareButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButtonActive: {
-    backgroundColor: theme.error + '15',
-    borderRadius: 20,
-  },
-  editButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  claimNotifBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    position: 'relative' as const,
-  },
-  claimNotifBadge: {
-    position: 'absolute' as const,
-    top: 2,
-    right: 2,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#EF4444',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    paddingHorizontal: 4,
-    borderWidth: 2,
-    borderColor: theme.surface,
-  },
-  claimNotifBadgeText: {
-    fontSize: 9,
-    fontWeight: '800' as const,
-    color: '#FFF',
-  },
-  headerTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-  },
-  scrollContentTablet: {
-    maxWidth: 960,
-    alignSelf: 'center' as const,
-    width: '100%',
-    paddingHorizontal: 24,
-  },
-  clubCardTablet: {
-    padding: 32,
-  },
-  tabletRow: {
-    flexDirection: 'row' as const,
-    gap: 16,
-  },
-  tabletHalf: {
-    flex: 1,
-  },
-  clubCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 24,
-    alignItems: 'center',
-    ...theme.shadows.card,
-  },
-  clubIconPressable: {
-    marginBottom: 16,
-  },
-  clubIcon: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: theme.accent,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  clubLogoWrap: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  clubLogoImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  clubLogoEditBadge: {
-    position: 'absolute',
-    bottom: 2,
-    right: 2,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  clubName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: theme.textPrimary,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  clubMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 16,
-  },
-  clubMetaText: {
-    fontSize: 15,
-    color: theme.textSecondary,
-  },
-  clubDescription: {
-    fontSize: 15,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
-  inlineFacilitiesSection: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  facilitiesGridInline: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  facilityTagInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: theme.success + '10',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-  },
-  facilityTextInline: {
-    fontSize: 12,
-    color: theme.success,
-    fontWeight: '500',
-  },
-  inlineContactSection: {
-    marginTop: 12,
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-    gap: 8,
-  },
-  contactRowInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  contactTextInline: {
-    fontSize: 14,
-    color: theme.primary,
-  },
-  quickStats: {
-    flexDirection: 'row',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    marginTop: 16,
-    ...theme.shadows.card,
-  },
-  quickStatItem: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 20,
-  },
-  quickStatBorder: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderColor: theme.border,
-  },
-  quickStatValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  quickStatLabel: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 4,
-  },
-  section: {
-    marginTop: 24,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 12,
-  },
-  locationCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  locationInfo: {
-    marginBottom: 16,
-  },
-  locationAddress: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 4,
-  },
-  locationCity: {
-    fontSize: 15,
-    color: theme.textSecondary,
-  },
-  mapButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.primaryLight + '20',
-    paddingVertical: 12,
-    borderRadius: theme.borderRadius.md,
-  },
-  mapButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  facilitiesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  facilityTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: theme.surface,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  facilityText: {
-    fontSize: 14,
-    color: theme.textPrimary,
-  },
-  contactCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    overflow: 'hidden',
-    ...theme.shadows.card,
-  },
-  contactRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    gap: 12,
-    borderTopWidth: 1,
-    borderTopColor: theme.border,
-  },
-  contactText: {
-    flex: 1,
-    fontSize: 15,
-    color: theme.textPrimary,
-  },
-  memberCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  memberAvatar: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: theme.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  memberInitials: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  memberInfo: {
-    flex: 1,
-  },
-  memberName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  memberRole: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  memberStats: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  memberWinRate: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.success,
-  },
-  tournamentCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    marginBottom: 8,
-    ...theme.shadows.card,
-  },
-  tournamentDate: {
-    width: 50,
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  tournamentDay: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: theme.textPrimary,
-  },
-  tournamentMonth: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    textTransform: 'uppercase',
-  },
-  tournamentInfo: {
-    flex: 1,
-  },
-  tournamentName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginBottom: 2,
-  },
-  tournamentFormat: {
-    fontSize: 13,
-    color: theme.textSecondary,
-  },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius.full,
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  visibilityCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    ...theme.shadows.card,
-  },
-  visibilityIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 14,
-  },
-  visibilityInfo: {
-    flex: 1,
-  },
-  visibilityTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  visibilityDesc: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  visibilityBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: theme.borderRadius.full,
-  },
-  visibilityBadgeText: {
-    fontSize: 12,
-    fontWeight: '700',
-  },
-
-  // Verified badge
-  verifiedBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
-    backgroundColor: '#2563EB12',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-
-  // Claim styles
-  claimButton: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    gap: 14,
-    borderWidth: 1.5,
-    borderColor: '#2563EB25',
-    ...theme.shadows.card,
-  },
-  claimButtonIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#2563EB12',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  claimButtonTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: '#2563EB',
-  },
-  claimButtonDesc: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-    lineHeight: 17,
-  },
-  claimStatusCard: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    gap: 14,
-    ...theme.shadows.card,
-  },
-  claimStatusIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  claimStatusTitle: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: '#F59E0B',
-  },
-  claimStatusDesc: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  claimCard: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: '#F59E0B30',
-    ...theme.shadows.card,
-  },
-  claimCardHeader: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-    marginBottom: 10,
-  },
-  claimAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#F59E0B',
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-  },
-  claimName: {
-    fontSize: 15,
-    fontWeight: '600' as const,
-    color: theme.textPrimary,
-  },
-  claimEmail: {
-    fontSize: 12,
-    color: theme.textSecondary,
-    marginTop: 1,
-  },
-  claimDate: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 2,
-  },
-  claimMessageBox: {
-    flexDirection: 'row' as const,
-    gap: 8,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    marginBottom: 12,
-  },
-  claimMessageText: {
-    flex: 1,
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 19,
-    fontStyle: 'italic' as const,
-  },
-  claimActions: {
-    flexDirection: 'row' as const,
-    gap: 8,
-  },
-  claimDeclineBtn: {
-    flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 5,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  claimDeclineText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: theme.error,
-  },
-  claimAcceptBtn: {
-    flex: 2,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'center' as const,
-    gap: 5,
-    paddingVertical: 11,
-    borderRadius: 12,
-    backgroundColor: '#10B981',
-  },
-  claimAcceptText: {
-    fontSize: 13,
-    fontWeight: '700' as const,
-    color: '#FFF',
-  },
-  claimInput: {
-    flexDirection: 'row' as const,
-    gap: 10,
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.md,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  claimInputField: {
-    fontSize: 14,
-    color: theme.textPrimary,
-    lineHeight: 20,
-    minHeight: 80,
-    textAlignVertical: 'top' as const,
-  },
-
-  // ===== Preview Modal =====
-  pvOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
-  pvModal: { backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '90%', paddingBottom: 0 },
-  pvHeader: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 12, padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
-  pvHeaderIcon: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
-  pvHeaderTitle: { fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary },
-  pvHeaderSub: { fontSize: 13, color: theme.textSecondary, marginTop: 2, lineHeight: 18 },
-  pvCloseBtn: { width: 36, height: 36, alignItems: 'center' as const, justifyContent: 'center' as const, borderRadius: 18, backgroundColor: theme.backgroundSecondary },
-  pvScroll: { paddingHorizontal: 20, paddingTop: 16 },
-  pvCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12 },
-  pvAvatarRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14, marginBottom: 12 },
-  pvAvatarClub: { width: 56, height: 56, borderRadius: 28, backgroundColor: theme.accent, alignItems: 'center' as const, justifyContent: 'center' as const },
-  pvName: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
-  pvNickname: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
-  pvLocationRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginBottom: 8 },
-  pvLocationText: { fontSize: 12, color: theme.textSecondary },
-  pvInfoRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginBottom: 10 },
-  pvInfoPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 8, paddingVertical: 4, backgroundColor: theme.surface, borderRadius: 12 },
-  pvInfoText: { fontSize: 12, fontWeight: '600' as const },
-  pvContactRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginBottom: 10 },
-  pvContactPill: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 5, backgroundColor: theme.primary + '10', borderRadius: 14 },
-  pvContactText: { fontSize: 12, fontWeight: '500' as const, color: theme.primary },
-  pvStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, paddingVertical: 10, paddingHorizontal: 12 },
-  pvStatItem: { alignItems: 'center' as const, flex: 1 },
-  pvStatValue: { fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
-  pvStatLabel: { fontSize: 9, color: theme.textSecondary, marginTop: 1, textTransform: 'uppercase' as const },
-  pvStatDivider: { width: 1, height: 24, backgroundColor: theme.border, marginHorizontal: 6 },
-  pvToggleCard: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 12 },
-  pvToggleRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  pvToggleIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
-  pvToggleTitle: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
-  pvToggleDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  pvNote: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.primary + '15' },
-  pvNoteText: { flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 },
-  pvActions: { flexDirection: 'row' as const, gap: 10, paddingHorizontal: 20, paddingVertical: 16, borderTopWidth: 1, borderTopColor: theme.border },
-  pvCancelBtn: { flex: 1, alignItems: 'center' as const, justifyContent: 'center' as const, paddingVertical: 14, borderRadius: theme.borderRadius.md, backgroundColor: theme.backgroundSecondary },
-  pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
-  pvConfirmBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: theme.borderRadius.md },
-  pvConfirmText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
-
-  // Co-Management
-  coAdminCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card, borderWidth: 1, borderColor: '#7C3AED20' },
-  coAdminHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 12, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border },
-  coAdminHeaderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
-  coAdminHeaderTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
-  coAdminHeaderDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
-  coAdminAddBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center' as const, justifyContent: 'center' as const },
-  coAdminEmpty: { fontSize: 13, color: theme.textMuted, fontStyle: 'italic' as const, textAlign: 'center' as const, paddingVertical: 8 },
-  coAdminItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 10, borderTopWidth: 1, borderTopColor: theme.border },
-  coAdminAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#7C3AED15', alignItems: 'center' as const, justifyContent: 'center' as const },
-  coAdminAvatarText: { fontSize: 14, fontWeight: '700' as const, color: '#7C3AED' },
-  coAdminName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
-  coAdminEmail: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
-  coAdminPermBadge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, marginRight: 6 },
-  coAdminPermText: { fontSize: 10, fontWeight: '700' as const, textTransform: 'uppercase' as const },
-  coAdminRemoveBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#FECACA' },
-  coAdminBadgeCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#7C3AED08', borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 1, borderColor: '#7C3AED15' },
-  coAdminBadgeText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED', flex: 1 },
-
-  // Geo Ranking
-  geoRankSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border + '40', width: '100%' },
-  geoRankHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 10, justifyContent: 'center' as const },
-  geoRankTitle: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary, letterSpacing: 0.3 },
-  geoRankRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8 },
-  geoRankBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
-  geoRankBadgeLabel: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 70 },
-  geoRankBadgeRank: { fontSize: 14, fontWeight: '900' as const },
-  geoRankBadgeTotal: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted },
+  container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  backButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  headerActions: { flexDirection: 'row', gap: 4 },
+  saveButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.accent + '15', borderRadius: 20 },
+  shareButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  editButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  deleteButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  favoriteButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  favoriteButtonActive: { backgroundColor: theme.error + '15', borderRadius: 20 },
+  scrollView: { flex: 1 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
+  tabletRow: { flexDirection: 'row' as const, gap: 16 },
+  tabletHalf: { flex: 1 },
+  clubCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 16, alignItems: 'center', ...theme.shadows.card },
+  clubCardTablet: { maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
+  clubIconPressable: { marginBottom: 12 },
+  clubIcon: { width: 88, height: 88, borderRadius: 20, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', ...theme.shadows.cardElevated },
+  clubLogoWrap: { width: 88, height: 88, borderRadius: 20, overflow: 'hidden', ...theme.shadows.cardElevated },
+  clubLogoImage: { width: 88, height: 88, borderRadius: 20 },
+  clubLogoEditBadge: { position: 'absolute', bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
+  clubName: { fontSize: 22, fontWeight: '700', color: theme.textPrimary, marginBottom: 8, textAlign: 'center' },
+  verifiedBadge: { backgroundColor: '#2563EB12', borderRadius: 12, padding: 4 },
+  clubMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  clubMetaText: { fontSize: 14, color: theme.textSecondary },
+  clubDescription: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
+  geoRankSection: { marginTop: 12, width: '100%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12 },
+  geoRankHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  geoRankTitle: { fontSize: 12, fontWeight: '700', color: '#3B82F6', letterSpacing: 0.5 },
+  geoRankRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  geoRankBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
+  geoRankBadgeLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, maxWidth: 80 },
+  geoRankBadgeRank: { fontSize: 13, fontWeight: '800' },
+  geoRankBadgeTotal: { fontSize: 10, color: theme.textMuted },
+  inlineFacilitiesSection: { marginTop: 12, width: '100%' },
+  facilitiesGridInline: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  facilityTagInline: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  facilityTextInline: { fontSize: 13, color: theme.textPrimary },
+  inlineContactSection: { marginTop: 10, width: '100%', gap: 6 },
+  contactRowInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
+  contactTextInline: { fontSize: 14, color: theme.primary },
+  section: { marginBottom: 24 },
+  sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },
+  quickStats: { flexDirection: 'row', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 24, ...theme.shadows.card },
+  quickStatItem: { flex: 1, alignItems: 'center', gap: 4 },
+  quickStatBorder: { borderLeftWidth: 1, borderLeftColor: theme.border },
+  quickStatValue: { fontSize: 18, fontWeight: '700', color: theme.textPrimary },
+  quickStatLabel: { fontSize: 11, color: theme.textSecondary },
+  locationCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  locationInfo: { marginBottom: 8 },
+  locationAddress: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  locationCity: { fontSize: 13, color: theme.textSecondary },
+  mapButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primaryLight + '20', paddingVertical: 10, borderRadius: theme.borderRadius.md, marginTop: 8 },
+  mapButtonText: { fontSize: 14, fontWeight: '600', color: theme.primary },
+  memberCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 12, marginBottom: 8, gap: 12, ...theme.shadows.card },
+  memberAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  memberInitials: { fontSize: 16, fontWeight: '700', color: theme.primary },
+  memberInfo: { flex: 1 },
+  memberName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  memberRole: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  memberStats: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  memberWinRate: { fontSize: 14, fontWeight: '700', color: theme.success },
+  tournamentCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, marginBottom: 8, gap: 12, ...theme.shadows.card },
+  tournamentDate: { width: 48, height: 48, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
+  tournamentDay: { fontSize: 18, fontWeight: '900', color: theme.primary, lineHeight: 20 },
+  tournamentMonth: { fontSize: 9, fontWeight: '700', color: theme.primary, letterSpacing: 0.5, textTransform: 'uppercase' },
+  tournamentInfo: { flex: 1 },
+  tournamentName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary, marginBottom: 2 },
+  tournamentFormat: { fontSize: 12, color: theme.textSecondary },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+  visibilityCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  visibilityIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 14 },
+  visibilityInfo: { flex: 1 },
+  visibilityTitle: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  visibilityDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  visibilityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: theme.borderRadius.full },
+  visibilityBadgeText: { fontSize: 12, fontWeight: '700' },
+  claimNotifBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', position: 'relative' },
+  claimNotifBadge: { position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
+  claimNotifBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
+  claimCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, borderWidth: 1, borderColor: '#F59E0B25', ...theme.shadows.card },
+  claimCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  claimAvatar: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#F59E0B', alignItems: 'center', justifyContent: 'center' },
+  claimName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  claimEmail: { fontSize: 12, color: theme.textSecondary, marginTop: 1 },
+  claimDate: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+  claimMessageBox: { flexDirection: 'row', gap: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 12 },
+  claimMessageText: { fontSize: 13, color: theme.textPrimary, flex: 1, fontStyle: 'italic', lineHeight: 19 },
+  claimActions: { flexDirection: 'row', gap: 8 },
+  claimDeclineBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: theme.error + '10', borderWidth: 1, borderColor: theme.error + '25' },
+  claimDeclineText: { fontSize: 13, fontWeight: '600', color: theme.error },
+  claimAcceptBtn: { flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563EB' },
+  claimAcceptText: { fontSize: 13, fontWeight: '700', color: '#FFF' },
+  claimStatusCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card },
+  claimStatusIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  claimStatusTitle: { fontSize: 15, fontWeight: '600', color: '#F59E0B' },
+  claimStatusDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
+  claimButton: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, borderWidth: 1, borderColor: '#2563EB25', ...theme.shadows.card },
+  claimButtonIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#2563EB15', alignItems: 'center', justifyContent: 'center' },
+  claimButtonTitle: { fontSize: 15, fontWeight: '600', color: '#2563EB' },
+  claimButtonDesc: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
 });

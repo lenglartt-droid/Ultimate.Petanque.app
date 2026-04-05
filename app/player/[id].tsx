@@ -39,6 +39,7 @@ import Svg, { Polygon, Line, Circle as SvgCircle, Text as SvgText, G, Rect } fro
 import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
 import EloSection from '@/components/feature/player/EloSection';
+import EloSparkline from '@/components/feature/player/EloSparkline';
 import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
 import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
 import { computeHeadToHeadRoleAnalysis, computeSeasonalRoleEvolution, generateRoleEvolutionPdfHtml, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
@@ -426,11 +427,6 @@ export default function PlayerDetailScreen() {
           <Pressable style={s.headerIconBtn} onPress={handleOpenSharePreview}>
             <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
-          {canEdit ? (
-            <Pressable style={s.headerIconBtn} onPress={() => setShowMergePicker(true)}>
-              <MaterialIcons name="compare-arrows" size={20} color={theme.accent} />
-            </Pressable>
-          ) : null}
           {isRealUser ? (
             <Pressable style={[s.headerIconBtn, { backgroundColor: theme.error + '10' }]} onPress={() => { Haptics.selectionAsync(); setShowReportModal(true); }}>
               <MaterialIcons name="flag" size={20} color={theme.error} />
@@ -446,9 +442,20 @@ export default function PlayerDetailScreen() {
               <MaterialIcons name="edit" size={20} color={theme.primary} />
             </Pressable>
           ) : null}
-          {canEdit && !isSelf && !isSharedItem ? (
-            <Pressable style={[s.headerIconBtn, { backgroundColor: theme.error + '15' }]} onPress={handleDelete}>
-              <MaterialIcons name="delete" size={20} color={theme.error} />
+          {canEdit ? (
+            <Pressable style={[s.headerIconBtn, { backgroundColor: theme.backgroundSecondary }]} onPress={() => {
+              Haptics.selectionAsync();
+              Alert.alert(
+                language === 'fr' ? 'Actions avancees' : 'Advanced Actions',
+                '',
+                [
+                  { text: language === 'fr' ? 'Fusionner avec un autre joueur' : 'Merge with another player', onPress: () => setShowMergePicker(true) },
+                  ...(!isSelf && !isSharedItem ? [{ text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive' as const, onPress: handleDelete }] : []),
+                  { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' as const },
+                ]
+              );
+            }}>
+              <MaterialIcons name="more-vert" size={20} color={theme.textSecondary} />
             </Pressable>
           ) : null}
         </View>
@@ -641,6 +648,48 @@ export default function PlayerDetailScreen() {
                 )
               ) : null}
 
+              {/* ===== ELO SECTION IN HERO (matching me.tsx) ===== */}
+              {player.eloRating ? (() => {
+                const eloR = getEloRank(player.eloRating);
+                return (
+                  <View style={s.heroSectionBlock}>
+                    <View style={s.heroSectionBlockHeader}>
+                      <MaterialIcons name={eloR.icon as any} size={12} color={eloR.color} />
+                      <Text style={[s.heroSectionBlockLabel, { color: eloR.color }]}>ELO</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginBottom: 8 }}>
+                      <Text style={{ fontSize: 28, fontWeight: '900', color: eloR.color }}>{player.eloRating}</Text>
+                      <View style={{ backgroundColor: eloR.color + '15', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, borderWidth: 1, borderColor: eloR.color + '30' }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: eloR.color }}>{eloR.label[language === 'fr' ? 'fr' : 'en']}</Text>
+                      </View>
+                    </View>
+                    {/* ELO Sparkline Chart */}
+                    {eloChartData && eloChartData.points.length >= 3 ? (
+                      <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                        <EloSparkline
+                          points={eloChartData.entries.map(e => ({ elo: e.eloAfter, won: e.won }))}
+                          currentElo={eloChartData.currentElo}
+                          weekDelta={eloChartData.weekDelta}
+                          width={Math.min(screenWidth - 120, 220)}
+                          height={40}
+                          language={language}
+                        />
+                      </View>
+                    ) : null}
+                    {roleElos ? (
+                      <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginBottom: 6 }}>
+                        {[{ label: 'Tireur', value: roleElos.tireur, color: '#F97316', icon: 'gps-fixed' }, { label: 'Pointeur', value: roleElos.pointeur, color: '#3B82F6', icon: 'adjust' }, { label: 'Milieu', value: roleElos.milieu, color: '#8B5CF6', icon: 'swap-horiz' }].map(r => (
+                          <View key={r.label} style={{ alignItems: 'center', backgroundColor: r.color + '08', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                            <MaterialIcons name={r.icon as any} size={10} color={r.color} />
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: r.color }}>{r.value}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    ) : null}
+                  </View>
+                );
+              })() : null}
+
               {/* ===== UNIFIED RANKING HUB ===== */}
               <View style={s.rankingHub}>
                 {/* League tier compact */}
@@ -716,30 +765,6 @@ export default function PlayerDetailScreen() {
           </View>
 
           <View style={isTablet ? s.tabletRight : undefined}>
-            {/* ===== ELO RATING & HISTORY (above preferences) ===== */}
-            {belowFoldReady ? (
-              <EloSection
-                player={{ id: player.id, eloRating: player.eloRating, userId: (player as any)?.userId, lastMatchDate: player.lastMatchDate }}
-                eloHistory={eloHistory}
-                eloLoading={eloLoading}
-                roleElos={roleElos}
-                inactivityDecay={inactivityDecay}
-                rankHistory={rankHistory}
-                rankHistoryLoading={rankHistoryLoading}
-                language={language}
-                t={t}
-                screenWidth={screenWidth}
-              />
-            ) : (player.eloRating || eloHistory.length > 0) ? (
-              <View style={s.sectionCard}>
-                <View style={s.sectionHeader}>
-                  <View style={[s.sectionIconBox, { backgroundColor: currentEloRank.color + '15' }]}><MaterialIcons name={currentEloRank.icon as any} size={18} color={currentEloRank.color} /></View>
-                  <Text style={s.sectionTitle}>{t('leaderboard', 'eloRating')}</Text>
-                </View>
-                <View style={{ alignItems: 'center', paddingVertical: 12 }}><Text style={{ fontSize: 36, fontWeight: '900', color: currentEloRank.color }}>{player.eloRating || ELO_INITIAL}</Text></View>
-              </View>
-            ) : null}
-
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {belowFoldReady ? (
               <GamePreferencesSection
