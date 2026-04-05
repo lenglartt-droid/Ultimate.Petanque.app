@@ -54,47 +54,7 @@ const RESULT_CONFIG: Record<string, { icon: string; color: string; rank: number 
   'Autre': { icon: 'more-horiz', color: '#7B8794', rank: 8 },
 };
 
-// ============================================
-// PERFORMANCE BADGES
-// ============================================
-interface PerformanceBadge {
-  id: string;
-  icon: string;
-  label: string;
-  description: string;
-  color: string;
-  bgColor: string;
-  earned: boolean;
-  value?: string;
-  progress?: number;
-}
 
-const BadgeCard = React.memo(({ badge, index }: { badge: PerformanceBadge; index: number }) => (
-    <View style={[styles.badgeCard, !badge.earned && styles.badgeCardLocked, badge.earned && { borderColor: badge.color + '25' }]}>
-      <View style={styles.badgeTop}>
-        <View style={[styles.badgeIconCircle, { backgroundColor: badge.earned ? badge.bgColor : theme.backgroundSecondary }]}>
-          <MaterialIcons name={badge.icon as any} size={24} color={badge.earned ? badge.color : theme.textMuted} />
-        </View>
-        {badge.earned && badge.value ? (
-          <View style={[styles.badgeValuePill, { backgroundColor: badge.color + '12' }]}>
-            <Text style={[styles.badgeValue, { color: badge.color }]}>{badge.value}</Text>
-          </View>
-        ) : null}
-      </View>
-      <Text style={[styles.badgeLabel, !badge.earned && { color: theme.textMuted }]} numberOfLines={1}>{badge.label}</Text>
-      {!badge.earned && badge.progress !== undefined ? (
-        <View style={styles.badgeProgressBar}>
-          <View style={[styles.badgeProgressFill, { width: `${Math.min(badge.progress, 100)}%`, backgroundColor: badge.color + '60' }]} />
-        </View>
-      ) : null}
-      <Text style={styles.badgeDesc} numberOfLines={2}>{badge.description}</Text>
-      {!badge.earned ? (
-        <View style={styles.badgeLockOverlay}>
-          <MaterialIcons name="lock-outline" size={14} color={theme.textMuted} />
-        </View>
-      ) : null}
-    </View>
-));
 
 // ============================================
 // TOURNAMENT CARD
@@ -267,7 +227,6 @@ export default function PalmaresScreen() {
   const [yearFilter, setYearFilter] = useState<YearFilter>('all');
   const [formatFilter, setFormatFilter] = useState<FormatFilter>('all');
   const [resultFilter, setResultFilter] = useState<ResultFilter>('all');
-  const [showBadges, setShowBadges] = useState(true);
   const [showFormatStats, setShowFormatStats] = useState(false);
   const [showTournamentDetails, setShowTournamentDetails] = useState(false);
   const [showHeaderFilters, setShowHeaderFilters] = useState(false);
@@ -452,21 +411,6 @@ export default function PalmaresScreen() {
     Object.values(stats).forEach(s => { s.winRate = s.played > 0 ? Math.round((s.wins / s.played) * 100) : 0; });
     return stats;
   }, [palmaresData]);
-
-  // Performance Badges
-  const badges: PerformanceBadge[] = useMemo(() => [
-    { id: 'champion', icon: 'emoji-events', label: t('palmares', 'champion'), description: t('palmares', 'championDesc'), color: '#FFD700', bgColor: '#FFD700' + '18', earned: summary.titles > 0, value: summary.titles > 0 ? `${summary.titles} ${t('palmares', 'titleCount')}` : undefined, progress: summary.titles > 0 ? 100 : Math.min((summary.podiums / 1) * 50, 90) },
-    { id: 'podium_collector', icon: 'workspace-premium', label: t('palmares', 'collector'), description: t('palmares', 'collectorDesc'), color: '#A8B4C0', bgColor: '#C0C0C0' + '18', earned: summary.podiums >= 3, value: summary.podiums >= 3 ? `${summary.podiums} ${t('palmares', 'podiumCount')}` : undefined, progress: Math.min((summary.podiums / 3) * 100, 99) },
-    { id: 'invincible', icon: 'shield', label: t('palmares', 'invincible'), description: t('palmares', 'invincibleDesc'), color: theme.success, bgColor: theme.success + '15', earned: summary.undefeated > 0, value: summary.undefeated > 0 ? `${summary.undefeated} ${t('palmares', 'times')}` : undefined, progress: 0 },
-    { id: 'streak', icon: 'local-fire-department', label: t('palmares', 'onFire'), description: t('palmares', 'onFireDesc'), color: '#FF6B35', bgColor: '#FF6B35' + '15', earned: summary.maxStreak >= 5, value: summary.maxStreak >= 5 ? `${summary.maxStreak} ${t('palmares', 'matchCount')}` : undefined, progress: Math.min((summary.maxStreak / 5) * 100, 99) },
-    { id: 'sniper', icon: 'gps-fixed', label: t('palmares', 'sniper'), description: t('palmares', 'sniperDesc'), color: theme.tirColor, bgColor: theme.tirColor + '15', earned: summary.bestTirTournament !== null && (summary.bestTirTournament.stats.tirRate || 0) >= 60, value: summary.bestTirTournament ? `${summary.bestTirTournament.stats.tirRate}%` : undefined, progress: summary.bestTirTournament ? Math.min(((summary.bestTirTournament.stats.tirRate || 0) / 60) * 100, 99) : 0 },
-    { id: 'carreau_master', icon: 'stars', label: t('palmares', 'carreauMaster'), description: t('palmares', 'carreauMasterDesc'), color: theme.carreauColor, bgColor: theme.carreauColor + '15', earned: summary.totalCarreaux >= 10, value: summary.totalCarreaux >= 10 ? `${summary.totalCarreaux} ${t('palmares', 'carreaux').toLowerCase()}` : undefined, progress: Math.min((summary.totalCarreaux / 10) * 100, 99) },
-    { id: 'veteran', icon: 'military-tech', label: t('palmares', 'veteran'), description: t('palmares', 'veteranDesc'), color: '#8B5CF6', bgColor: '#8B5CF6' + '15', earned: summary.totalTournaments >= 10, value: summary.totalTournaments >= 10 ? `${summary.totalTournaments} ${t('palmares', 'tournois')}` : undefined, progress: Math.min((summary.totalTournaments / 10) * 100, 99) },
-    { id: 'winner', icon: 'trending-up', label: t('palmares', 'winner'), description: t('palmares', 'winnerDesc'), color: theme.primary, bgColor: theme.primary + '15', earned: summary.avgWinRate >= 60 && summary.totalMatches >= 5, value: summary.avgWinRate >= 60 ? `${summary.avgWinRate}%` : undefined, progress: summary.totalMatches >= 5 ? Math.min((summary.avgWinRate / 60) * 100, 99) : Math.min((summary.totalMatches / 5) * 50, 49) },
-  ], [summary, t]);
-
-  const earnedBadges = badges.filter(b => b.earned);
-  const lockedBadges = badges.filter(b => !b.earned);
 
   const flatListData = useMemo(() => showTournamentDetails ? palmaresData : [], [palmaresData, showTournamentDetails]);
 
@@ -720,23 +664,20 @@ export default function PalmaresScreen() {
             {/* Ad Banner */}
             <AdBanner position="inline" />
 
-            {/* ============ BADGES (no filter card here — moved to header) ============ */}
-            <View>
-              <Pressable style={styles.badgesSectionHeader} onPress={() => { Haptics.selectionAsync(); setShowBadges(!showBadges); }}>
-                <View style={styles.badgesSectionLeft}>
-                  <MaterialIcons name="stars" size={18} color={theme.carreauColor} />
-                  <Text style={styles.badgesSectionTitle}>{t('palmares', 'badges')}</Text>
-                  <View style={styles.badgeCountPill}><Text style={styles.badgeCountText}>{earnedBadges.length}/{badges.length}</Text></View>
-                </View>
-                <MaterialIcons name={showBadges ? 'expand-less' : 'expand-more'} size={22} color={theme.textSecondary} />
-              </Pressable>
-              {showBadges ? (
-                <View style={styles.badgesGrid}>
-                  {earnedBadges.map((badge, i) => <BadgeCard key={badge.id} badge={badge} index={i} />)}
-                  {lockedBadges.map((badge, i) => <BadgeCard key={badge.id} badge={badge} index={earnedBadges.length + i} />)}
-                </View>
-              ) : null}
-            </View>
+            {/* Badges link — badges moved to dedicated Badges page */}
+            <Pressable
+              style={styles.badgesLink}
+              onPress={() => { Haptics.selectionAsync(); router.push('/badges' as any); }}
+            >
+              <View style={[styles.badgesLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="stars" size={20} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.badgesLinkTitle}>{t('palmares', 'badges')}</Text>
+                <Text style={styles.badgesLinkSub}>{language === 'en' ? 'View all badges & progression' : 'Voir tous les badges & progression'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.carreauColor} />
+            </Pressable>
 
 
 
@@ -956,24 +897,11 @@ const styles = StyleSheet.create({
   formatStatValue: { fontSize: 13, fontWeight: '700', color: theme.primary, width: 36, textAlign: 'right' },
   formatStatCount: { fontSize: 10, color: theme.textMuted, width: 40 },
 
-  // Badges
-  badgesSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 14, paddingHorizontal: 4, marginBottom: 4 },
-  badgesSectionLeft: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  badgesSectionTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
-  badgeCountPill: { backgroundColor: theme.primary + '15', paddingHorizontal: 10, paddingVertical: 3, borderRadius: theme.borderRadius.full },
-  badgeCountText: { fontSize: 12, fontWeight: '700', color: theme.primary },
-  badgesGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 },
-  badgeCard: { width: (screenWidth - 32 - 20) / 3, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, alignItems: 'center', ...theme.shadows.card, minHeight: 130, borderWidth: 1.5, borderColor: 'transparent' },
-  badgeCardLocked: { opacity: 0.4 },
-  badgeTop: { alignItems: 'center', marginBottom: 8 },
-  badgeIconCircle: { width: 46, height: 46, borderRadius: 23, alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
-  badgeValuePill: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: theme.borderRadius.full },
-  badgeLabel: { fontSize: 12, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 3 },
-  badgeValue: { fontSize: 10, fontWeight: '700', textAlign: 'center' },
-  badgeDesc: { fontSize: 9, color: theme.textMuted, textAlign: 'center', lineHeight: 13 },
-  badgeLockOverlay: { position: 'absolute', top: 8, right: 8 },
-  badgeProgressBar: { width: '85%', height: 4, backgroundColor: theme.border, borderRadius: 2, overflow: 'hidden', marginBottom: 4 },
-  badgeProgressFill: { height: '100%', borderRadius: 2 },
+  // Badges link
+  badgesLink: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, borderWidth: 1, borderColor: theme.carreauColor + '20', ...theme.shadows.card },
+  badgesLinkIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  badgesLinkTitle: { fontSize: 15, fontWeight: '700' as const, color: theme.textPrimary },
+  badgesLinkSub: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
 
 
 

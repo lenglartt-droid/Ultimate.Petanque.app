@@ -240,5 +240,10 @@ export const statsTranslations = {
     exportGenerating: { fr: 'Generation en cours...', en: 'Generating...' },
     exportSuccess: { fr: 'Image exportee', en: 'Image exported' },
     exportError: { fr: "Erreur lors de l'export", en: 'Export error' },
+    fannySection: { fr: 'Fannys (13-0)', en: 'Fannys (13-0)' },
+    fannyGivenLabel: { fr: 'Fannys donnees', en: 'Fannys given' },
+    fannyReceivedLabel: { fr: 'Fannys recues', en: 'Fannys received' },
+    fannyGivenDesc: { fr: 'Victoires 13-0', en: '13-0 wins' },
+    fannyReceivedDesc: { fr: 'Defaites 0-13', en: '0-13 losses' },
   },
 };

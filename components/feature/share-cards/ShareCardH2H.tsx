@@ -258,71 +258,71 @@ export default function ShareCardH2H({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 18;
-  const titleSize = isStory ? 12 : 10;
-  const nameSize = isStory ? 18 : 15;
-  const scoreFontSize = isStory ? 40 : 32;
+  const pad = isStory ? 24 : 14;
+  const titleSize = isStory ? 12 : 9;
+  const nameSize = isStory ? 18 : 13;
+  const scoreFontSize = isStory ? 40 : 28;
 
   return (
     <View style={s.card}>
       <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 16 : 10 }}>
-          <MaterialIcons name="compare-arrows" size={isStory ? 16 : 13} color={ct.accent} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 16 : 6 }}>
+          <MaterialIcons name="compare-arrows" size={isStory ? 16 : 12} color={ct.accent} />
           <Text style={{ fontSize: titleSize, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>HEAD TO HEAD</Text>
         </View>
 
         {/* Player names */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: isStory ? 16 : 12 }}>
-          <PlayerHeader player={playerA} side="left" ct={ct} />
-          <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, paddingHorizontal: 4 }}>
-            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: ct.accent + '18', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: ct.accent + '30' }}>
-              <Text style={{ fontSize: 9, fontWeight: '900', color: ct.accent }}>VS</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: isStory ? 8 : 6, marginBottom: isStory ? 16 : 8 }}>
+          <PlayerHeader player={playerA} side="left" ct={ct} compact={!isStory} />
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, paddingHorizontal: 2 }}>
+            <View style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: isStory ? 14 : 11, backgroundColor: ct.accent + '18', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: ct.accent + '30' }}>
+              <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '900', color: ct.accent }}>VS</Text>
             </View>
           </View>
-          <PlayerHeader player={playerB} side="right" ct={ct} />
+          <PlayerHeader player={playerB} side="right" ct={ct} compact={!isStory} />
         </View>
 
         {/* Win record - big score */}
-        <View style={{ alignItems: 'center', marginBottom: isStory ? 20 : 14 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 16 : 12, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, paddingVertical: isStory ? 14 : 10, paddingHorizontal: isStory ? 24 : 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+        <View style={{ alignItems: 'center', marginBottom: isStory ? 20 : 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 16 : 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: isStory ? 16 : 12, paddingVertical: isStory ? 14 : 7, paddingHorizontal: isStory ? 24 : 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.35)' }}>{record.winsA}</Text>
-              <View style={{ width: 24, height: 3, borderRadius: 1.5, backgroundColor: colorA, marginTop: 2, opacity: winnerSide === 'A' ? 1 : 0.2 }} />
+              <View style={{ width: isStory ? 24 : 18, height: 3, borderRadius: 1.5, backgroundColor: colorA, marginTop: 2, opacity: winnerSide === 'A' ? 1 : 0.2 }} />
             </View>
             <View style={{ alignItems: 'center' }}>
-              <Text style={{ fontSize: isStory ? 10 : 8, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 0.5 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
+              <Text style={{ fontSize: isStory ? 10 : 7, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 0.5 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
               {record.draws > 0 ? (
-                <Text style={{ fontSize: isStory ? 9 : 7, color: 'rgba(255,255,255,0.15)', marginTop: 2 }}>{record.draws} {fr ? 'nuls' : 'draws'}</Text>
+                <Text style={{ fontSize: isStory ? 9 : 6, color: 'rgba(255,255,255,0.15)', marginTop: 1 }}>{record.draws} {fr ? 'nuls' : 'draws'}</Text>
               ) : null}
             </View>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: winnerSide === 'B' ? colorB : 'rgba(255,255,255,0.35)' }}>{record.winsB}</Text>
-              <View style={{ width: 24, height: 3, borderRadius: 1.5, backgroundColor: colorB, marginTop: 2, opacity: winnerSide === 'B' ? 1 : 0.2 }} />
+              <View style={{ width: isStory ? 24 : 18, height: 3, borderRadius: 1.5, backgroundColor: colorB, marginTop: 2, opacity: winnerSide === 'B' ? 1 : 0.2 }} />
             </View>
           </View>
-          <Text style={{ fontSize: isStory ? 10 : 8, color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
+          <Text style={{ fontSize: isStory ? 10 : 7, color: 'rgba(255,255,255,0.25)', marginTop: isStory ? 6 : 3 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
         </View>
 
         {/* Trend line + Form indicator */}
         {recentH2H && recentH2H.length >= 2 ? (
-          <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 10, gap: isStory ? 8 : 5, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 12, paddingVertical: isStory ? 10 : 7, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
-            <Text style={{ fontSize: isStory ? 8 : 7, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>{fr ? 'TENDANCE' : 'TREND'}</Text>
+          <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 6, gap: isStory ? 8 : 3, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: isStory ? 12 : 8, paddingVertical: isStory ? 10 : 5, paddingHorizontal: isStory ? 12 : 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
+            <Text style={{ fontSize: isStory ? 8 : 6, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>{fr ? 'TENDANCE' : 'TREND'}</Text>
             <TrendLine results={recentH2H} colorA={colorA} colorB={colorB} compact={!isStory} />
             <FormBadge results={recentH2H} fr={fr} colorA={colorA} colorB={colorB} compact={!isStory} />
           </View>
         ) : null}
 
         {/* Comparison bars */}
-        <View style={{ marginBottom: isStory ? 14 : 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+        <View style={{ marginBottom: isStory ? 14 : 6 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: isStory ? 4 : 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colorA }} />
-              <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerA.name.split(' ')[0]}</Text>
+              <View style={{ width: isStory ? 8 : 6, height: isStory ? 8 : 6, borderRadius: 4, backgroundColor: colorA }} />
+              <Text style={{ fontSize: isStory ? 9 : 6, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerA.name.split(' ')[0]}</Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
-              <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerB.name.split(' ')[0]}</Text>
-              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colorB }} />
+              <Text style={{ fontSize: isStory ? 9 : 6, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerB.name.split(' ')[0]}</Text>
+              <View style={{ width: isStory ? 8 : 6, height: isStory ? 8 : 6, borderRadius: 4, backgroundColor: colorB }} />
             </View>
           </View>
 
@@ -343,15 +343,15 @@ export default function ShareCardH2H({
 
         {/* Last match date */}
         {record.lastMatchDate ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: isStory ? 6 : 4 }}>
-            <MaterialIcons name="schedule" size={isStory ? 10 : 8} color="rgba(255,255,255,0.2)" />
-            <Text style={{ fontSize: isStory ? 9 : 7, color: 'rgba(255,255,255,0.2)' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: isStory ? 6 : 2 }}>
+            <MaterialIcons name="schedule" size={isStory ? 10 : 7} color="rgba(255,255,255,0.2)" />
+            <Text style={{ fontSize: isStory ? 9 : 6, color: 'rgba(255,255,255,0.2)' }}>
               {fr ? 'Dernier match' : 'Last match'}: {new Date(record.lastMatchDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
             </Text>
           </View>
         ) : null}
 
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
       </LinearGradient>
     </View>
   );

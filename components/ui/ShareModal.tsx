@@ -855,7 +855,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 </Animated.View>
 
                 {/* Social media card button */}
-                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player') ? (
+                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player' || itemType === 'club' || itemType === 'terrain') ? (
                   <Pressable
                     style={({ pressed }) => [s.socialCardBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
                     onPress={() => {
