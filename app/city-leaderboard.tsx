@@ -21,7 +21,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchWeeklyLeaderboard, getSubRankings, WeeklyRankChange } from '@/services/weeklyLeaderboardService';
 import { fetchLeaderboard, LeaderboardPlayer, sortLeaderboard, LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
@@ -36,7 +36,7 @@ export default function CityLeaderboardScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
   const params = useLocalSearchParams<{ city?: string; type?: string; value?: string }>();
 
   // Support country/continent detail pages
