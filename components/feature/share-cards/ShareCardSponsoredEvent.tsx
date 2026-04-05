@@ -132,10 +132,10 @@ export default function ShareCardSponsoredEvent({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 28 : 20;
-  const titleSize = isStory ? 22 : 18;
-  const qrSize = isStory ? 140 : 110;
-  const codeFontSize = isStory ? 22 : 18;
+  const pad = isStory ? 28 : 14;
+  const titleSize = isStory ? 22 : 16;
+  const qrSize = isStory ? 140 : 90;
+  const codeFontSize = isStory ? 22 : 16;
 
   return (
     <View style={s.card}>

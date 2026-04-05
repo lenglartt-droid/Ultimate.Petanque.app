@@ -78,6 +78,12 @@ export const MeetupCard = React.memo(({ meetup, onPress, t, language }: MeetupCa
       </View>
     </Pressable>
   );
+}, (prev, next) => {
+  return prev.meetup.id === next.meetup.id &&
+    prev.meetup.status === next.meetup.status &&
+    prev.meetup._acceptedCount === next.meetup._acceptedCount &&
+    prev.meetup._source === next.meetup._source &&
+    prev.language === next.language;
 });
 
 const styles = StyleSheet.create({

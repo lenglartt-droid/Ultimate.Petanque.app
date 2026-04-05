@@ -138,7 +138,20 @@ function CompactHistory({ recentResults, matches, hasData, language, t }: Props)
   );
 }
 
-export default memo(CompactHistory);
+export default memo(CompactHistory, (prev, next) => {
+  // Skip re-render if the data that drives the UI hasn't changed
+  if (prev.recentResults.length !== next.recentResults.length) return false;
+  if (prev.hasData !== next.hasData) return false;
+  if (prev.language !== next.language) return false;
+  if (prev.matches.length !== next.matches.length) return false;
+  // Deep-compare recent results by id + score (avoids re-render from new array references)
+  for (let i = 0; i < prev.recentResults.length; i++) {
+    const a = prev.recentResults[i];
+    const b = next.recentResults[i];
+    if (a.id !== b.id || a.score !== b.score || a.result !== b.result) return false;
+  }
+  return true;
+});
 
 const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },

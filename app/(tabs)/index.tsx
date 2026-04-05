@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
@@ -104,7 +104,8 @@ interface HomeSection { key: SectionKey; data: SectionKey[] }
 // ============================================================
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, tournaments, matches, challenges, selfPlayer, refreshData } = useApp();
+  const { userStats, tournaments, matches, challenges, selfPlayer } = useAppData();
+  const { refreshData } = useAppActions();
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
