@@ -18,11 +18,18 @@ export function createGetters(
   matches: Match[],
   terrains: Terrain[],
 ) {
-  const getPlayerById = (id: string) => players.find(p => p.id === id);
-  const getClubById = (id: string) => clubs.find(c => c.id === id);
-  const getTournamentById = (id: string) => tournaments.find(t => t.id === id);
-  const getMatchById = (id: string) => matches.find(m => m.id === id);
-  const getTerrainById = (id: string) => terrains.find(t => t.id === id);
+  // Build lookup maps for O(1) access instead of O(n) find()
+  const playerMap = new Map(players.map(p => [p.id, p]));
+  const clubMap = new Map(clubs.map(c => [c.id, c]));
+  const tournamentMap = new Map(tournaments.map(t => [t.id, t]));
+  const matchMap = new Map(matches.map(m => [m.id, m]));
+  const terrainMap = new Map(terrains.map(t => [t.id, t]));
+
+  const getPlayerById = (id: string) => playerMap.get(id);
+  const getClubById = (id: string) => clubMap.get(id);
+  const getTournamentById = (id: string) => tournamentMap.get(id);
+  const getMatchById = (id: string) => matchMap.get(id);
+  const getTerrainById = (id: string) => terrainMap.get(id);
 
   const getMatchesByPlayer = (playerId: string) =>
     matches.filter(m => m.teamA.players.includes(playerId) || m.teamB.players.includes(playerId));
