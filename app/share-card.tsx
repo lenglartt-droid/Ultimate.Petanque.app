@@ -41,6 +41,7 @@ import {
   ShareCardStats,
   ShareCardChallenge,
   ShareCardTournament,
+  ShareCardH2H,
 } from '@/components/feature/share-cards';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeName } from '@/services/badgeService';
@@ -52,7 +53,7 @@ interface PlayerInfo {
   country?: string;
 }
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament';
+type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -66,6 +67,7 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   stats: { fr: 'Mes statistiques', en: 'My Statistics', icon: 'bar-chart', iconColor: '#3B82F6' },
   challenge: { fr: 'Resultat de defi', en: 'Challenge Result', icon: 'track-changes', iconColor: '#EF4444' },
   tournament: { fr: 'Resultat de tournoi', en: 'Tournament Result', icon: 'emoji-events', iconColor: '#F59E0B' },
+  h2h: { fr: 'Confrontation directe', en: 'Head to Head', icon: 'compare-arrows', iconColor: '#8B5CF6' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -75,13 +77,153 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function ShareCardScreen() {
-  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string }>();
+  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string }>();
   const { language } = useLanguage();
   const { user } = useAuth();
   const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players } = useApp();
   const { badges: userBadges } = useBadges();
   const { showAlert } = useAlert();
   const fr = language === 'fr';
+
+  // H2H: Compute opponents the user has played against
+  const h2hOpponents = useMemo(() => {
+    if (cardType !== 'h2h' || !selfPlayer?.id) return [];
+    const opponentMap = new Map<string, { id: string; name: string; matchCount: number }>();
+    matches.forEach(m => {
+      const inA = m.teamA.players.includes(selfPlayer.id);
+      const inB = m.teamB.players.includes(selfPlayer.id);
+      if (!inA && !inB) return;
+      const oppTeam = inA ? m.teamB : m.teamA;
+      oppTeam.players.forEach((pid, idx) => {
+        if (pid === selfPlayer.id) return;
+        const existing = opponentMap.get(pid);
+        const name = oppTeam.playerNames[idx] || pid;
+        if (existing) {
+          existing.matchCount++;
+        } else {
+          opponentMap.set(pid, { id: pid, name, matchCount: 1 });
+        }
+      });
+    });
+    return Array.from(opponentMap.values()).sort((a, b) => b.matchCount - a.matchCount);
+  }, [cardType, matches, selfPlayer?.id]);
+
+  // Auto-select first opponent if none selected
+  React.useEffect(() => {
+    if (cardType === 'h2h' && !selectedOpponentId && h2hOpponents.length > 0) {
+      setSelectedOpponentId(h2hOpponents[0].id);
+    }
+  }, [cardType, selectedOpponentId, h2hOpponents]);
+
+  // H2H: compute record and stats between self and selected opponent
+  const h2hData = useMemo(() => {
+    if (cardType !== 'h2h' || !selfPlayer?.id || !selectedOpponentId) return null;
+    const pid = selfPlayer.id;
+    const oid = selectedOpponentId;
+
+    let winsA = 0, winsB = 0, draws = 0, totalScoreA = 0, totalScoreB = 0;
+    let tirsA = 0, tirsSuccessA = 0, pointsA = 0, pointsSuccessA = 0, carreauxA = 0;
+    let tirsB = 0, tirsSuccessB = 0, pointsB = 0, pointsSuccessB = 0, carreauxB = 0;
+    let matchCountA = 0, winsOverallA = 0, matchCountB = 0, winsOverallB = 0;
+    let lastMatchDate: string | undefined;
+    let h2hMatchCount = 0;
+
+    matches.forEach(m => {
+      const inTeamA_self = m.teamA.players.includes(pid);
+      const inTeamB_self = m.teamB.players.includes(pid);
+      const inTeamA_opp = m.teamA.players.includes(oid);
+      const inTeamB_opp = m.teamB.players.includes(oid);
+
+      // Count overall stats for both players
+      if (inTeamA_self || inTeamB_self) {
+        matchCountA++;
+        const selfWon = (inTeamA_self && m.winner === 'A') || (inTeamB_self && m.winner === 'B');
+        if (selfWon) winsOverallA++;
+        if (m.playerActions) {
+          const pa = m.playerActions.find(a => a.playerId === pid);
+          if (pa) {
+            tirsA += pa.actions.tirs; tirsSuccessA += pa.actions.tirsSuccess;
+            pointsA += pa.actions.points; pointsSuccessA += pa.actions.pointsSuccess;
+            carreauxA += pa.actions.carreaux;
+          }
+        }
+      }
+      if (inTeamA_opp || inTeamB_opp) {
+        matchCountB++;
+        const oppWon = (inTeamA_opp && m.winner === 'A') || (inTeamB_opp && m.winner === 'B');
+        if (oppWon) winsOverallB++;
+        if (m.playerActions) {
+          const pa = m.playerActions.find(a => a.playerId === oid);
+          if (pa) {
+            tirsB += pa.actions.tirs; tirsSuccessB += pa.actions.tirsSuccess;
+            pointsB += pa.actions.points; pointsSuccessB += pa.actions.pointsSuccess;
+            carreauxB += pa.actions.carreaux;
+          }
+        }
+      }
+
+      // H2H: check if they are on OPPOSING teams
+      const isH2H = (inTeamA_self && inTeamB_opp) || (inTeamB_self && inTeamA_opp);
+      if (!isH2H) return;
+
+      h2hMatchCount++;
+      if (!lastMatchDate || new Date(m.date) > new Date(lastMatchDate)) lastMatchDate = m.date;
+
+      const selfInA = inTeamA_self;
+      totalScoreA += selfInA ? m.teamA.score : m.teamB.score;
+      totalScoreB += selfInA ? m.teamB.score : m.teamA.score;
+
+      const selfWon = (selfInA && m.winner === 'A') || (!selfInA && m.winner === 'B');
+      const oppWon = (selfInA && m.winner === 'B') || (!selfInA && m.winner === 'A');
+      if (selfWon) winsA++;
+      else if (oppWon) winsB++;
+      else draws++;
+    });
+
+    if (h2hMatchCount === 0) return null;
+
+    const oppPlayer = players.find(p => p.id === oid);
+    const oppName = oppPlayer?.name || h2hOpponents.find(o => o.id === oid)?.name || 'Adversaire';
+    const oppEloRank = oppPlayer?.eloRating ? getEloRank(oppPlayer.eloRating) : null;
+
+    return {
+      playerA: {
+        name: selfPlayer.name || playerName,
+        eloRating: selfPlayer.eloRating,
+        eloColor: eloData?.color,
+        eloRankLabel: eloData?.label,
+        club: selfPlayer.club,
+        city: selfPlayer.city || selfPlayer.location?.city,
+        country: selfPlayer.country,
+        winRate: matchCountA > 0 ? Math.round((winsOverallA / matchCountA) * 100) : 0,
+        tirRate: tirsA > 0 ? Math.round((tirsSuccessA / tirsA) * 100) : 0,
+        pointRate: pointsA > 0 ? Math.round((pointsSuccessA / pointsA) * 100) : 0,
+        carreauCount: carreauxA,
+      },
+      playerB: {
+        name: oppName,
+        eloRating: oppPlayer?.eloRating,
+        eloColor: oppEloRank?.color,
+        eloRankLabel: oppEloRank ? oppEloRank.label[fr ? 'fr' : 'en'] : undefined,
+        club: oppPlayer?.club,
+        city: oppPlayer?.city || oppPlayer?.location?.city,
+        country: oppPlayer?.country,
+        winRate: matchCountB > 0 ? Math.round((winsOverallB / matchCountB) * 100) : 0,
+        tirRate: tirsB > 0 ? Math.round((tirsSuccessB / tirsB) * 100) : 0,
+        pointRate: pointsB > 0 ? Math.round((pointsSuccessB / pointsB) * 100) : 0,
+        carreauCount: carreauxB,
+      },
+      record: {
+        winsA,
+        winsB,
+        draws,
+        totalMatches: h2hMatchCount,
+        avgScoreA: h2hMatchCount > 0 ? totalScoreA / h2hMatchCount : 0,
+        avgScoreB: h2hMatchCount > 0 ? totalScoreB / h2hMatchCount : 0,
+        lastMatchDate,
+      },
+    };
+  }, [cardType, matches, selfPlayer, selectedOpponentId, players, h2hOpponents, eloData, playerName, fr]);
 
   const [activeFormat, setActiveFormat] = useState<ShareCardFormat>('square');
   const [activeTheme, setActiveTheme] = useState<CardColorTheme>('dark');
@@ -93,6 +235,11 @@ export default function ShareCardScreen() {
   const cardType = (params.type as CardType) || 'stats';
   const itemId = params.id;
   const badgeId = params.badgeId;
+  const opponentIdParam = params.opponentId;
+
+  // H2H: opponent selection state
+  const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(opponentIdParam || null);
+  const [showOpponentPicker, setShowOpponentPicker] = useState(false);
 
   // Resolve data
   const match = useMemo(() => {
@@ -191,11 +338,14 @@ export default function ShareCardScreen() {
       case 'tournament':
         if (tournament) return tournament.name;
         return 'Tournoi';
+      case 'h2h':
+        if (h2hData) return `${h2hData.playerA.name} vs ${h2hData.playerB.name}`;
+        return 'H2H';
       case 'stats':
       default:
         return playerName || 'Stats';
     }
-  }, [cardType, match, badgeId, challenge, tournament, playerName, language]);
+  }, [cardType, match, badgeId, challenge, tournament, playerName, language, h2hData]);
 
   const recordHistory = useCallback(async (action: 'shared' | 'downloaded') => {
     const info = TYPE_INFO[cardType];
@@ -342,6 +492,18 @@ export default function ShareCardScreen() {
             format={activeFormat}
           />
         );
+      case 'h2h':
+        if (!h2hData) return <EmptyCard message={fr ? 'Selectionnez un adversaire' : 'Select an opponent'} />;
+        return (
+          <ShareCardH2H
+            playerA={h2hData.playerA}
+            playerB={h2hData.playerB}
+            record={h2hData.record}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
       case 'stats':
       default:
         return (
@@ -395,6 +557,40 @@ export default function ShareCardScreen() {
         <Animated.View entering={FadeInDown.duration(300)}>
           <Text style={st.typeLabel}>{fr ? typeInfo.fr : typeInfo.en}</Text>
         </Animated.View>
+
+        {/* H2H: Opponent Picker */}
+        {cardType === 'h2h' ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(15)} style={st.h2hPickerContainer}>
+            <Text style={st.h2hPickerLabel}>{fr ? 'ADVERSAIRE' : 'OPPONENT'}</Text>
+            {h2hOpponents.length === 0 ? (
+              <View style={st.h2hEmptyState}>
+                <MaterialIcons name="people-outline" size={24} color={theme.textMuted} />
+                <Text style={st.h2hEmptyText}>{fr ? 'Aucun adversaire trouve. Jouez des matchs pour debloquer cette carte.' : 'No opponents found. Play matches to unlock this card.'}</Text>
+              </View>
+            ) : (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.h2hOpponentScroll}>
+                {h2hOpponents.slice(0, 10).map(opp => {
+                  const isActive = selectedOpponentId === opp.id;
+                  const oppP = players.find(p => p.id === opp.id);
+                  const oppElo = oppP?.eloRating ? getEloRank(oppP.eloRating) : null;
+                  return (
+                    <Pressable
+                      key={opp.id}
+                      style={[st.h2hOpponentChip, isActive && { backgroundColor: '#8B5CF6' + '18', borderColor: '#8B5CF6' + '50' }]}
+                      onPress={() => { Haptics.selectionAsync(); setSelectedOpponentId(opp.id); }}
+                    >
+                      <Text style={[st.h2hOpponentName, isActive && { color: '#8B5CF6' }]} numberOfLines={1}>{opp.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                        <Text style={st.h2hOpponentCount}>{opp.matchCount}m</Text>
+                        {oppElo ? <Text style={{ fontSize: 8, fontWeight: '700', color: oppElo.color }}>{oppP?.eloRating}</Text> : null}
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </Animated.View>
+        ) : null}
 
         {/* Platform presets */}
         <Animated.View entering={FadeInDown.duration(300).delay(30)} style={st.platformRow}>
@@ -566,4 +762,13 @@ const st = StyleSheet.create({
   shareBtn: { flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 15, borderRadius: 16 },
   shareBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   btnDisabled: { opacity: 0.6 },
+  // H2H opponent picker
+  h2hPickerContainer: { marginBottom: 14, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border },
+  h2hPickerLabel: { fontSize: 9, fontWeight: '700', color: theme.textMuted, letterSpacing: 1, marginBottom: 8 },
+  h2hEmptyState: { alignItems: 'center' as const, paddingVertical: 16, gap: 8 },
+  h2hEmptyText: { fontSize: 12, color: theme.textMuted, textAlign: 'center' as const, lineHeight: 18 },
+  h2hOpponentScroll: { gap: 6, paddingRight: 4 },
+  h2hOpponentChip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border, minWidth: 80, alignItems: 'center' as const },
+  h2hOpponentName: { fontSize: 12, fontWeight: '700', color: theme.textPrimary, marginBottom: 2 },
+  h2hOpponentCount: { fontSize: 9, fontWeight: '600', color: theme.textMuted },
 });

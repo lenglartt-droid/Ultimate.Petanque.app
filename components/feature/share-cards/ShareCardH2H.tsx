@@ -1,0 +1,266 @@
+/**
+ * ShareCardH2H — Head-to-Head comparison card for social sharing.
+ * Shows two players side by side with stats comparison, win history, ELO, geo ranks.
+ * Adapts layout to square / story / landscape formats.
+ */
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import ShareCardWatermark from './ShareCardWatermark';
+import { CARD_COLOR_THEMES, type CardColorTheme, type ShareCardFormat } from '@/services/shareCardService';
+
+interface PlayerH2HData {
+  name: string;
+  eloRating?: number;
+  eloColor?: string;
+  eloRankLabel?: string;
+  club?: string;
+  city?: string;
+  country?: string;
+  winRate?: number;
+  tirRate?: number;
+  pointRate?: number;
+  carreauCount?: number;
+}
+
+interface H2HRecord {
+  winsA: number;
+  winsB: number;
+  draws: number;
+  totalMatches: number;
+  avgScoreA: number;
+  avgScoreB: number;
+  lastMatchDate?: string;
+}
+
+interface Props {
+  playerA: PlayerH2HData;
+  playerB: PlayerH2HData;
+  record: H2HRecord;
+  language?: 'fr' | 'en';
+  colorTheme?: CardColorTheme;
+  format?: ShareCardFormat;
+}
+
+function ComparisonBar({ valueA, valueB, labelA, labelB, colorA, colorB, unit, compact }: {
+  valueA: number; valueB: number; labelA?: string; labelB?: string; colorA: string; colorB: string; unit?: string; compact?: boolean;
+}) {
+  const total = Math.max(1, valueA + valueB);
+  const pctA = (valueA / total) * 100;
+  const pctB = (valueB / total) * 100;
+  const fs = compact ? 8 : 10;
+  const barH = compact ? 5 : 7;
+
+  return (
+    <View style={{ marginBottom: compact ? 5 : 8 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+        <Text style={{ fontSize: fs, fontWeight: '800', color: valueA >= valueB ? colorA : 'rgba(255,255,255,0.4)' }}>{valueA}{unit || ''}</Text>
+        {labelA ? <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '600', color: 'rgba(255,255,255,0.35)', flex: 1, textAlign: 'center' }}>{labelA}</Text> : null}
+        <Text style={{ fontSize: fs, fontWeight: '800', color: valueB >= valueA ? colorB : 'rgba(255,255,255,0.4)' }}>{valueB}{unit || ''}</Text>
+      </View>
+      <View style={{ flexDirection: 'row', height: barH, borderRadius: barH / 2, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+        <View style={{ width: `${Math.max(2, pctA)}%`, backgroundColor: colorA, borderTopLeftRadius: barH / 2, borderBottomLeftRadius: barH / 2 }} />
+        <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.15)' }} />
+        <View style={{ width: `${Math.max(2, pctB)}%`, backgroundColor: colorB, borderTopRightRadius: barH / 2, borderBottomRightRadius: barH / 2 }} />
+      </View>
+    </View>
+  );
+}
+
+function PlayerHeader({ player, side, ct, compact }: { player: PlayerH2HData; side: 'left' | 'right'; ct: any; compact?: boolean }) {
+  const align = side === 'left' ? 'flex-start' : 'flex-end';
+  const textAlign = side === 'left' ? 'left' : 'right';
+  const nameSize = compact ? 11 : 14;
+  const eloSize = compact ? 8 : 10;
+
+  return (
+    <View style={{ flex: 1, alignItems: align as any }}>
+      <Text style={{ fontSize: nameSize, fontWeight: '800', color: ct.textPrimary, textAlign: textAlign as any }} numberOfLines={1}>{player.name}</Text>
+      {player.eloRating ? (
+        <View style={{ flexDirection: side === 'left' ? 'row' : 'row-reverse', alignItems: 'center', gap: 3, marginTop: 2 }}>
+          <MaterialIcons name="diamond" size={compact ? 7 : 9} color={player.eloColor || '#94A3B8'} />
+          <Text style={{ fontSize: eloSize, fontWeight: '700', color: player.eloColor || '#94A3B8' }}>{player.eloRating}</Text>
+          {player.eloRankLabel ? <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '600', color: 'rgba(255,255,255,0.4)' }}>{player.eloRankLabel}</Text> : null}
+        </View>
+      ) : null}
+      {player.club ? (
+        <View style={{ flexDirection: side === 'left' ? 'row' : 'row-reverse', alignItems: 'center', gap: 2, marginTop: 2 }}>
+          <MaterialIcons name="home" size={compact ? 6 : 8} color={ct.textSecondary} />
+          <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '500', color: ct.textSecondary }} numberOfLines={1}>{player.club}</Text>
+        </View>
+      ) : null}
+      {player.city ? (
+        <View style={{ flexDirection: side === 'left' ? 'row' : 'row-reverse', alignItems: 'center', gap: 2, marginTop: 1 }}>
+          <MaterialIcons name="place" size={compact ? 6 : 8} color={ct.textSecondary} />
+          <Text style={{ fontSize: compact ? 6 : 8, fontWeight: '500', color: ct.textSecondary }} numberOfLines={1}>{player.city}{player.country ? `, ${player.country}` : ''}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export default function ShareCardH2H({
+  playerA, playerB, record,
+  language = 'fr', colorTheme = 'dark', format = 'square',
+}: Props) {
+  const fr = language === 'fr';
+  const ct = CARD_COLOR_THEMES[colorTheme];
+  const isStory = format === 'story';
+  const isLandscape = format === 'landscape';
+
+  const colorA = '#22C55E';
+  const colorB = '#3B82F6';
+  const winnerSide = record.winsA > record.winsB ? 'A' : record.winsB > record.winsA ? 'B' : null;
+
+  // === LANDSCAPE ===
+  if (isLandscape) {
+    return (
+      <View style={s.card}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 12, justifyContent: 'space-between' }}>
+          {/* Title */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
+            <MaterialIcons name="compare-arrows" size={10} color={ct.accent} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>HEAD TO HEAD</Text>
+          </View>
+
+          <View style={{ flexDirection: 'row', flex: 1 }}>
+            {/* Left: players */}
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <PlayerHeader player={playerA} side="left" ct={ct} compact />
+                <View style={{ alignItems: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ fontSize: 8, fontWeight: '700', color: 'rgba(255,255,255,0.25)' }}>VS</Text>
+                </View>
+                <PlayerHeader player={playerB} side="right" ct={ct} compact />
+              </View>
+              {/* Score record */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.4)' }}>{record.winsA}</Text>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 6, fontWeight: '700', color: 'rgba(255,255,255,0.25)', letterSpacing: 0.5 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
+                  {record.draws > 0 ? <Text style={{ fontSize: 6, color: 'rgba(255,255,255,0.2)' }}>{record.draws} {fr ? 'nuls' : 'draws'}</Text> : null}
+                </View>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: winnerSide === 'B' ? colorB : 'rgba(255,255,255,0.4)' }}>{record.winsB}</Text>
+              </View>
+            </View>
+
+            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 4 }} />
+
+            {/* Right: comparison bars */}
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              {playerA.winRate !== undefined && playerB.winRate !== undefined ? (
+                <ComparisonBar valueA={playerA.winRate} valueB={playerB.winRate} labelA={fr ? 'Vict.' : 'Win'} colorA={colorA} colorB={colorB} unit="%" compact />
+              ) : null}
+              {playerA.tirRate !== undefined && playerB.tirRate !== undefined ? (
+                <ComparisonBar valueA={playerA.tirRate} valueB={playerB.tirRate} labelA={fr ? 'Tir' : 'Shot'} colorA={colorA} colorB={colorB} unit="%" compact />
+              ) : null}
+              {playerA.pointRate !== undefined && playerB.pointRate !== undefined ? (
+                <ComparisonBar valueA={playerA.pointRate} valueB={playerB.pointRate} labelA="Point" colorA={colorA} colorB={colorB} unit="%" compact />
+              ) : null}
+              <ComparisonBar valueA={Math.round(record.avgScoreA * 10) / 10} valueB={Math.round(record.avgScoreB * 10) / 10} labelA={fr ? 'Moy.' : 'Avg.'} colorA={colorA} colorB={colorB} compact />
+              <View style={{ flexDirection: 'row', justifyContent: 'center', marginTop: 2 }}>
+                <Text style={{ fontSize: 7, color: 'rgba(255,255,255,0.25)' }}>{record.totalMatches} {fr ? 'matchs' : 'matches'}</Text>
+              </View>
+            </View>
+          </View>
+          <ShareCardWatermark variant="light" size="sm" />
+        </LinearGradient>
+      </View>
+    );
+  }
+
+  // === STORY / SQUARE ===
+  const pad = isStory ? 24 : 18;
+  const titleSize = isStory ? 12 : 10;
+  const nameSize = isStory ? 18 : 15;
+  const scoreFontSize = isStory ? 40 : 32;
+
+  return (
+    <View style={s.card}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 16 : 10 }}>
+          <MaterialIcons name="compare-arrows" size={isStory ? 16 : 13} color={ct.accent} />
+          <Text style={{ fontSize: titleSize, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>HEAD TO HEAD</Text>
+        </View>
+
+        {/* Player names */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginBottom: isStory ? 16 : 12 }}>
+          <PlayerHeader player={playerA} side="left" ct={ct} />
+          <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, paddingHorizontal: 4 }}>
+            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: ct.accent + '18', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: ct.accent + '30' }}>
+              <Text style={{ fontSize: 9, fontWeight: '900', color: ct.accent }}>VS</Text>
+            </View>
+          </View>
+          <PlayerHeader player={playerB} side="right" ct={ct} />
+        </View>
+
+        {/* Win record - big score */}
+        <View style={{ alignItems: 'center', marginBottom: isStory ? 20 : 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 16 : 12, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 16, paddingVertical: isStory ? 14 : 10, paddingHorizontal: isStory ? 24 : 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.35)' }}>{record.winsA}</Text>
+              <View style={{ width: 24, height: 3, borderRadius: 1.5, backgroundColor: colorA, marginTop: 2, opacity: winnerSide === 'A' ? 1 : 0.2 }} />
+            </View>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: isStory ? 10 : 8, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 0.5 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
+              {record.draws > 0 ? (
+                <Text style={{ fontSize: isStory ? 9 : 7, color: 'rgba(255,255,255,0.15)', marginTop: 2 }}>{record.draws} {fr ? 'nuls' : 'draws'}</Text>
+              ) : null}
+            </View>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: winnerSide === 'B' ? colorB : 'rgba(255,255,255,0.35)' }}>{record.winsB}</Text>
+              <View style={{ width: 24, height: 3, borderRadius: 1.5, backgroundColor: colorB, marginTop: 2, opacity: winnerSide === 'B' ? 1 : 0.2 }} />
+            </View>
+          </View>
+          <Text style={{ fontSize: isStory ? 10 : 8, color: 'rgba(255,255,255,0.25)', marginTop: 6 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
+        </View>
+
+        {/* Comparison bars */}
+        <View style={{ marginBottom: isStory ? 14 : 10 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colorA }} />
+              <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerA.name.split(' ')[0]}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.35)' }}>{playerB.name.split(' ')[0]}</Text>
+              <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colorB }} />
+            </View>
+          </View>
+
+          {playerA.winRate !== undefined && playerB.winRate !== undefined ? (
+            <ComparisonBar valueA={playerA.winRate} valueB={playerB.winRate} labelA={fr ? 'Taux Victoire' : 'Win Rate'} colorA={colorA} colorB={colorB} unit="%" compact={!isStory} />
+          ) : null}
+          {playerA.tirRate !== undefined && playerB.tirRate !== undefined ? (
+            <ComparisonBar valueA={playerA.tirRate} valueB={playerB.tirRate} labelA={fr ? 'Taux Tir' : 'Shot Rate'} colorA={colorA} colorB={colorB} unit="%" compact={!isStory} />
+          ) : null}
+          {playerA.pointRate !== undefined && playerB.pointRate !== undefined ? (
+            <ComparisonBar valueA={playerA.pointRate} valueB={playerB.pointRate} labelA={fr ? 'Taux Point' : 'Point Rate'} colorA={colorA} colorB={colorB} unit="%" compact={!isStory} />
+          ) : null}
+          {playerA.carreauCount !== undefined && playerB.carreauCount !== undefined ? (
+            <ComparisonBar valueA={playerA.carreauCount} valueB={playerB.carreauCount} labelA="Carreaux" colorA={colorA} colorB={colorB} compact={!isStory} />
+          ) : null}
+          <ComparisonBar valueA={Math.round(record.avgScoreA * 10) / 10} valueB={Math.round(record.avgScoreB * 10) / 10} labelA={fr ? 'Score Moyen' : 'Avg Score'} colorA={colorA} colorB={colorB} compact={!isStory} />
+        </View>
+
+        {/* Last match date */}
+        {record.lastMatchDate ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: isStory ? 6 : 4 }}>
+            <MaterialIcons name="schedule" size={isStory ? 10 : 8} color="rgba(255,255,255,0.2)" />
+            <Text style={{ fontSize: isStory ? 9 : 7, color: 'rgba(255,255,255,0.2)' }}>
+              {fr ? 'Dernier match' : 'Last match'}: {new Date(record.lastMatchDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </Text>
+          </View>
+        ) : null}
+
+        <ShareCardWatermark variant="light" size="sm" />
+      </LinearGradient>
+    </View>
+  );
+}
+
+const s = StyleSheet.create({
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+});
