@@ -117,7 +117,7 @@ export default function ShareCardPalmares({
               <MaterialIcons name="emoji-events" size={10} color="#FFD700" />
               <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'PALMARES' : 'CAREER'}</Text>
             </View>
-            {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
+            {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text> : null}
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
@@ -169,7 +169,7 @@ export default function ShareCardPalmares({
                   {season.tournaments.slice(0, 2).map((t, i) => (
                     <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 3, paddingLeft: 4, marginBottom: 1 }}>
                       <ResultBadge result={t.result} compact />
-                      <Text style={{ fontSize: 7, color: ct.textPrimary, flex: 1 }} numberOfLines={1}>{t.name}</Text>
+                      <Text style={{ fontSize: 7, color: ct.textPrimary, flex: 1, flexShrink: 1 }} numberOfLines={1}>{t.name}</Text>
                     </View>
                   ))}
                   {season.tournaments.length > 2 ? (
@@ -200,7 +200,7 @@ export default function ShareCardPalmares({
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>{fr ? 'PALMARES' : 'CAREER'}</Text>
-            {playerName ? <Text style={{ fontSize: isStory ? 14 : 12, fontWeight: '800', color: ct.textPrimary, marginTop: 1 }}>{playerName}</Text> : null}
+            {playerName ? <Text style={{ fontSize: isStory ? 14 : 12, fontWeight: '800', color: ct.textPrimary, marginTop: 1 }} numberOfLines={1}>{playerName}</Text> : null}
           </View>
           {eloRating ? (
             <View style={{ backgroundColor: (eloColor || '#94A3B8') + '20', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}>
@@ -274,13 +274,13 @@ export default function ShareCardPalmares({
                     <Text style={{ fontSize: 8, fontWeight: '700', color: '#FFD700' }}>x{season.titles}</Text>
                   </View>
                 ) : null}
-                <Text style={{ fontSize: 8, color: ct.textSecondary }}>{season.tournaments.length} {fr ? 'tournois' : 'events'} - {season.wins}V/{season.totalMatches - season.wins}D</Text>
+                <Text style={{ fontSize: 8, color: ct.textSecondary, flexShrink: 1 }} numberOfLines={1}>{season.tournaments.length} {fr ? 'tournois' : 'events'} - {season.wins}V/{season.totalMatches - season.wins}D</Text>
               </View>
               {season.tournaments.slice(0, maxTournamentsPerSeason).map((t, i) => (
                 <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, marginBottom: 2 }}>
                   <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: RESULT_COLORS[t.result || ''] || '#64748B' }} />
                   <ResultBadge result={t.result} compact={!isStory} />
-                  <Text style={{ fontSize: isStory ? 10 : 9, fontWeight: '600', color: ct.textPrimary, flex: 1 }} numberOfLines={1}>{t.name}</Text>
+                  <Text style={{ fontSize: isStory ? 10 : 9, fontWeight: '600', color: ct.textPrimary, flex: 1, flexShrink: 1 }} numberOfLines={1}>{t.name}</Text>
                   {t.city ? <Text style={{ fontSize: 7, color: '#64748B' }}>{t.city}</Text> : null}
                 </View>
               ))}

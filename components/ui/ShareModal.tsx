@@ -854,7 +854,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                   </Pressable>
                 {/* Social media share — same style as other options */}
-                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player' || itemType === 'club') ? (
+                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'club' || (itemType === 'player' && (() => { const p = getPlayerById(itemId); return p && (p as any)?.userId; })())) ? (
                   <Pressable
                     style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]}
                     onPress={() => {
