@@ -13,7 +13,6 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as Linking from 'expo-linking';
 import { Image } from 'expo-image';
@@ -643,7 +642,7 @@ export default function MyPlayerCardScreen() {
 
             {/* ===== GAME PREFERENCES with Radar ===== */}
             {(roleAnalysis.totalWithRoles > 0 || terrainAnalysis.totalWithTerrain > 0 || partnerAnalysis.totalWithPartners > 0 || preferredBoulesAnalysis) ? (
-              <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+              <View style={s.sectionCard}>
                 <View style={s.sectionHeader}>
                   <View style={[s.sectionIconBox, { backgroundColor: '#8B5CF6' + '15' }]}>
                     <MaterialIcons name="psychology" size={18} color="#8B5CF6" />
@@ -753,13 +752,13 @@ export default function MyPlayerCardScreen() {
                     </View>
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             ) : null}
           </View>
         </View>
 
         {/* ===== MATCH STATISTICS with progress bars ===== */}
-        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}>
               <MaterialIcons name="sports" size={18} color={theme.primary} />
@@ -809,10 +808,53 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
+
+        {/* ===== ROLE EVOLUTION ===== */}
+        {roleAnalysis.totalWithRoles > 0 ? (
+          <View style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#F97316' + '15' }]}>
+                <MaterialIcons name="swap-horiz" size={18} color="#F97316" />
+              </View>
+              <Text style={s.sectionTitle}>{language === 'fr' ? 'Evolution du Role' : 'Role Evolution'}</Text>
+            </View>
+            <View style={{ gap: 10, marginBottom: 12 }}>
+              {Object.entries(roleAnalysis.roleCounts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([role, count]) => {
+                const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
+                const rc = roleIcons[role] || { icon: 'person', color: theme.textMuted };
+                return (
+                  <View key={role} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={[s.perfIcon, { backgroundColor: rc.color + '15', width: 34, height: 34, borderRadius: 8 }]}>
+                      <MaterialIcons name={rc.icon as any} size={16} color={rc.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{t('roles', role)}</Text>
+                        <Text style={{ fontSize: 14, fontWeight: '800', color: rc.color }}>{pct}%</Text>
+                      </View>
+                      <View style={s.perfBarTrack}>
+                        <View style={[s.perfBarFill, { width: `${pct}%`, backgroundColor: rc.color }]} />
+                      </View>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F97316' + '10', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#F97316' + '20' }}
+              onPress={() => { Haptics.selectionAsync(); router.push('/role-performance' as any); }}
+            >
+              <MaterialIcons name="analytics" size={16} color="#F97316" />
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#F97316' }}>{language === 'fr' ? 'Voir analyse complete' : 'View full analysis'}</Text>
+              <MaterialIcons name="chevron-right" size={16} color="#F97316" />
+            </Pressable>
+          </View>
+        ) : null}
 
         {/* ===== SHOT PERFORMANCE with progress bars ===== */}
-        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.accent + '15' }]}>
               <MaterialIcons name="gps-fixed" size={18} color={theme.accent} />
@@ -842,10 +884,10 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
           ))}
-        </Animated.View>
+        </View>
 
         {/* ===== CHALLENGES ===== */}
-        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: theme.carreauColor + '15' }]}>
               <MaterialIcons name="star" size={18} color={theme.carreauColor} />
@@ -872,10 +914,10 @@ export default function MyPlayerCardScreen() {
               </View>
             </View>
           ))}
-        </Animated.View>
+        </View>
 
         {/* ===== VISIBILITY ===== */}
-        <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
+        <View style={s.sectionCard}>
           <View style={s.sectionHeader}>
             <View style={[s.sectionIconBox, { backgroundColor: (isPublic ? theme.success : theme.textMuted) + '15' }]}>
               <MaterialIcons name={isPublic ? 'public' : 'lock'} size={18} color={isPublic ? theme.success : theme.textMuted} />
@@ -903,61 +945,15 @@ export default function MyPlayerCardScreen() {
               </Text>
             </View>
           ) : null}
-        </Animated.View>
-
-        {/* ===== ROLE EVOLUTION ===== */}
-        {roleAnalysis.totalWithRoles > 0 ? (
-          <Animated.View entering={FadeIn.duration(400)} style={s.sectionCard}>
-            <View style={s.sectionHeader}>
-              <View style={[s.sectionIconBox, { backgroundColor: '#F97316' + '15' }]}>
-                <MaterialIcons name="swap-horiz" size={18} color="#F97316" />
-              </View>
-              <Text style={s.sectionTitle}>{language === 'fr' ? 'Evolution du Role' : 'Role Evolution'}</Text>
-            </View>
-
-            {/* Role distribution */}
-            <View style={{ gap: 10, marginBottom: 12 }}>
-              {Object.entries(roleAnalysis.roleCounts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]).map(([role, count]) => {
-                const pct = roleAnalysis.totalWithRoles > 0 ? Math.round((count / roleAnalysis.totalWithRoles) * 100) : 0;
-                const rc = roleIcons[role] || { icon: 'person', color: theme.textMuted };
-                return (
-                  <View key={role} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <View style={[s.perfIcon, { backgroundColor: rc.color + '15', width: 34, height: 34, borderRadius: 8 }]}>
-                      <MaterialIcons name={rc.icon as any} size={16} color={rc.color} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{t('roles', role)}</Text>
-                        <Text style={{ fontSize: 14, fontWeight: '800', color: rc.color }}>{pct}%</Text>
-                      </View>
-                      <View style={s.perfBarTrack}>
-                        <View style={[s.perfBarFill, { width: `${pct}%`, backgroundColor: rc.color }]} />
-                      </View>
-                      <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{count} {language === 'fr' ? 'matchs' : 'matches'}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-
-            <Pressable
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#F97316' + '10', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: '#F97316' + '20' }}
-              onPress={() => { Haptics.selectionAsync(); router.push('/role-performance' as any); }}
-            >
-              <MaterialIcons name="analytics" size={16} color="#F97316" />
-              <Text style={{ fontSize: 13, fontWeight: '600', color: '#F97316' }}>{language === 'fr' ? 'Voir analyse complete' : 'View full analysis'}</Text>
-              <MaterialIcons name="chevron-right" size={16} color="#F97316" />
-            </Pressable>
-          </Animated.View>
-        ) : null}
+        </View>
 
         {/* ===== EDIT BUTTON ===== */}
-        <Animated.View entering={FadeIn.duration(400)}>
+        <View>
           <Pressable style={s.editProfileBtn} onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push({ pathname: '/profile', params: { edit: 'true' } } as any); }}>
             <MaterialIcons name="edit" size={20} color="#FFF" />
             <Text style={s.editProfileBtnText}>{t('player', 'editMyProfile')}</Text>
           </Pressable>
-        </Animated.View>
+        </View>
       </ScrollView>
 
       {/* ===== PUBLIC PREVIEW MODAL ===== */}

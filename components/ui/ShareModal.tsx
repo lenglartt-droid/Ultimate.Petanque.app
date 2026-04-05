@@ -854,6 +854,30 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </Pressable>
                 </Animated.View>
 
+                {/* Social media card button */}
+                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player') ? (
+                  <Pressable
+                    style={({ pressed }) => [s.socialCardBtn, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      handleClose();
+                      setTimeout(() => {
+                        const shareType = itemType === 'player' ? 'stats' : itemType;
+                        router.push({ pathname: '/share-card', params: { type: shareType, id: itemId } } as any);
+                      }, 300);
+                    }}
+                  >
+                    <View style={s.socialCardBtnIcon}>
+                      <MaterialIcons name="camera-alt" size={22} color="#8B5CF6" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.socialCardBtnTitle}>{fr ? 'Fiche reseaux sociaux' : 'Social Media Card'}</Text>
+                      <Text style={s.socialCardBtnDesc}>{fr ? 'Creer une image a partager sur Instagram, TikTok, etc.' : 'Create an image to share on Instagram, TikTok, etc.'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
+                  </Pressable>
+                ) : null}
+
                 {/* Read-only info */}
                 <View style={s.infoRow}>
                   <MaterialIcons name="visibility" size={14} color={typeConfig.color} />
@@ -1163,6 +1187,12 @@ const s = StyleSheet.create({
   optionIcon: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   optionTitle: { fontSize: 15, fontWeight: '600', color: '#0F172A' },
   optionDesc: { fontSize: 12, color: '#94A3B8', marginTop: 1 },
+
+  // Social media card button
+  socialCardBtn: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginTop: 12, backgroundColor: '#8B5CF608', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#8B5CF625' },
+  socialCardBtnIcon: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#8B5CF612', alignItems: 'center', justifyContent: 'center' },
+  socialCardBtnTitle: { fontSize: 15, fontWeight: '700', color: '#8B5CF6' },
+  socialCardBtnDesc: { fontSize: 11, color: '#94A3B8', marginTop: 1, lineHeight: 15 },
 
   // Info row
   infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginHorizontal: 16, marginTop: 16, padding: 12, backgroundColor: '#F8FAFC', borderRadius: 12, borderWidth: 1, borderColor: '#F1F5F9' },
