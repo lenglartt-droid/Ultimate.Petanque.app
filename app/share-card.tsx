@@ -42,7 +42,10 @@ import {
   ShareCardChallenge,
   ShareCardTournament,
   ShareCardH2H,
+  ShareCardSponsoredEvent,
 } from '@/components/feature/share-cards';
+import { getSponsoredEvent, getEventParticipants, type SponsoredEvent } from '@/services/sponsoredEventService';
+import { config } from '@/constants/config';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeName } from '@/services/badgeService';
 
@@ -53,7 +56,7 @@ interface PlayerInfo {
   country?: string;
 }
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h';
+type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -68,6 +71,7 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   challenge: { fr: 'Resultat de defi', en: 'Challenge Result', icon: 'track-changes', iconColor: '#EF4444' },
   tournament: { fr: 'Resultat de tournoi', en: 'Tournament Result', icon: 'emoji-events', iconColor: '#F59E0B' },
   h2h: { fr: 'Confrontation directe', en: 'Head to Head', icon: 'compare-arrows', iconColor: '#8B5CF6' },
+  'sponsored-event': { fr: 'Defi sponsorise', en: 'Sponsored Event', icon: 'campaign', iconColor: '#7C3AED' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -77,7 +81,7 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function ShareCardScreen() {
-  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string }>();
+  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string; eventId?: string }>();
   const { language } = useLanguage();
   const { user } = useAuth();
   const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players } = useApp();
@@ -127,6 +131,7 @@ export default function ShareCardScreen() {
     let matchCountA = 0, winsOverallA = 0, matchCountB = 0, winsOverallB = 0;
     let lastMatchDate: string | undefined;
     let h2hMatchCount = 0;
+    const h2hMatchHistory: Array<{ date: string; won: boolean; scoreA: number; scoreB: number }> = [];
 
     matches.forEach(m => {
       const inTeamA_self = m.teamA.players.includes(pid);
@@ -175,6 +180,7 @@ export default function ShareCardScreen() {
 
       const selfWon = (selfInA && m.winner === 'A') || (!selfInA && m.winner === 'B');
       const oppWon = (selfInA && m.winner === 'B') || (!selfInA && m.winner === 'A');
+      h2hMatchHistory.push({ date: m.date, won: selfWon, scoreA: selfInA ? m.teamA.score : m.teamB.score, scoreB: selfInA ? m.teamB.score : m.teamA.score });
       if (selfWon) winsA++;
       else if (oppWon) winsB++;
       else draws++;
@@ -222,8 +228,14 @@ export default function ShareCardScreen() {
         avgScoreB: h2hMatchCount > 0 ? totalScoreB / h2hMatchCount : 0,
         lastMatchDate,
       },
+      recentH2H: h2hMatchHistory.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(-10),
     };
   }, [cardType, matches, selfPlayer, selectedOpponentId, players, h2hOpponents, eloData, playerName, fr]);
+
+  // Sponsored event data
+  const [sponsoredEvent, setSponsoredEvent] = useState<SponsoredEvent | null>(null);
+  const [sponsoredEventParticipantCount, setSponsoredEventParticipantCount] = useState(0);
+  const [sponsoredEventLoading, setSponsoredEventLoading] = useState(false);
 
   const [activeFormat, setActiveFormat] = useState<ShareCardFormat>('square');
   const [activeTheme, setActiveTheme] = useState<CardColorTheme>('dark');
@@ -236,6 +248,22 @@ export default function ShareCardScreen() {
   const itemId = params.id;
   const badgeId = params.badgeId;
   const opponentIdParam = params.opponentId;
+  const eventId = params.eventId || params.id;
+
+  // Load sponsored event data
+  React.useEffect(() => {
+    if (cardType !== 'sponsored-event' || !eventId) return;
+    setSponsoredEventLoading(true);
+    Promise.all([
+      getSponsoredEvent(eventId),
+      getEventParticipants(eventId),
+    ]).then(([{ event }, { participants: parts }]) => {
+      setSponsoredEvent(event);
+      const accepted = (parts || []).filter(p => p.status === 'accepted' || p.status === 'completed').length;
+      setSponsoredEventParticipantCount(accepted);
+      setSponsoredEventLoading(false);
+    }).catch(() => setSponsoredEventLoading(false));
+  }, [cardType, eventId]);
 
   // H2H: opponent selection state
   const [selectedOpponentId, setSelectedOpponentId] = useState<string | null>(opponentIdParam || null);
@@ -341,6 +369,9 @@ export default function ShareCardScreen() {
       case 'h2h':
         if (h2hData) return `${h2hData.playerA.name} vs ${h2hData.playerB.name}`;
         return 'H2H';
+      case 'sponsored-event':
+        if (sponsoredEvent) return sponsoredEvent.title;
+        return 'Event';
       case 'stats':
       default:
         return playerName || 'Stats';
@@ -499,6 +530,35 @@ export default function ShareCardScreen() {
             playerA={h2hData.playerA}
             playerB={h2hData.playerB}
             record={h2hData.record}
+            recentH2H={h2hData.recentH2H}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      case 'sponsored-event':
+        if (sponsoredEventLoading) return <EmptyCard message={fr ? 'Chargement...' : 'Loading...'} />;
+        if (!sponsoredEvent) return <EmptyCard message={fr ? 'Evenement introuvable' : 'Event not found'} />;
+        return (
+          <ShareCardSponsoredEvent
+            title={sponsoredEvent.title}
+            challengeType={sponsoredEvent.challengeType}
+            challengeMode={sponsoredEvent.challengeMode}
+            eventDate={sponsoredEvent.eventDate}
+            startTime={sponsoredEvent.startTime}
+            endTime={sponsoredEvent.endTime}
+            city={sponsoredEvent.city}
+            country={sponsoredEvent.country}
+            terrainName={sponsoredEvent.terrainName}
+            scope={sponsoredEvent.scope}
+            shareCode={sponsoredEvent.shareCode}
+            ambassadorName={sponsoredEvent.ambassadorName}
+            maxParticipants={sponsoredEvent.maxParticipants}
+            acceptedCount={sponsoredEventParticipantCount}
+            minWitnesses={sponsoredEvent.minWitnesses}
+            status={sponsoredEvent.status}
+            description={sponsoredEvent.description}
+            qrUrl={`${config.appDownloadUrl}?event=${sponsoredEvent.shareCode}`}
             language={language}
             colorTheme={activeTheme}
             format={activeFormat}
