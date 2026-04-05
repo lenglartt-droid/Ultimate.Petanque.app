@@ -603,7 +603,7 @@ export default function HomeScreen() {
       case 'divider1':
       case 'divider2':
       case 'divider3':
-        return <View style={st.divider}><View style={st.dividerLine} /><View style={st.dividerDot} /><View style={st.dividerLine} /></View>;
+        return <View style={{ height: 4 }} />;
 
       // ===== WEEKLY STATS CARD =====
       case 'weeklyStats':

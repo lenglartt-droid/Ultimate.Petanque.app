@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push'];
 
     const results: Record<string, any> = {};
 
@@ -904,7 +904,159 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 10: Clean up old analytics (older than 365 days)
+    // TASK 10: Weekly Digest Push Notification (Monday morning)
+    // Sends personalized weekly summary to all active players
+    // ============================================================
+    if (tasks.includes('weekly_digest_push')) {
+      console.log('[weekly-cron] Sending weekly digest push notifications...');
+      try {
+        const now = new Date();
+        const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+        // Check dedup: only once per week
+        const weekStart = new Date(now);
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1); // Monday
+        weekStart.setHours(0, 0, 0, 0);
+        const { data: existingDigest } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'weekly_digest_push')
+          .gte('created_at', weekStart.toISOString())
+          .limit(1);
+
+        if (existingDigest && existingDigest.length > 0) {
+          console.log('[weekly-cron] Weekly digest already sent this week');
+          results.weekly_digest_push = { sent: false, reason: 'already_sent_this_week' };
+        } else {
+          // Fetch all active push tokens
+          const { data: allTokens } = await supabaseAdmin
+            .from('push_tokens')
+            .select('user_id, token')
+            .eq('active', true);
+
+          if (!allTokens || allTokens.length === 0) {
+            results.weekly_digest_push = { sent: 0, reason: 'no_tokens' };
+          } else {
+            const userIds = [...new Set(allTokens.map((t: any) => t.user_id))];
+            const tokensByUser = new Map<string, string[]>();
+            allTokens.forEach((t: any) => {
+              if (!tokensByUser.has(t.user_id)) tokensByUser.set(t.user_id, []);
+              tokensByUser.get(t.user_id)!.push(t.token);
+            });
+
+            // Filter by notification preference
+            const { data: prefData } = await supabaseAdmin
+              .from('user_preferences')
+              .select('user_id, notification_preferences')
+              .in('user_id', userIds);
+            const prefMap = new Map<string, any>();
+            (prefData || []).forEach((p: any) => prefMap.set(p.user_id, p.notification_preferences || {}));
+
+            // Get matches from this week per user
+            const { data: weekMatches } = await supabaseAdmin
+              .from('matches')
+              .select('user_id, team_a, team_b, winner, date')
+              .gte('date', weekAgo.toISOString());
+
+            // Compute per-user weekly stats
+            const userWeekly = new Map<string, { matches: number; wins: number }>(); 
+            if (weekMatches) {
+              for (const m of weekMatches) {
+                const allPlayers = [...(m.team_a?.players || []), ...(m.team_b?.players || [])];
+                for (const pid of allPlayers) {
+                  if (!userWeekly.has(pid)) userWeekly.set(pid, { matches: 0, wins: 0 });
+                  const ws = userWeekly.get(pid)!;
+                  ws.matches++;
+                  const inA = (m.team_a?.players || []).includes(pid);
+                  if ((inA && m.winner === 'A') || (!inA && m.winner === 'B')) ws.wins++;
+                }
+              }
+            }
+
+            // Get ELO history for delta
+            const { data: eloHist } = await supabaseAdmin
+              .from('elo_history')
+              .select('user_id, elo_delta')
+              .gte('recorded_at', weekAgo.toISOString());
+
+            const userEloDelta = new Map<string, number>();
+            if (eloHist) {
+              for (const h of eloHist) {
+                userEloDelta.set(h.user_id, (userEloDelta.get(h.user_id) || 0) + h.elo_delta);
+              }
+            }
+
+            const messages: any[] = [];
+            let eligibleCount = 0;
+
+            for (const uid of userIds) {
+              // Check preference
+              const prefs = prefMap.get(uid);
+              if (prefs && prefs.ranking_changed === false) continue;
+
+              const tokens = tokensByUser.get(uid) || [];
+              if (tokens.length === 0) continue;
+
+              const ws = userWeekly.get(uid);
+              const eloDelta = userEloDelta.get(uid) || 0;
+
+              if (!ws || ws.matches === 0) continue; // Skip inactive users
+
+              eligibleCount++;
+              const winRate = ws.matches > 0 ? Math.round((ws.wins / ws.matches) * 100) : 0;
+              const eloStr = eloDelta >= 0 ? `+${eloDelta}` : `${eloDelta}`;
+
+              const title = `\u{1F4CA} Bilan de ta semaine`;
+              const body = `${ws.matches} match${ws.matches > 1 ? 's' : ''}, ${ws.wins} victoire${ws.wins > 1 ? 's' : ''} (${winRate}%) | ELO: ${eloStr}`;
+
+              for (const tk of tokens) {
+                messages.push(buildPushMessage(
+                  tk, title, body,
+                  { type: 'ranking_changed', weeklyDigest: true },
+                  { channelId: 'tournament-reminders' }
+                ));
+              }
+            }
+
+            // Send in batches
+            let totalSent = 0;
+            let totalErrors = 0;
+            const BATCH_SIZE = 100;
+            for (let i = 0; i < messages.length; i += BATCH_SIZE) {
+              const batch = messages.slice(i, i + BATCH_SIZE);
+              const tickets = await sendPushNotifications(batch);
+              totalSent += tickets.filter((t: any) => t.status === 'ok').length;
+              totalErrors += tickets.filter((t: any) => t.status === 'error').length;
+              // Deactivate invalid tokens
+              for (let j = 0; j < tickets.length; j++) {
+                if (tickets[j].details?.error === 'DeviceNotRegistered') {
+                  const invalidToken = batch[j]?.to;
+                  if (invalidToken) {
+                    await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                  }
+                }
+              }
+            }
+
+            // Track dedup
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'weekly_digest_push',
+              source_page: `sent:${totalSent}|errors:${totalErrors}|eligible:${eligibleCount}`,
+            }).catch(() => {});
+
+            console.log(`[weekly-cron] Weekly digest: ${totalSent} sent, ${totalErrors} errors, ${eligibleCount} eligible`);
+            results.weekly_digest_push = { sent: totalSent, errors: totalErrors, eligible: eligibleCount };
+          }
+        }
+      } catch (digestErr: any) {
+        console.error('[weekly-cron] Weekly digest push error:', digestErr.message);
+        results.weekly_digest_push = { error: digestErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 11: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');

@@ -224,6 +224,8 @@ export const leaderboardTranslations = {
     eloMilestoneDate: { fr: 'le', en: 'on' },
     weeklyDigestTitle: { fr: 'Bilan Hebdo', en: 'Weekly Digest' },
     weeklyDigestDesc: { fr: 'Resume de la semaine', en: 'Weekly summary' },
+    milestoneCardTitle: { fr: 'Jalon ELO', en: 'ELO Milestone' },
+    milestoneCardDesc: { fr: 'Promotion de ligue ou record ELO', en: 'League promotion or ELO record' },
     eloLeaderboardHistory: { fr: 'Position au classement', en: 'Leaderboard Position' },
     eloLeaderboardHistoryDesc: { fr: 'Dernieres semaines', en: 'Last weeks' },
     eloNoLeaderboardHistory: { fr: 'Pas encore d historique de classement', en: 'No leaderboard history yet' },
