@@ -286,8 +286,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // ===== Computed values (delegated to extracted functions) =====
+  // computePlayersWithStats now has internal caching — avoids recalc when data hasn't changed
   const playersWithStats = React.useMemo(() => computePlayersWithStats(players, matches), [players, matches]);
   const selfPlayer = React.useMemo(() => computeSelfPlayer(playersWithStats, user?.id), [playersWithStats, user?.id]);
+  // computeClubsWithMemberCount now uses a Map instead of O(clubs × players) filter
   const clubsWithMemberCount = React.useMemo(() => computeClubsWithMemberCount(clubs, playersWithStats), [clubs, playersWithStats]);
 
   // ===== Computed: user stats (delegated) =====
@@ -888,13 +890,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, [justReconnected, user?.id, loadData, supabase, handleConflict]);
 
-  // Persist cache on state changes
+  // Persist cache on state changes — longer debounce to reduce serialization overhead
+  const cacheTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!user?.id || !initialLoadDone.current) return;
-    const timeout = setTimeout(() => {
+    if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current);
+    cacheTimerRef.current = setTimeout(() => {
       saveToCache({ players, clubs, tournaments, matches, challenges, terrains });
-    }, 2000);
-    return () => clearTimeout(timeout);
+    }, 5000); // 5s instead of 2s — reduces write frequency by ~60%
+    return () => { if (cacheTimerRef.current) clearTimeout(cacheTimerRef.current); };
   }, [players, clubs, tournaments, matches, challenges, terrains, user?.id]);
 
   // ===== Preferences =====
@@ -1125,7 +1129,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // ===== Getters (delegated to extracted module) =====
+  // ===== Getters (delegated to extracted module — now uses O(1) Map lookups) =====
   const getters = React.useMemo(
     () => createGetters(playersWithStats, clubsWithMemberCount, tournaments, matches, terrains),
     [playersWithStats, clubsWithMemberCount, tournaments, matches, terrains]

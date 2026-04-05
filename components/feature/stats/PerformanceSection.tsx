@@ -225,6 +225,35 @@ export function PerformanceSection({
         <>{renderWinRateByFormat()}{renderAvgScore()}</>
       )}
 
+      {/* Fanny Section */}
+      {(performanceStats.fannyWins > 0 || performanceStats.fannyLosses > 0) && (
+        <View style={[ss.section, isTablet ? ss.tabletHalf : undefined]}>
+          <SectionHeader title={t('stats', 'fannySection')} icon="sentiment-very-satisfied" color={'#F97316'} />
+          <View style={ss.card}>
+            <View style={ss.scoreComparison}>
+              <View style={ss.scoreItem}>
+                <MaterialIcons name="sentiment-very-satisfied" size={28} color={theme.success} />
+                <Text style={[ss.scoreValue, { color: theme.success }]}>{performanceStats.fannyWins}</Text>
+                <Text style={ss.scoreLabel}>{t('stats', 'fannyGivenLabel')}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{t('stats', 'fannyGivenDesc')}</Text>
+              </View>
+              <View style={ss.scoreDiff}>
+                <View style={[ss.scoreDiffBadge, { backgroundColor: '#F9731615' }]}>
+                  <Text style={[ss.scoreDiffText, { color: '#F97316', fontSize: 16 }]}>13-0</Text>
+                  <Text style={ss.scoreDiffLabel}>Fanny</Text>
+                </View>
+              </View>
+              <View style={ss.scoreItem}>
+                <MaterialIcons name="sentiment-dissatisfied" size={28} color={theme.error} />
+                <Text style={[ss.scoreValue, { color: theme.error }]}>{performanceStats.fannyLosses}</Text>
+                <Text style={ss.scoreLabel}>{t('stats', 'fannyReceivedLabel')}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>{t('stats', 'fannyReceivedDesc')}</Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      )}
+
       {/* Duration */}
       {performanceStats.matchesWithDuration > 0 && (
         <View style={ss.section}>

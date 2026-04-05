@@ -26,6 +26,9 @@ export function useBadges() {
   const [newlyUnlockedQueue, setNewlyUnlockedQueue] = useState<string[]>([]);
   const [currentUnlock, setCurrentUnlock] = useState<string | null>(null);
   const hasChecked = useRef(false);
+  const lastCheckMatchCount = useRef(0);
+  const lastCheckChallengeCount = useRef(0);
+  const badgeCheckInFlight = useRef(false);
 
   // Load badges on mount
   useEffect(() => {
@@ -40,11 +43,18 @@ export function useBadges() {
     load();
   }, [user?.id]);
 
-  // Check for new badges when data changes
+  // Check for new badges when data changes — debounced and skipped if data unchanged
   useEffect(() => {
     if (!user?.id || loading || matches.length === 0) return;
+    // Skip if match/challenge count unchanged (prevents redundant DB queries)
+    if (lastCheckMatchCount.current === matches.length && lastCheckChallengeCount.current === challenges.length && hasChecked.current) return;
+    if (badgeCheckInFlight.current) return;
 
     const checkBadges = async () => {
+      badgeCheckInFlight.current = true;
+      lastCheckMatchCount.current = matches.length;
+      lastCheckChallengeCount.current = challenges.length;
+      hasChecked.current = true;
       const isAmb = await isUserAmbassador(user.id);
 
       // Count total carreaux
@@ -224,11 +234,12 @@ export function useBadges() {
         setXp(calculatedXp);
         await syncXpToDb(user.id, calculatedXp);
       }
+      badgeCheckInFlight.current = false;
     };
 
-    // Debounce check
-    const timer = setTimeout(checkBadges, 2000);
-    return () => clearTimeout(timer);
+    // Longer debounce (5s) to avoid hammering DB on rapid state changes
+    const timer = setTimeout(checkBadges, 5000);
+    return () => { clearTimeout(timer); };
   }, [user?.id, matches.length, challenges.length, sharedMatchIds.length, loading]);
 
   // Process unlock queue one at a time

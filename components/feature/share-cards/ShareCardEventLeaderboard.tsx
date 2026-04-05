@@ -103,8 +103,8 @@ export default function ShareCardEventLeaderboard({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 18;
-  const maxEntries = isStory ? 10 : 7;
+  const pad = isStory ? 24 : 14;
+  const maxEntries = isStory ? 10 : 6;
 
   return (
     <View style={s.card}>
@@ -207,7 +207,7 @@ export default function ShareCardEventLeaderboard({
           ) : null}
         </View>
 
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
       </LinearGradient>
     </View>
   );

@@ -2,7 +2,7 @@
  * LeaderboardHub — Prominent combined leaderboard section for the home page.
  * Geo leaderboard is prioritized, with community leaderboard as a secondary tab.
  */
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import {
   View,
   Text,
@@ -40,7 +40,7 @@ function MedalIcon({ rank }: { rank: number }) {
   return <Text style={s.geoRankNum}>{rank}</Text>;
 }
 
-export default function LeaderboardHub() {
+function LeaderboardHub() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { selfPlayer } = useApp();
@@ -553,6 +553,8 @@ export default function LeaderboardHub() {
     </View>
   );
 }
+
+export default memo(LeaderboardHub);
 
 const s = StyleSheet.create({
   root: {
