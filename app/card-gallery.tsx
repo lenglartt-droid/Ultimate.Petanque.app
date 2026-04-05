@@ -39,6 +39,8 @@ export default function CardGalleryScreen() {
   const [stats, setStats] = useState({ total: 0, shared: 0, downloaded: 0, byType: {} as Record<string, number> });
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [filterType, setFilterType] = useState<FilterType>('all');
+  const [filterFormat, setFilterFormat] = useState<FilterFormat>('all');
 
   const loadData = useCallback(async () => {
     const [history, historyStats] = await Promise.all([getCardHistory(), getCardHistoryStats()]);
@@ -99,6 +101,17 @@ export default function CardGalleryScreen() {
     router.push({ pathname: '/share-card', params: { type: entry.type } } as any);
   }, []);
 
+  // Filter entries
+  const filteredEntries = React.useMemo(() => {
+    return entries.filter(entry => {
+      if (filterType !== 'all' && entry.type !== filterType) return false;
+      if (filterFormat !== 'all' && entry.format !== filterFormat) return false;
+      return true;
+    });
+  }, [entries, filterType, filterFormat]);
+
+  const activeFilterCount = (filterType !== 'all' ? 1 : 0) + (filterFormat !== 'all' ? 1 : 0);
+
   // Group entries by date
   const groupedEntries = React.useMemo(() => {
     const groups: { label: string; entries: CardHistoryEntry[] }[] = [];
@@ -109,7 +122,7 @@ export default function CardGalleryScreen() {
     let currentLabel = '';
     let currentGroup: CardHistoryEntry[] = [];
 
-    for (const entry of entries) {
+    for (const entry of filteredEntries) {
       const entryDate = new Date(entry.createdAt);
       const dateStr = entryDate.toDateString();
       let label: string;
@@ -131,7 +144,7 @@ export default function CardGalleryScreen() {
     }
     if (currentGroup.length > 0) groups.push({ label: currentLabel, entries: currentGroup });
     return groups;
-  }, [entries, fr]);
+  }, [filteredEntries, fr]);
 
   return (
     <SafeAreaView edges={['top']} style={s.container}>
@@ -156,6 +169,51 @@ export default function CardGalleryScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {/* Filter Bar */}
+        {stats.total > 0 ? (
+          <View style={s.filterSection}>
+            {/* Type filter */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filterRow}>
+              <Pressable style={[s.filterChip, filterType === 'all' && s.filterChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterType('all'); }}>
+                <MaterialIcons name="select-all" size={12} color={filterType === 'all' ? '#FFF' : theme.textMuted} />
+                <Text style={[s.filterChipText, filterType === 'all' && s.filterChipTextActive]}>{fr ? 'Tous' : 'All'}</Text>
+              </Pressable>
+              {Object.entries(TYPE_ICONS).map(([key, info]) => {
+                const count = stats.byType[key] || 0;
+                if (count === 0) return null;
+                const isActive = filterType === key;
+                return (
+                  <Pressable key={key} style={[s.filterChip, isActive && { backgroundColor: info.color, borderColor: info.color }]} onPress={() => { Haptics.selectionAsync(); setFilterType(isActive ? 'all' : key); }}>
+                    <MaterialIcons name={info.icon as any} size={12} color={isActive ? '#FFF' : info.color} />
+                    <Text style={[s.filterChipText, isActive && s.filterChipTextActive]}>{fr ? info.labelFr : info.label}</Text>
+                    <View style={[s.filterChipCount, isActive && { backgroundColor: 'rgba(255,255,255,0.3)' }]}><Text style={[s.filterChipCountText, isActive && { color: '#FFF' }]}>{count}</Text></View>
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+            {/* Format filter */}
+            <View style={s.formatFilterRow}>
+              {(['all', 'square', 'story', 'landscape'] as FilterFormat[]).map(fmt => {
+                const isActive = filterFormat === fmt;
+                const icon = fmt === 'all' ? 'apps' : fmt === 'square' ? 'crop-square' : fmt === 'story' ? 'crop-portrait' : 'crop-landscape';
+                const label = fmt === 'all' ? (fr ? 'Tous' : 'All') : fmt === 'square' ? '1:1' : fmt === 'story' ? '9:16' : '16:9';
+                return (
+                  <Pressable key={fmt} style={[s.formatChip, isActive && s.formatChipActive]} onPress={() => { Haptics.selectionAsync(); setFilterFormat(fmt); }}>
+                    <MaterialIcons name={icon as any} size={13} color={isActive ? '#FFF' : theme.textMuted} />
+                    <Text style={[s.formatChipText, isActive && s.formatChipTextActive]}>{label}</Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+            {activeFilterCount > 0 ? (
+              <Pressable style={s.clearFiltersBtn} onPress={() => { setFilterType('all'); setFilterFormat('all'); }}>
+                <MaterialIcons name="close" size={12} color={theme.error} />
+                <Text style={s.clearFiltersText}>{fr ? 'Effacer filtres' : 'Clear filters'} ({activeFilterCount})</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
         {/* Stats Summary */}
         {stats.total > 0 ? (
           <Animated.View entering={FadeInDown.duration(300)} style={s.statsCard}>
@@ -202,7 +260,19 @@ export default function CardGalleryScreen() {
         ) : null}
 
         {/* Empty state */}
-        {!loading && entries.length === 0 ? (
+        {!loading && filteredEntries.length === 0 && entries.length > 0 ? (
+          <View style={s.emptyState}>
+            <View style={s.emptyIcon}>
+              <MaterialIcons name="filter-list-off" size={40} color={theme.textMuted} />
+            </View>
+            <Text style={s.emptyTitle}>{fr ? 'Aucun resultat' : 'No results'}</Text>
+            <Text style={s.emptyDesc}>{fr ? 'Aucune carte ne correspond aux filtres selectionnes.' : 'No cards match the selected filters.'}</Text>
+            <Pressable style={s.emptyCta} onPress={() => { setFilterType('all'); setFilterFormat('all'); }}>
+              <MaterialIcons name="refresh" size={18} color="#FFF" />
+              <Text style={s.emptyCtaText}>{fr ? 'Reinitialiser' : 'Reset filters'}</Text>
+            </Pressable>
+          </View>
+        ) : !loading && entries.length === 0 ? (
           <Animated.View entering={FadeIn.duration(400)} style={s.emptyState}>
             <View style={s.emptyIcon}>
               <MaterialIcons name="photo-library" size={48} color={theme.textMuted} />
@@ -315,13 +385,20 @@ export default function CardGalleryScreen() {
   );
 }
 
-const TYPE_ICONS = {
-  match: { icon: 'sports', color: '#F59E0B' },
-  badge: { icon: 'military-tech', color: '#8B5CF6' },
-  stats: { icon: 'bar-chart', color: '#3B82F6' },
-  challenge: { icon: 'track-changes', color: '#EF4444' },
-  tournament: { icon: 'emoji-events', color: '#F59E0B' },
+const TYPE_ICONS: Record<string, { icon: string; color: string; label: string; labelFr: string }> = {
+  match: { icon: 'sports', color: '#F59E0B', label: 'Match', labelFr: 'Match' },
+  badge: { icon: 'military-tech', color: '#8B5CF6', label: 'Badge', labelFr: 'Badge' },
+  stats: { icon: 'bar-chart', color: '#3B82F6', label: 'Stats', labelFr: 'Stats' },
+  challenge: { icon: 'track-changes', color: '#EF4444', label: 'Challenge', labelFr: 'Defi' },
+  tournament: { icon: 'emoji-events', color: '#F59E0B', label: 'Tournament', labelFr: 'Tournoi' },
+  h2h: { icon: 'compare-arrows', color: '#EC4899', label: 'H2H', labelFr: 'H2H' },
+  'sponsored-event': { icon: 'campaign', color: '#7C3AED', label: 'Event', labelFr: 'Event' },
+  palmares: { icon: 'emoji-events', color: '#FFD700', label: 'Career', labelFr: 'Palmares' },
+  'event-leaderboard': { icon: 'leaderboard', color: '#9333EA', label: 'Leaderboard', labelFr: 'Classement' },
 };
+
+type FilterType = 'all' | string;
+type FilterFormat = 'all' | 'square' | 'story' | 'landscape';
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
@@ -349,6 +426,23 @@ const s = StyleSheet.create({
   emptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginBottom: 24 },
   emptyCta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.primary, paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 },
   emptyCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  // Filter section
+  filterSection: { marginBottom: 16 },
+  filterRow: { gap: 6, paddingBottom: 8 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  filterChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  filterChipText: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
+  filterChipTextActive: { color: '#FFF' },
+  filterChipCount: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 8, marginLeft: 2 },
+  filterChipCountText: { fontSize: 9, fontWeight: '700', color: theme.textMuted },
+  formatFilterRow: { flexDirection: 'row', gap: 6, marginTop: 4 },
+  formatChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  formatChipActive: { backgroundColor: '#8B5CF6', borderColor: '#8B5CF6' },
+  formatChipText: { fontSize: 11, fontWeight: '600', color: theme.textSecondary },
+  formatChipTextActive: { color: '#FFF' },
+  clearFiltersBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', marginTop: 6, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: theme.error + '10', borderWidth: 1, borderColor: theme.error + '20' },
+  clearFiltersText: { fontSize: 10, fontWeight: '600', color: theme.error },
 
   // Group label
   groupLabel: { fontSize: 12, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10, marginTop: 4 },

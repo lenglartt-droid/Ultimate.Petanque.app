@@ -21,6 +21,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { Tournament, Match } from '@/types/petanque';
 import AdBanner from '@/components/ui/AdBanner';
 import { fetchEloSeasons, getEloRank, getEloColor, EloSeasonEntry, ELO_RANKS, checkAndApplySeasonalReset } from '@/services/eloService';
+import { exportPalmaresPDF } from '@/services/palmaresExportService';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -270,6 +271,54 @@ export default function PalmaresScreen() {
   const [showFormatStats, setShowFormatStats] = useState(false);
   const [showTournamentDetails, setShowTournamentDetails] = useState(false);
   const [showHeaderFilters, setShowHeaderFilters] = useState(false);
+  const [exporting, setExporting] = useState(false);
+
+  // Export PDF handler
+  const handleExportPDF = useCallback(async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setExporting(true);
+    try {
+      const seasonMap = new Map<number, any>();
+      palmaresData.forEach(item => {
+        const year = new Date(item.tournament.date).getFullYear();
+        if (!seasonMap.has(year)) seasonMap.set(year, { year, tournaments: [], titles: 0, podiums: 0, totalMatches: 0, wins: 0, winRate: 0 });
+        const sg = seasonMap.get(year)!;
+        sg.tournaments.push({
+          name: item.tournament.name, date: item.tournament.date, format: item.tournament.format,
+          result: item.tournament.finalResult, city: item.tournament.location?.city,
+          matchesPlayed: item.stats.played, wins: item.stats.wins, losses: item.stats.losses,
+          winRate: item.stats.winRate, pointsFor: item.stats.pointsFor, pointsAgainst: item.stats.pointsAgainst,
+          tirRate: item.stats.tirRate, carreaux: item.stats.carreaux,
+          registrationCost: item.tournament.registrationCost, prizeWon: item.tournament.prizeWon,
+        });
+        if (item.tournament.finalResult === '1er') { sg.titles++; sg.podiums++; }
+        else if (['2\u00e8me', '3\u00e8me'].includes(item.tournament.finalResult || '')) sg.podiums++;
+        sg.totalMatches += item.stats.played; sg.wins += item.stats.wins;
+      });
+      const exportSeasons = Array.from(seasonMap.values()).sort((a: any, b: any) => b.year - a.year);
+      exportSeasons.forEach((s: any) => { s.winRate = s.totalMatches > 0 ? Math.round((s.wins / s.totalMatches) * 100) : 0; });
+
+      await exportPalmaresPDF({
+        playerName: selfPlayer?.name || '',
+        clubName: selfPlayer?.club,
+        eloRating: selfPlayer?.eloRating,
+        eloRankLabel: selfPlayer?.eloRating ? getEloRank(selfPlayer.eloRating).label[language === 'fr' ? 'fr' : 'en'] : undefined,
+        seasons: exportSeasons,
+        summary: {
+          totalTournaments: summary.totalTournaments, totalMatches: summary.totalMatches,
+          totalWins: summary.totalWins, totalLosses: summary.totalLosses,
+          avgWinRate: summary.avgWinRate, titles: summary.titles,
+          podiums: summary.podiums, totalCarreaux: summary.totalCarreaux,
+          maxStreak: summary.maxStreak, totalPrize: summary.totalPrize, totalCost: summary.totalCost,
+        },
+        language: language as 'fr' | 'en',
+      });
+    } catch (e) {
+      console.log('[Palmares] PDF export error:', e);
+    } finally {
+      setExporting(false);
+    }
+  }, [palmaresData, summary, selfPlayer, language]);
 
   // ELO Seasons
   const [eloSeasons, setEloSeasons] = useState<EloSeasonEntry[]>([]);
@@ -437,6 +486,13 @@ export default function PalmaresScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('palmares', 'title')}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <Pressable
+            style={[styles.filterToggleBtn, { backgroundColor: '#22C55E' + '12' }]}
+            onPress={handleExportPDF}
+            disabled={exporting || palmaresData.length === 0}
+          >
+            {exporting ? <ActivityIndicator size="small" color="#22C55E" /> : <MaterialIcons name="picture-as-pdf" size={18} color="#22C55E" />}
+          </Pressable>
           <Pressable
             style={[styles.filterToggleBtn, { backgroundColor: '#8B5CF6' + '12' }]}
             onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'palmares' } } as any); }}

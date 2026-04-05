@@ -16,6 +16,21 @@ interface GeoRankInfo {
   country?: { name?: string; rank?: number };
 }
 
+interface TournamentMatchInfo {
+  id: string;
+  teamANames: string[];
+  teamBNames: string[];
+  scoreA: number;
+  scoreB: number;
+  winner: 'A' | 'B';
+  tournamentPhase?: string;
+}
+
+interface GoldSponsorInfo {
+  displayName: string;
+  photo?: string;
+}
+
 interface Props {
   tournament: Tournament;
   playerName?: string;
@@ -24,6 +39,8 @@ interface Props {
   eloRankLabel?: string;
   clubName?: string;
   geoRank?: GeoRankInfo | null;
+  tournamentMatches?: TournamentMatchInfo[];
+  goldSponsor?: GoldSponsorInfo | null;
   language?: 'fr' | 'en';
   colorTheme?: CardColorTheme;
   format?: ShareCardFormat;
@@ -71,7 +88,7 @@ function GeoRankBadges({ geoRank, compact }: { geoRank?: GeoRankInfo | null; com
   );
 }
 
-export default function ShareCardTournament({ tournament, playerName, eloRating, eloColor, eloRankLabel, clubName, geoRank, language = 'fr', colorTheme = 'dark', format = 'square' }: Props) {
+export default function ShareCardTournament({ tournament, playerName, eloRating, eloColor, eloRankLabel, clubName, geoRank, tournamentMatches, goldSponsor, language = 'fr', colorTheme = 'dark', format = 'square' }: Props) {
   const fr = language === 'fr';
   const ct = CARD_COLOR_THEMES[colorTheme];
   const status = STATUS_CONFIG[tournament.status] || STATUS_CONFIG['À venir'];
@@ -161,6 +178,13 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
               ) : null}
             </View>
           </View>
+          {/* Gold Sponsor */}
+          {goldSponsor ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 3, marginBottom: 2 }}>
+              <MaterialIcons name="star" size={7} color="#F59E0B" />
+              <Text style={{ fontSize: 6, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'Partenaire' : 'Partner'}: {goldSponsor.displayName}</Text>
+            </View>
+          ) : null}
           <ShareCardWatermark variant="light" size="sm" />
         </LinearGradient>
       </View>
@@ -168,7 +192,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 18;
+  const pad = isStory ? 24 : 14;
   const nameSize = isStory ? 22 : 18;
 
   return (
@@ -226,6 +250,53 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
             {tournament.tournamentLevel ? <View style={{ backgroundColor: '#8B5CF615', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><Text style={{ fontSize: 9, fontWeight: '700', color: '#8B5CF6' }}>{tournament.tournamentLevel}</Text></View> : null}
             {tournament.tournamentScope ? <View style={{ backgroundColor: '#3B82F615', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><Text style={{ fontSize: 9, fontWeight: '700', color: '#3B82F6' }}>{tournament.tournamentScope}</Text></View> : null}
             {tournament.prize ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F59E0B15', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><MaterialIcons name="card-giftcard" size={9} color="#F59E0B" /><Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B' }}>{tournament.prize}</Text></View> : null}
+          </View>
+        ) : null}
+
+        {/* Footer */}
+        {/* Match List */}
+        {tournamentMatches && tournamentMatches.length > 0 ? (
+          <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, marginBottom: isStory ? 10 : 6 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+              <MaterialIcons name="format-list-numbered" size={10} color={ct.accent} />
+              <Text style={{ fontSize: 8, fontWeight: '700', letterSpacing: 0.8, color: ct.accent }}>{fr ? 'MATCHS' : 'MATCHES'}</Text>
+              <Text style={{ fontSize: 8, fontWeight: '600', color: '#64748B' }}>({tournamentMatches.length})</Text>
+            </View>
+            {tournamentMatches.slice(0, isStory ? 8 : 5).map((tm, idx) => {
+              const won = tm.winner === 'A';
+              return (
+                <View key={tm.id || idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 3, borderBottomWidth: idx < (isStory ? 7 : 4) ? 1 : 0, borderBottomColor: 'rgba(255,255,255,0.04)' }}>
+                  <View style={{ width: 4, height: 4, borderRadius: 2, backgroundColor: won ? '#22C55E' : '#EF4444' }} />
+                  {tm.tournamentPhase ? (
+                    <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B', width: isStory ? 50 : 40 }} numberOfLines={1}>{tm.tournamentPhase}</Text>
+                  ) : null}
+                  <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textPrimary, flex: 1 }} numberOfLines={1}>{tm.teamANames.join(', ')}</Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: won ? '#22C55E' : ct.textPrimary }}>{tm.scoreA}</Text>
+                    <Text style={{ fontSize: 7, color: '#64748B' }}>-</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '800', color: !won ? '#EF4444' : ct.textPrimary }}>{tm.scoreB}</Text>
+                  </View>
+                  <Text style={{ fontSize: 8, fontWeight: '500', color: '#64748B', flex: 1, textAlign: 'right' }} numberOfLines={1}>{tm.teamBNames.join(', ')}</Text>
+                </View>
+              );
+            })}
+            {tournamentMatches.length > (isStory ? 8 : 5) ? (
+              <Text style={{ fontSize: 7, color: '#64748B', textAlign: 'center', marginTop: 3 }}>+{tournamentMatches.length - (isStory ? 8 : 5)} {fr ? 'matchs' : 'matches'}</Text>
+            ) : null}
+          </View>
+        ) : null}
+
+        {/* Gold Sponsor Banner */}
+        {goldSponsor ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F59E0B12', borderRadius: 10, paddingVertical: isStory ? 8 : 6, paddingHorizontal: 10, marginBottom: isStory ? 10 : 6, borderWidth: 1, borderColor: '#F59E0B25' }}>
+            <View style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: isStory ? 8 : 6, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="workspace-premium" size={isStory ? 16 : 12} color="#F59E0B" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B', letterSpacing: 0.5 }}>{fr ? 'PARTENAIRE OR' : 'GOLD PARTNER'}</Text>
+              <Text style={{ fontSize: isStory ? 11 : 9, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{goldSponsor.displayName}</Text>
+            </View>
+            <MaterialIcons name="star" size={isStory ? 14 : 10} color="#F59E0B" />
           </View>
         ) : null}
 

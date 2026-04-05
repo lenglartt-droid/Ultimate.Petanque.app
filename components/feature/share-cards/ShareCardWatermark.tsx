@@ -12,18 +12,19 @@ const APP_DOWNLOAD_URL = 'https://ultimatepetanque.app/download';
 
 interface WatermarkProps {
   variant?: 'light' | 'dark';
-  size?: 'sm' | 'md';
+  size?: 'sm' | 'md' | 'xs';
   absolute?: boolean;
   hideQR?: boolean;
 }
 
 export default function ShareCardWatermark({ variant = 'light', size = 'md', absolute = false, hideQR = false }: WatermarkProps) {
   const isDark = variant === 'dark';
-  const isSm = size === 'sm';
+  const isSm = size === 'sm' || size === 'xs';
+  const isXs = size === 'xs';
   const textColor = isDark ? 'rgba(0,0,0,0.55)' : 'rgba(255,255,255,0.7)';
   const dotColor = isDark ? 'rgba(0,0,0,0.35)' : 'rgba(255,255,255,0.45)';
   const bgColor = isDark ? 'rgba(0,0,0,0.06)' : 'rgba(255,255,255,0.08)';
-  const qrSize = isSm ? 28 : 36;
+  const qrSize = isXs ? 20 : isSm ? 28 : 36;
   const qrColor = isDark ? '#333333' : '#FFFFFF';
   const qrBgColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.05)';
 
@@ -31,20 +32,23 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
     <View style={[
       s.container,
       isSm && s.containerSm,
+      isXs && s.containerXs,
       absolute && s.absolute,
     ]}>
-      <View style={[s.inner, { backgroundColor: bgColor }, isSm && s.innerSm]}>
+      <View style={[s.inner, { backgroundColor: bgColor }, isSm && s.innerSm, isXs && s.innerXs]}>
         {!hideQR ? (
-          <View style={[s.qrWrap, { backgroundColor: qrBgColor }, isSm && s.qrWrapSm]}>
+          <View style={[s.qrWrap, { backgroundColor: qrBgColor }, isSm && s.qrWrapSm, isXs && s.qrWrapXs]}>
             <QRCode value={APP_DOWNLOAD_URL} size={qrSize} color={qrColor} backgroundColor="transparent" />
           </View>
         ) : null}
-        <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)' }, isSm && s.logoBgSm]}>
-          <MaterialIcons name="sports" size={isSm ? 11 : 15} color={textColor} />
-        </View>
+        {!isXs ? (
+          <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)' }, isSm && s.logoBgSm]}>
+            <MaterialIcons name="sports" size={isSm ? 11 : 15} color={textColor} />
+          </View>
+        ) : null}
         <View style={{ flex: 1 }}>
-          <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm]}>Ultimate Petanque</Text>
-          <Text style={[s.tagline, { color: dotColor }, isSm && s.taglineSm]}>{isSm ? 'Telecharger' : 'Scannez pour telecharger'}</Text>
+          <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm, isXs && s.appNameXs]}>Ultimate Petanque</Text>
+          {!isXs ? <Text style={[s.tagline, { color: dotColor }, isSm && s.taglineSm]}>{isSm ? 'Telecharger' : 'Scannez pour telecharger'}</Text> : null}
         </View>
       </View>
     </View>
@@ -61,6 +65,10 @@ const s = StyleSheet.create({
   containerSm: {
     paddingTop: 6,
     paddingBottom: 2,
+  },
+  containerXs: {
+    paddingTop: 3,
+    paddingBottom: 1,
   },
   absolute: {
     position: 'absolute',
@@ -84,6 +92,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 9,
     borderRadius: 8,
   },
+  innerXs: {
+    gap: 4,
+    paddingVertical: 3,
+    paddingHorizontal: 7,
+    borderRadius: 6,
+  },
   logoBg: {
     width: 26,
     height: 26,
@@ -105,8 +119,13 @@ const s = StyleSheet.create({
     borderRadius: 5,
     padding: 2,
   },
+  qrWrapXs: {
+    borderRadius: 4,
+    padding: 1.5,
+  },
   appName: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
   appNameSm: { fontSize: 9, fontWeight: '700' },
+  appNameXs: { fontSize: 7, fontWeight: '700' },
   tagline: { fontSize: 8, fontWeight: '500', marginTop: 0.5 },
   taglineSm: { fontSize: 6.5 },
 });

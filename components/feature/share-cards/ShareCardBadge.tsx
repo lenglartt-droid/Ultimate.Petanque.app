@@ -118,11 +118,11 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
   }
 
   // === STORY / SQUARE ===
-  const iconOuterSize = isStory ? 130 : 100;
-  const iconInnerSize = isStory ? 94 : 72;
-  const nameSize = isStory ? 24 : 20;
-  const descSize = isStory ? 13 : 11;
-  const pad = isStory ? 28 : 20;
+  const iconOuterSize = isStory ? 130 : 80;
+  const iconInnerSize = isStory ? 94 : 58;
+  const nameSize = isStory ? 24 : 18;
+  const descSize = isStory ? 13 : 10;
+  const pad = isStory ? 28 : 14;
 
   return (
     <View style={s.card}>
@@ -177,7 +177,7 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
           {playerName ? <Text style={{ fontSize: 11, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
           {dateStr ? <Text style={{ fontSize: 10, fontWeight: '500', color: ct.textSecondary }}>{dateStr}</Text> : null}
         </View>
-        <ShareCardWatermark variant="light" size="sm" />
+        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
       </LinearGradient>
     </View>
   );
