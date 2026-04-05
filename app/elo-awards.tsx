@@ -8,6 +8,9 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeasonEntry, EloHistoryEntry, ELO_INITIAL, ELO_RANKS, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
+import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress } from '@/services/globalRankingService';
+import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 
 interface SeasonAward {
   id: string;
@@ -46,6 +49,8 @@ export default function EloAwardsScreen() {
 
   const currentElo = selfPlayer?.eloRating || ELO_INITIAL;
   const currentRank = getEloRank(currentElo);
+  const currentLeague = getLeagueTier(currentElo);
+  const leagueProgress = getLeagueProgress(currentElo);
 
   // Current season stats
   const currentSeasonStats = useMemo(() => {
@@ -160,21 +165,33 @@ export default function EloAwardsScreen() {
       </View>
 
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
-        {/* Current Season Hero */}
+        {/* Current Season Hero — League Tier Style */}
+        <Animated.View entering={FadeInDown.duration(400)}>
         <View style={st.heroCard}>
-          <View style={st.heroTop}>
-            <View style={[st.heroIconBox, { backgroundColor: currentRank.color + '15' }]}>
-              <MaterialIcons name={currentRank.icon as any} size={32} color={currentRank.color} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={st.heroLabel}>{t('leaderboard', 'eloAwardCurrentSeason')}</Text>
-              <Text style={[st.heroValue, { color: currentRank.color }]}>{currentElo}</Text>
-              <View style={[st.heroRankBadge, { backgroundColor: currentRank.color + '12', borderColor: currentRank.color + '30' }]}>
-                <MaterialIcons name={currentRank.icon as any} size={12} color={currentRank.color} />
-                <Text style={[st.heroRankText, { color: currentRank.color }]}>{currentRank.label[isFr ? 'fr' : 'en']}</Text>
+          <LinearGradient colors={currentLeague.gradient} style={st.heroGradient}>
+            <View style={st.heroTop}>
+              <View style={st.heroEmblemWrap}>
+                <Text style={{ fontSize: 28 }}>{currentLeague.emblem}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.heroLeagueName}>{isFr ? currentLeague.name.fr : currentLeague.name.en}</Text>
+                <Text style={st.heroEloValue}>{currentElo} ELO</Text>
+              </View>
+              <View style={st.heroSeasonBadge}>
+                <Text style={st.heroSeasonYear}>{currentSeasonStats.year}</Text>
+                <Text style={st.heroSeasonLabel}>{isFr ? 'Saison' : 'Season'}</Text>
               </View>
             </View>
-          </View>
+            {/* Progress to next tier */}
+            {leagueProgress.nextTier ? (
+              <View style={st.heroProgressRow}>
+                <View style={st.heroProgressTrack}>
+                  <View style={[st.heroProgressFill, { width: `${leagueProgress.progress}%` }]} />
+                </View>
+                <Text style={st.heroProgressText}>{leagueProgress.eloToNext} → {leagueProgress.nextTier.emblem}</Text>
+              </View>
+            ) : null}
+          </LinearGradient>
           <View style={st.heroStats}>
             <View style={st.heroStatItem}>
               <Text style={st.heroStatValue}>{currentSeasonStats.matchesPlayed}</Text>
@@ -199,6 +216,7 @@ export default function EloAwardsScreen() {
             </View>
           </View>
         </View>
+        </Animated.View>
 
         {/* Placement Badge */}
         {isInPlacement(currentSeasonStats.matchesPlayed) ? (
@@ -220,38 +238,58 @@ export default function EloAwardsScreen() {
           </View>
         ) : null}
 
-        {/* Rank Tiers Visualization */}
+        {/* League Tiers Visualization — 6 tiers with gradients */}
+        <Animated.View entering={FadeInDown.duration(400).delay(100)}>
         <View style={st.tiersCard}>
           <Text style={st.sectionTitle}>{t('leaderboard', 'eloRank')}</Text>
-          {ELO_RANKS.slice().reverse().map((rank, idx) => {
-            const isCurrentTier = currentRank.tier === rank.tier;
-            const nextRank = ELO_RANKS.slice().reverse()[idx + 1];
-            const progressInTier = nextRank ? Math.min(100, Math.max(0, ((currentElo - rank.minElo) / (nextRank.minElo - rank.minElo)) * 100)) : 100;
+          {[...LEAGUE_TIERS].reverse().map((league, idx) => {
+            const isCurrentTier = currentLeague.id === league.id;
+            const nextLeague = [...LEAGUE_TIERS].reverse()[idx + 1];
+            const progressInTier = nextLeague ? Math.min(100, Math.max(0, ((currentElo - league.minElo) / (nextLeague.minElo - league.minElo)) * 100)) : (isCurrentTier ? 100 : 0);
+            const rangeLabel = league.maxElo === Infinity ? `${league.minElo}+` : `${league.minElo}-${league.maxElo}`;
+            const isAbove = currentElo >= league.minElo;
             return (
-              <View key={rank.tier} style={[st.tierRow, isCurrentTier && { backgroundColor: rank.color + '08', borderWidth: 1.5, borderColor: rank.color + '30' }]}>
-                <View style={[st.tierIconBox, { backgroundColor: rank.color + '15' }]}>
-                  <MaterialIcons name={rank.icon as any} size={18} color={rank.color} />
-                </View>
+              <Pressable
+                key={league.id}
+                style={[st.tierRow, isCurrentTier && { borderWidth: 1.5, borderColor: league.color + '40' }]}
+                onPress={() => { router.push({ pathname: '/leaderboard', params: { tier: league.id } } as any); }}
+              >
+                <LinearGradient
+                  colors={isCurrentTier ? league.gradient : [league.color + '08', league.color + '03']}
+                  style={st.tierGradientBox}
+                >
+                  <Text style={{ fontSize: 18 }}>{league.emblem}</Text>
+                </LinearGradient>
                 <View style={{ flex: 1 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <Text style={[st.tierName, isCurrentTier && { color: rank.color, fontWeight: '800' }]}>{rank.label[isFr ? 'fr' : 'en']}</Text>
-                    <Text style={st.tierRange}>{rank.minElo}+</Text>
+                    <Text style={[st.tierName, isCurrentTier && { color: '#FFF', fontWeight: '800' }, !isCurrentTier && isAbove && { color: league.color }]}>
+                      {isFr ? league.name.fr : league.name.en}
+                    </Text>
+                    <Text style={[st.tierRange, isCurrentTier && { color: 'rgba(255,255,255,0.5)' }]}>{rangeLabel}</Text>
                     {isCurrentTier ? (
-                      <View style={[st.currentBadge, { backgroundColor: rank.color }]}>
+                      <View style={[st.currentBadge, { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
                         <Text style={st.currentBadgeText}>{isFr ? 'Actuel' : 'Current'}</Text>
                       </View>
                     ) : null}
                   </View>
                   {isCurrentTier ? (
                     <View style={st.tierProgress}>
-                      <View style={[st.tierProgressFill, { width: `${Math.max(progressInTier, 5)}%`, backgroundColor: rank.color }]} />
+                      <View style={[st.tierProgressFill, { width: `${Math.max(progressInTier, 5)}%`, backgroundColor: 'rgba(255,255,255,0.7)' }]} />
                     </View>
                   ) : null}
                 </View>
-              </View>
+                {isCurrentTier ? (
+                  <LinearGradient colors={league.gradient} style={st.tierEloBadge}>
+                    <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF' }}>{currentElo}</Text>
+                  </LinearGradient>
+                ) : (
+                  <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                )}
+              </Pressable>
             );
           })}
         </View>
+        </Animated.View>
 
         {/* Season Awards */}
         <View>
@@ -358,14 +396,20 @@ const st = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
-  heroCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 20, marginBottom: 16, borderWidth: 1, borderColor: '#9333EA20', ...theme.shadows.card },
-  heroTop: { flexDirection: 'row', alignItems: 'center', gap: 16, marginBottom: 16 },
-  heroIconBox: { width: 60, height: 60, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
-  heroLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5 },
-  heroValue: { fontSize: 36, fontWeight: '900' },
-  heroRankBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, borderWidth: 1, alignSelf: 'flex-start', marginTop: 4 },
-  heroRankText: { fontSize: 12, fontWeight: '700' },
-  heroStats: { flexDirection: 'row', backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8 },
+  heroCard: { backgroundColor: theme.surface, borderRadius: 20, overflow: 'hidden' as const, marginBottom: 16, ...theme.shadows.card },
+  heroGradient: { padding: 20, paddingBottom: 16 },
+  heroTop: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 14 },
+  heroEmblemWrap: { width: 56, height: 56, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
+  heroLeagueName: { fontSize: 18, fontWeight: '800' as const, color: '#FFF', letterSpacing: -0.3 },
+  heroEloValue: { fontSize: 13, fontWeight: '600' as const, color: 'rgba(255,255,255,0.65)', marginTop: 2 },
+  heroSeasonBadge: { alignItems: 'center' as const, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  heroSeasonYear: { fontSize: 16, fontWeight: '900' as const, color: '#FFF' },
+  heroSeasonLabel: { fontSize: 9, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)' },
+  heroProgressRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 12 },
+  heroProgressTrack: { flex: 1, height: 5, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 3, overflow: 'hidden' as const },
+  heroProgressFill: { height: '100%' as const, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 3 },
+  heroProgressText: { fontSize: 10, fontWeight: '700' as const, color: 'rgba(255,255,255,0.6)' },
+  heroStats: { flexDirection: 'row' as const, backgroundColor: theme.surface, paddingVertical: 14, paddingHorizontal: 8 },
   heroStatItem: { flex: 1, alignItems: 'center' },
   heroStatValue: { fontSize: 18, fontWeight: '800', color: theme.textPrimary },
   heroStatLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '600', textAlign: 'center' },
@@ -373,14 +417,15 @@ const st = StyleSheet.create({
   sectionTitle: { fontSize: 13, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 12 },
   sectionTitleOuter: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginTop: 8, marginBottom: 12 },
   tiersCard: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 16, ...theme.shadows.card },
-  tierRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: 'transparent' },
-  tierIconBox: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  tierName: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  tierRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingVertical: 10, paddingHorizontal: 10, borderRadius: 12, marginBottom: 6, borderWidth: 1, borderColor: 'transparent' },
+  tierGradientBox: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  tierName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
   tierRange: { fontSize: 11, color: theme.textMuted },
   currentBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  currentBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
-  tierProgress: { height: 5, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden', marginTop: 6 },
-  tierProgressFill: { height: '100%', borderRadius: 3 },
+  currentBadgeText: { fontSize: 9, fontWeight: '800' as const, color: '#FFF' },
+  tierProgress: { height: 5, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 3, overflow: 'hidden' as const, marginTop: 6 },
+  tierProgressFill: { height: '100%' as const, borderRadius: 3 },
+  tierEloBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 },
   awardCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 10, ...theme.shadows.card },
   awardIconBox: { width: 48, height: 48, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
   awardLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },

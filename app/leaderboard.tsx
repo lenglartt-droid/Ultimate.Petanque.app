@@ -762,7 +762,8 @@ export default function LeaderboardScreen() {
           case 'silver': return elo >= 1100 && elo < 1200;
           case 'gold': return elo >= 1200 && elo < 1500;
           case 'diamond': return elo >= 1500 && elo < 1800;
-          case 'master': return elo >= 1800;
+          case 'master': return elo >= 1800 && elo < 2000;
+          case 'grand_master': return elo >= 2000;
           default: return true;
         }
       });
