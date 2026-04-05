@@ -21,8 +21,7 @@ import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
-import CommunityLeaderboard from '@/components/ui/CommunityLeaderboard';
-import LeaderboardHub from '@/components/feature/LeaderboardHub';
+import MiniRankingWidget from '@/components/feature/MiniRankingWidget';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
@@ -366,7 +365,7 @@ export default function HomeScreen() {
                 <Text style={st.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={st.heroTopActions}>
-                <Pressable style={st.heroIconBtn} onPress={() => { router.push('/global-ranking' as any); }}>
+                <Pressable style={st.heroIconBtn} onPress={() => { router.push('/leaderboard' as any); }}>
                   <MaterialIcons name="public" size={20} color="rgba(255,255,255,0.7)" />
                 </Pressable>
                 <Pressable style={st.heroIconBtn} onPress={() => { router.push('/activity-feed' as any); }}>
@@ -414,11 +413,11 @@ export default function HomeScreen() {
           </View>
         );
 
-      // ===== LEADERBOARD HUB =====
+      // ===== MINI RANKING WIDGET =====
       case 'leaderboardHub':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <LeaderboardHub />
+            <MiniRankingWidget />
           </View>
         );
 

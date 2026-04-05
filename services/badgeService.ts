@@ -403,6 +403,22 @@ export const BADGES: BadgeDefinition[] = [
     condition: (ctx) => ctx.peakElo >= 1600 },
   { id: 'resilient', icon: 'refresh', color: '#3B82F6', xpReward: 75, category: 'elo',
     condition: (ctx) => ctx.seasonalResets >= 2 && ctx.eloRating >= 1200 },
+
+  // Global Ranking badges
+  { id: 'top_1000_mondial', icon: 'public', color: '#3B82F6', xpReward: 75, category: 'elo',
+    condition: (ctx) => ctx.leaderboardRank !== null && ctx.leaderboardRank <= 1000 },
+  { id: 'top_100_mondial', icon: 'language', color: '#F59E0B', xpReward: 150, category: 'elo',
+    condition: (ctx) => ctx.leaderboardRank !== null && ctx.leaderboardRank <= 100 },
+  { id: 'top_10_mondial', icon: 'military-tech', color: '#FFD700', xpReward: 250, category: 'elo',
+    condition: (ctx) => ctx.leaderboardRank !== null && ctx.leaderboardRank <= 10 },
+
+  // League tier badges
+  { id: 'ligue_argent', icon: 'workspace-premium', color: '#94A3B8', xpReward: 40, category: 'elo',
+    condition: (ctx) => ctx.eloRating >= 1100 },
+  { id: 'ligue_diamant', icon: 'diamond', color: '#06B6D4', xpReward: 100, category: 'elo',
+    condition: (ctx) => ctx.eloRating >= 1500 },
+  { id: 'ligue_grand_maitre', icon: 'auto-awesome', color: '#FFD700', xpReward: 300, category: 'elo',
+    condition: (ctx) => ctx.eloRating >= 2000 },
 ];
 
 // ============================================
@@ -527,6 +543,14 @@ export function getBadgeName(badgeId: string, lang: 'fr' | 'en'): string {
     chute_libre: { fr: 'Chute Libre', en: 'Free Fall' },
     sommet_atteint: { fr: 'Sommet Atteint', en: 'Summit Reached' },
     resilient: { fr: 'Resilient', en: 'Resilient' },
+    // Global Ranking
+    top_1000_mondial: { fr: 'Top 1000 Mondial', en: 'World Top 1000' },
+    top_100_mondial: { fr: 'Top 100 Mondial', en: 'World Top 100' },
+    top_10_mondial: { fr: 'Top 10 Mondial', en: 'World Top 10' },
+    // League tiers
+    ligue_argent: { fr: 'Ligue Argent', en: 'Silver League' },
+    ligue_diamant: { fr: 'Ligue Diamant', en: 'Diamond League' },
+    ligue_grand_maitre: { fr: 'Ligue Grand Maitre', en: 'Grand Master League' },
   };
   return names[badgeId]?.[lang] || badgeId;
 }
@@ -650,6 +674,14 @@ export function getBadgeDescription(badgeId: string, lang: 'fr' | 'en'): string 
     chute_libre: { fr: 'Perdre 30+ ELO en 1 match — aie!', en: 'Lose 30+ ELO in 1 match — ouch!' },
     sommet_atteint: { fr: 'Atteindre 1600 ELO pic de saison', en: 'Reach 1600 peak season ELO' },
     resilient: { fr: '2+ resets saisonniers + 1200 ELO — resilient', en: '2+ seasonal resets + 1200 ELO — resilient' },
+    // Global Ranking
+    top_1000_mondial: { fr: 'Entrer dans le top 1000 mondial', en: 'Enter the world top 1000' },
+    top_100_mondial: { fr: 'Entrer dans le top 100 mondial — elite planetaire', en: 'Enter the world top 100 — planetary elite' },
+    top_10_mondial: { fr: 'Entrer dans le top 10 mondial — legende vivante', en: 'Enter the world top 10 — living legend' },
+    // League tiers
+    ligue_argent: { fr: 'Atteindre la Ligue Argent (1100 ELO)', en: 'Reach Silver League (1100 ELO)' },
+    ligue_diamant: { fr: 'Atteindre la Ligue Diamant (1500 ELO)', en: 'Reach Diamond League (1500 ELO)' },
+    ligue_grand_maitre: { fr: 'Atteindre la Ligue Grand Maitre (2000 ELO)', en: 'Reach Grand Master League (2000 ELO)' },
   };
   return descs[badgeId]?.[lang] || '';
 }

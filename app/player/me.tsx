@@ -27,6 +27,7 @@ import { getEloRank, ELO_INITIAL } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
+import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 
 // ============================================
@@ -449,6 +450,18 @@ export default function MyPlayerCardScreen() {
                   </Pressable>
                 );
               })() : null}
+
+              {/* ── BLOC: GLOBAL RANK & LEAGUE TIER ── */}
+              <View style={s.heroSectionBlock}>
+                <GlobalRankBadge
+                  playerId={selfPlayer.id}
+                  playerUserId={user?.id}
+                  eloRating={selfPlayer.eloRating || 1000}
+                  isPublic={isPublic}
+                  language={language}
+                  compact
+                />
+              </View>
 
               {/* ── BLOC 2c: GEO RANKING (between ELO and LIEU) ── */}
               {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (

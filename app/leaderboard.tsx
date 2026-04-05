@@ -14,7 +14,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -326,11 +326,17 @@ export default function LeaderboardScreen() {
   }, []);
   const isTablet = screenWidth >= 600;
 
+  // ============ DEEP LINK PARAMS ============
+  const { tab: tabParam, tier: tierParam, filter: filterParam } = useLocalSearchParams<{ tab?: string; tier?: string; filter?: string }>();
+
   // ============ TAB STATE ============
-  const [activeTab, setActiveTab] = useState<LeaderboardTab>('players');
+  const [activeTab, setActiveTab] = useState<LeaderboardTab>(() => {
+    const valid: LeaderboardTab[] = ['players', 'clubs', 'boules', 'events'];
+    return valid.includes(tabParam as LeaderboardTab) ? (tabParam as LeaderboardTab) : 'players';
+  });
 
   // ============ WEEKLY STATE ============
-  const [weeklyMode, setWeeklyMode] = useState<'alltime' | 'weekly'>('alltime');
+  const [weeklyMode, setWeeklyMode] = useState<'alltime' | 'weekly'>(() => filterParam === 'weekly' ? 'weekly' : 'alltime');
   type WeeklySubFilter = 'all' | 'city' | 'club';
   const [weeklySubFilter, setWeeklySubFilter] = useState<WeeklySubFilter>('all');
   const [weeklyPlayers, setWeeklyPlayers] = useState<Array<any>>([]);
@@ -348,7 +354,10 @@ export default function LeaderboardScreen() {
   const [filterRole, setFilterRole] = useState<string>('all');
   const [filterLevel, setFilterLevel] = useState<string>('all');
   const [filterTrustLevel, setFilterTrustLevel] = useState<string>('all');
-  const [filterEloRank, setFilterEloRank] = useState<string>('all');
+  const [filterEloRank, setFilterEloRank] = useState<string>(() => {
+    const validTiers = ['bronze', 'silver', 'gold', 'diamond', 'master'];
+    return tierParam && validTiers.includes(tierParam) ? tierParam : 'all';
+  });
   const [filterClub, setFilterClub] = useState<string>('all');
   const [filterBrand, setFilterBrand] = useState<string>('all');
   const [filterTerrain, setFilterTerrain] = useState<string>('all');
