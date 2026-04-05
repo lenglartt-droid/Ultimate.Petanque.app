@@ -563,6 +563,171 @@ export default function EloAwardsScreen() {
           );
         })() : null}
 
+        {/* ===== ELO PREDICTIONS ===== */}
+        {(() => {
+          if (!leagueProgress.nextTier) {
+            // Already Grand Master
+            return (
+              <Animated.View entering={FadeInDown.duration(400).delay(75)}>
+                <View style={st.chartCard}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                    <MaterialIcons name="auto-graph" size={18} color="#FFD700" />
+                    <Text style={st.sectionTitle}>{t('leaderboard', 'eloPredictionTitle')}</Text>
+                  </View>
+                  <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                    <Text style={{ fontSize: 36 }}>👑</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: '#FFD700', marginTop: 8 }}>{t('leaderboard', 'eloPredictionAlreadyTop')}</Text>
+                    <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 4, textAlign: 'center' }}>{t('leaderboard', 'eloPredictionAlreadyTopDesc')}</Text>
+                  </View>
+                </View>
+              </Animated.View>
+            );
+          }
+
+          // Compute predictions from recent matches
+          const recentN = Math.min(eloHistory.length, 10);
+          if (recentN < 2) return null;
+          const recentMatches = eloHistory.slice(0, recentN); // newest first
+          const recentWins = recentMatches.filter(h => h.won).length;
+          const recentWinRate = Math.round((recentWins / recentN) * 100);
+          const totalDelta = recentMatches.reduce((sum, h) => sum + h.eloDelta, 0);
+          const avgDelta = totalDelta / recentN;
+          const avgDeltaRound = Math.round(avgDelta * 10) / 10;
+          const eloNeeded = leagueProgress.eloToNext;
+          const nextTier = leagueProgress.nextTier;
+
+          // Estimate matches at current pace
+          const matchesAtPace = avgDelta > 0 ? Math.ceil(eloNeeded / avgDelta) : null;
+          // Optimistic: only count winning delta avg
+          const winningDeltas = recentMatches.filter(h => h.won).map(h => h.eloDelta);
+          const avgWinDelta = winningDeltas.length > 0 ? winningDeltas.reduce((s, d) => s + d, 0) / winningDeltas.length : 0;
+          const optimisticMatches = avgWinDelta > 0 && recentWinRate > 0
+            ? Math.ceil(eloNeeded / (avgWinDelta * (recentWinRate / 100)))
+            : null;
+
+          return (
+            <Animated.View entering={FadeInDown.duration(400).delay(75)}>
+              <View style={st.chartCard}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                  <MaterialIcons name="auto-graph" size={18} color={nextTier.color} />
+                  <Text style={st.sectionTitle}>{t('leaderboard', 'eloPredictionTitle')}</Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted, marginLeft: 'auto' }}>
+                    {t('leaderboard', 'eloPredictionDesc').replace('{count}', String(recentN))}
+                  </Text>
+                </View>
+
+                {/* Target tier */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: nextTier.color + '08', borderRadius: 14, padding: 12, marginTop: 10, marginBottom: 12, borderWidth: 1, borderColor: nextTier.color + '18' }}>
+                  <LinearGradient colors={nextTier.gradient} style={{ width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>{nextTier.emblem}</Text>
+                  </LinearGradient>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>
+                      {t('leaderboard', 'eloPredictionNextTier')}: {isFr ? nextTier.name.fr : nextTier.name.en}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>
+                      {eloNeeded} ELO {isFr ? 'necessaires' : 'needed'} ({nextTier.minElo}+)
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'center', backgroundColor: nextTier.color + '15', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '900', color: nextTier.color }}>{eloNeeded}</Text>
+                    <Text style={{ fontSize: 8, fontWeight: '600', color: nextTier.color + '80' }}>ELO</Text>
+                  </View>
+                </View>
+
+                {/* Recent stats row */}
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                  <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingVertical: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: avgDeltaRound >= 0 ? '#22C55E' : '#EF4444' }}>
+                      {avgDeltaRound >= 0 ? '+' : ''}{avgDeltaRound}
+                    </Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{t('leaderboard', 'eloPredictionAvgDelta')}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingVertical: 10 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: recentWinRate >= 50 ? '#22C55E' : '#F59E0B' }}>{recentWinRate}%</Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{t('leaderboard', 'eloPredictionRecentWinRate')}</Text>
+                  </View>
+                </View>
+
+                {/* Projection rows */}
+                <View style={{ gap: 8 }}>
+                  {/* Current pace */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: avgDelta > 0 ? '#22C55E15' : '#EF444415', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name={avgDelta > 0 ? 'trending-up' : 'trending-flat'} size={18} color={avgDelta > 0 ? '#22C55E' : '#EF4444'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted }}>{t('leaderboard', 'eloPredictionCurrentPace')}</Text>
+                      {matchesAtPace ? (
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: theme.textPrimary, marginTop: 2 }}>
+                          ~{matchesAtPace} {isFr ? 'matchs' : 'matches'}
+                        </Text>
+                      ) : (
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: '#EF4444', marginTop: 2 }}>
+                          {isFr ? 'Delta negatif — jouez plus pour progresser' : 'Negative delta — play more to progress'}
+                        </Text>
+                      )}
+                    </View>
+                    {matchesAtPace ? (
+                      <View style={{ alignItems: 'center' }}>
+                        <Text style={{ fontSize: 8, fontWeight: '600', color: theme.textMuted }}>{nextTier.emblem}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+
+                  {/* Optimistic */}
+                  {optimisticMatches && optimisticMatches !== matchesAtPace ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#22C55E08', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#22C55E15' }}>
+                      <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#22C55E15', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name="rocket-launch" size={18} color="#22C55E" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#22C55E' }}>{t('leaderboard', 'eloPredictionOptimistic')}</Text>
+                        <Text style={{ fontSize: 16, fontWeight: '800', color: '#22C55E', marginTop: 2 }}>
+                          ~{optimisticMatches} {isFr ? 'matchs' : 'matches'}
+                        </Text>
+                      </View>
+                    </View>
+                  ) : null}
+                </View>
+
+                {/* Visual progress bar toward next tier */}
+                <View style={{ marginTop: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 10 }}>{currentLeague.emblem}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: currentLeague.color }}>{currentElo}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: nextTier.color }}>{nextTier.minElo}</Text>
+                      <Text style={{ fontSize: 10 }}>{nextTier.emblem}</Text>
+                    </View>
+                  </View>
+                  <View style={{ height: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 4, overflow: 'hidden' }}>
+                    <LinearGradient
+                      colors={currentLeague.gradient}
+                      style={{ height: '100%', width: `${Math.max(leagueProgress.progress, 3)}%`, borderRadius: 4 }}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                    />
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          );
+        })()}
+
+        {/* Share League Rank CTA */}
+        <Animated.View entering={FadeInDown.duration(400).delay(80)}>
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: currentLeague.color + '12', borderRadius: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: currentLeague.color + '25' }}
+            onPress={() => router.push({ pathname: '/share-card', params: { type: 'league' } } as any)}
+          >
+            <MaterialIcons name="share" size={16} color={currentLeague.color} />
+            <Text style={{ fontSize: 13, fontWeight: '700', color: currentLeague.color }}>{t('leaderboard', 'eloShareLeague')}</Text>
+          </Pressable>
+        </Animated.View>
+
         {/* Placement Badge */}
         {isInPlacement(currentSeasonStats.matchesPlayed) ? (
           <View style={[st.heroCard, { borderColor: '#F59E0B20', marginBottom: 16 }]}>

@@ -7,4 +7,5 @@ export { default as ShareCardH2H } from './ShareCardH2H';
 export { default as ShareCardSponsoredEvent } from './ShareCardSponsoredEvent';
 export { default as ShareCardPalmares } from './ShareCardPalmares';
 export { default as ShareCardEventLeaderboard } from './ShareCardEventLeaderboard';
+export { default as ShareCardLeague } from './ShareCardLeague';
 export { default as ShareCardWatermark } from './ShareCardWatermark';

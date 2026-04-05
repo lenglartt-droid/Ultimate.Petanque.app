@@ -45,6 +45,7 @@ import {
   ShareCardSponsoredEvent,
   ShareCardPalmares,
   ShareCardEventLeaderboard,
+  ShareCardLeague,
 } from '@/components/feature/share-cards';
 import { getSponsoredEvent, getEventParticipants, fetchEventLeaderboard, type SponsoredEvent, type EventLeaderboardEntry } from '@/services/sponsoredEventService';
 import { fetchAmbassadors, type Ambassador } from '@/services/ambassadorService';
@@ -59,7 +60,10 @@ interface PlayerInfo {
   country?: string;
 }
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard';
+import { getLeagueTier, getLeagueProgress, fetchPlayerGlobalRank } from '@/services/globalRankingService';
+import { fetchEloHistory, type EloHistoryEntry } from '@/services/eloService';
+
+type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard' | 'league';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -77,6 +81,7 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   'sponsored-event': { fr: 'Defi sponsorise', en: 'Sponsored Event', icon: 'campaign', iconColor: '#7C3AED' },
   palmares: { fr: 'Palmares', en: 'Career', icon: 'emoji-events', iconColor: '#FFD700' },
   'event-leaderboard': { fr: 'Classement defis', en: 'Event Leaderboard', icon: 'leaderboard', iconColor: '#7C3AED' },
+  league: { fr: 'Classement Ligue', en: 'League Ranking', icon: 'military-tech', iconColor: '#FFD700' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -260,6 +265,20 @@ export default function ShareCardScreen() {
   const [sponsoredEvent, setSponsoredEvent] = useState<SponsoredEvent | null>(null);
   const [sponsoredEventParticipantCount, setSponsoredEventParticipantCount] = useState(0);
   const [sponsoredEventLoading, setSponsoredEventLoading] = useState(false);
+
+  // League card data
+  const [leagueWorldRank, setLeagueWorldRank] = useState<{ rank: number | null; total: number } | null>(null);
+  const [leagueEloHistory, setLeagueEloHistory] = useState<EloHistoryEntry[]>([]);
+  React.useEffect(() => {
+    if (cardType !== 'league' || !selfPlayer?.id) return;
+    Promise.all([
+      selfPlayer.isPublic ? fetchPlayerGlobalRank(selfPlayer.id) : Promise.resolve({ rank: null, total: 0 }),
+      fetchEloHistory(selfPlayer.id, 30),
+    ]).then(([rankRes, histRes]) => {
+      setLeagueWorldRank({ rank: rankRes.rank, total: rankRes.total });
+      setLeagueEloHistory(histRes.history);
+    }).catch(() => {});
+  }, [cardType, selfPlayer?.id, selfPlayer?.isPublic]);
 
   const [activeFormat, setActiveFormat] = useState<ShareCardFormat>('square');
   const [activeTheme, setActiveTheme] = useState<CardColorTheme>('dark');
@@ -477,11 +496,15 @@ export default function ShareCardScreen() {
       case 'sponsored-event':
         if (sponsoredEvent) return sponsoredEvent.title;
         return 'Event';
+      case 'league': {
+        const tierName = fr ? getLeagueTier(selfPlayer?.eloRating || 1000).name.fr : getLeagueTier(selfPlayer?.eloRating || 1000).name.en;
+        return `${tierName} - ${selfPlayer?.eloRating || 1000} ELO`;
+      }
       case 'stats':
       default:
         return playerName || 'Stats';
     }
-  }, [cardType, match, badgeId, challenge, tournament, playerName, language, h2hData]);
+  }, [cardType, match, badgeId, challenge, tournament, playerName, language, h2hData, selfPlayer?.eloRating]);
 
   const recordHistory = useCallback(async (action: 'shared' | 'downloaded') => {
     const info = TYPE_INFO[cardType];
@@ -757,6 +780,37 @@ export default function ShareCardScreen() {
             format={activeFormat}
           />
         );
+      case 'league': {
+        const leagueElo = selfPlayer?.eloRating || 1000;
+        const leagueProg = getLeagueProgress(leagueElo);
+        const leagueTier = leagueProg.tier;
+        const eloHistPoints = [...leagueEloHistory].reverse().map(h => ({ elo: h.eloAfter, won: h.won }));
+        const geoRankData2 = geoRank ? {
+          city: geoRank.city?.rank ? { name: geoRank.city.name, rank: geoRank.city.rank } : undefined,
+          country: geoRank.country?.rank ? { name: geoRank.country.name, rank: geoRank.country.rank } : undefined,
+        } : null;
+        return (
+          <ShareCardLeague
+            playerName={playerName}
+            elo={leagueElo}
+            leagueTier={leagueTier}
+            worldRank={leagueWorldRank?.rank}
+            worldTotal={leagueWorldRank?.total}
+            progress={leagueProg.progress}
+            eloToNext={leagueProg.eloToNext}
+            nextTierEmblem={leagueProg.nextTier?.emblem}
+            eloHistory={eloHistPoints}
+            matchesPlayed={userStats.totalMatches || matches.length}
+            wins={userStats.wins || 0}
+            winRate={userStats.winRate || 0}
+            clubName={clubName}
+            geoRank={geoRankData2}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
       case 'stats':
       default:
         return (
