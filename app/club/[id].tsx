@@ -36,6 +36,8 @@ import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { isSharedWithMe, saveSharedItemToMyAccount, recordShareView } from '@/services/shareService';
 import { toggleItemPublic } from '@/services/publicItemsService';
+import { fetchGeoLeaderboard, GeoEntry } from '@/services/geoLeaderboardService';
+import { getCountryFlag, getContinentFlag, getContinentLabel, getContinent } from '@/constants/geoData';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest } from '@/services/clubClaimService';
@@ -114,6 +116,32 @@ export default function ClubDetailScreen() {
   const [uploadingCard, setUploadingCard] = React.useState(false);
   const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
   const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375);
+
+  // Geo ranking state for club
+  const [clubGeoRank, setClubGeoRank] = React.useState<{ city?: { rank: number; total: number }; country?: { rank: number; total: number }; continent?: { rank: number; total: number }; world?: { rank: number; total: number } } | null>(null);
+  React.useEffect(() => {
+    if (!club) return;
+    fetchGeoLeaderboard().then(({ cities, countries, continents }) => {
+      const result: any = {};
+      if (club.city) {
+        const cityIdx = cities.findIndex(c => c.key.toLowerCase() === club.city.toLowerCase());
+        if (cityIdx >= 0) result.city = { rank: cityIdx + 1, total: cities.length };
+      }
+      if (club.country) {
+        const countryIdx = countries.findIndex(c => c.key.toLowerCase() === club.country!.toLowerCase());
+        if (countryIdx >= 0) result.country = { rank: countryIdx + 1, total: countries.length };
+        const continent = getContinent(club.country);
+        if (continent) {
+          const contIdx = continents.findIndex(c => c.key === continent);
+          if (contIdx >= 0) result.continent = { rank: contIdx + 1, total: continents.length };
+        }
+      }
+      // World: total clubs public count
+      const allPublic = cities.reduce((s, c) => s + c.playerCount, 0);
+      if (allPublic > 0) result.world = { rank: null, total: allPublic };
+      setClubGeoRank(Object.keys(result).length > 0 ? result : null);
+    }).catch(() => {});
+  }, [club?.id, club?.isPublic, club?.city, club?.country]);
 
   const isFavorite = id ? isFavoriteClub(id) : false;
 
@@ -504,6 +532,42 @@ export default function ClubDetailScreen() {
             <Text style={styles.clubMetaText}>{club.address ? `${club.address}, ` : ''}{club.city}</Text>
           </View>
           {club.description ? <Text style={styles.clubDescription}>{club.description}</Text> : null}
+
+          {/* Geographic Ranking */}
+          {clubGeoRank && (clubGeoRank.city || clubGeoRank.country || clubGeoRank.continent) ? (
+            <View style={styles.geoRankSection}>
+              <View style={styles.geoRankHeader}>
+                <MaterialIcons name="public" size={14} color="#3B82F6" />
+                <Text style={styles.geoRankTitle}>{language === 'fr' ? 'Classement geographique' : 'Geographic Ranking'}</Text>
+              </View>
+              <View style={styles.geoRankRow}>
+                {clubGeoRank.city ? (
+                  <View style={styles.geoRankBadge}>
+                    <MaterialIcons name="location-city" size={14} color="#3B82F6" />
+                    <Text style={styles.geoRankBadgeLabel}>{club.city}</Text>
+                    <Text style={[styles.geoRankBadgeRank, { color: clubGeoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{clubGeoRank.city.rank}</Text>
+                    <Text style={styles.geoRankBadgeTotal}>/{clubGeoRank.city.total}</Text>
+                  </View>
+                ) : null}
+                {clubGeoRank.country ? (
+                  <View style={styles.geoRankBadge}>
+                    <Text style={{ fontSize: 14 }}>{getCountryFlag(club.country || '')}</Text>
+                    <Text style={styles.geoRankBadgeLabel} numberOfLines={1}>{club.country}</Text>
+                    <Text style={[styles.geoRankBadgeRank, { color: clubGeoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{clubGeoRank.country.rank}</Text>
+                    <Text style={styles.geoRankBadgeTotal}>/{clubGeoRank.country.total}</Text>
+                  </View>
+                ) : null}
+                {clubGeoRank.continent ? (
+                  <View style={styles.geoRankBadge}>
+                    <Text style={{ fontSize: 14 }}>{getContinentFlag(getContinent(club.country || ''))}</Text>
+                    <Text style={styles.geoRankBadgeLabel} numberOfLines={1}>{getContinentLabel(getContinent(club.country || ''), language === 'fr')}</Text>
+                    <Text style={[styles.geoRankBadgeRank, { color: clubGeoRank.continent.rank <= 3 ? '#F59E0B' : '#F59E0B' }]}>#{clubGeoRank.continent.rank}</Text>
+                    <Text style={styles.geoRankBadgeTotal}>/{clubGeoRank.continent.total}</Text>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          ) : null}
 
           {/* Facilities inline */}
           {club.facilities && club.facilities.length > 0 ? (
@@ -2245,4 +2309,14 @@ const styles = StyleSheet.create({
   coAdminRemoveBtn: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FEF2F2', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#FECACA' },
   coAdminBadgeCard: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#7C3AED08', borderRadius: theme.borderRadius.lg, padding: 14, borderWidth: 1, borderColor: '#7C3AED15' },
   coAdminBadgeText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED', flex: 1 },
+
+  // Geo Ranking
+  geoRankSection: { marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: theme.border + '40', width: '100%' },
+  geoRankHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 10, justifyContent: 'center' as const },
+  geoRankTitle: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary, letterSpacing: 0.3 },
+  geoRankRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, justifyContent: 'center' as const, gap: 8 },
+  geoRankBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+  geoRankBadgeLabel: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 70 },
+  geoRankBadgeRank: { fontSize: 14, fontWeight: '900' as const },
+  geoRankBadgeTotal: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted },
 });

@@ -48,7 +48,11 @@ import {
   ShareCardLeague,
   ShareCardWeeklyDigest,
   ShareCardMilestone,
+  ShareCardClub,
 } from '@/components/feature/share-cards';
+import { fetchClubLeaderboard } from '@/services/clubLeaderboardService';
+import { fetchGeoLeaderboard } from '@/services/geoLeaderboardService';
+import { getContinent, getContinentLabel } from '@/constants/geoData';
 import { getSponsoredEvent, getEventParticipants, fetchEventLeaderboard, type SponsoredEvent, type EventLeaderboardEntry } from '@/services/sponsoredEventService';
 import { fetchAmbassadors, type Ambassador } from '@/services/ambassadorService';
 import { config } from '@/constants/config';
@@ -66,7 +70,7 @@ import { getLeagueTier, getLeagueProgress, fetchPlayerGlobalRank, LEAGUE_TIERS }
 import { fetchEloHistory, type EloHistoryEntry } from '@/services/eloService';
 import { getLastWeekSummary, getCurrentWeekStart, getWeekEnd } from '@/services/weeklyLeaderboardService';
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard' | 'league' | 'weekly-digest' | 'milestone';
+type CardType = 'match' | 'badge' | 'stats' | 'club' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard' | 'league' | 'weekly-digest' | 'milestone';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -87,6 +91,7 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   league: { fr: 'Classement Ligue', en: 'League Ranking', icon: 'military-tech', iconColor: '#FFD700' },
   'weekly-digest': { fr: 'Bilan Hebdo', en: 'Weekly Digest', icon: 'date-range', iconColor: '#EC4899' },
   milestone: { fr: 'Jalon ELO', en: 'ELO Milestone', icon: 'emoji-events', iconColor: '#F59E0B' },
+  club: { fr: 'Fiche Club', en: 'Club Card', icon: 'home', iconColor: '#D97706' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -96,10 +101,10 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 export default function ShareCardScreen() {
-  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string; eventId?: string }>();
+  const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string; eventId?: string; clubId?: string }>();
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players } = useAppData();
+  const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players, clubs } = useAppData();
   const { badges: userBadges } = useBadges();
   const { showAlert } = useAlert();
   const fr = language === 'fr';
@@ -436,6 +441,56 @@ export default function ShareCardScreen() {
   const badgeId = params.badgeId;
   const opponentIdParam = params.opponentId;
   const eventId = params.eventId || params.id;
+  const clubIdParam = params.clubId || (cardType === 'club' ? params.id : undefined);
+
+  // Club card data
+  const [clubCardData, setClubCardData] = useState<{
+    club: any; topPlayers: any[]; totalMatches: number;
+    avgWinRate: number; avgTirRate: number; avgCarreauRate: number;
+    geoRank: any;
+  } | null>(null);
+  React.useEffect(() => {
+    if (cardType !== 'club' || !clubIdParam) return;
+    const loadClubData = async () => {
+      const { getClubById } = require('@/contexts/AppContext');
+      // Use clubs from appData
+      const club = (clubs as any[])?.find?.((c: any) => c.id === clubIdParam);
+      if (!club) return;
+      // Fetch club leaderboard for stats
+      const { clubs: lbClubs } = await fetchClubLeaderboard();
+      const lbClub = lbClubs.find(c => c.id === clubIdParam);
+      // Fetch geo rank
+      let geoRankData: any = null;
+      try {
+        const { cities, countries, continents } = await fetchGeoLeaderboard();
+        const result: any = {};
+        if (club.city) {
+          const cityIdx = cities.findIndex((c: any) => c.key.toLowerCase() === club.city.toLowerCase());
+          if (cityIdx >= 0) result.city = { name: club.city, rank: cityIdx + 1, total: cities.length };
+        }
+        if (club.country) {
+          const countryIdx = countries.findIndex((c: any) => c.key.toLowerCase() === club.country.toLowerCase());
+          if (countryIdx >= 0) result.country = { name: club.country, rank: countryIdx + 1, total: countries.length };
+          const continent = getContinent(club.country);
+          if (continent) {
+            const contIdx = continents.findIndex((c: any) => c.key === continent);
+            if (contIdx >= 0) result.continent = { name: getContinentLabel(continent, fr), rank: contIdx + 1, total: continents.length };
+          }
+        }
+        if (Object.keys(result).length > 0) geoRankData = result;
+      } catch {}
+      setClubCardData({
+        club,
+        topPlayers: lbClub?.topPlayers || [],
+        totalMatches: lbClub?.totalMatches || 0,
+        avgWinRate: lbClub?.stats?.avgWinRate || 0,
+        avgTirRate: lbClub?.stats?.avgTirRate || 0,
+        avgCarreauRate: lbClub?.stats?.avgCarreauRate || 0,
+        geoRank: geoRankData,
+      });
+    };
+    loadClubData();
+  }, [cardType, clubIdParam, fr]);
 
   // Load sponsored event data
   React.useEffect(() => {
@@ -649,6 +704,11 @@ export default function ShareCardScreen() {
       case 'milestone': {
         if (milestoneData) return milestoneData.label;
         return fr ? 'Jalon ELO' : 'ELO Milestone';
+      }
+      case 'club': {
+        const cd = clubCardData;
+        if (cd?.club) return cd.club.name;
+        return 'Club';
       }
       case 'stats':
       default:
@@ -1008,6 +1068,33 @@ export default function ShareCardScreen() {
             previousTier={milestoneData.previousTier || null}
             matchContext={milestoneData.matchContext}
             clubName={clubName}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
+      case 'club': {
+        if (!clubCardData?.club) return <EmptyCard message={fr ? 'Club introuvable' : 'Club not found'} />;
+        const cd = clubCardData;
+        return (
+          <ShareCardClub
+            clubName={cd.club.name}
+            city={cd.club.city}
+            country={cd.club.country}
+            logo={cd.club.logo}
+            membersCount={cd.club.membersCount}
+            foundedYear={cd.club.foundedYear}
+            membershipCost={cd.club.membershipCost}
+            facilities={cd.club.facilities}
+            description={cd.club.description}
+            geoRank={cd.geoRank}
+            topPlayers={cd.topPlayers.map((p: any) => ({ name: p.name, winRate: p.winRate, eloRating: p.eloRating }))}
+            totalMatches={cd.totalMatches}
+            avgWinRate={cd.avgWinRate}
+            avgTirRate={cd.avgTirRate}
+            avgCarreauRate={cd.avgCarreauRate}
+            isVerified={cd.club.isVerified}
             language={language}
             colorTheme={activeTheme}
             format={activeFormat}

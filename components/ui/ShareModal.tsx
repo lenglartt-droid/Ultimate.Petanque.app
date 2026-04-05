@@ -854,14 +854,14 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                     <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
                   </Pressable>
                 {/* Social media share — same style as other options */}
-                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player' || itemType === 'club' || itemType === 'terrain') ? (
+                {(itemType === 'match' || itemType === 'challenge' || itemType === 'tournament' || itemType === 'player' || itemType === 'club') ? (
                   <Pressable
                     style={({ pressed }) => [s.optionCard, pressed && s.optionCardPressed]}
                     onPress={() => {
                       Haptics.selectionAsync();
                       handleClose();
                       setTimeout(() => {
-                        const shareType = itemType === 'player' ? 'stats' : itemType === 'club' ? 'stats' : itemType;
+                        const shareType = itemType === 'player' ? 'stats' : itemType;
                         const shareParams: any = { type: shareType, id: itemId };
                         if (itemType === 'club') shareParams.clubId = itemId;
                         router.push({ pathname: '/share-card', params: shareParams } as any);
