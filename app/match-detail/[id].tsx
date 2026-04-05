@@ -17,6 +17,7 @@ import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
+import AdBanner from '@/components/ui/AdBanner';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
@@ -619,6 +620,8 @@ export default function MatchDetailScreen() {
         })() : null}
 
         {/* Player Actions */}
+        {/* Ad Banner - natural break after menes/before actions */}
+        <AdBanner position="inline" />
         {match.playerActions && match.playerActions.length > 0 ? (
           <View style={s.card}>
             <View style={s.cardHeaderRow}>

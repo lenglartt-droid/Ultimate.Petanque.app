@@ -22,6 +22,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import MiniRankingWidget from '@/components/feature/MiniRankingWidget';
+import MiniGeoRankingWidget from '@/components/feature/MiniGeoRankingWidget';
 import LeaguePromotionModal from '@/components/ui/LeaguePromotionModal';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
@@ -97,7 +98,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -367,7 +368,9 @@ export default function HomeScreen() {
     const s: HomeSection[] = [];
     s.push({ key: 'hero', data: ['hero'] });
     s.push({ key: 'actions', data: ['actions'] });
-    // Leaderboard Hub — prominent position right after actions
+    // Geographic Ranking Widget — above full leaderboard
+    s.push({ key: 'geoRanking', data: ['geoRanking'] });
+    // Leaderboard Hub — prominent position
     s.push({ key: 'leaderboardHub', data: ['leaderboardHub'] });
     if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
     if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
@@ -375,15 +378,17 @@ export default function HomeScreen() {
     s.push({ key: 'sponsor', data: ['sponsor'] });
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
     s.push({ key: 'timeline', data: ['timeline'] });
-    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
+    // Ad banner after timeline — first natural break point
     s.push({ key: 'adBanner1', data: ['adBanner1'] });
+    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
     s.push({ key: 'divider1', data: ['divider1'] });
     if (featuredAmbassadors.length > 0) {
       s.push({ key: 'ambassadors', data: ['ambassadors'] });
       s.push({ key: 'divider2', data: ['divider2'] });
     }
-    s.push({ key: 'adBanner2', data: ['adBanner2'] });
     s.push({ key: 'history', data: ['history'] });
+    // Ad banner at bottom — second placement after all content
+    if (matches.length > 0 || challenges.length > 0) s.push({ key: 'adBanner2', data: ['adBanner2'] });
     return s;
   }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length]);
 
@@ -442,6 +447,14 @@ export default function HomeScreen() {
                 </View>
               ))}
             </View>
+          </View>
+        );
+
+      // ===== GEO RANKING WIDGET =====
+      case 'geoRanking':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <MiniGeoRankingWidget />
           </View>
         );
 
