@@ -100,6 +100,7 @@ export default function EditTerrainScreen() {
   const [publicAccess, setPublicAccess] = useState(true);
   const [lighting, setLighting] = useState(false);
   const [covered, setCovered] = useState(false);
+  const [parking, setParking] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
@@ -146,6 +147,7 @@ export default function EditTerrainScreen() {
       setLongitude(terrain.location.longitude);
       setPhotos(terrain.photos || []);
       setEnvironment(terrain.environment || 'outdoor');
+      setParking((terrain as any).parking ?? false);
     }
   }, [terrain]);
 
@@ -292,7 +294,7 @@ export default function EditTerrainScreen() {
         location: { latitude, longitude }, type,
         description: description.trim() || undefined,
         clubId, clubName: sc?.name, publicAccess,
-        courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,
+        courtsCount: parseInt(courtsCount) || 1, lighting, covered, parking, environment, photos: uploadedPhotos,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -536,6 +538,17 @@ export default function EditTerrainScreen() {
                   </View>
                 </View>
                 <Switch value={covered} onValueChange={setCovered} trackColor={{ false: theme.border, true: theme.accent + '50' }} thumbColor={covered ? theme.accent : theme.textMuted} />
+              </View>
+              <View style={styles.featureDivider} />
+              <View style={styles.featureRow}>
+                <View style={styles.featureInfo}>
+                  <MaterialIcons name="local-parking" size={22} color="#6366F1" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.featureTitle}>{t('terrain', 'parking')}</Text>
+                    <Text style={styles.featureDesc}>{t('terrain', 'parkingDesc')}</Text>
+                  </View>
+                </View>
+                <Switch value={parking} onValueChange={setParking} trackColor={{ false: theme.border, true: '#6366F1' + '50' }} thumbColor={parking ? '#6366F1' : theme.textMuted} />
               </View>
             </View>
           </SectionCard>

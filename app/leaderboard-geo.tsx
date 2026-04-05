@@ -20,7 +20,7 @@ import { fetchGeoLeaderboard, GeoEntry } from '@/services/geoLeaderboardService'
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 
 type GeoTab = 'cities' | 'countries' | 'continents';
-type SortKey = 'composite' | 'avgElo' | 'avgWinRate' | 'playerCount' | 'totalMatches';
+type SortKey = 'composite' | 'avgElo' | 'avgWinRate' | 'playerCount' | 'totalMatches' | 'avgTrustScore';
 
 const TAB_CONFIG: { id: GeoTab; icon: string; color: string }[] = [
   { id: 'cities', icon: 'location-city', color: '#3B82F6' },
@@ -32,6 +32,7 @@ const SORT_OPTIONS: { id: SortKey; icon: string }[] = [
   { id: 'composite', icon: 'auto-awesome' },
   { id: 'avgElo', icon: 'diamond' },
   { id: 'avgWinRate', icon: 'emoji-events' },
+  { id: 'avgTrustScore', icon: 'verified-user' },
   { id: 'playerCount', icon: 'people' },
   { id: 'totalMatches', icon: 'sports' },
 ];
@@ -63,6 +64,7 @@ function GeoCard({ entry, rank, tab, isFr, sortKey }: { entry: GeoEntry; rank: n
   // Highlight the active sort metric
   const highlightedValue = sortKey === 'avgElo' ? `${entry.avgElo}`
     : sortKey === 'avgWinRate' ? `${entry.avgWinRate}%`
+    : sortKey === 'avgTrustScore' ? `${entry.avgTrustScore}`
     : sortKey === 'playerCount' ? `${entry.playerCount}`
     : sortKey === 'totalMatches' ? `${entry.totalMatches}`
     : null;
@@ -111,6 +113,12 @@ function GeoCard({ entry, rank, tab, isFr, sortKey }: { entry: GeoEntry; rank: n
             <Text style={styles.statPillLabel}>{isFr ? 'Vict.' : 'Win'}</Text>
             <Text style={[styles.statPillValue, { color: theme.success }]}>{entry.avgWinRate}%</Text>
           </View>
+          {sortKey === 'avgTrustScore' ? (
+            <View style={[styles.statPill, styles.statPillHighlight]}>
+              <Text style={styles.statPillLabel}>Trust</Text>
+              <Text style={[styles.statPillValue, { color: entry.avgTrustScore >= 65 ? '#22C55E' : entry.avgTrustScore >= 45 ? '#D97706' : '#EF4444' }]}>{entry.avgTrustScore}</Text>
+            </View>
+          ) : null}
         </View>
       </Pressable>
       {entry.topPlayer ? (
@@ -201,6 +209,8 @@ export default function GeoLeaderboardScreen() {
         return sorted.sort((a, b) => b.playerCount - a.playerCount);
       case 'totalMatches':
         return sorted.sort((a, b) => b.totalMatches - a.totalMatches);
+      case 'avgTrustScore':
+        return sorted.sort((a, b) => b.avgTrustScore - a.avgTrustScore);
       case 'composite':
       default:
         return sorted.sort((a, b) => (b.playerCount * b.avgElo) - (a.playerCount * a.avgElo));
@@ -221,6 +231,7 @@ export default function GeoLeaderboardScreen() {
     composite: isFr ? 'Score' : 'Score',
     avgElo: 'ELO',
     avgWinRate: isFr ? 'Victoires' : 'Win Rate',
+    avgTrustScore: 'TrustScore',
     playerCount: isFr ? 'Joueurs' : 'Players',
     totalMatches: isFr ? 'Matchs' : 'Games',
   };

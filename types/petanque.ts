@@ -145,6 +145,7 @@ export interface Terrain {
   courtsCount: number;
   lighting: boolean;
   covered: boolean;
+  parking: boolean;
   environment?: 'indoor' | 'outdoor';
   createdAt?: string;
 }

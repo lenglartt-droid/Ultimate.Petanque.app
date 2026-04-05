@@ -179,8 +179,10 @@ export default function PlayerDetailScreen() {
   React.useEffect(() => {
     if (!player) return;
     const playerUserId2 = (player as any)?.userId;
+    // Only fetch ambassador data for players linked to a real user account
+    if (!playerUserId2) { setAmbassadorData(null); return; }
     fetchAmbassadors().then(({ ambassadors }) => {
-      const amb = ambassadors.find(a => a.playerId === id || (playerUserId2 && a.userId === playerUserId2));
+      const amb = ambassadors.find(a => (playerUserId2 && a.userId === playerUserId2) || a.playerId === id);
       setAmbassadorData(amb || null);
     });
   }, [id, player]);
@@ -648,8 +650,8 @@ export default function PlayerDetailScreen() {
                 )
               ) : null}
 
-              {/* ===== ELO SECTION IN HERO (matching me.tsx) ===== */}
-              {player.eloRating ? (() => {
+              {/* ===== ELO SECTION IN HERO (matching me.tsx) — only for real users ===== */}
+              {player.eloRating && player.userId ? (() => {
                 const eloR = getEloRank(player.eloRating);
                 return (
                   <View style={s.heroSectionBlock}>

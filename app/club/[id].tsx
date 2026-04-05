@@ -173,18 +173,17 @@ export default function ClubDetailScreen() {
     getClubInvitations(id).then(invs => setClubInvitations(invs.filter(i => i.status === 'pending')));
   }, [id, user?.id, club?.userId]);
 
-  // Filter players for invite modal search
-  React.useEffect(() => {
-    if (!showInviteModal) return;
+  // Filter players for invite modal search — using useMemo to avoid render thrashing
+  const inviteFilteredPlayersMemo = React.useMemo(() => {
+    if (!showInviteModal) return [];
     const q = inviteSearch.trim().toLowerCase();
     const memberIds = new Set(clubPlayers.map(p => p.id));
     const pendingInviteIds = new Set(clubInvitations.map(i => i.invitedPlayerId));
-    const filtered = players
-      .filter(p => !memberIds.has(p.id)) // exclude existing members
-      .filter(p => !q || p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q))
+    return players
+      .filter(p => !memberIds.has(p.id))
+      .filter(p => !q || p.name.toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q) || (p.city || '').toLowerCase().includes(q))
       .slice(0, 20)
       .map(p => ({ ...p, _isInvited: pendingInviteIds.has(p.id) }));
-    setInviteFilteredPlayers(filtered as any);
   }, [inviteSearch, showInviteModal, players, clubPlayers, clubInvitations]);
 
   const handleInvitePlayer = React.useCallback(async (player: any) => {
@@ -534,6 +533,15 @@ export default function ClubDetailScreen() {
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
+          {/* Analytics button for owner/co-admin */}
+          {canEdit && !isSharedItem ? (
+            <Pressable
+              style={[styles.editButton, { backgroundColor: '#8B5CF610' }]}
+              onPress={() => router.push({ pathname: '/club-analytics', params: { id: id! } } as any)}
+            >
+              <MaterialIcons name="analytics" size={22} color="#8B5CF6" />
+            </Pressable>
+          ) : null}
           {canEdit && (
             <Pressable
               style={styles.editButton}
@@ -604,6 +612,18 @@ export default function ClubDetailScreen() {
               </View>
             ) : null}
           </View>
+          {/* Owner / Co-admin badge */}
+          {user?.id && club.userId === user.id ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#7C3AED12', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginBottom: 6, borderWidth: 1, borderColor: '#7C3AED25' }}>
+              <MaterialIcons name="admin-panel-settings" size={14} color="#7C3AED" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#7C3AED' }}>{language === 'fr' ? 'Proprietaire' : 'Owner'}</Text>
+            </View>
+          ) : isCoAdmin ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#3B82F612', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginBottom: 6, borderWidth: 1, borderColor: '#3B82F625' }}>
+              <MaterialIcons name="shield" size={14} color="#3B82F6" />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>{language === 'fr' ? 'Co-administrateur' : 'Co-admin'}</Text>
+            </View>
+          ) : null}
           {sharedPermission ? (
             <View style={{ marginBottom: 8 }}>
               <SharedBadge permission={sharedPermission} />
@@ -985,63 +1005,76 @@ export default function ClubDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Contact Visibility Toggle - only when public */}
-        {canEdit && !isSharedItem && (club.isPublic ?? false) && (club.contactEmail || club.contactPhone) && (
+        {/* ===== SIMPLIFIED VISIBILITY SECTION ===== */}
+        {canEdit && !isSharedItem && (
           <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'VISIBILITE' : 'VISIBILITY'}</Text>
+
+            {/* Toggle 1: Community Visibility */}
             <Pressable
               style={styles.visibilityCard}
               onPress={async () => {
+                if (togglingPublic) return;
                 Haptics.selectionAsync();
-                const newVal = !(club.showContactPublic ?? false);
-                try {
-                  await updateClub(club.id, { showContactPublic: newVal });
-                } catch (e: any) {
-                  showAlert(t('common', 'error'), e.message);
-                }
+                setTogglingPublic(true);
+                const newVal = !isPublicState;
+                const { error } = await toggleItemPublic('clubs', club.id, newVal);
+                if (error) { showAlert(t('common', 'error'), error); }
+                else { setIsPublicState(newVal); setItemPublic('clubs', club.id, newVal); }
+                setTogglingPublic(false);
               }}
-            >
-              <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
-                <MaterialIcons name={club.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={club.showContactPublic ? theme.success : theme.textMuted} />
-              </View>
-              <View style={styles.visibilityInfo}>
-                <Text style={styles.visibilityTitle}>{t('map', 'showContactPublic')}</Text>
-                <Text style={styles.visibilityDesc}>
-                  {club.showContactPublic ? t('map', 'contactVisibleDesc') : t('map', 'contactHiddenDesc')}
-                </Text>
-              </View>
-              <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
-                <Text style={[styles.visibilityBadgeText, { color: club.showContactPublic ? theme.success : theme.textMuted }]}>
-                  {club.showContactPublic ? t('map', 'visibleLabel') : t('map', 'hiddenLabel')}
-                </Text>
-              </View>
-            </Pressable>
-          </Animated.View>
-        )}
-
-        {/* Visibility Toggle - only for owner */}
-        {canEdit && !isSharedItem && (
-          <Animated.View entering={FadeIn.duration(400).delay(550)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{t('map', 'visibility').toUpperCase()}</Text>
-            <Pressable
-              style={styles.visibilityCard}
-              onPress={handleOpenPublicPreview}
               disabled={togglingPublic}
             >
               <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
                 <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
               </View>
               <View style={styles.visibilityInfo}>
-                <Text style={styles.visibilityTitle}>{t('map', 'visibilityToggle')}</Text>
+                <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite communaute' : 'Community Visibility'}</Text>
                 <Text style={styles.visibilityDesc}>
-                  {isPublicState ? t('map', 'publicItemsDesc') : t('map', 'makePublic')}
+                  {isPublicState ? (language === 'fr' ? 'Visible dans l\'annuaire et sur la carte' : 'Visible in directory and on map') : (language === 'fr' ? 'Masque de l\'annuaire et de la carte' : 'Hidden from directory and map')}
                 </Text>
               </View>
-              <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
-                <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
-                  {isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}
-                </Text>
-              </View>
+              {togglingPublic ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
+                  <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
+                    {isPublicState ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
+                  </Text>
+                </View>
+              )}
             </Pressable>
+
+            {/* Toggle 2: Contact Info Visibility (only when public and has contacts) */}
+            {isPublicState && (club.contactEmail || club.contactPhone) ? (
+              <Pressable
+                style={[styles.visibilityCard, { marginTop: 8 }]}
+                onPress={async () => {
+                  Haptics.selectionAsync();
+                  const newVal = !(club.showContactPublic ?? false);
+                  try {
+                    await updateClub(club.id, { showContactPublic: newVal } as any);
+                  } catch (e: any) {
+                    showAlert(t('common', 'error'), e.message);
+                  }
+                }}
+              >
+                <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                  <MaterialIcons name={club.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={club.showContactPublic ? theme.success : theme.textMuted} />
+                </View>
+                <View style={styles.visibilityInfo}>
+                  <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
+                  <Text style={styles.visibilityDesc}>
+                    {club.showContactPublic ? (language === 'fr' ? 'Email et telephone visibles' : 'Email and phone visible') : (language === 'fr' ? 'Email et telephone masques' : 'Email and phone hidden')}
+                  </Text>
+                </View>
+                <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                  <Text style={[styles.visibilityBadgeText, { color: club.showContactPublic ? theme.success : theme.textMuted }]}>
+                    {club.showContactPublic ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
           </Animated.View>
         )}
 
@@ -1295,7 +1328,6 @@ export default function ClubDetailScreen() {
                   placeholderTextColor={theme.textMuted}
                   value={inviteSearch}
                   onChangeText={setInviteSearch}
-                  autoFocus
                 />
                 {inviteSearch.length > 0 ? (
                   <Pressable onPress={() => setInviteSearch('')} hitSlop={8}>
@@ -1305,13 +1337,13 @@ export default function ClubDetailScreen() {
               </View>
             </View>
             <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}>
-              {inviteFilteredPlayers.length === 0 ? (
+              {inviteFilteredPlayersMemo.length === 0 ? (
                 <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                   <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
                   <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun joueur trouve' : 'No players found'}</Text>
                 </View>
               ) : null}
-              {(inviteFilteredPlayers as any[]).map((player: any) => {
+              {(inviteFilteredPlayersMemo as any[]).map((player: any) => {
                 const isMember = clubPlayers.some(cp => cp.id === player.id);
                 const isInvited = player._isInvited || clubInvitations.some(i => i.invitedPlayerId === player.id);
                 return (
