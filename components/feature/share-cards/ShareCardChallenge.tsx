@@ -224,69 +224,70 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
     );
   }
 
-  // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 14;
-  const scoreBadgeSize = isStory ? 100 : 68;
-  const scoreFontSize = isStory ? 42 : 30;
+  // === SQUARE ===
+  const isSquare = !isStory && !isLandscape;
+  const pad = isStory ? 24 : 12;
+  const scoreBadgeSize = isStory ? 100 : 56;
+  const scoreFontSize = isStory ? 42 : 24;
 
   return (
     <View style={s.card}>
       <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: isStory ? 16 : 10 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ backgroundColor: config.color + '20', width: 32, height: 32, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name={config.icon as any} size={15} color={config.color} />
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: isStory ? 16 : 6 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isSquare ? 5 : 8 }}>
+            <View style={{ backgroundColor: config.color + '20', width: isSquare ? 24 : 32, height: isSquare ? 24 : 32, borderRadius: isSquare ? 7 : 9, alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name={config.icon as any} size={isSquare ? 12 : 15} color={config.color} />
             </View>
             <View>
-              <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1.5, color: ct.textSecondary }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: config.color }}>{config.label[language]}</Text>
+              <Text style={{ fontSize: isSquare ? 6 : 8, fontWeight: '800', letterSpacing: 1.5, color: ct.textSecondary }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
+              <Text style={{ fontSize: isSquare ? 11 : 14, fontWeight: '800', color: config.color }}>{config.label[language]}</Text>
             </View>
           </View>
-          <View style={{ alignItems: 'flex-end', gap: 3 }}>
-            {is1v1 ? <View style={{ backgroundColor: '#EF444425', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7 }}><Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444' }}>1v1</Text></View> : null}
-            <Text style={{ fontSize: 10, fontWeight: '500', color: ct.textSecondary }}>{dateStr}</Text>
+          <View style={{ alignItems: 'flex-end', gap: 2 }}>
+            {is1v1 ? <View style={{ backgroundColor: '#EF444425', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 6 }}><Text style={{ fontSize: isSquare ? 8 : 10, fontWeight: '800', color: '#EF4444' }}>1v1</Text></View> : null}
+            <Text style={{ fontSize: isSquare ? 8 : 10, fontWeight: '500', color: ct.textSecondary }}>{dateStr}</Text>
           </View>
         </View>
 
         {/* Main score */}
-        <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 10 }}>
-          <LinearGradient colors={config.gradient} style={{ width: scoreBadgeSize, height: scoreBadgeSize, borderRadius: scoreBadgeSize * 0.28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 4 }}>
+        <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 6 }}>
+          <LinearGradient colors={config.gradient} style={{ width: scoreBadgeSize, height: scoreBadgeSize, borderRadius: scoreBadgeSize * 0.28, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: isSquare ? 2 : 4 }}>
             <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: '#FFF' }}>{isPrecision ? (challenge.totalPoints || 0) : successCount}</Text>
-            <Text style={{ fontSize: isStory ? 14 : 12, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: scoreFontSize * 0.3 }}>/{isPrecision ? (challenge.maxPoints || 75) : totalShots}</Text>
+            <Text style={{ fontSize: isStory ? 14 : 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: scoreFontSize * 0.3 }}>/{isPrecision ? (challenge.maxPoints || 75) : totalShots}</Text>
           </LinearGradient>
           {!isPrecision ? (
-            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
-              <Text style={{ fontSize: isStory ? 26 : 22, fontWeight: '900', color: config.color }}>{Math.round(successRate)}%</Text>
-              <Text style={{ fontSize: 11, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'reussite' : 'success'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: isSquare ? 3 : 5 }}>
+              <Text style={{ fontSize: isStory ? 26 : 18, fontWeight: '900', color: config.color }}>{Math.round(successRate)}%</Text>
+              <Text style={{ fontSize: isSquare ? 9 : 11, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'reussite' : 'success'}</Text>
             </View>
           ) : (
-            <Text style={{ fontSize: 10, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'points totaux' : 'total points'}</Text>
+            <Text style={{ fontSize: isSquare ? 8 : 10, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'points totaux' : 'total points'}</Text>
           )}
         </View>
 
         {/* Carreaux */}
         {carreauCount > 0 ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, marginBottom: isStory ? 12 : 8, backgroundColor: '#F59E0B10', paddingVertical: 4, borderRadius: 8 }}>
-            <MaterialIcons name="star" size={12} color="#F59E0B" />
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{carreauCount} {carreauCount > 1 ? 'carreaux' : 'carreau'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: isStory ? 12 : 4, backgroundColor: '#F59E0B10', paddingVertical: isSquare ? 2 : 4, borderRadius: 8 }}>
+            <MaterialIcons name="star" size={isSquare ? 10 : 12} color="#F59E0B" />
+            <Text style={{ fontSize: isSquare ? 10 : 12, fontWeight: '700', color: '#F59E0B' }}>{carreauCount} {carreauCount > 1 ? 'carreaux' : 'carreau'}</Text>
           </View>
         ) : null}
 
         {/* Atelier results */}
         {hasAteliers ? (
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 10 : 8, marginBottom: isStory ? 12 : 8 }}>
-            <Text style={{ fontSize: 8, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.8, marginBottom: 4 }}>{fr ? 'RESULTATS PAR ATELIER' : 'WORKSHOP RESULTS'}</Text>
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 10 : 6, marginBottom: isStory ? 12 : 4 }}>
+            <Text style={{ fontSize: isSquare ? 6 : 8, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.8, marginBottom: isSquare ? 2 : 4 }}>{fr ? 'RESULTATS PAR ATELIER' : 'WORKSHOP RESULTS'}</Text>
             {Object.entries(challenge.atelierScores!).map(([aid, score]) => (
-              <AtelierScoreRow key={aid} atelierId={aid} score={score as number} maxScore={20} ct={ct} />
+              <AtelierScoreRow key={aid} atelierId={aid} score={score as number} maxScore={20} ct={ct} compact={isSquare} />
             ))}
           </View>
         ) : null}
 
         {/* Shot-by-shot for 10 tirs */}
         {has10TirsShots ? (
-          <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 10 : 8, marginBottom: isStory ? 12 : 8 }}>
-            <ShotByShot shots={challenge.shots!.map((s, i) => ({ number: i + 1, success: s.success, carreau: s.carreau }))} ct={ct} compact={!isStory} />
+          <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 10 : 6, marginBottom: isStory ? 12 : 4 }}>
+            <ShotByShot shots={challenge.shots!.map((s, i) => ({ number: i + 1, success: s.success, carreau: s.carreau }))} ct={ct} compact={isSquare || !isStory} />
           </View>
         ) : null}
 
@@ -325,7 +326,7 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
         ) : null}
 
         {/* Footer */}
-        <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, gap: 3 }}>
+        <View style={{ borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: isSquare ? 4 : 8, gap: isSquare ? 1 : 3 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
               {playerName && !is1v1 ? <Text style={{ fontSize: 11, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
@@ -352,7 +353,9 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
             ) : null}
           </View>
         </View>
-        <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
+        <View style={{ marginTop: isSquare ? 2 : 0 }}>
+          <ShareCardWatermark variant="light" size={isStory ? 'sm' : 'xs'} />
+        </View>
       </LinearGradient>
     </View>
   );
