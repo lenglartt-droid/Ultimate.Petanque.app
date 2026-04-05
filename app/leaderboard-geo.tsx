@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -130,7 +130,12 @@ export default function GeoLeaderboardScreen() {
   const { language } = useLanguage();
   const isFr = language === 'fr';
 
-  const [tab, setTab] = useState<GeoTab>('cities');
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const [tab, setTab] = useState<GeoTab>(() => {
+    const valid: GeoTab[] = ['cities', 'countries', 'continents'];
+    if (params.tab && valid.includes(params.tab as GeoTab)) return params.tab as GeoTab;
+    return 'cities';
+  });
   const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);

@@ -1265,7 +1265,7 @@ export default function TerrainDetailScreen() {
         </View>
       </Modal>
 
-      {/* Review Modal */
+      {/* Review Modal */}
       <Modal visible={showReviewModal} animationType="slide" transparent>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24 }}>
