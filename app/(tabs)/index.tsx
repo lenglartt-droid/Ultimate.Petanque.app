@@ -22,6 +22,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import { preloadInterstitial } from '@/services/adService';
 import MiniRankingWidget from '@/components/feature/MiniRankingWidget';
+import LeaguePromotionModal from '@/components/ui/LeaguePromotionModal';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
@@ -33,6 +34,7 @@ import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
 import TournamentPickerModal from '@/components/feature/TournamentPickerModal';
 
 import QRShareModal from '@/components/feature/QRShareModal';
+import { getLeagueTier, LeagueTier } from '@/services/globalRankingService';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
@@ -131,6 +133,39 @@ export default function HomeScreen() {
   // Witness alerts
   const [witnessRequests, setWitnessRequests] = useState<EventNotification[]>([]);
   const [eventNotifCount, setEventNotifCount] = useState(0);
+
+  // League promotion detection
+  const [leaguePromotion, setLeaguePromotion] = useState<{ type: 'promotion' | 'relegation'; newTier: LeagueTier; previousTier: LeagueTier; elo: number } | null>(null);
+  const prevTierRef = React.useRef<string | null>(null);
+
+  // Detect league tier changes
+  useEffect(() => {
+    if (!selfPlayer) return;
+    const elo = selfPlayer.eloRating || 1000;
+    const currentTier = getLeagueTier(elo);
+    if (prevTierRef.current === null) {
+      prevTierRef.current = currentTier.id;
+      return;
+    }
+    if (prevTierRef.current !== currentTier.id) {
+      const prevTierObj = getLeagueTier(
+        currentTier.minElo > 0 ? currentTier.minElo - 1 : currentTier.minElo
+      );
+      // Find actual previous tier from stored id
+      const { LEAGUE_TIERS } = require('@/services/globalRankingService');
+      const storedPrev = LEAGUE_TIERS.find((t: LeagueTier) => t.id === prevTierRef.current);
+      if (storedPrev) {
+        const isPromotion = currentTier.minElo > storedPrev.minElo;
+        setLeaguePromotion({
+          type: isPromotion ? 'promotion' : 'relegation',
+          newTier: currentTier,
+          previousTier: storedPrev,
+          elo,
+        });
+      }
+      prevTierRef.current = currentTier.id;
+    }
+  }, [selfPlayer?.eloRating]);
 
   // Responsive
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -365,9 +400,6 @@ export default function HomeScreen() {
                 <Text style={st.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={st.heroTopActions}>
-                <Pressable style={st.heroIconBtn} onPress={() => { router.push('/leaderboard' as any); }}>
-                  <MaterialIcons name="public" size={20} color="rgba(255,255,255,0.7)" />
-                </Pressable>
                 <Pressable style={st.heroIconBtn} onPress={() => { router.push('/activity-feed' as any); }}>
                   <MaterialIcons name="dynamic-feed" size={20} color="rgba(255,255,255,0.7)" />
                 </Pressable>
@@ -729,6 +761,17 @@ export default function HomeScreen() {
 
       <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} />
       <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} />
+      {leaguePromotion ? (
+        <LeaguePromotionModal
+          visible={!!leaguePromotion}
+          onClose={() => setLeaguePromotion(null)}
+          type={leaguePromotion.type}
+          newTier={leaguePromotion.newTier}
+          previousTier={leaguePromotion.previousTier}
+          elo={leaguePromotion.elo}
+          language={language}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

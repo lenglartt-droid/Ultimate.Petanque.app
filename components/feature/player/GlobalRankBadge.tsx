@@ -139,7 +139,7 @@ export default function GlobalRankBadge({ playerId, playerUserId, eloRating, isP
     <Animated.View entering={FadeInDown.duration(250).delay(100)}>
       <Pressable
         style={[st.container, compact && st.containerCompact]}
-        onPress={() => { Haptics.selectionAsync(); router.push('/global-ranking' as any); }}
+        onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}
       >
         {/* League Badge + Rank */}
         <LinearGradient colors={tier.gradient} style={st.badgeGradient}>
