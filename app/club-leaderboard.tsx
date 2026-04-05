@@ -19,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import { getSupabaseClient } from '@/template';
 import AdBanner from '@/components/ui/AdBanner';
+import { getEloRank } from '@/services/eloService';
 
 interface ClubLeaderboardEntry {
   id: string;
@@ -35,7 +36,7 @@ interface ClubLeaderboardEntry {
   isVerified: boolean;
 }
 
-type SortKey = 'winRate' | 'totalWins' | 'tournamentsCount' | 'membersCount' | 'avgElo';
+type SortKey = 'winRate' | 'totalWins' | 'tournamentsCount' | 'membersCount' | 'avgElo' | 'composite';
 type RegionFilter = 'all' | 'country' | 'city';
 
 export default function ClubLeaderboardScreen() {
@@ -47,7 +48,7 @@ export default function ClubLeaderboardScreen() {
 
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [sortKey, setSortKey] = useState<SortKey>('winRate');
+  const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all');
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -127,9 +128,19 @@ export default function ClubLeaderboardScreen() {
       if (myCity) data = data.filter(c => c.city.toLowerCase() === myCity.toLowerCase());
     }
 
+    // Composite score function
+    const getComposite = (c: ClubLeaderboardEntry) => {
+      const eloScore = Math.max(0, (c.avgElo - 800) / 12);
+      const winScore = c.winRate * 0.4;
+      const tourneyScore = Math.min(c.tournamentsCount * 3, 30);
+      const memberScore = Math.min(c.membersCount * 1.5, 15);
+      return eloScore + winScore + tourneyScore + memberScore;
+    };
+
     // Sort
     data.sort((a, b) => {
       switch (sortKey) {
+        case 'composite': return getComposite(b) - getComposite(a);
         case 'winRate': return b.winRate - a.winRate;
         case 'totalWins': return b.totalWins - a.totalWins;
         case 'tournamentsCount': return b.tournamentsCount - a.tournamentsCount;
@@ -143,9 +154,10 @@ export default function ClubLeaderboardScreen() {
   }, [leaderboardData, search, sortKey, regionFilter, params.region]);
 
   const sortOptions: { id: SortKey; label: string; icon: string }[] = [
+    { id: 'composite', label: fr ? 'Score global' : 'Overall', icon: 'auto-awesome' },
     { id: 'winRate', label: fr ? 'Taux victoire' : 'Win Rate', icon: 'trending-up' },
-    { id: 'totalWins', label: fr ? 'Victoires' : 'Wins', icon: 'emoji-events' },
     { id: 'avgElo', label: 'ELO', icon: 'leaderboard' },
+    { id: 'totalWins', label: fr ? 'Victoires' : 'Wins', icon: 'emoji-events' },
     { id: 'tournamentsCount', label: fr ? 'Tournois' : 'Tournaments', icon: 'flag' },
     { id: 'membersCount', label: fr ? 'Membres' : 'Members', icon: 'people' },
   ];
@@ -192,11 +204,21 @@ export default function ClubLeaderboardScreen() {
         </View>
 
         <View style={s.statsCol}>
-          <Text style={[s.mainStat, sortKey === 'winRate' ? { color: theme.success } : sortKey === 'avgElo' ? { color: '#06B6D4' } : { color: theme.primary }]}>
-            {sortKey === 'winRate' ? `${item.winRate}%` : sortKey === 'avgElo' ? item.avgElo : sortKey === 'totalWins' ? item.totalWins : sortKey === 'tournamentsCount' ? item.tournamentsCount : item.membersCount}
+          {/* League badge for ELO */}
+          {(() => {
+            const eloR = getEloRank(item.avgElo);
+            return (
+              <View style={[s.leagueBadge, { backgroundColor: eloR.color + '12', borderColor: eloR.color + '30' }]}>
+                <MaterialIcons name={eloR.icon as any} size={10} color={eloR.color} />
+                <Text style={[s.leagueBadgeText, { color: eloR.color }]}>{item.avgElo}</Text>
+              </View>
+            );
+          })()}
+          <Text style={[s.mainStat, sortKey === 'winRate' || sortKey === 'composite' ? { color: theme.success } : sortKey === 'avgElo' ? { color: '#06B6D4' } : { color: theme.primary }]}>
+            {sortKey === 'composite' ? `${item.winRate}%` : sortKey === 'winRate' ? `${item.winRate}%` : sortKey === 'avgElo' ? item.avgElo : sortKey === 'totalWins' ? item.totalWins : sortKey === 'tournamentsCount' ? item.tournamentsCount : item.membersCount}
           </Text>
           <Text style={s.subStat}>
-            {sortKey === 'winRate' ? `${item.totalWins}/${item.totalMatches}` : sortKey === 'avgElo' ? 'ELO' : sortKey === 'totalWins' ? `${item.winRate}%` : sortKey === 'tournamentsCount' ? (fr ? 'tournois' : 'tournaments') : (fr ? 'membres' : 'members')}
+            {sortKey === 'composite' ? `${item.totalWins}W • ${item.tournamentsCount}T` : sortKey === 'winRate' ? `${item.totalWins}/${item.totalMatches}` : sortKey === 'avgElo' ? 'ELO' : sortKey === 'totalWins' ? `${item.winRate}%` : sortKey === 'tournamentsCount' ? (fr ? 'tournois' : 'tournaments') : (fr ? 'membres' : 'members')}
           </Text>
         </View>
       </Pressable>
@@ -330,6 +352,8 @@ const s = StyleSheet.create({
   statsCol: { alignItems: 'flex-end' },
   mainStat: { fontSize: 18, fontWeight: '800' },
   subStat: { fontSize: 10, color: theme.textMuted, marginTop: 2 },
+  leagueBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, marginBottom: 3 },
+  leagueBadgeText: { fontSize: 10, fontWeight: '800' as const },
 
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   emptyState: { alignItems: 'center', paddingVertical: 48, gap: 8 },

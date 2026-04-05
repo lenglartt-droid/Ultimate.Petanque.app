@@ -382,10 +382,10 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       // Init contact visibility from item data
       if (itemType === 'player') {
         const p = getPlayerById(itemId);
-        setContactVisible(p?.showContactPublic ?? false);
+        setContactVisible(p?.showContactPublic === true);
       } else if (itemType === 'club') {
         const c = getClubById(itemId);
-        setContactVisible((c as any)?.showContactPublic ?? false);
+        setContactVisible((c as any)?.showContactPublic === true);
       }
     }
   }, [visible, itemId, itemType]);
@@ -787,12 +787,17 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                 {showContactToggle && isOwnItem ? (
                   <Pressable
                     style={s.contactToggleCard}
-                    onPress={() => {
+                    onPress={async () => {
                       Haptics.selectionAsync();
                       const newVal = !contactVisible;
                       setContactVisible(newVal);
-                      if (itemType === 'player') updatePlayer(itemId, { showContactPublic: newVal });
-                      else if (itemType === 'club') updateClub(itemId, { showContactPublic: newVal } as any);
+                      try {
+                        if (itemType === 'player') await updatePlayer(itemId, { showContactPublic: newVal });
+                        else if (itemType === 'club') await updateClub(itemId, { showContactPublic: newVal } as any);
+                      } catch (e) {
+                        console.log('[ShareModal] Error updating contact visibility:', e);
+                        setContactVisible(!newVal); // revert on error
+                      }
                     }}
                   >
                     <View style={[s.contactToggleIcon, { backgroundColor: (contactVisible ? '#10B981' : '#94A3B8') + '15' }]}>

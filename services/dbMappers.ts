@@ -21,7 +21,7 @@ import {
 
 export function mapPlayerFromDb(p: any): Player {
   return {
-    id: p.id, name: p.name, nickname: p.nickname, avatar: p.avatar,
+    id: p.id, userId: p.user_id || undefined, name: p.name, nickname: p.nickname, avatar: p.avatar,
     club: p.club, clubId: p.club_id, role: p.role, level: p.level,
     experience: p.experience || undefined,
     city: p.city || p.location?.city || undefined,

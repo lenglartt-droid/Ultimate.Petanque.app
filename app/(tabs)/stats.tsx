@@ -157,7 +157,7 @@ export default function StatsScreen() {
 
         {/* Context filter */}
         <View style={styles.contextFilterBar}>
-          {([{ id: 'all' as ContextFilter, label: t('common', 'all'), icon: 'select-all' }, { id: 'training' as ContextFilter, label: t('home', 'training'), icon: 'fitness-center' }, { id: 'tournament' as ContextFilter, label: t('home', 'tournament'), icon: 'emoji-events' }] as const).map(cf => (
+          {([{ id: 'all' as ContextFilter, label: t('common', 'all'), icon: 'select-all' }, { id: 'training' as ContextFilter, label: language === 'fr' ? 'Match Entrainement' : 'Training Match', icon: 'fitness-center' }, { id: 'tournament' as ContextFilter, label: language === 'fr' ? 'Match Tournois' : 'Tournament Match', icon: 'emoji-events' }] as const).map(cf => (
             <Pressable key={cf.id} style={[styles.contextPill, contextFilter === cf.id && styles.contextPillActive]} onPress={() => { Haptics.selectionAsync(); setContextFilter(cf.id); }}>
               <MaterialIcons name={cf.icon as any} size={13} color={contextFilter === cf.id ? '#FFF' : theme.textSecondary} />
               <Text style={[styles.contextPillText, contextFilter === cf.id && styles.contextPillTextActive]}>{cf.label}</Text>
