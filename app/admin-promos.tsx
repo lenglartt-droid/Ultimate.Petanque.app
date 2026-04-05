@@ -19,7 +19,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { getSupabaseClient } from '@/template';
 import { useAuth, useAlert } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppUI } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
@@ -46,7 +46,7 @@ export default function AdminPromosScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { isAdmin } = useApp();
+  const { isAdmin } = useAppUI();
   const { language } = useLanguage();
   const supabase = getSupabaseClient();
 
