@@ -366,6 +366,9 @@ export default function HomeScreen() {
                 <Text style={st.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={st.heroTopActions}>
+                <Pressable style={st.heroIconBtn} onPress={() => { router.push('/activity-feed' as any); }}>
+                  <MaterialIcons name="dynamic-feed" size={20} color="rgba(255,255,255,0.7)" />
+                </Pressable>
                 <Pressable style={st.heroIconBtn} onPress={() => router.push('/scanner' as any)}>
                   <MaterialIcons name="qr-code-scanner" size={20} color="rgba(255,255,255,0.7)" />
                 </Pressable>

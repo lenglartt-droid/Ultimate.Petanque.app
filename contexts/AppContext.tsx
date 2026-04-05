@@ -218,7 +218,7 @@ interface AppContextType {
   setBatterySaver: (enabled: boolean) => Promise<void>;
 }
 
-const AppContext = createContext<AppContextType | undefined>(undefined);
+// Legacy AppContext removed — use useAppData/useAppUI/useAppActions instead
 
 // ===== Split contexts for granular subscriptions =====
 type AppDataType = Pick<AppContextType,
@@ -1236,93 +1236,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     <AppDataContext.Provider value={dataValue}>
       <AppUIContext.Provider value={uiValue}>
         <AppActionsContext.Provider value={actionsValue}>
-          <AppContext.Provider
-            value={{
-              players: playersWithStats,
-              clubs: clubsWithMemberCount,
-              tournaments,
-              matches,
-              challenges,
-              terrains,
-              userStats,
-              challengeStats,
-              boulesSets,
-              loading,
-              addBoulesSet,
-              updateBoulesSet,
-              deleteBoulesSet,
-              setPrimaryBoulesSet,
-              addMatch,
-              addPlayer,
-              addClub,
-              addTournament,
-              addChallenge,
-              addTerrain,
-              updateMatch,
-              updatePlayer,
-              updateClub,
-              updateTournament,
-              updateTerrain,
-              updateChallenge,
-              updateBracketMatch,
-              deleteMatch,
-              deletePlayer,
-              deleteChallenge,
-              deleteTerrain,
-              deleteClub,
-              deleteTournament,
-              favoriteTerrainIds,
-              toggleFavoriteTerrain,
-              isFavoriteTerrain,
-              favoriteClubIds,
-              toggleFavoriteClub,
-              isFavoriteClub,
-              tournamentNotifications,
-              toggleTournamentNotification,
-              isTournamentNotificationEnabled,
-              getSharedPermission,
-              isSharedItem,
-              sharedMatchIds,
-              sharedChallengeIds,
-              getPlayerById,
-              getClubById,
-              getTournamentById,
-              getMatchById,
-              getTerrainById,
-              getMatchesByPlayer,
-              getMatchesByTournament,
-              getHeadToHead,
-              getCommonOpponents,
-              retryFailedOps,
-              refreshData,
-              selfPlayer,
-              isPremium: isPremiumState,
-              setIsPremium,
-              isAdmin,
-              batterySaverEnabled: syncConfig.batterySaverEnabled,
-              setBatterySaver,
-              setItemPublic,
-              isReplayingQueue,
-              replayProgress,
-              currentConflict,
-              conflictRemaining,
-              resolveConflict,
-            }}
-          >
-            {children}
-          </AppContext.Provider>
+          {children}
         </AppActionsContext.Provider>
       </AppUIContext.Provider>
     </AppDataContext.Provider>
   );
-}
-
-export function useApp() {
-  const context = useContext(AppContext);
-  if (!context) {
-    throw new Error('useApp must be used within AppProvider');
-  }
-  return context;
 }
 
 /**
