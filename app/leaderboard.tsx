@@ -10,6 +10,7 @@ import {
   ActivityIndicator,
   Modal,
   Dimensions,
+  Platform,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -37,6 +38,8 @@ import { extraTranslations } from '@/constants/i18nExtra';
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { CONTINENT_MAP, getContinent, getContinentLabel, getCountryFlag, getContinentFlag } from '@/constants/geoData';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchPlayerGlobalRank, fetchLeagueTierStats, getLeagueTier, getLeagueProgress, LEAGUE_TIERS, LeagueTier, LeagueTierStats, RankedPlayer } from '@/services/globalRankingService';
+import { getEloRank as getEloRankInfo } from '@/services/eloService';
 
 const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
 
@@ -431,6 +434,10 @@ export default function LeaderboardScreen() {
   const [eventSortBy, setEventSortBy] = useState<'wins' | 'podiums' | 'avgScore' | 'participations'>('wins');
   const [eventSearch, setEventSearch] = useState('');
 
+  // ============ LEAGUE TIER STATE ============
+  const [tierStats, setTierStats] = useState<LeagueTierStats[]>([]);
+  const [myGlobalRank, setMyGlobalRank] = useState<{ rank: number | null; total: number } | null>(null);
+
   // ============ TRUST TAB STATE ============
   const [trustPlayers, setTrustPlayers] = useState<any[]>([]);
   const [trustLoading, setTrustLoading] = useState(false);
@@ -461,13 +468,24 @@ export default function LeaderboardScreen() {
 
   const loadData = useCallback(async (period?: LeaderboardPeriod) => {
     setLoading(true);
-    const { players: lbP, error: err } = await fetchLeaderboard(period);
+    const [{ players: lbP, error: err }, tierResult] = await Promise.all([
+      fetchLeaderboard(period),
+      tierStats.length === 0 ? fetchLeagueTierStats() : Promise.resolve({ stats: tierStats, error: null }),
+    ]);
     setAllPlayers(lbP);
     setError(err);
+    if (tierResult.stats.length > 0) setTierStats(tierResult.stats);
     setLoading(false);
   }, []);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load my global rank
+  useEffect(() => {
+    if (selfPlayer?.id && selfPlayer?.isPublic) {
+      fetchPlayerGlobalRank(selfPlayer.id).then((r) => setMyGlobalRank({ rank: r.rank, total: r.total })).catch(() => {});
+    }
+  }, [selfPlayer?.id, selfPlayer?.isPublic]);
 
   // Load weekly leaderboard
   const loadWeekly = useCallback(async () => {
@@ -850,7 +868,13 @@ export default function LeaderboardScreen() {
     <SafeAreaView edges={['top']} style={s.container}>
       {/* Header */}
       <View style={s.header}>
-        <LinearGradient colors={['#0F172A', '#1E293B', '#334155']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
+        <LinearGradient colors={(() => {
+          if (activeTab === 'players' && selfPlayer) {
+            const tier = getLeagueTier(selfPlayer.eloRating || 1000);
+            return [tier.gradient[0] + 'DD', tier.gradient[1] + 'DD', '#1E293B'] as [string, string, string];
+          }
+          return ['#0F172A', '#1E293B', '#334155'] as [string, string, string];
+        })()} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.headerGradient}>
           <View style={s.headerTop}>
             <Pressable style={s.backBtn} onPress={() => router.back()}>
               <MaterialIcons name="arrow-back" size={24} color="#FFF" />
@@ -1006,7 +1030,6 @@ export default function LeaderboardScreen() {
         <View style={s.sortWrapper}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.sortRow}>
             {activeTab === 'players' ? ([
-              { id: 'elo' as LeaderboardSort, label: t('leaderboard', 'eloRating'), icon: 'diamond' },
               { id: 'winRate' as LeaderboardSort, label: t('leaderboard', 'sortByWinRate'), icon: 'emoji-events' },
               { id: 'matches' as LeaderboardSort, label: t('leaderboard', 'sortByMatches'), icon: 'sports' },
               { id: 'tirRate' as LeaderboardSort, label: t('leaderboard', 'sortByTirRate'), icon: 'gps-fixed' },
@@ -1677,7 +1700,79 @@ export default function LeaderboardScreen() {
           initialNumToRender={15}
           ListHeaderComponent={
             <View>
+              {/* ===== LEAGUE TIER CARD (integrated from global-ranking) ===== */}
+              {selfPlayer ? (() => {
+                const elo = selfPlayer.eloRating || 1000;
+                const progress = getLeagueProgress(elo);
+                const tier = progress.tier;
+                return (
+                  <View style={s.leagueCard}>
+                    <LinearGradient colors={tier.gradient} style={s.leagueGradient}>
+                      <View style={s.leagueTopRow}>
+                        <View style={s.leagueEmblemWrap}>
+                          <Text style={{ fontSize: 22 }}>{tier.emblem}</Text>
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.leagueTierName}>{language === 'fr' ? tier.name.fr : tier.name.en}</Text>
+                          <Text style={s.leagueEloLabel}>{elo} ELO</Text>
+                        </View>
+                        {myGlobalRank?.rank ? (
+                          <View style={s.leagueRankBadge}>
+                            <Text style={s.leagueRankHash}>#</Text>
+                            <Text style={s.leagueRankValue}>{myGlobalRank.rank.toLocaleString()}</Text>
+                            <Text style={s.leagueRankTotal}>{language === 'fr' ? 'sur' : 'of'} {myGlobalRank.total.toLocaleString()}</Text>
+                          </View>
+                        ) : (
+                          <View style={s.leagueRankBadge}>
+                            <MaterialIcons name="leaderboard" size={14} color="rgba(255,255,255,0.5)" />
+                            <Text style={s.leagueRankTotal}>{language === 'fr' ? 'Mondial' : 'World'}</Text>
+                          </View>
+                        )}
+                      </View>
+                      {progress.nextTier ? (
+                        <View style={s.leagueProgressRow}>
+                          <View style={s.leagueProgressTrack}>
+                            <View style={[s.leagueProgressFill, { width: `${progress.progress}%` }]} />
+                          </View>
+                          <Text style={s.leagueProgressText}>{progress.eloToNext} → {progress.nextTier.emblem}</Text>
+                        </View>
+                      ) : null}
+                    </LinearGradient>
+                  </View>
+                );
+              })() : null}
 
+              {/* ===== LEAGUE DISTRIBUTION ===== */}
+              {tierStats.length > 0 ? (
+                <View style={s.tierOverview}>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.tierScroll}>
+                    {tierStats.map(ts => {
+                      const isActive = filterEloRank === ts.tier.id;
+                      const isMyTier = selfPlayer ? getLeagueTier(selfPlayer.eloRating || 1000).id === ts.tier.id : false;
+                      return (
+                        <Pressable
+                          key={ts.tier.id}
+                          style={[s.tierChip, isActive && { borderColor: ts.tier.color, borderWidth: 2 }]}
+                          onPress={() => { Haptics.selectionAsync(); setFilterEloRank(filterEloRank === ts.tier.id ? 'all' : ts.tier.id); }}
+                        >
+                          <LinearGradient colors={ts.tier.gradient} style={s.tierChipGradient}>
+                            <Text style={{ fontSize: 16 }}>{ts.tier.emblem}</Text>
+                          </LinearGradient>
+                          <Text style={[s.tierChipName, { color: ts.tier.color }]} numberOfLines={1}>
+                            {language === 'fr' ? ts.tier.name.fr : ts.tier.name.en}
+                          </Text>
+                          <Text style={s.tierChipCount}>{ts.playerCount}</Text>
+                          {isMyTier ? (
+                            <View style={[s.tierMyDot, { backgroundColor: ts.tier.color + '25' }]}>
+                              <MaterialIcons name="person" size={8} color={ts.tier.color} />
+                            </View>
+                          ) : null}
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                </View>
+              ) : null}
 
               {filteredSorted.length > 0 ? (
                 <View style={s.listHeader}>
@@ -2135,6 +2230,31 @@ const s = StyleSheet.create({
   listHeader: { paddingVertical: 8 },
   listHeaderText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
   loadMoreFooter: { paddingVertical: 20, alignItems: 'center' },
+
+  // League tier card (integrated from global-ranking)
+  leagueCard: { marginBottom: 12, borderRadius: 16, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.15, shadowRadius: 10 }, android: { elevation: 4 }, default: {} }) },
+  leagueGradient: { padding: 16, borderRadius: 16 },
+  leagueTopRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  leagueEmblemWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
+  leagueTierName: { fontSize: 16, fontWeight: '800' as const, color: '#FFF', letterSpacing: -0.3 },
+  leagueEloLabel: { fontSize: 12, fontWeight: '600' as const, color: 'rgba(255,255,255,0.65)', marginTop: 1 },
+  leagueRankBadge: { alignItems: 'center' as const, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
+  leagueRankHash: { fontSize: 10, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)' },
+  leagueRankValue: { fontSize: 20, fontWeight: '900' as const, color: '#FFF', lineHeight: 22 },
+  leagueRankTotal: { fontSize: 10, fontWeight: '600' as const, color: 'rgba(255,255,255,0.5)', marginTop: 1 },
+  leagueProgressRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 12 },
+  leagueProgressTrack: { flex: 1, height: 5, backgroundColor: 'rgba(0,0,0,0.2)', borderRadius: 3, overflow: 'hidden' as const },
+  leagueProgressFill: { height: '100%' as const, backgroundColor: 'rgba(255,255,255,0.7)', borderRadius: 3 },
+  leagueProgressText: { fontSize: 10, fontWeight: '700' as const, color: 'rgba(255,255,255,0.6)' },
+
+  // Tier overview (distribution chips)
+  tierOverview: { marginBottom: 12 },
+  tierScroll: { gap: 8 },
+  tierChip: { width: 84, backgroundColor: theme.surface, borderRadius: 14, padding: 10, alignItems: 'center' as const, borderWidth: 1, borderColor: theme.border, ...theme.shadows.card },
+  tierChipGradient: { width: 34, height: 34, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 6 },
+  tierChipName: { fontSize: 10, fontWeight: '700' as const, textAlign: 'center' as const, marginBottom: 2 },
+  tierChipCount: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted },
+  tierMyDot: { position: 'absolute' as const, top: 4, right: 4, width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
 
   // Player row
   row: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },

@@ -209,12 +209,8 @@ export function PerformanceSection({
         </View>
       </View>
 
-      {/* Games Played + Win Rate by Mode */}
-      {isTablet ? (
-        <View style={ss.tabletRow}>{renderGamesPlayed()}{renderWinRateByMode()}</View>
-      ) : (
-        <>{renderGamesPlayed()}{renderWinRateByMode()}</>
-      )}
+      {/* Games Played */}
+      {renderGamesPlayed()}
 
       <AdBanner position="inline" />
 
