@@ -9,6 +9,7 @@ import {
   RefreshControl,
   TextInput,
   Platform,
+  ScrollView,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -309,24 +310,26 @@ export default function GeoLeaderboardScreen() {
       </View>
 
       {/* Sort Options */}
-      <View style={styles.sortBar}>
+      <View style={styles.sortBarOuter}>
         <Text style={styles.sortLabel}>{isFr ? 'Trier :' : 'Sort:'}</Text>
-        {SORT_OPTIONS.map(opt => {
-          const isActive = sortKey === opt.id;
-          const tabColor = TAB_CONFIG.find(t => t.id === tab)?.color || theme.primary;
-          return (
-            <Pressable
-              key={opt.id}
-              style={[styles.sortChip, isActive && { backgroundColor: tabColor + '18', borderColor: tabColor + '40' }]}
-              onPress={() => setSortKey(opt.id)}
-            >
-              <MaterialIcons name={opt.icon as any} size={13} color={isActive ? tabColor : theme.textMuted} />
-              <Text style={[styles.sortChipText, isActive && { color: tabColor, fontWeight: '700' }]}>
-                {sortLabels[opt.id]}
-              </Text>
-            </Pressable>
-          );
-        })}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortBarScroll}>
+          {SORT_OPTIONS.map(opt => {
+            const isActive = sortKey === opt.id;
+            const tabColor = TAB_CONFIG.find(t => t.id === tab)?.color || theme.primary;
+            return (
+              <Pressable
+                key={opt.id}
+                style={[styles.sortChip, isActive && { backgroundColor: tabColor + '18', borderColor: tabColor + '40' }]}
+                onPress={() => setSortKey(opt.id)}
+              >
+                <MaterialIcons name={opt.icon as any} size={13} color={isActive ? tabColor : theme.textMuted} />
+                <Text style={[styles.sortChipText, isActive && { color: tabColor, fontWeight: '700' }]}>
+                  {sortLabels[opt.id]}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
       </View>
 
       {/* Content */}
@@ -429,11 +432,15 @@ const styles = StyleSheet.create({
   },
 
   // Sort
-  sortBar: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    paddingHorizontal: 16, paddingVertical: 10,
+  sortBarOuter: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingLeft: 16, paddingVertical: 10,
   },
-  sortLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginRight: 2 },
+  sortBarScroll: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    paddingRight: 16,
+  },
+  sortLabel: { fontSize: 12, fontWeight: '600', color: theme.textMuted, marginRight: 8 },
   sortChip: {
     flexDirection: 'row', alignItems: 'center', gap: 4,
     paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8,

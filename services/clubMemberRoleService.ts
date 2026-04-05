@@ -124,6 +124,48 @@ export async function removeMemberRole(roleId: string): Promise<{ error: string 
 }
 
 /**
+ * Get role history for a club member (from matches - tracks which game role was played).
+ * Returns monthly breakdown of game roles (Tireur/Pointeur/Milieu) played.
+ */
+export function computeMemberRoleTrend(
+  playerId: string,
+  matches: Array<{ date: string; teamA: { players: string[]; playerRoles?: Array<{ playerId: string; role: string }> }; teamB: { players: string[]; playerRoles?: Array<{ playerId: string; role: string }> } }>,
+  lastMonths: number = 6
+): Array<{ month: string; roles: Record<string, number>; dominant: string }> {
+  const now = new Date();
+  const monthData: Map<string, Record<string, number>> = new Map();
+
+  for (let i = lastMonths - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    monthData.set(key, { 'Tireur': 0, 'Pointeur': 0, 'Milieu': 0 });
+  }
+
+  matches.forEach(m => {
+    const md = new Date(m.date);
+    const key = `${md.getFullYear()}-${String(md.getMonth() + 1).padStart(2, '0')}`;
+    if (!monthData.has(key)) return;
+
+    const allRoles = [...(m.teamA.playerRoles || []), ...(m.teamB.playerRoles || [])];
+    const pr = allRoles.find(r => r.playerId === playerId);
+    if (pr && monthData.get(key)) {
+      const bucket = monthData.get(key)!;
+      bucket[pr.role] = (bucket[pr.role] || 0) + 1;
+    }
+  });
+
+  const result: Array<{ month: string; roles: Record<string, number>; dominant: string }> = [];
+  monthData.forEach((roles, key) => {
+    const d = new Date(key + '-01');
+    const monthLabel = d.toLocaleDateString('fr-FR', { month: 'short' });
+    const dominant = Object.entries(roles).reduce((a, b) => b[1] > a[1] ? b : a, ['Milieu', 0])[0];
+    result.push({ month: monthLabel, roles, dominant });
+  });
+
+  return result;
+}
+
+/**
  * Get a player's role in a specific club.
  */
 export async function getPlayerClubRole(clubId: string, playerId: string): Promise<ClubMemberRole | null> {

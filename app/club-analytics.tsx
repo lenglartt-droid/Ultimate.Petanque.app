@@ -17,7 +17,7 @@ import Svg, { Rect, Line, Circle as SvgCircle, Polyline, Text as SvgText, G } fr
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
-import { fetchClubAnalytics, ClubAnalytics } from '@/services/clubAnalyticsService';
+import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics } from '@/services/clubAnalyticsService';
 import { getEloRank } from '@/services/eloService';
 import { Platform } from 'react-native';
 
@@ -423,6 +423,115 @@ export default function ClubAnalyticsScreen() {
             <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Exporter en PDF' : 'Export PDF'}</Text>
           </Pressable>
 
+          {/* Member Analytics */}
+          {analytics.memberAnalytics && analytics.memberAnalytics.length > 0 ? (
+            <View style={s.sectionCard}>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="person-search" size={18} color={theme.primary} />
+                </View>
+                <Text style={s.sectionTitle}>{fr ? 'Analyse par membre' : 'Member Analytics'}</Text>
+              </View>
+              {analytics.memberAnalytics.map((ma, idx) => {
+                const eloR = getEloRank(ma.elo);
+                const roleColors: Record<string, string> = { 'Tireur': '#F97316', 'Pointeur': '#3B82F6', 'Milieu': '#8B5CF6' };
+                const rc = roleColors[ma.role] || theme.textMuted;
+                return (
+                  <Pressable key={ma.id} style={s.maCard} onPress={() => router.push(`/player/${ma.id}`)}>
+                    <View style={s.maCardHeader}>
+                      <View style={s.maAvatar}>
+                        {ma.avatar ? (
+                          <Image source={{ uri: ma.avatar }} style={{ width: 40, height: 40, borderRadius: 12 }} contentFit="cover" />
+                        ) : (
+                          <Text style={s.maAvatarText}>{ma.name.charAt(0)}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.maName} numberOfLines={1}>{ma.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: rc + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                            <MaterialIcons name={ma.role === 'Tireur' ? 'gps-fixed' : ma.role === 'Pointeur' ? 'adjust' : 'swap-horiz'} size={10} color={rc} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: rc }}>{ma.role}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: eloR.color + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                            <MaterialIcons name={eloR.icon as any} size={10} color={eloR.color} />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: eloR.color }}>{ma.elo}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      {/* Contribution Score */}
+                      <View style={{ alignItems: 'center', minWidth: 44 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '900', color: ma.contributionScore >= 70 ? theme.success : ma.contributionScore >= 40 ? '#D97706' : theme.textSecondary }}>{ma.contributionScore}</Text>
+                        <Text style={{ fontSize: 8, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 }}>Score</Text>
+                      </View>
+                    </View>
+                    {/* Stats row */}
+                    <View style={s.maStatsRow}>
+                      <View style={s.maStatItem}>
+                        <Text style={s.maStatValue}>{ma.matchesPlayed}</Text>
+                        <Text style={s.maStatLabel}>{fr ? 'Matchs' : 'Games'}</Text>
+                      </View>
+                      <View style={s.maStatItem}>
+                        <Text style={[s.maStatValue, { color: theme.success }]}>{ma.winRate}%</Text>
+                        <Text style={s.maStatLabel}>{fr ? 'Victoires' : 'Wins'}</Text>
+                      </View>
+                      <View style={s.maStatItem}>
+                        <Text style={[s.maStatValue, { color: '#F97316' }]}>{ma.tirRate}%</Text>
+                        <Text style={s.maStatLabel}>Tir</Text>
+                      </View>
+                      <View style={s.maStatItem}>
+                        <Text style={[s.maStatValue, { color: '#3B82F6' }]}>{ma.pointRate}%</Text>
+                        <Text style={s.maStatLabel}>Point</Text>
+                      </View>
+                      <View style={s.maStatItem}>
+                        <Text style={[s.maStatValue, { color: theme.carreauColor }]}>{ma.carreaux}</Text>
+                        <Text style={s.maStatLabel}>Carr.</Text>
+                      </View>
+                    </View>
+                    {/* Activity sparkline (mini bars) */}
+                    <View style={s.maActivityRow}>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, marginRight: 6 }}>{fr ? 'Activite' : 'Activity'}</Text>
+                      {ma.monthlyMatches.map((mm, mi) => {
+                        const maxMm = Math.max(...ma.monthlyMatches.map(x => x.count), 1);
+                        const barH = Math.max(2, (mm.count / maxMm) * 20);
+                        return (
+                          <View key={mi} style={{ alignItems: 'center', flex: 1 }}>
+                            <View style={{ width: 8, height: barH, borderRadius: 4, backgroundColor: mm.count > 0 ? theme.primary : theme.border, marginBottom: 2 }} />
+                            <Text style={{ fontSize: 7, color: theme.textMuted }}>{mm.month.slice(0, 3)}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                    {/* Role Trend */}
+                    {ma.roleTrend && ma.roleTrend.some(rt => Object.values(rt.roles).some(v => v > 0)) ? (
+                      <View style={s.maRoleTrendRow}>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, marginRight: 6 }}>{fr ? 'Role' : 'Role'}</Text>
+                        {ma.roleTrend.map((rt, ri) => {
+                          const total = Object.values(rt.roles).reduce((a, b) => a + b, 0);
+                          if (total === 0) return (
+                            <View key={ri} style={{ alignItems: 'center', flex: 1 }}>
+                              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: theme.border, marginBottom: 2 }} />
+                              <Text style={{ fontSize: 7, color: theme.textMuted }}>{rt.month.slice(0, 3)}</Text>
+                            </View>
+                          );
+                          const domColor = rt.dominant === 'Tireur' ? '#F97316' : rt.dominant === 'Pointeur' ? '#3B82F6' : '#8B5CF6';
+                          return (
+                            <View key={ri} style={{ alignItems: 'center', flex: 1 }}>
+                              <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: domColor + '25', alignItems: 'center', justifyContent: 'center' }}>
+                                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: domColor }} />
+                              </View>
+                              <Text style={{ fontSize: 7, color: theme.textMuted }}>{rt.month.slice(0, 3)}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+
           {/* Tournament Stats */}
           <View style={s.sectionCard}>
             <View style={s.sectionHeader}>
@@ -501,4 +610,17 @@ const s = StyleSheet.create({
   tournamentStat: { flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingVertical: 16, gap: 4 },
   tournamentStatValue: { fontSize: 22, fontWeight: '800', color: theme.textPrimary },
   tournamentStatLabel: { fontSize: 10, color: theme.textMuted, textAlign: 'center' },
+
+  // Member Analytics
+  maCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
+  maCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },
+  maAvatar: { width: 40, height: 40, borderRadius: 12, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  maAvatarText: { fontSize: 16, fontWeight: '700', color: theme.primary },
+  maName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  maStatsRow: { flexDirection: 'row', gap: 6, marginBottom: 8 },
+  maStatItem: { flex: 1, alignItems: 'center', backgroundColor: theme.surface, borderRadius: 8, paddingVertical: 6 },
+  maStatValue: { fontSize: 13, fontWeight: '800', color: theme.textPrimary },
+  maStatLabel: { fontSize: 8, fontWeight: '600', color: theme.textMuted, marginTop: 1 },
+  maActivityRow: { flexDirection: 'row', alignItems: 'flex-end', paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.border + '60' },
+  maRoleTrendRow: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.border + '60', marginTop: 4 },
 });

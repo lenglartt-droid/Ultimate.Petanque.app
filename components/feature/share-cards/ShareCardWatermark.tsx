@@ -30,7 +30,7 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
   const qrColor = isDark ? '#333333' : '#FFFFFF';
   const qrBgColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.05)';
 
-  const logoSize = isXs ? 14 : isSm ? 20 : 26;
+  const logoSize = isXs ? 22 : isSm ? 32 : 42;
 
   return (
     <View style={[
@@ -41,8 +41,8 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
     ]}>
       <View style={[s.inner, { backgroundColor: bgColor }, isSm && s.innerSm, isXs && s.innerXs]}>
         {/* App Logo */}
-        <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)', width: logoSize, height: logoSize, borderRadius: logoSize * 0.28 }, isSm && s.logoBgSm]}>
-          <Image source={APP_LOGO} style={{ width: logoSize - 4, height: logoSize - 4, borderRadius: (logoSize - 4) * 0.25 }} contentFit="contain" />
+        <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)', width: logoSize, height: logoSize, borderRadius: logoSize * 0.25 }, isSm && s.logoBgSm]}>
+          <Image source={APP_LOGO} style={{ width: logoSize - 4, height: logoSize - 4, borderRadius: (logoSize - 4) * 0.22 }} contentFit="contain" />
         </View>
         <View style={{ flex: 1, flexShrink: 1 }}>
           <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm, isXs && s.appNameXs]} numberOfLines={1}>Ultimate Petanque</Text>
@@ -102,16 +102,16 @@ const s = StyleSheet.create({
     borderRadius: 6,
   },
   logoBg: {
-    width: 26,
-    height: 26,
-    borderRadius: 7,
+    width: 42,
+    height: 42,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoBgSm: {
-    width: 20,
-    height: 20,
-    borderRadius: 6,
+    width: 32,
+    height: 32,
+    borderRadius: 8,
   },
   qrWrap: {
     borderRadius: 6,
@@ -126,9 +126,9 @@ const s = StyleSheet.create({
     borderRadius: 4,
     padding: 1.5,
   },
-  appName: { fontSize: 12, fontWeight: '700', letterSpacing: 0.3 },
-  appNameSm: { fontSize: 9, fontWeight: '700' },
-  appNameXs: { fontSize: 7, fontWeight: '700' },
-  tagline: { fontSize: 8, fontWeight: '500', marginTop: 0.5 },
-  taglineSm: { fontSize: 6.5 },
+  appName: { fontSize: 14, fontWeight: '800', letterSpacing: 0.3 },
+  appNameSm: { fontSize: 11, fontWeight: '800' },
+  appNameXs: { fontSize: 9, fontWeight: '700' },
+  tagline: { fontSize: 10, fontWeight: '500', marginTop: 1 },
+  taglineSm: { fontSize: 8 },
 });
