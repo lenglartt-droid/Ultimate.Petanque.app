@@ -8,4 +8,5 @@ export { default as ShareCardSponsoredEvent } from './ShareCardSponsoredEvent';
 export { default as ShareCardPalmares } from './ShareCardPalmares';
 export { default as ShareCardEventLeaderboard } from './ShareCardEventLeaderboard';
 export { default as ShareCardLeague } from './ShareCardLeague';
+export { default as ShareCardWeeklyDigest } from './ShareCardWeeklyDigest';
 export { default as ShareCardWatermark } from './ShareCardWatermark';

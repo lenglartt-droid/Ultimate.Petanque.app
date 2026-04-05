@@ -9,7 +9,8 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeasonEntry, EloHistoryEntry, ELO_INITIAL, ELO_RANKS, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
-import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress, LeagueTier } from '@/services/globalRankingService';
+import { LEAGUE_TIERS, getLeagueTier, getLeagueProgress, LeagueTier, fetchPlayerGlobalRank } from '@/services/globalRankingService';
+import { getLastWeekSummary, getCurrentWeekStart, getWeekEnd, formatDateISO } from '@/services/weeklyLeaderboardService';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -138,6 +139,56 @@ export default function EloAwardsScreen() {
   const [showCompare, setShowCompare] = useState(false);
   const [compareA, setCompareA] = useState<string | null>(null);
   const [compareB, setCompareB] = useState<string | null>(null);
+
+  // ELO Milestones
+  const milestones = useMemo(() => {
+    if (eloHistory.length === 0) return [];
+    const reversed = [...eloHistory].reverse(); // oldest first
+    const items: Array<{ id: string; label: string; elo: number; date: string; icon: string; color: string; emblem?: string }> = [];
+    const tierThresholds = [...LEAGUE_TIERS].reverse(); // ascending by ELO: bronze, silver, gold...
+
+    // First match milestone
+    if (reversed.length > 0) {
+      items.push({ id: 'first_match', label: t('leaderboard', 'eloMilestoneFirstMatch'), elo: reversed[0].eloAfter, date: reversed[0].recordedAt, icon: 'flag', color: '#3B82F6' });
+    }
+
+    // Track which tier thresholds have been crossed
+    const crossedTiers = new Set<string>();
+    let prevElo = reversed.length > 0 ? reversed[0].eloBefore : ELO_INITIAL;
+    for (const entry of reversed) {
+      const prevTier = getLeagueTier(prevElo);
+      const curTier = getLeagueTier(entry.eloAfter);
+      if (prevTier.id !== curTier.id && !crossedTiers.has(curTier.id) && curTier.minElo > prevTier.minElo) {
+        crossedTiers.add(curTier.id);
+        items.push({
+          id: `tier_${curTier.id}`,
+          label: `${isFr ? curTier.name.fr : curTier.name.en} (${curTier.minElo}+)`,
+          elo: entry.eloAfter,
+          date: entry.recordedAt,
+          icon: curTier.icon,
+          color: curTier.color,
+          emblem: curTier.emblem,
+        });
+      }
+      prevElo = entry.eloAfter;
+    }
+
+    // Peak ELO milestone (only if > starting)
+    const peak = Math.max(...reversed.map(e => e.eloAfter));
+    if (peak > ELO_INITIAL + 50) {
+      const peakEntry = reversed.find(e => e.eloAfter === peak);
+      if (peakEntry) {
+        const existing = items.find(i => i.id === `tier_${getLeagueTier(peak).id}`);
+        if (!existing || existing.elo !== peak) {
+          items.push({ id: 'peak_elo', label: `Peak ELO: ${peak}`, elo: peak, date: peakEntry.recordedAt, icon: 'whatshot', color: '#F59E0B', emblem: getLeagueTier(peak).emblem });
+        }
+      }
+    }
+
+    // Sort chronologically
+    items.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return items;
+  }, [eloHistory, isFr, t]);
 
   useEffect(() => {
     if (!selfPlayer) { setLoading(false); return; }
@@ -717,8 +768,52 @@ export default function EloAwardsScreen() {
           );
         })()}
 
+        {/* ===== ELO MILESTONES TIMELINE ===== */}
+        {milestones.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(80)}>
+            <View style={st.chartCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <MaterialIcons name="timeline" size={18} color="#F59E0B" />
+                <Text style={st.sectionTitle}>{t('leaderboard', 'eloMilestonesTitle')}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted, marginLeft: 'auto' }}>{milestones.length} {isFr ? 'jalons' : 'milestones'}</Text>
+              </View>
+              <View style={{ position: 'relative', paddingLeft: 24 }}>
+                {/* Vertical timeline line */}
+                <View style={{ position: 'absolute', left: 9, top: 8, bottom: 8, width: 2, backgroundColor: theme.border + '40', borderRadius: 1 }} />
+                {milestones.map((ms, idx) => {
+                  const dateStr = new Date(ms.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' });
+                  const isLast = idx === milestones.length - 1;
+                  return (
+                    <View key={ms.id} style={{ flexDirection: 'row', alignItems: 'flex-start', marginBottom: isLast ? 0 : 16, position: 'relative' }}>
+                      {/* Timeline dot */}
+                      <View style={{ position: 'absolute', left: -24, top: 2, width: 20, height: 20, borderRadius: 10, backgroundColor: ms.color + '20', borderWidth: 2, borderColor: ms.color + '40', alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
+                        {ms.emblem ? (
+                          <Text style={{ fontSize: 8 }}>{ms.emblem}</Text>
+                        ) : (
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: ms.color }} />
+                        )}
+                      </View>
+                      {/* Content */}
+                      <View style={{ flex: 1, backgroundColor: ms.color + '08', borderRadius: 12, padding: 10, borderWidth: 1, borderColor: ms.color + '15' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name={ms.icon as any} size={14} color={ms.color} />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary, flex: 1 }}>{ms.label}</Text>
+                          <View style={{ backgroundColor: ms.color + '18', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 11, fontWeight: '800', color: ms.color }}>{ms.elo}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 3 }}>{dateStr}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </Animated.View>
+        ) : null}
+
         {/* Share League Rank CTA */}
-        <Animated.View entering={FadeInDown.duration(400).delay(80)}>
+        <Animated.View entering={FadeInDown.duration(400).delay(85)}>
           <Pressable
             style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: currentLeague.color + '12', borderRadius: 14, paddingVertical: 12, marginBottom: 16, borderWidth: 1, borderColor: currentLeague.color + '25' }}
             onPress={() => router.push({ pathname: '/share-card', params: { type: 'league' } } as any)}

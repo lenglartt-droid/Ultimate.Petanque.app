@@ -26,6 +26,7 @@ import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
 import { useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
+import { LEAGUE_TIERS } from '@/services/globalRankingService';
 import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { trackOnboardingStep } from '@/services/onboardingAnalyticsService';
@@ -34,7 +35,7 @@ import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 // ============================================
 // TYPES
 // ============================================
-type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
+type Step = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
 
@@ -119,17 +120,17 @@ export default function OnboardingScreen() {
   useEffect(() => {
     if (splashDone && step === 0) {
       if (user) {
-        setStep(7 as Step);
+        setStep(8 as Step);
       } else {
         setStep(1);
       }
     }
   }, [splashDone, user]);
 
-  // If user logs in while on an earlier step, skip directly to Express Profile (step 7)
+  // If user logs in while on an earlier step, skip directly to Express Profile (step 8)
   useEffect(() => {
-    if (user && step >= 1 && step < 7) {
-      setStep(7 as Step);
+    if (user && step >= 1 && step < 8) {
+      setStep(8 as Step);
     }
   }, [user]);
 
@@ -137,7 +138,7 @@ export default function OnboardingScreen() {
   useEffect(() => {
     const names: Record<number, string> = {
       0: 'splash', 1: 'language', 2: 'promise', 3: 'sponsor',
-      4: 'features', 5: 'map', 6: 'login_cta', 7: 'profile', 8: 'referral',
+      4: 'features', 5: 'leagues', 6: 'map', 7: 'login_cta', 8: 'profile', 9: 'referral',
     };
     trackOnboardingStep({
       sessionId: trackingSessionId,
@@ -148,9 +149,9 @@ export default function OnboardingScreen() {
     });
   }, [step, trackingSessionId]);
 
-  // Load referral code when reaching step 8
+  // Load referral code when reaching step 9
   useEffect(() => {
-    if (step === 8 && user?.id && !referralCode) {
+    if (step === 9 && user?.id && !referralCode) {
       loadOrCreateReferralCode();
     }
   }, [step, user?.id]);
@@ -210,7 +211,7 @@ export default function OnboardingScreen() {
     // Track step completion
     const names: Record<number, string> = {
       0: 'splash', 1: 'language', 2: 'promise', 3: 'sponsor',
-      4: 'features', 5: 'map', 6: 'login_cta', 7: 'profile', 8: 'referral',
+      4: 'features', 5: 'leagues', 6: 'map', 7: 'login_cta', 8: 'profile', 9: 'referral',
     };
     trackOnboardingStep({
       sessionId: trackingSessionId,
@@ -223,7 +224,7 @@ export default function OnboardingScreen() {
       setStep(4 as Step);
       return;
     }
-    setStep(prev => Math.min(8, prev + 1) as Step);
+    setStep(prev => Math.min(9, prev + 1) as Step);
   };
 
   const goBack = () => {
@@ -302,7 +303,7 @@ export default function OnboardingScreen() {
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setStep(8 as Step);
+      setStep(9 as Step);
     } catch (error: any) {
       showAlert(t('common', 'error'), error.message || 'Unable to save profile');
     } finally {
@@ -574,7 +575,7 @@ export default function OnboardingScreen() {
             <Pressable onPress={goBack} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={1} total={6} />
+            <ProgressDots current={1} total={7} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.sponsorContent} showsVerticalScrollIndicator={false}>
@@ -697,20 +698,12 @@ export default function OnboardingScreen() {
           : 'Unlock badges and enter the leaderboard.',
       },
       {
-        icon: 'diamond',
-        color: '#9333EA',
-        title: language === 'fr' ? 'Classement ELO dynamique' : 'Dynamic ELO ranking',
-        desc: language === 'fr'
-          ? 'Ton rang evolue a chaque match : Bronze, Argent, Or, Diamant, Maitre.'
-          : 'Your rank evolves with every match: Bronze, Silver, Gold, Diamond, Master.',
-      },
-      {
         icon: 'verified-user',
         color: '#DC2626',
         title: language === 'fr' ? 'Score de Confiance (TrustScore)' : 'Trust Score (TrustScore)',
         desc: language === 'fr'
-          ? 'Un systeme anti-triche avance qui analyse, detecte les anomalies et garantit un classement fiable et equitable.'
-          : 'An advanced anti-cheat system that analyzes, detects anomalies and ensures a reliable and fair ranking.',
+          ? 'Un systeme anti-triche avance qui garantit un classement fiable et equitable.'
+          : 'An advanced anti-cheat system that ensures a reliable and fair ranking.',
       },
     ];
 
@@ -721,7 +714,7 @@ export default function OnboardingScreen() {
             <Pressable onPress={goBack} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={2} total={6} />
+            <ProgressDots current={2} total={7} />
             <View style={{ width: 24 }} />
           </View>
 
@@ -751,15 +744,6 @@ export default function OnboardingScreen() {
               ))}
             </View>
 
-            <View style={s.featureTeaser}>
-              <MaterialIcons name="auto-awesome" size={16} color="#FCD34D" />
-              <Text style={s.featureTeaserText}>
-                {language === 'fr'
-                  ? 'La fiabilite du classement repose sur 2 piliers : un classement ELO dynamique et un systeme anti-triche (Score de Confiance).'
-                  : 'Ranking reliability is built on 2 pillars: a dynamic ELO ranking and an anti-cheat system (Trust Score).'}
-              </Text>
-            </View>
-
             <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
@@ -776,9 +760,107 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 5: MAP DISCOVERY
+  // STEP 5: LEAGUE TIERS EXPLANATION (NEW)
   // ============================================
   if (step === 5) {
+    const tiersToShow = [...LEAGUE_TIERS].reverse(); // Bronze first
+    return (
+      <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
+        <SafeAreaView style={s.fullScreen}>
+          <View style={s.screenHeader}>
+            <Pressable onPress={() => setStep(4 as Step)} hitSlop={12}>
+              <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
+            </Pressable>
+            <ProgressDots current={3} total={7} />
+            <View style={{ width: 24 }} />
+          </View>
+          <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={{ alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ width: 56, height: 56, borderRadius: 18, backgroundColor: '#9333EA18', alignItems: 'center', justifyContent: 'center', marginBottom: 10 }}>
+                <MaterialIcons name="leaderboard" size={32} color="#9333EA" />
+              </View>
+              <Text style={s.pageTitle}>
+                {language === 'fr' ? 'Systeme de Ligues ELO' : 'ELO League System'}
+              </Text>
+              <Text style={s.pageSubtitle}>
+                {language === 'fr'
+                  ? 'Chaque match fait varier ton ELO. Progresse a travers 6 ligues pour atteindre le sommet.'
+                  : 'Every match changes your ELO. Progress through 6 leagues to reach the top.'}
+              </Text>
+            </View>
+
+            {/* Calibration info */}
+            <View style={[s.featureTeaser, { marginBottom: 14, borderWidth: 1, borderColor: '#F59E0B25' }]}>
+              <MaterialIcons name="science" size={16} color="#F59E0B" />
+              <Text style={s.featureTeaserText}>
+                {language === 'fr'
+                  ? 'Tes 10 premiers matchs sont une phase de calibration. Ton ELO varie plus vite pour trouver ton vrai niveau rapidement.'
+                  : 'Your first 10 matches are a calibration phase. Your ELO changes faster to find your true level quickly.'}
+              </Text>
+            </View>
+
+            {/* Tier cards */}
+            <View style={{ gap: 8, marginBottom: 16 }}>
+              {tiersToShow.map((tier) => {
+                const rangeLabel = tier.maxElo === Infinity ? `${tier.minElo}+` : `${tier.minElo} - ${tier.maxElo}`;
+                return (
+                  <View key={tier.id} style={[s.featureRow, { borderLeftWidth: 3, borderLeftColor: tier.color, paddingVertical: 12 }]}>
+                    <View style={{ width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: tier.color + '15' }}>
+                      <Text style={{ fontSize: 22 }}>{tier.emblem}</Text>
+                    </View>
+                    <View style={s.featureInfo}>
+                      <Text style={[s.featureTitle, { color: tier.color }]}>{language === 'fr' ? tier.name.fr : tier.name.en}</Text>
+                      <Text style={s.featureDesc}>{rangeLabel} ELO</Text>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+
+            {/* Progression explanation */}
+            <View style={[s.communityCallCard, { borderColor: '#9333EA30' }]}>
+              <View style={s.communityCallHeader}>
+                <MaterialIcons name="trending-up" size={18} color="#9333EA" />
+                <Text style={[s.communityCallTitle, { color: '#A78BFA' }]}>
+                  {language === 'fr' ? 'Comment progresser ?' : 'How to progress?'}
+                </Text>
+              </View>
+              <View style={s.communityTipsList}>
+                {[
+                  { icon: 'sports', color: '#60A5FA', text: language === 'fr' ? 'Gagne des matchs pour monter en ELO' : 'Win matches to climb ELO' },
+                  { icon: 'people', color: '#10B981', text: language === 'fr' ? 'Plus ton adversaire est fort, plus tu gagnes de points' : 'The stronger your opponent, the more points you earn' },
+                  { icon: 'military-tech', color: '#F59E0B', text: language === 'fr' ? 'Debloque des badges a chaque promotion de ligue' : 'Unlock badges at each league promotion' },
+                  { icon: 'share', color: '#EC4899', text: language === 'fr' ? 'Partage tes cartes de rang sur les reseaux sociaux' : 'Share your rank cards on social media' },
+                ].map((tip, j) => (
+                  <View key={j} style={s.communityTipRow}>
+                    <View style={[s.communityTipIcon, { backgroundColor: tip.color + '18' }]}>
+                      <MaterialIcons name={tip.icon as any} size={15} color={tip.color} />
+                    </View>
+                    <Text style={s.communityTipText}>{tip.text}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+
+            <View style={s.ctaContainer}>
+              <Pressable
+                style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                onPress={() => setStep(6 as Step)}
+              >
+                <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
+              </Pressable>
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      </LinearGradient>
+    );
+  }
+
+  // ============================================
+  // STEP 6: MAP DISCOVERY
+  // ============================================
+  if (step === 6) {
     const mapFeatures = [
       { icon: 'place', color: '#10B981', label: language === 'fr' ? 'Terrains pres de toi' : 'Courts near you' },
       { icon: 'people', color: '#3B82F6', label: language === 'fr' ? 'Joueurs a proximite' : 'Nearby players' },
@@ -797,10 +879,10 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.screenHeader}>
-            <Pressable onPress={() => setStep(4 as Step)} hitSlop={12}>
+            <Pressable onPress={() => setStep(5 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={3} total={6} />
+            <ProgressDots current={4} total={7} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -881,7 +963,7 @@ export default function OnboardingScreen() {
             <View style={s.ctaContainer}>
               <Pressable
                 style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                onPress={() => setStep(6 as Step)}
+                onPress={() => setStep(7 as Step)}
               >
                 <Text style={s.ctaPrimaryText}>{language === 'fr' ? 'Continuer' : 'Continue'}</Text>
                 <MaterialIcons name="arrow-forward" size={20} color="#0F172A" />
@@ -894,17 +976,17 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 6: DEFERRED LOGIN
+  // STEP 7: DEFERRED LOGIN
   // ============================================
-  if (step === 6) {
+  if (step === 7) {
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.screenHeader}>
-            <Pressable onPress={() => setStep(5 as Step)} hitSlop={12}>
+            <Pressable onPress={() => setStep(6 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={4} total={6} />
+            <ProgressDots current={5} total={7} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
@@ -941,7 +1023,7 @@ export default function OnboardingScreen() {
               {user ? (
                 <Pressable
                   style={({ pressed }) => [s.ctaPrimary, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
-                  onPress={() => setStep(7 as Step)}
+                  onPress={() => setStep(8 as Step)}
                 >
                   <MaterialIcons name="person" size={20} color="#0F172A" />
                   <Text style={s.ctaPrimaryText}>
@@ -984,9 +1066,9 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 7: EXPRESS PROFILE ("Dernière Touche")
+  // STEP 8: EXPRESS PROFILE ("Dernière Touche")
   // ============================================
-  if (step === 7) {
+  if (step === 8) {
     const roles = [
       { id: 'Tireur' as PlayerRole, icon: 'gps-fixed', label: language === 'fr' ? 'Tireur' : 'Shooter' },
       { id: 'Pointeur' as PlayerRole, icon: 'adjust', label: language === 'fr' ? 'Pointeur' : 'Pointer' },
@@ -1003,10 +1085,10 @@ export default function OnboardingScreen() {
         <SafeAreaView style={s.fullScreen}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
             <View style={s.screenHeader}>
-              <Pressable onPress={() => setStep(6 as Step)} hitSlop={12}>
+              <Pressable onPress={() => setStep(7 as Step)} hitSlop={12}>
                 <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
               </Pressable>
-              <ProgressDots current={5} total={6} />
+              <ProgressDots current={6} total={7} />
               <View style={{ width: 24 }} />
             </View>
             <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -1104,17 +1186,17 @@ export default function OnboardingScreen() {
   }
 
   // ============================================
-  // STEP 8: INVITE FRIENDS (REFERRAL)
+  // STEP 9: INVITE FRIENDS (REFERRAL)
   // ============================================
-  if (step === 8) {
+  if (step === 9) {
     return (
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.screenHeader}>
-            <Pressable onPress={() => setStep(7 as Step)} hitSlop={12}>
+            <Pressable onPress={() => setStep(8 as Step)} hitSlop={12}>
               <MaterialIcons name="arrow-back" size={24} color="#94A3B8" />
             </Pressable>
-            <ProgressDots current={5} total={6} />
+            <ProgressDots current={6} total={7} />
             <View style={{ width: 24 }} />
           </View>
           <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
