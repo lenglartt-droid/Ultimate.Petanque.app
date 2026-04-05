@@ -79,7 +79,7 @@ export const ELO_RANKS: EloRankInfo[] = [
   { tier: 'master', label: { fr: 'Maitre', en: 'Master' }, color: '#9333EA', icon: 'auto-awesome', minElo: 1800 },
   { tier: 'diamond', label: { fr: 'Diamant', en: 'Diamond' }, color: '#06B6D4', icon: 'diamond', minElo: 1500 },
   { tier: 'gold', label: { fr: 'Or', en: 'Gold' }, color: '#F59E0B', icon: 'emoji-events', minElo: 1200 },
-  { tier: 'silver', label: { fr: 'Argent', en: 'Silver' }, color: '#94A3B8', icon: 'workspace-premium', minElo: 1000 },
+  { tier: 'silver', label: { fr: 'Argent', en: 'Silver' }, color: '#94A3B8', icon: 'workspace-premium', minElo: 1100 },
   { tier: 'bronze', label: { fr: 'Bronze', en: 'Bronze' }, color: '#CD7F32', icon: 'shield', minElo: 0 },
 ];
 

@@ -249,7 +249,12 @@ const FeedBadgeCard = React.memo(({ data, lang, index }: { data: FeedBadgeUnlock
               <Text style={fs.cardTitleBold}>{data.username}</Text>
               {' '}{ft('badgeUnlocked', lang)}
             </Text>
-            <Text style={[fs.cardSubtitle, { color: '#F59E0B' }]}>{badge?.icon || '🏅'} {badgeName}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+              <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: (badge?.color || '#F59E0B') + '15', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name={(badge?.icon || 'emoji-events') as any} size={12} color={badge?.color || '#F59E0B'} />
+              </View>
+              <Text style={[fs.cardSubtitle, { color: '#F59E0B', marginTop: 0 }]}>{badgeName}</Text>
+            </View>
             {badgeDesc ? (
               <Text style={fs.badgeDesc} numberOfLines={2}>{badgeDesc}</Text>
             ) : null}
