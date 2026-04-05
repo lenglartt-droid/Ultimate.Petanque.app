@@ -848,6 +848,27 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="activity-feed" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="player-compare" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="global-ranking" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="leaderboard-geo" 
                 options={{ 
                   presentation: 'card',
