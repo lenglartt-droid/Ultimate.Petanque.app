@@ -152,8 +152,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'sr4',
           q: fr ? 'Comment fonctionne le classement ELO ?' : 'How does the ELO ranking work?',
           a: fr
-            ? 'Le classement repose sur un systeme inspire du ELO, utilise dans les sports competitifs. Chaque resultat est analyse en tenant compte du niveau des adversaires, de l\'ecart de score et du contexte (match atteste, nombre de participants). 5 rangs : Bronze, Argent, Or, Diamant, Maitre. L\'ELO evolue plus vite en phase de placement (10 premiers matchs). En cas d\'inactivite (30+ jours), un declin progressif s\'applique (plancher a 800). Chaque janvier, une compression saisonniere rapproche les ELO de 1000 pour relancer la competition.'
-            : 'The ranking is based on an ELO-inspired system used in competitive sports. Each result factors in opponent level, score margin and context (attested match, participant count). 5 ranks: Bronze, Silver, Gold, Diamond, Master. ELO moves faster in placement phase (first 10 matches). After 30+ days of inactivity, a gradual decay applies (floor at 800). Each January, a seasonal compression brings ELOs closer to 1000 to restart competition.',
+            ? 'Le classement repose sur un systeme inspire du ELO, utilise dans les sports competitifs. Chaque resultat est analyse en tenant compte du niveau des adversaires, de l\'ecart de score et du contexte (match atteste, nombre de participants). 6 ligues : Bronze, Argent, Or, Diamant, Maitre, Grand Maitre. L\'ELO evolue plus vite en phase de placement (10 premiers matchs). En cas d\'inactivite (30+ jours), un declin progressif s\'applique (plancher a 800). Chaque janvier, une compression saisonniere rapproche les ELO de 1000 pour relancer la competition. Quand vous changez de ligue, une modal de celebration (promotion) ou d alerte (relegation) s affiche automatiquement.'
+            : 'The ranking is based on an ELO-inspired system used in competitive sports. Each result factors in opponent level, score margin and context (attested match, participant count). 6 leagues: Bronze, Silver, Gold, Diamond, Master, Grand Master. ELO moves faster in placement phase (first 10 matches). After 30+ days of inactivity, a gradual decay applies (floor at 800). Each January, a seasonal compression brings ELOs closer to 1000 to restart competition. When you change league, a celebration modal (promotion) or alert (relegation) is shown automatically.',
         },
         {
           id: 'sr4b',
@@ -175,6 +175,20 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           a: fr
             ? 'Activez votre profil public et jouez au minimum 3 matchs publics. Filtrez le classement par zone (monde, continent, pays, ville), periode et critere. Le classement hebdomadaire est reinitialise chaque lundi.'
             : 'Enable your public profile and play at least 3 public matches. Filter the leaderboard by zone (world, continent, country, city), period and criteria. Weekly leaderboard resets every Monday.',
+        },
+        {
+          id: 'sr6_global',
+          q: fr ? 'Comment fonctionne le classement mondial et les ligues ?' : 'How does the global ranking and league system work?',
+          a: fr
+            ? 'Le classement mondial classe tous les joueurs publics par ELO. Six ligues progressives : Bronze (0-1099), Argent (1100-1199), Or (1200-1499), Diamant (1500-1799), Maitre (1800-1999), Grand Maitre (2000+). Votre rang mondial #X et votre ligue sont visibles sur votre profil et dans le widget classement de la page d accueil. Une barre de progression montre les ELO restants pour la promotion. L historique des promotions/relegations par saison est affiche sur votre fiche joueur. Le classement unifie (onglet Joueurs) integre les filtres geographiques, par ligue, par club, par marque de boules et par periode.'
+            : 'The global ranking ranks all public players by ELO. Six progressive leagues: Bronze (0-1099), Silver (1100-1199), Gold (1200-1499), Diamond (1500-1799), Master (1800-1999), Grand Master (2000+). Your world rank #X and league are visible on your profile and in the home page ranking widget. A progress bar shows remaining ELO for promotion. Promotion/relegation history by season is shown on your player card. The unified leaderboard (Players tab) integrates geographic, league, club, boules brand and period filters.',
+        },
+        {
+          id: 'sr6_feed',
+          q: fr ? 'Comment fonctionne le fil d activite communautaire ?' : 'How does the community activity feed work?',
+          a: fr
+            ? 'Le fil d activite (icone flux dynamique en haut de l accueil) agrege automatiquement les evenements de la communaute sans posts manuels : resultats de matchs publics, badges debloques, mouvements ELO significatifs, records de la semaine, meetups et evenements sponsorises. Le fil inclut un digest hebdomadaire (top 3 joueurs, plus gros mouvement ELO, badge le plus debloque), des filtres par categorie (tous, matchs, badges, evenements, records), des reactions rapides, et un systeme de polling avec banniere de nouveaux elements. Il n y a aucune moderation necessaire car tout le contenu est genere automatiquement.'
+            : 'The activity feed (dynamic feed icon at top of home) automatically aggregates community events without manual posts: public match results, unlocked badges, significant ELO movements, weekly records, meetups and sponsored events. The feed includes a weekly digest (top 3 players, biggest ELO move, most unlocked badge), category filters (all, matches, badges, events, records), quick reactions, and a polling system with new items banner. No moderation needed as all content is auto-generated.',
         },
         {
           id: 'sr6b',
@@ -388,6 +402,13 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           a: fr
             ? 'Appuyez sur "Partager" en haut de n\'importe quelle fiche. Une page plein ecran affiche un apercu detaille. 4 modes : partage natif (WhatsApp, SMS, email), copie du code, copie de l\'invitation ou QR code. Definissez une expiration (illimitee, 1 jour, 1 semaine, 1 mois).'
             : 'Tap "Share" at top of any card. A full-screen page shows a detailed preview. 4 modes: native share (WhatsApp, SMS, email), copy code, copy invitation or QR code. Set expiration (unlimited, 1 day, 1 week, 1 month).',
+        },
+        {
+          id: 'ps4',
+          q: fr ? 'Comment partager mes resultats sur les reseaux sociaux (Instagram, WhatsApp, etc.) ?' : 'How do I share my results on social media (Instagram, WhatsApp, etc.)?',
+          a: fr
+            ? 'L\'app genere des cartes visuelles partageables pour 9 types de contenu : match, badge, statistiques, defi, tournoi, face-a-face, evenement sponsorise, classement d\'evenement et palmares. Depuis le detail d\'un match, defi ou profil, appuyez sur l\'icone de partage puis selectionnez "Carte visuelle". Choisissez le format (carre pour Instagram, story 9:16 pour Instagram/TikTok, paysage pour Twitter/Facebook), le theme de couleur (sombre ou clair) et l\'app genere une image haute qualite avec vos stats, votre rang ELO, votre classement geographique et un QR code watermark. Partagez directement via WhatsApp, Instagram Stories, ou enregistrez l\'image dans votre galerie. Toutes les cartes incluent automatiquement le logo de l\'app et un QR code pour que les autres joueurs puissent scanner et voir votre profil.'
+            : 'The app generates shareable visual cards for 9 content types: match, badge, stats, challenge, tournament, head-to-head, sponsored event, event leaderboard and honors. From a match, challenge or profile detail, tap the share icon then select "Visual Card". Choose format (square for Instagram, 9:16 story for Instagram/TikTok, landscape for Twitter/Facebook), color theme (dark or light) and the app generates a high-quality image with your stats, ELO rank, geographic ranking and QR watermark. Share directly via WhatsApp, Instagram Stories, or save to your gallery. All cards automatically include the app logo and a QR code so other players can scan and view your profile.',
         },
       ],
     },
