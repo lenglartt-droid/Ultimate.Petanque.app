@@ -217,7 +217,7 @@ export default function ShareCardStats({
         </View>
 
         {/* Streak + Geo */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.06)', paddingTop: 8, marginBottom: isStory ? 0 : 4 }}>
           {(currentStreak !== undefined && currentStreak > 0) ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F9731615', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}>
               <MaterialIcons name="local-fire-department" size={12} color="#F97316" />

@@ -28,6 +28,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
 import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
+import EloSparkline from '@/components/feature/player/EloSparkline';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 
 // ============================================
@@ -102,6 +103,26 @@ export default function MyPlayerCardScreen() {
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
   const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
   const [geoRank, setGeoRank] = React.useState<PlayerGeoRank | null>(null);
+
+  // ELO history for sparkline
+  const [eloHistory, setEloHistory] = React.useState<any[]>([]);
+  React.useEffect(() => {
+    if (!selfPlayer?.id) return;
+    const { fetchEloHistory: fetchHist } = require('@/services/eloService');
+    fetchHist(selfPlayer.id, 30).then(({ history }: any) => setEloHistory(history)).catch(() => {});
+  }, [selfPlayer?.id]);
+
+  const eloChartData = React.useMemo(() => {
+    if (eloHistory.length === 0) return null;
+    const sorted = [...eloHistory].reverse();
+    const points = sorted.map((h: any) => h.eloAfter);
+    const min = Math.min(...points, 1000) - 30;
+    const max = Math.max(...points, 1000) + 30;
+    const currentElo = sorted[sorted.length - 1]?.eloAfter || selfPlayer?.eloRating || 1000;
+    const weekAgoElo = sorted.length > 7 ? sorted[sorted.length - 8]?.eloAfter : sorted[0]?.eloAfter || 1000;
+    const weekDelta = currentElo - weekAgoElo;
+    return { points, min, max, currentElo, weekDelta, entries: sorted };
+  }, [eloHistory, selfPlayer?.eloRating]);
 
   const [screenDims, setScreenDims] = React.useState(() => Dimensions.get('window'));
   React.useEffect(() => {
@@ -443,6 +464,19 @@ export default function MyPlayerCardScreen() {
                         <Text style={{ fontSize: 13, fontWeight: '700', color: eloR.color }}>{eloR.label[language === 'fr' ? 'fr' : 'en']}</Text>
                       </View>
                     </View>
+                    {/* ELO Sparkline Chart */}
+                    {eloChartData && eloChartData.points.length >= 3 ? (
+                      <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                        <EloSparkline
+                          points={eloChartData.entries.map((e: any) => ({ elo: e.eloAfter, won: e.won }))}
+                          currentElo={eloChartData.currentElo}
+                          weekDelta={eloChartData.weekDelta}
+                          width={Math.min(screenWidth - 120, 220)}
+                          height={40}
+                          language={language}
+                        />
+                      </View>
+                    ) : null}
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
                       <Text style={{ fontSize: 11, color: theme.textMuted }}>{language === 'fr' ? 'Voir mon palmares' : 'View my awards'}</Text>
                       <MaterialIcons name="chevron-right" size={14} color={theme.textMuted} />
