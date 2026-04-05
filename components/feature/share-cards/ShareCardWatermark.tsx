@@ -1,14 +1,16 @@
 /**
  * Watermark branding component for share cards.
- * Displays "Ultimate Petanque" logo + app name + QR code for app download.
+ * Displays app logo image + "Ultimate Petanque" name + QR code for app download.
  * Always positioned at the bottom of the card with guaranteed visibility.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
+import { Image } from 'expo-image';
 import QRCode from 'react-native-qrcode-svg';
 
 const APP_DOWNLOAD_URL = 'https://ultimatepetanque.app/download';
+const APP_LOGO = require('@/assets/images/app-logo.png');
 
 interface WatermarkProps {
   variant?: 'light' | 'dark';
@@ -28,6 +30,8 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
   const qrColor = isDark ? '#333333' : '#FFFFFF';
   const qrBgColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.05)';
 
+  const logoSize = isXs ? 14 : isSm ? 20 : 26;
+
   return (
     <View style={[
       s.container,
@@ -36,20 +40,19 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
       absolute && s.absolute,
     ]}>
       <View style={[s.inner, { backgroundColor: bgColor }, isSm && s.innerSm, isXs && s.innerXs]}>
+        {/* App Logo */}
+        <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)', width: logoSize, height: logoSize, borderRadius: logoSize * 0.28 }, isSm && s.logoBgSm]}>
+          <Image source={APP_LOGO} style={{ width: logoSize - 4, height: logoSize - 4, borderRadius: (logoSize - 4) * 0.25 }} contentFit="contain" />
+        </View>
+        <View style={{ flex: 1, flexShrink: 1 }}>
+          <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm, isXs && s.appNameXs]} numberOfLines={1}>Ultimate Petanque</Text>
+          {!isXs ? <Text style={[s.tagline, { color: dotColor }, isSm && s.taglineSm]} numberOfLines={1}>{isSm ? 'Telecharger' : 'Scannez pour telecharger'}</Text> : null}
+        </View>
         {!hideQR ? (
           <View style={[s.qrWrap, { backgroundColor: qrBgColor }, isSm && s.qrWrapSm, isXs && s.qrWrapXs]}>
             <QRCode value={APP_DOWNLOAD_URL} size={qrSize} color={qrColor} backgroundColor="transparent" />
           </View>
         ) : null}
-        {!isXs ? (
-          <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)' }, isSm && s.logoBgSm]}>
-            <MaterialIcons name="sports" size={isSm ? 11 : 15} color={textColor} />
-          </View>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm, isXs && s.appNameXs]}>Ultimate Petanque</Text>
-          {!isXs ? <Text style={[s.tagline, { color: dotColor }, isSm && s.taglineSm]}>{isSm ? 'Telecharger' : 'Scannez pour telecharger'}</Text> : null}
-        </View>
       </View>
     </View>
   );

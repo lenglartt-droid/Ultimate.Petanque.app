@@ -16,8 +16,8 @@ import { useAppData, useAppActions } from '@/contexts/AppContext';
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
-import AdBanner from '@/components/ui/AdBanner';
 import SponsorBanner from '@/components/ui/SponsorBanner';
+import AdBanner from '@/components/ui/AdBanner';
 
 import { filterByTime } from '@/hooks/useFilteredStats';
 import type { TimeFilter } from '@/hooks/useFilteredStats';

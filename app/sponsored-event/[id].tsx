@@ -972,7 +972,7 @@ export default function SponsoredEventDetailScreen() {
                   <MaterialIcons name="camera-alt" size={22} color="#A855F7" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Fiche reseaux sociaux' : 'Social Media Card'}</Text>
+                  <Text style={s.shareOptionTitle}>{language === 'fr' ? 'Partage reseaux sociaux' : 'Social Media Share'}</Text>
                   <Text style={s.shareOptionDesc}>{language === 'fr' ? 'Image avec QR code pour Instagram, TikTok, Facebook' : 'Image with QR code for Instagram, TikTok, Facebook'}</Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
