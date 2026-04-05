@@ -12,7 +12,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
 import { Image } from 'expo-image';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -67,7 +67,8 @@ const CATEGORY_TAB_KEYS: { id: StatsCategory; key: string; icon: string; color: 
 
 export default function StatsScreen() {
   const insets = useSafeAreaInsets();
-  const { matches, challenges, tournaments, players, terrains, boulesSets, getMatchesByTournament, selfPlayer } = useApp();
+  const { matches, challenges, tournaments, terrains, boulesSets, selfPlayer, players } = useAppData();
+  const { getMatchesByTournament } = useAppActions();
   const { t, language } = useLanguage();
   const { timeFilter: timeFilterParam } = useLocalSearchParams<{ timeFilter?: string }>();
 

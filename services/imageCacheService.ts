@@ -3,6 +3,7 @@ import { Image } from 'expo-image';
 /**
  * Image Cache Service
  * Handles prefetching of frequently used images and periodic cache cleanup.
+ * Uses match-frequency-based prioritization for player avatars.
  */
 
 // Track prefetch state to avoid duplicate calls
@@ -14,12 +15,36 @@ let cleanupIntervalId: ReturnType<typeof setInterval> | null = null;
 const MEMORY_CLEANUP_INTERVAL_MS = 30 * 60 * 1000; // 30 minutes
 
 /**
- * Collect avatar URLs from players array
+ * Collect avatar URLs from players, sorted by match frequency (most-played first).
+ * Players who appear in more matches get their avatars prefetched first.
  */
-function collectAvatarUrls(players: { avatar?: string | null }[]): string[] {
-  return players
+function collectAvatarUrlsByFrequency(
+  players: { id?: string; avatar?: string | null }[],
+  matches?: { teamA?: { players?: string[] }; teamB?: { players?: string[] } }[]
+): string[] {
+  if (!players.length) return [];
+
+  // Build frequency map: playerId → match count
+  const freqMap = new Map<string, number>();
+  if (matches && matches.length > 0) {
+    for (const m of matches) {
+      const allIds = [...(m.teamA?.players || []), ...(m.teamB?.players || [])];
+      for (const pid of allIds) {
+        freqMap.set(pid, (freqMap.get(pid) || 0) + 1);
+      }
+    }
+  }
+
+  // Sort players by match frequency (descending), then collect avatar URLs
+  const sorted = [...players]
     .filter(p => p.avatar && typeof p.avatar === 'string' && p.avatar.startsWith('http'))
-    .map(p => p.avatar as string);
+    .sort((a, b) => {
+      const fa = freqMap.get(a.id || '') || 0;
+      const fb = freqMap.get(b.id || '') || 0;
+      return fb - fa;
+    });
+
+  return sorted.map(p => p.avatar as string);
 }
 
 /**
@@ -47,9 +72,10 @@ function collectBoulesPhotoUrls(boulesSets: { photo?: string | null }[]): string
  * Respects cooldown to prevent redundant calls.
  */
 export async function prefetchImages(data: {
-  players?: { avatar?: string | null }[];
+  players?: { id?: string; avatar?: string | null }[];
   terrains?: { photos?: string[] | null }[];
   boulesSets?: { photo?: string | null }[];
+  matches?: { teamA?: { players?: string[] }; teamB?: { players?: string[] } }[];
 }): Promise<void> {
   const now = Date.now();
   if (now - lastPrefetchTimestamp < PREFETCH_COOLDOWN_MS) return;
@@ -60,7 +86,7 @@ export async function prefetchImages(data: {
   const secondaryUrls: string[] = [];
 
   if (data.players) {
-    const avatarUrls = collectAvatarUrls(data.players);
+    const avatarUrls = collectAvatarUrlsByFrequency(data.players, data.matches);
     priorityUrls.push(...avatarUrls.slice(0, 10));
     secondaryUrls.push(...avatarUrls.slice(10));
   }

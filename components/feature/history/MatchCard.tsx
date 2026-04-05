@@ -97,6 +97,16 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
       </View>
     </Pressable>
   );
+}, (prev, next) => {
+  return prev.match.id === next.match.id &&
+    prev.match.teamA.score === next.match.teamA.score &&
+    prev.match.teamB.score === next.match.teamB.score &&
+    prev.match.winner === next.match.winner &&
+    prev.compact === next.compact &&
+    prev.isShared === next.isShared &&
+    prev.sharedPermission === next.sharedPermission &&
+    prev.eloDelta === next.eloDelta &&
+    prev.language === next.language;
 });
 
 const styles = StyleSheet.create({
@@ -136,3 +146,6 @@ const styles = StyleSheet.create({
   eloDeltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: theme.borderRadius.full },
   eloDeltaText: { fontSize: 10, fontWeight: '800' },
 });
+
+// Custom comparator for React.memo — avoid re-renders from stable-content object references
+MatchCard.displayName = 'MatchCard';

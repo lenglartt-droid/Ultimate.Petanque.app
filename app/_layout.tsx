@@ -13,6 +13,7 @@ import { useApp } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
 import { isATTPromptNeeded } from '@/services/trackingService';
+import DevPerformanceOverlay from '@/components/ui/DevPerformanceOverlay';
 import { checkUserBanStatus, BanInfo } from '@/services/banCheckService';
 import BanScreen from '@/components/ui/BanScreen';
 import { initSentry } from '@/services/sentryService';
@@ -873,6 +874,7 @@ function LayoutInner() {
                 }} 
               />
             </Stack>
+            {__DEV__ ? <DevPerformanceOverlay /> : null}
             </View>
   );
 }
