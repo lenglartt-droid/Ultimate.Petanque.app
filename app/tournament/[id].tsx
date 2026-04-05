@@ -22,7 +22,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions, useAppUI } from '@/contexts/AppContext';
 import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
 import ShareModal from '@/components/ui/ShareModal';
@@ -168,7 +168,8 @@ const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (
 export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, refreshData, loading: appLoading } = useApp();
+  const { tournamentNotifications, loading: appLoading } = useAppData();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {

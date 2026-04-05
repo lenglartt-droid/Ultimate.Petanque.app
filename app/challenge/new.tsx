@@ -26,7 +26,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import ShareModal from '@/components/ui/ShareModal';
@@ -165,7 +165,8 @@ function CountdownTimer({ seconds, isRunning, onStart, onTimeUp, startLabel }: C
 
 export default function NewChallengeScreen() {
   const insets = useSafeAreaInsets();
-  const { addChallenge, userStats, selfPlayer, players, matches, challenges: pastChallenges, boulesSets, terrains } = useApp();
+  const { userStats, selfPlayer, players, matches, challenges: pastChallenges, boulesSets, terrains } = useAppData();
+  const { addChallenge } = useAppActions();
   const { t, language } = useLanguage();
 
   // Responsive dimensions

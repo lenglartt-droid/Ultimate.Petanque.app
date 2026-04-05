@@ -109,6 +109,13 @@ export const SeriesCard = React.memo(({ series, onMatchPress, t, language }: Ser
       ) : null}
     </View>
   );
+}, (prev, next) => {
+  return prev.series.seriesId === next.series.seriesId &&
+    prev.series.teamAWins === next.series.teamAWins &&
+    prev.series.teamBWins === next.series.teamBWins &&
+    prev.series.isComplete === next.series.isComplete &&
+    prev.series.matches.length === next.series.matches.length &&
+    prev.language === next.language;
 });
 
 const styles = StyleSheet.create({

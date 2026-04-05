@@ -21,7 +21,7 @@ import Animated, { FadeInDown, FadeIn, FadeInUp } from 'react-native-reanimated'
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import ShareRequestModal from '@/components/ui/ShareRequestModal';
@@ -152,7 +152,8 @@ export default function NewMatchScreen() {
     seriesWinsB?: string;
     seriesId?: string;
   }>();
-  const { addMatch, players, tournaments, matches, selfPlayer, terrains, boulesSets } = useApp();
+  const { players, tournaments, matches, selfPlayer, terrains, boulesSets } = useAppData();
+  const { addMatch } = useAppActions();
   const { t, language } = useLanguage();
   
   const isRevanche = revanche === 'true';

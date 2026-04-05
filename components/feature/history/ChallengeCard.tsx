@@ -110,6 +110,16 @@ export const ChallengeCard = React.memo(({ challenge, onPress, t, language, isSh
       </View>
     </Pressable>
   );
+}, (prev, next) => {
+  return prev.challenge.id === next.challenge.id &&
+    prev.challenge.successRate === next.challenge.successRate &&
+    prev.challenge.totalPoints === next.challenge.totalPoints &&
+    prev.challenge.successCount === next.challenge.successCount &&
+    prev.challenge.carreauCount === next.challenge.carreauCount &&
+    prev.challenge.winner === next.challenge.winner &&
+    prev.isShared === next.isShared &&
+    prev.sharedPermission === next.sharedPermission &&
+    prev.language === next.language;
 });
 
 const styles = StyleSheet.create({

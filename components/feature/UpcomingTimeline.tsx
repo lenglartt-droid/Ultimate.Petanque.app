@@ -278,7 +278,23 @@ function UpcomingTimeline({
   );
 }
 
-export default memo(UpcomingTimeline);
+export default memo(UpcomingTimeline, (prev, next) => {
+  // Skip re-render if timeline-driving data hasn't changed
+  if (prev.tournaments.length !== next.tournaments.length) return false;
+  if (prev.meetups.length !== next.meetups.length) return false;
+  if (prev.upcomingEvents.length !== next.upcomingEvents.length) return false;
+  if (prev.meetupsLoading !== next.meetupsLoading) return false;
+  if (prev.eventsLoading !== next.eventsLoading) return false;
+  if (prev.pendingInviteCount !== next.pendingInviteCount) return false;
+  if (prev.language !== next.language) return false;
+  // Only re-render for time changes every 60s (now is updated every 60s already)
+  if (Math.abs(prev.now - next.now) > 120000) return false;
+  // Deep check first tournament/meetup/event IDs to detect data changes
+  if (prev.tournaments.length > 0 && next.tournaments.length > 0 && prev.tournaments[0]?.id !== next.tournaments[0]?.id) return false;
+  if (prev.meetups.length > 0 && next.meetups.length > 0 && prev.meetups[0]?.id !== next.meetups[0]?.id) return false;
+  if (prev.upcomingEvents.length > 0 && next.upcomingEvents.length > 0 && prev.upcomingEvents[0]?.id !== next.upcomingEvents[0]?.id) return false;
+  return true;
+});
 
 const s = StyleSheet.create({
   headerRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
