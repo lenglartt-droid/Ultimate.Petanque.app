@@ -39,6 +39,7 @@ import { Modal, Switch, TextInput } from 'react-native';
 import * as Linking from 'expo-linking';
 import EloSection from '@/components/feature/player/EloSection';
 import GamePreferencesSection from '@/components/feature/player/GamePreferencesSection';
+import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
 import { computeHeadToHeadRoleAnalysis, computeSeasonalRoleEvolution, generateRoleEvolutionPdfHtml, getRoleColor as getRoleColorService, getRoleIcon as getRoleIconService } from '@/services/roleAnalysisService';
 import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
@@ -638,6 +639,16 @@ export default function PlayerDetailScreen() {
                   </Pressable>
                 )
               ) : null}
+
+              {/* ===== GLOBAL RANK & LEAGUE TIER ===== */}
+              <GlobalRankBadge
+                playerId={player.id}
+                playerUserId={(player as any)?.userId}
+                eloRating={player.eloRating || ELO_INITIAL}
+                isPublic={player.isPublic ?? false}
+                language={language}
+                compact
+              />
 
               {/* ===== GEO RANKING BADGES ===== */}
               {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
