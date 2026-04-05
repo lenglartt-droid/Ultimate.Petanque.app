@@ -46,6 +46,8 @@ import {
   ShareCardPalmares,
   ShareCardEventLeaderboard,
   ShareCardLeague,
+  ShareCardWeeklyDigest,
+  ShareCardMilestone,
 } from '@/components/feature/share-cards';
 import { getSponsoredEvent, getEventParticipants, fetchEventLeaderboard, type SponsoredEvent, type EventLeaderboardEntry } from '@/services/sponsoredEventService';
 import { fetchAmbassadors, type Ambassador } from '@/services/ambassadorService';
@@ -60,10 +62,11 @@ interface PlayerInfo {
   country?: string;
 }
 
-import { getLeagueTier, getLeagueProgress, fetchPlayerGlobalRank } from '@/services/globalRankingService';
+import { getLeagueTier, getLeagueProgress, fetchPlayerGlobalRank, LEAGUE_TIERS } from '@/services/globalRankingService';
 import { fetchEloHistory, type EloHistoryEntry } from '@/services/eloService';
+import { getLastWeekSummary, getCurrentWeekStart, getWeekEnd } from '@/services/weeklyLeaderboardService';
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard' | 'league';
+type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard' | 'league' | 'weekly-digest' | 'milestone';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -82,6 +85,8 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   palmares: { fr: 'Palmares', en: 'Career', icon: 'emoji-events', iconColor: '#FFD700' },
   'event-leaderboard': { fr: 'Classement defis', en: 'Event Leaderboard', icon: 'leaderboard', iconColor: '#7C3AED' },
   league: { fr: 'Classement Ligue', en: 'League Ranking', icon: 'military-tech', iconColor: '#FFD700' },
+  'weekly-digest': { fr: 'Bilan Hebdo', en: 'Weekly Digest', icon: 'date-range', iconColor: '#EC4899' },
+  milestone: { fr: 'Jalon ELO', en: 'ELO Milestone', icon: 'emoji-events', iconColor: '#F59E0B' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -279,6 +284,145 @@ export default function ShareCardScreen() {
       setLeagueEloHistory(histRes.history);
     }).catch(() => {});
   }, [cardType, selfPlayer?.id, selfPlayer?.isPublic]);
+
+  // Weekly digest data
+  // Milestone card data
+  const [milestoneData, setMilestoneData] = useState<{
+    label: string; icon: string; color: string;
+    elo: number; eloDelta?: number; date: string;
+    previousTier?: any; matchContext?: string;
+  } | null>(null);
+  React.useEffect(() => {
+    if (cardType !== 'milestone' || !selfPlayer?.id) return;
+    // Build milestone from recent ELO history (most recent tier change or peak)
+    const buildMilestone = async () => {
+      const { history } = await fetchEloHistory(selfPlayer.id, 50);
+      if (history.length === 0) return;
+      const reversed = [...history].reverse(); // oldest first
+      // Find the most recent tier change
+      let lastTierChange: { entry: any; prevTier: any; curTier: any } | null = null;
+      let prevElo = reversed[0].eloBefore;
+      for (const entry of reversed) {
+        const prev = getLeagueTier(prevElo);
+        const cur = getLeagueTier(entry.eloAfter);
+        if (prev.id !== cur.id && cur.minElo > prev.minElo) {
+          lastTierChange = { entry, prevTier: prev, curTier: cur };
+        }
+        prevElo = entry.eloAfter;
+      }
+      if (lastTierChange) {
+        const tier = lastTierChange.curTier;
+        setMilestoneData({
+          label: `${fr ? tier.name.fr : tier.name.en} ${fr ? 'atteint' : 'reached'} !`,
+          icon: tier.icon, color: tier.color,
+          elo: lastTierChange.entry.eloAfter,
+          eloDelta: lastTierChange.entry.eloDelta,
+          date: lastTierChange.entry.recordedAt,
+          previousTier: lastTierChange.prevTier,
+          matchContext: lastTierChange.entry.opponentName ? `vs ${lastTierChange.entry.opponentName}` : undefined,
+        });
+      } else {
+        // Fallback: peak ELO
+        const peak = Math.max(...reversed.map(e => e.eloAfter));
+        const peakEntry = reversed.find(e => e.eloAfter === peak) || reversed[reversed.length - 1];
+        setMilestoneData({
+          label: `Peak ELO: ${peak}`,
+          icon: 'whatshot', color: '#F59E0B',
+          elo: peak, eloDelta: peakEntry.eloDelta,
+          date: peakEntry.recordedAt,
+        });
+      }
+    };
+    buildMilestone();
+  }, [cardType, selfPlayer?.id, fr]);
+
+  const [weeklyDigestData, setWeeklyDigestData] = useState<{
+    weeklyRank: number | null;
+    weeklyRankChange: { direction: 'up' | 'down' | 'same' | 'new'; diff: number } | null;
+    weeklyMatches: number;
+    weeklyWins: number;
+    weeklyWinRate: number;
+    weeklyEloDelta: number;
+    weeklyTirRate: number;
+    weeklyCarreaux: number;
+    bestPerformance: string;
+    weekLabel: string;
+  } | null>(null);
+  React.useEffect(() => {
+    if (cardType !== 'weekly-digest' || !selfPlayer?.id) return;
+    const computeWeeklyDigest = async () => {
+      // Compute from current week's matches
+      const weekStart = getCurrentWeekStart();
+      const weekEnd = getWeekEnd(weekStart);
+      const weekMatches = matches.filter(m => {
+        const d = new Date(m.date);
+        return d >= weekStart && d <= weekEnd && (m.teamA.players.includes(selfPlayer.id) || m.teamB.players.includes(selfPlayer.id));
+      });
+      const wWins = weekMatches.filter(m => {
+        const inA = m.teamA.players.includes(selfPlayer.id);
+        return (inA && m.winner === 'A') || (!inA && m.winner === 'B');
+      }).length;
+      const wWinRate = weekMatches.length > 0 ? Math.round((wWins / weekMatches.length) * 100) : 0;
+      // Compute ELO delta for the week
+      let wEloDelta = 0;
+      let wTirs = 0, wTirsSuccess = 0, wCarreaux = 0;
+      weekMatches.forEach(m => {
+        if (m.playerActions) {
+          const pa = m.playerActions.find(a => a.playerId === selfPlayer.id);
+          if (pa) {
+            wTirs += pa.actions.tirs || 0;
+            wTirsSuccess += pa.actions.tirsSuccess || 0;
+            wCarreaux += pa.actions.carreaux || 0;
+          }
+        }
+      });
+      // Find ELO delta from eloHistory entries this week
+      try {
+        const { history: recentHist } = await fetchEloHistory(selfPlayer.id, 50);
+        const weekHist = recentHist.filter(h => {
+          const d = new Date(h.recordedAt);
+          return d >= weekStart && d <= weekEnd;
+        });
+        wEloDelta = weekHist.reduce((sum, h) => sum + h.eloDelta, 0);
+      } catch {}
+      // Best performance (highest score margin win)
+      let bestPerf = '';
+      let bestMargin = 0;
+      weekMatches.forEach(m => {
+        const inA = m.teamA.players.includes(selfPlayer.id);
+        const selfWon = (inA && m.winner === 'A') || (!inA && m.winner === 'B');
+        if (selfWon) {
+          const selfScore = inA ? m.teamA.score : m.teamB.score;
+          const oppScore = inA ? m.teamB.score : m.teamA.score;
+          const margin = selfScore - oppScore;
+          if (margin > bestMargin) {
+            bestMargin = margin;
+            const oppNames = (inA ? m.teamB.playerNames : m.teamA.playerNames).filter(Boolean).join(', ');
+            bestPerf = `${selfScore}-${oppScore} vs ${oppNames || (fr ? 'Adversaire' : 'Opponent')}`;
+          }
+        }
+      });
+      // Week label
+      const wLabel = fr
+        ? `Semaine du ${weekStart.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' })}`
+        : `Week of ${weekStart.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })}`;
+      // Try to get last week summary for rank
+      const summary = await getLastWeekSummary(user?.id || '').catch(() => null);
+      setWeeklyDigestData({
+        weeklyRank: summary?.rank || null,
+        weeklyRankChange: summary ? { direction: summary.rankChange, diff: summary.rankDiff } : null,
+        weeklyMatches: weekMatches.length,
+        weeklyWins: wWins,
+        weeklyWinRate: wWinRate,
+        weeklyEloDelta: wEloDelta,
+        weeklyTirRate: wTirs > 0 ? Math.round((wTirsSuccess / wTirs) * 100) : 0,
+        weeklyCarreaux: wCarreaux,
+        bestPerformance: bestPerf,
+        weekLabel: wLabel,
+      });
+    };
+    computeWeeklyDigest();
+  }, [cardType, selfPlayer?.id, matches, user?.id, fr]);
 
   const [activeFormat, setActiveFormat] = useState<ShareCardFormat>('square');
   const [activeTheme, setActiveTheme] = useState<CardColorTheme>('dark');
@@ -500,11 +644,17 @@ export default function ShareCardScreen() {
         const tierName = fr ? getLeagueTier(selfPlayer?.eloRating || 1000).name.fr : getLeagueTier(selfPlayer?.eloRating || 1000).name.en;
         return `${tierName} - ${selfPlayer?.eloRating || 1000} ELO`;
       }
+      case 'weekly-digest':
+        return weeklyDigestData ? weeklyDigestData.weekLabel : (fr ? 'Bilan Hebdo' : 'Weekly Digest');
+      case 'milestone': {
+        if (milestoneData) return milestoneData.label;
+        return fr ? 'Jalon ELO' : 'ELO Milestone';
+      }
       case 'stats':
       default:
         return playerName || 'Stats';
     }
-  }, [cardType, match, badgeId, challenge, tournament, playerName, language, h2hData, selfPlayer?.eloRating]);
+  }, [cardType, match, badgeId, challenge, tournament, playerName, language, h2hData, selfPlayer?.eloRating, weeklyDigestData]);
 
   const recordHistory = useCallback(async (action: 'shared' | 'downloaded') => {
     const info = TYPE_INFO[cardType];
@@ -805,6 +955,59 @@ export default function ShareCardScreen() {
             winRate={userStats.winRate || 0}
             clubName={clubName}
             geoRank={geoRankData2}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
+      case 'weekly-digest': {
+        if (!weeklyDigestData) return <EmptyCard message={fr ? 'Chargement...' : 'Loading...'} />;
+        if (weeklyDigestData.weeklyMatches === 0) return <EmptyCard message={fr ? 'Aucun match cette semaine' : 'No matches this week'} />;
+        const wdLeagueTier = getLeagueTier(selfPlayer?.eloRating || 1000);
+        const wdGeoRank = geoRank ? {
+          city: geoRank.city?.rank ? { name: geoRank.city.name, rank: geoRank.city.rank } : undefined,
+          country: geoRank.country?.rank ? { name: geoRank.country.name, rank: geoRank.country.rank } : undefined,
+        } : null;
+        return (
+          <ShareCardWeeklyDigest
+            playerName={playerName}
+            weekLabel={weeklyDigestData.weekLabel}
+            weeklyRank={weeklyDigestData.weeklyRank}
+            weeklyRankChange={weeklyDigestData.weeklyRankChange || undefined}
+            matchesPlayed={weeklyDigestData.weeklyMatches}
+            wins={weeklyDigestData.weeklyWins}
+            winRate={weeklyDigestData.weeklyWinRate}
+            eloDelta={weeklyDigestData.weeklyEloDelta}
+            currentElo={selfPlayer?.eloRating || 1000}
+            leagueTier={wdLeagueTier}
+            tirRate={weeklyDigestData.weeklyTirRate}
+            carreauCount={weeklyDigestData.weeklyCarreaux}
+            bestPerformance={weeklyDigestData.bestPerformance || undefined}
+            clubName={clubName}
+            geoRank={wdGeoRank}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
+      case 'milestone': {
+        if (!milestoneData) return <EmptyCard message={fr ? 'Aucun jalon ELO' : 'No ELO milestone'} />;
+        const msTier = getLeagueTier(milestoneData.elo);
+        return (
+          <ShareCardMilestone
+            playerName={playerName}
+            milestoneLabel={milestoneData.label}
+            milestoneIcon={milestoneData.icon}
+            milestoneColor={milestoneData.color}
+            elo={milestoneData.elo}
+            eloDelta={milestoneData.eloDelta}
+            date={milestoneData.date}
+            leagueTier={msTier}
+            previousTier={milestoneData.previousTier || null}
+            matchContext={milestoneData.matchContext}
+            clubName={clubName}
             language={language}
             colorTheme={activeTheme}
             format={activeFormat}

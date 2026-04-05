@@ -13,10 +13,11 @@ const STEP_NAMES: Record<number, string> = {
   2: 'promise',
   3: 'sponsor',
   4: 'features',
-  5: 'map',
-  6: 'login_cta',
-  7: 'profile',
-  8: 'referral',
+  5: 'leagues',
+  6: 'map',
+  7: 'login_cta',
+  8: 'profile',
+  9: 'referral',
 };
 
 /**
@@ -100,14 +101,14 @@ export async function getOnboardingStepAnalytics(): Promise<OnboardingAnalytics>
 
     const stepLabels: Record<number, string> = {
       0: 'Splash', 1: 'Language', 2: 'Promise', 3: 'Sponsor',
-      4: 'Features', 5: 'Map Discovery', 6: 'Login CTA', 7: 'Profile', 8: 'Referral',
+      4: 'Features', 5: 'Leagues', 6: 'Map Discovery', 7: 'Login CTA', 8: 'Profile', 9: 'Referral',
     };
 
     const steps: StepAnalytics[] = [];
     let worstDropoff = 0;
     let worstDropoffName: string | null = null;
 
-    for (let i = 0; i <= 8; i++) {
+    for (let i = 0; i <= 9; i++) {
       let entered = 0;
       let completed = 0;
       let skipped = 0;
@@ -150,7 +151,7 @@ export async function getOnboardingStepAnalytics(): Promise<OnboardingAnalytics>
 
     const totalSessions = sessionMap.size;
     const completedSessions = [...sessionMap.values()].filter(s => {
-      const lastStep = s.get(8);
+      const lastStep = s.get(9) || s.get(8);
       return lastStep && (lastStep.enter || lastStep.complete);
     }).length;
 
@@ -159,7 +160,7 @@ export async function getOnboardingStepAnalytics(): Promise<OnboardingAnalytics>
     let totalDurationCount = 0;
     sessionMap.forEach((session) => {
       const firstStep = session.get(1);
-      const lastStep = session.get(8) || session.get(7);
+      const lastStep = session.get(9) || session.get(8) || session.get(7);
       if (firstStep?.enter && lastStep) {
         const end = lastStep.complete || lastStep.enter;
         if (end) {
