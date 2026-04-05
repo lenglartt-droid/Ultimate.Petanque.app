@@ -641,83 +641,55 @@ export default function PlayerDetailScreen() {
                 )
               ) : null}
 
-              {/* ===== GLOBAL RANK & LEAGUE TIER ===== */}
-              <GlobalRankBadge
-                playerId={player.id}
-                playerUserId={(player as any)?.userId}
-                eloRating={player.eloRating || ELO_INITIAL}
-                isPublic={player.isPublic ?? false}
-                language={language}
-                compact
-              />
+              {/* ===== UNIFIED RANKING HUB ===== */}
+              <View style={s.rankingHub}>
+                {/* League tier compact */}
+                <GlobalRankBadge
+                  playerId={player.id}
+                  playerUserId={(player as any)?.userId}
+                  eloRating={player.eloRating || ELO_INITIAL}
+                  isPublic={player.isPublic ?? false}
+                  language={language}
+                  compact
+                />
 
-              {/* ===== GEO RANKING BADGES ===== */}
-              {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
-                <Pressable style={s.geoRankCard} onPress={() => router.push('/leaderboard-geo' as any)}>
-                  <View style={s.geoRankHeader}>
-                    <View style={[s.sectionIconBox, { backgroundColor: '#3B82F615', width: 28, height: 28 }]}>
-                      <MaterialIcons name="public" size={14} color="#3B82F6" />
+                {/* Geo ranks inline row */}
+                {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
+                  <Pressable style={s.geoRankInlineCard} onPress={() => router.push('/leaderboard-geo' as any)}>
+                    <View style={s.geoRankInlineHeader}>
+                      <MaterialIcons name="public" size={12} color="#3B82F6" />
+                      <Text style={s.geoRankInlineTitle}>{language === 'fr' ? 'Geographique' : 'Geographic'}</Text>
+                      <MaterialIcons name="chevron-right" size={14} color={theme.textMuted} style={{ marginLeft: 'auto' }} />
                     </View>
-                    <Text style={s.geoRankTitle}>{language === 'fr' ? 'Classement Geographique' : 'Geographic Ranking'}</Text>
-                    <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-                  </View>
-                  <View style={s.geoRankBadgesRow}>
-                    {geoRank.city ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#3B82F625' }]}>
-                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#3B82F612' }]}>
-                          <MaterialIcons name="location-city" size={16} color="#3B82F6" />
+                    <View style={s.geoRankInlineRow}>
+                      {geoRank.city ? (
+                        <View style={s.geoRankInlineChip}>
+                          <MaterialIcons name="location-city" size={12} color="#3B82F6" />
+                          <Text style={s.geoRankInlineLabel} numberOfLines={1}>{geoRank.city.name}</Text>
+                          <Text style={[s.geoRankInlineRank, { color: geoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{geoRank.city.rank}</Text>
+                          <Text style={s.geoRankInlineTotal}>/{geoRank.city.total}</Text>
                         </View>
-                        <View style={s.geoRankBadgeInfo}>
-                          <Text style={s.geoRankBadgeLabel}>{geoRank.city.name}</Text>
-                          <View style={s.geoRankBadgeRankRow}>
-                            <Text style={[s.geoRankBadgeRank, { color: geoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{geoRank.city.rank}</Text>
-                            <Text style={s.geoRankBadgeTotal}>/{geoRank.city.total}</Text>
-                          </View>
+                      ) : null}
+                      {geoRank.country ? (
+                        <View style={s.geoRankInlineChip}>
+                          <Text style={{ fontSize: 11 }}>{getCountryFlag(geoRank.country.name)}</Text>
+                          <Text style={s.geoRankInlineLabel} numberOfLines={1}>{geoRank.country.name}</Text>
+                          <Text style={[s.geoRankInlineRank, { color: geoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{geoRank.country.rank}</Text>
+                          <Text style={s.geoRankInlineTotal}>/{geoRank.country.total}</Text>
                         </View>
-                        {geoRank.city.rank === 1 ? (
-                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
-                        ) : geoRank.city.rank <= 3 ? (
-                          <View style={[s.geoRankCrown, { backgroundColor: '#94A3B812' }]}><MaterialIcons name="emoji-events" size={12} color="#94A3B8" /></View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                    {geoRank.country ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#10B98125' }]}>
-                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#10B98112' }]}>
-                          <Text style={{ fontSize: 14 }}>{getCountryFlag(geoRank.country.name)}</Text>
+                      ) : null}
+                      {geoRank.continent ? (
+                        <View style={s.geoRankInlineChip}>
+                          <Text style={{ fontSize: 11 }}>{getContinentFlag(geoRank.continent.name)}</Text>
+                          <Text style={s.geoRankInlineLabel} numberOfLines={1}>{getContinentLabel(geoRank.continent.name, language === 'fr')}</Text>
+                          <Text style={[s.geoRankInlineRank, { color: '#F59E0B' }]}>#{geoRank.continent.rank}</Text>
+                          <Text style={s.geoRankInlineTotal}>/{geoRank.continent.total}</Text>
                         </View>
-                        <View style={s.geoRankBadgeInfo}>
-                          <Text style={s.geoRankBadgeLabel} numberOfLines={1}>{geoRank.country.name}</Text>
-                          <View style={s.geoRankBadgeRankRow}>
-                            <Text style={[s.geoRankBadgeRank, { color: geoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{geoRank.country.rank}</Text>
-                            <Text style={s.geoRankBadgeTotal}>/{geoRank.country.total}</Text>
-                          </View>
-                        </View>
-                        {geoRank.country.rank === 1 ? (
-                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                    {geoRank.continent ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#F59E0B25' }]}>
-                        <View style={[s.geoRankBadgeIcon, { backgroundColor: '#F59E0B12' }]}>
-                          <Text style={{ fontSize: 14 }}>{getContinentFlag(geoRank.continent.name)}</Text>
-                        </View>
-                        <View style={s.geoRankBadgeInfo}>
-                          <Text style={s.geoRankBadgeLabel} numberOfLines={1}>{getContinentLabel(geoRank.continent.name, language === 'fr')}</Text>
-                          <View style={s.geoRankBadgeRankRow}>
-                            <Text style={[s.geoRankBadgeRank, { color: geoRank.continent.rank <= 3 ? '#F59E0B' : '#F59E0B' }]}>#{geoRank.continent.rank}</Text>
-                            <Text style={s.geoRankBadgeTotal}>/{geoRank.continent.total}</Text>
-                          </View>
-                        </View>
-                        {geoRank.continent.rank === 1 ? (
-                          <View style={s.geoRankCrown}><MaterialIcons name="emoji-events" size={12} color="#F59E0B" /></View>
-                        ) : null}
-                      </View>
-                    ) : null}
-                  </View>
-                </Pressable>
-              ) : null}
+                      ) : null}
+                    </View>
+                  </Pressable>
+                ) : null}
+              </View>
 
               {player.isPublic && player.stats.matchesPlayed < LEADERBOARD_MIN_MATCHES ? (
                 <Pressable style={s.leaderboardProgressCard} onPress={() => router.push('/leaderboard' as any)}>
@@ -1313,17 +1285,15 @@ const s = StyleSheet.create({
   mipArrow: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const },
   mipCreateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
 
-  // Geo Rank
-  geoRankCard: { width: '100%' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 16, padding: 14, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
-  geoRankHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 12 },
-  geoRankTitle: { fontSize: 12, fontWeight: '700' as const, color: theme.textSecondary, flex: 1, letterSpacing: 0.3 },
-  geoRankBadgesRow: { flexDirection: 'row' as const, gap: 8 },
-  geoRankBadge: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: theme.surface, borderRadius: 14, padding: 10, borderWidth: 1 },
-  geoRankBadgeIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
-  geoRankBadgeInfo: { flex: 1 },
-  geoRankBadgeLabel: { fontSize: 10, fontWeight: '600' as const, color: theme.textSecondary, marginBottom: 2 },
-  geoRankBadgeRankRow: { flexDirection: 'row' as const, alignItems: 'baseline' as const },
-  geoRankBadgeRank: { fontSize: 18, fontWeight: '900' as const },
-  geoRankBadgeTotal: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
-  geoRankCrown: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#F59E0B12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  // Unified ranking hub
+  rankingHub: { width: '100%' as const, marginBottom: 4 },
+  // Geo Rank inline
+  geoRankInlineCard: { width: '100%' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
+  geoRankInlineHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 },
+  geoRankInlineTitle: { fontSize: 10, fontWeight: '700' as const, color: theme.textSecondary, letterSpacing: 0.3 },
+  geoRankInlineRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  geoRankInlineChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
+  geoRankInlineLabel: { fontSize: 10, fontWeight: '600' as const, color: theme.textSecondary, maxWidth: 60 },
+  geoRankInlineRank: { fontSize: 14, fontWeight: '900' as const },
+  geoRankInlineTotal: { fontSize: 9, fontWeight: '600' as const, color: theme.textMuted },
 });

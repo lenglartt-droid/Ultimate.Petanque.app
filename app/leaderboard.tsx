@@ -42,6 +42,8 @@ import { fetchPlayerGlobalRank, fetchLeagueTierStats, getLeagueTier, getLeaguePr
 import { getEloRank as getEloRankInfo } from '@/services/eloService';
 
 const GEO_STORAGE_KEY = 'leaderboard_geo_scope';
+const RECENT_SEARCHES_KEY = 'leaderboard_recent_searches';
+const MAX_RECENT_SEARCHES = 8;
 
 type LeaderboardTab = 'players' | 'clubs' | 'boules' | 'events';
 
@@ -438,6 +440,30 @@ export default function LeaderboardScreen() {
   // ============ SEARCH AUTOCOMPLETE STATE ============
   const [searchSuggestions, setSearchSuggestions] = useState<Array<{ id: string; name: string; type: 'player' | 'club' | 'boules'; avatar?: string; subtitle?: string }>>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<Array<{ id: string; name: string; type: 'player' | 'club' | 'boules'; avatar?: string; subtitle?: string }>>([]);
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  // Load recent searches on mount
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY).then(raw => {
+      if (raw) { try { setRecentSearches(JSON.parse(raw)); } catch {} }
+    }).catch(() => {});
+  }, []);
+
+  const saveRecentSearch = useCallback((item: { id: string; name: string; type: 'player' | 'club' | 'boules'; avatar?: string; subtitle?: string }) => {
+    setRecentSearches(prev => {
+      const filtered = prev.filter(r => r.id !== item.id);
+      const updated = [item, ...filtered].slice(0, MAX_RECENT_SEARCHES);
+      AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(updated)).catch(() => {});
+      return updated;
+    });
+  }, []);
+
+  const clearRecentSearches = useCallback(() => {
+    setRecentSearches([]);
+    AsyncStorage.removeItem(RECENT_SEARCHES_KEY).catch(() => {});
+    Haptics.selectionAsync();
+  }, []);
 
   // Build autocomplete suggestions from current tab data
   useEffect(() => {
@@ -469,9 +495,11 @@ export default function LeaderboardScreen() {
     setShowSuggestions(results.length > 0);
   }, [search, clubSearch, boulesSearch, eventSearch, activeTab, allPlayers, allClubs, boulesEntries, boulesMode]);
 
-  const handleSuggestionPress = useCallback((suggestion: { id: string; type: string }) => {
+  const handleSuggestionPress = useCallback((suggestion: { id: string; name: string; type: 'player' | 'club' | 'boules'; avatar?: string; subtitle?: string }) => {
     Haptics.selectionAsync();
     setShowSuggestions(false);
+    setSearchFocused(false);
+    saveRecentSearch(suggestion);
     if (suggestion.type === 'player') {
       router.push(`/player/${suggestion.id}` as any);
     } else if (suggestion.type === 'club') {
@@ -479,7 +507,7 @@ export default function LeaderboardScreen() {
     } else if (suggestion.type === 'boules') {
       router.push({ pathname: `/boules-ranking/${encodeURIComponent(suggestion.id)}`, params: { brand: '', model: '', mode: boulesMode } } as any);
     }
-  }, [boulesMode]);
+  }, [boulesMode, saveRecentSearch]);
 
   // ============ TRUST TAB STATE ============
   const [trustPlayers, setTrustPlayers] = useState<any[]>([]);
@@ -1053,8 +1081,8 @@ export default function LeaderboardScreen() {
                     (activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch)(text);
                     if (text.trim().length >= 2) setShowSuggestions(true);
                   }}
-                  onFocus={() => { if (searchSuggestions.length > 0) setShowSuggestions(true); }}
-                  onBlur={() => { setTimeout(() => setShowSuggestions(false), 200); }}
+                  onFocus={() => { setSearchFocused(true); if (searchSuggestions.length > 0) setShowSuggestions(true); else if (!(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).trim() && recentSearches.length > 0) setShowSuggestions(true); }}
+                  onBlur={() => { setTimeout(() => { setShowSuggestions(false); setSearchFocused(false); }, 200); }}
                 />
                 {(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).length > 0 ? (
                   <Pressable onPress={() => { (activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch)(''); setShowSuggestions(false); }} hitSlop={8}>
@@ -1075,24 +1103,52 @@ export default function LeaderboardScreen() {
               </Pressable>
             </View>
             {/* Autocomplete dropdown */}
-            {showSuggestions && searchSuggestions.length > 0 ? (
+            {showSuggestions && (searchSuggestions.length > 0 || (searchFocused && !(activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch).trim() && recentSearches.length > 0)) ? (
               <View style={s.autocompleteDropdown}>
-                {searchSuggestions.map((sg, idx) => (
-                  <Pressable key={sg.id + idx} style={s.autocompleteItem} onPress={() => handleSuggestionPress(sg)}>
-                    <View style={s.autocompleteAvatar}>
-                      {sg.avatar ? (
-                        <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
-                      ) : (
-                        <MaterialIcons name={sg.type === 'player' ? 'person' : sg.type === 'club' ? 'home' : 'sports-baseball'} size={16} color={theme.primary} />
-                      )}
+                {searchSuggestions.length > 0 ? (
+                  searchSuggestions.map((sg, idx) => (
+                    <Pressable key={sg.id + idx} style={s.autocompleteItem} onPress={() => handleSuggestionPress(sg)}>
+                      <View style={s.autocompleteAvatar}>
+                        {sg.avatar ? (
+                          <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
+                        ) : (
+                          <MaterialIcons name={sg.type === 'player' ? 'person' : sg.type === 'club' ? 'home' : 'sports-baseball'} size={16} color={theme.primary} />
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.autocompleteName} numberOfLines={1}>{sg.name}</Text>
+                        {sg.subtitle ? <Text style={s.autocompleteSubtitle} numberOfLines={1}>{sg.subtitle}</Text> : null}
+                      </View>
+                      <MaterialIcons name="north-west" size={14} color={theme.textMuted} />
+                    </Pressable>
+                  ))
+                ) : (
+                  <>
+                    <View style={s.recentSearchHeader}>
+                      <MaterialIcons name="history" size={14} color={theme.textMuted} />
+                      <Text style={s.recentSearchTitle}>{language === 'fr' ? 'Recherches recentes' : 'Recent searches'}</Text>
+                      <Pressable onPress={clearRecentSearches} hitSlop={8} style={{ marginLeft: 'auto' }}>
+                        <Text style={s.recentSearchClear}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                      </Pressable>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.autocompleteName} numberOfLines={1}>{sg.name}</Text>
-                      {sg.subtitle ? <Text style={s.autocompleteSubtitle} numberOfLines={1}>{sg.subtitle}</Text> : null}
-                    </View>
-                    <MaterialIcons name="north-west" size={14} color={theme.textMuted} />
-                  </Pressable>
-                ))}
+                    {recentSearches.map((sg, idx) => (
+                      <Pressable key={`recent-${sg.id}-${idx}`} style={s.autocompleteItem} onPress={() => handleSuggestionPress(sg)}>
+                        <View style={s.autocompleteAvatar}>
+                          {sg.avatar ? (
+                            <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
+                          ) : (
+                            <MaterialIcons name={sg.type === 'player' ? 'person' : sg.type === 'club' ? 'home' : 'sports-baseball'} size={16} color={theme.primary} />
+                          )}
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.autocompleteName} numberOfLines={1}>{sg.name}</Text>
+                          {sg.subtitle ? <Text style={s.autocompleteSubtitle} numberOfLines={1}>{sg.subtitle}</Text> : null}
+                        </View>
+                        <MaterialIcons name="history" size={14} color={theme.textMuted} />
+                      </Pressable>
+                    ))}
+                  </>
+                )}
               </View>
             ) : null}
           </View>
@@ -2217,7 +2273,10 @@ const s = StyleSheet.create({
   filterBadgeText: { fontSize: 10, fontWeight: '700', color: '#FFF' },
 
   // Autocomplete
-  autocompleteDropdown: { position: 'absolute' as const, top: 52, left: 0, right: 54, backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }, android: { elevation: 10 }, default: {} }) },
+  autocompleteDropdown: { position: 'absolute' as const, top: 52, left: 0, right: 54, backgroundColor: '#1E293B', borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' as const, maxHeight: 320, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 12 }, android: { elevation: 10 }, default: {} }) },
+  recentSearchHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
+  recentSearchTitle: { fontSize: 11, fontWeight: '600' as const, color: '#64748B' },
+  recentSearchClear: { fontSize: 11, fontWeight: '600' as const, color: '#F59E0B' },
   autocompleteItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.04)' },
   autocompleteAvatar: { width: 32, height: 32, borderRadius: 8, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
   autocompleteName: { fontSize: 14, fontWeight: '600' as const, color: '#F8FAFC' },
