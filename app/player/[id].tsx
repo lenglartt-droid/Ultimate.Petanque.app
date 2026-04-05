@@ -17,6 +17,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 
 import theme, { blurhash } from '@/constants/theme';
+import AdBanner from '@/components/ui/AdBanner';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
@@ -812,7 +813,7 @@ export default function PlayerDetailScreen() {
                 onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'h2h', opponentId: player.id } } as any); }}
               >
                 <MaterialIcons name="camera-alt" size={12} color="#8B5CF6" />
-                <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6' }}>{language === 'fr' ? 'Partage RS F-a-F' : 'Social H2H'}</Text>
+                <Text style={{ fontSize: 10, fontWeight: '700', color: '#8B5CF6' }}>{language === 'fr' ? 'Partage RS' : 'Social Share'}</Text>
               </Pressable>
               <View style={s.sectionHeader}>
                 <View style={[s.sectionIconBox, { backgroundColor: '#EC489915' }]}><MaterialIcons name="compare-arrows" size={18} color="#EC4899" /></View>
@@ -1040,6 +1041,9 @@ export default function PlayerDetailScreen() {
             </View>
           ))}
         </View>
+
+        {/* Ad Banner - between performances and detailed stats */}
+        <AdBanner position="inline" />
 
         {/* ===== DETAILED STATS ===== */}
         <View style={s.sectionCard}>

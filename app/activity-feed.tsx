@@ -26,6 +26,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
 import theme, { blurhash } from '@/constants/theme';
+import AdBanner from '@/components/ui/AdBanner';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import * as Haptics from '@/services/haptics';
@@ -618,6 +619,8 @@ export default function ActivityFeedScreen() {
         <Text style={fs.timestamp}>{timestampLabel}</Text>
         {content}
         <ReactionBar feedItemId={item.id} reactions={itemReactions} onReact={handleReaction} />
+        {/* Inject ad every 8 items */}
+        {(index + 1) % 8 === 0 ? <View style={{ marginTop: 8 }}><AdBanner position="inline" /></View> : null}
       </View>
     );
 

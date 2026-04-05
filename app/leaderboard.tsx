@@ -994,7 +994,12 @@ export default function LeaderboardScreen() {
               <MaterialIcons name="search" size={20} color="#64748B" />
               <TextInput
                 style={s.searchInput}
-                placeholder={t('leaderboard', 'searchPlaceholder')}
+                placeholder={
+                  activeTab === 'clubs' ? (language === 'fr' ? 'Rechercher un club...' : 'Search a club...')
+                  : activeTab === 'boules' ? (language === 'fr' ? 'Rechercher des boules...' : 'Search boules...')
+                  : activeTab === 'events' ? (language === 'fr' ? 'Rechercher un evenement...' : 'Search an event...')
+                  : t('leaderboard', 'searchPlaceholder')
+                }
                 placeholderTextColor="rgba(255,255,255,0.4)"
                 value={activeTab === 'players' ? search : activeTab === 'clubs' ? clubSearch : activeTab === 'events' ? eventSearch : boulesSearch}
                 onChangeText={activeTab === 'players' ? setSearch : activeTab === 'clubs' ? setClubSearch : activeTab === 'events' ? setEventSearch : setBoulesSearch}
@@ -1518,7 +1523,7 @@ export default function LeaderboardScreen() {
                       </View>
                       ); })()}
                       <View style={{ flex: 1 }}>
-                        <Text style={s.boulesName} numberOfLines={1}>{entry.brand}{entry.model ? ` ${entry.model}` : ''}</Text>
+                        <Text style={s.boulesName} numberOfLines={1}>{boulesMode === 'model' && entry.model ? entry.model : `${entry.brand}${entry.model ? ` ${entry.model}` : ''}`}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 2 }}>
                           <View style={s.clubMeta}>
                             <MaterialIcons name="people" size={11} color={theme.textMuted} />

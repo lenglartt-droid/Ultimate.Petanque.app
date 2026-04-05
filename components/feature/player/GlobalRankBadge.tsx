@@ -252,17 +252,14 @@ export default function GlobalRankBadge({ playerId, playerUserId, eloRating, isP
 const st = StyleSheet.create({
   container: {
     width: '100%',
-    backgroundColor: '#FFF',
+    backgroundColor: theme.surface,
     borderRadius: 20,
     overflow: 'hidden',
     marginBottom: 14,
-    ...Platform.select({
-      ios: { shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.12, shadowRadius: 10 },
-      android: { elevation: 4 },
-      default: {},
-    }),
+    borderWidth: 1,
+    borderColor: theme.border,
   },
-  containerCompact: { marginBottom: 0 },
+  containerCompact: { marginBottom: 10, borderRadius: 16 },
   loadingRow: { paddingVertical: 20, alignItems: 'center' },
 
   // Badge gradient section

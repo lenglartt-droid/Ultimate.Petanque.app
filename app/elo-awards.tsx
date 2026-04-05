@@ -6,6 +6,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 
 import theme from '@/constants/theme';
+import AdBanner from '@/components/ui/AdBanner';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeasonEntry, EloHistoryEntry, ELO_INITIAL, ELO_RANKS, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
@@ -906,6 +907,8 @@ export default function EloAwardsScreen() {
         </Animated.View>
 
         {/* Season Awards */}
+        {/* Ad Banner - between chart and season awards */}
+        <AdBanner position="inline" />
         <View>
           <Text style={st.sectionTitleOuter}>{t('leaderboard', 'eloAwardsTitle')}</Text>
           {seasonAwards.length === 0 ? (
