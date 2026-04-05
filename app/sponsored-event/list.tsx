@@ -297,6 +297,9 @@ export default function SponsoredEventListScreen() {
           <Pressable style={[s.joinBtn, viewMode === 'cities' && { backgroundColor: 'rgba(255,255,255,0.35)' }]} onPress={() => setViewMode(viewMode === 'list' ? 'cities' : 'list')}>
             <MaterialIcons name={viewMode === 'cities' ? 'view-list' : 'location-city'} size={20} color="#FFF" />
           </Pressable>
+          <Pressable style={[s.joinBtn, { backgroundColor: 'rgba(255,255,255,0.2)' }]} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'event-leaderboard' } } as any); }}>
+            <MaterialIcons name="leaderboard" size={20} color="#FFF" />
+          </Pressable>
           <Pressable style={s.createBtn} onPress={() => router.push('/sponsored-event/new' as any)}>
             <MaterialIcons name="add" size={22} color="#FFF" />
           </Pressable>

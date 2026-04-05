@@ -439,7 +439,7 @@ export default function PalmaresScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <Pressable
             style={[styles.filterToggleBtn, { backgroundColor: '#8B5CF6' + '12' }]}
-            onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'stats' } } as any); }}
+            onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: 'palmares' } } as any); }}
           >
             <MaterialIcons name="share" size={18} color="#8B5CF6" />
           </Pressable>

@@ -43,8 +43,11 @@ import {
   ShareCardTournament,
   ShareCardH2H,
   ShareCardSponsoredEvent,
+  ShareCardPalmares,
+  ShareCardEventLeaderboard,
 } from '@/components/feature/share-cards';
-import { getSponsoredEvent, getEventParticipants, type SponsoredEvent } from '@/services/sponsoredEventService';
+import { getSponsoredEvent, getEventParticipants, fetchEventLeaderboard, type SponsoredEvent, type EventLeaderboardEntry } from '@/services/sponsoredEventService';
+import { fetchAmbassadors, type Ambassador } from '@/services/ambassadorService';
 import { config } from '@/constants/config';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeName } from '@/services/badgeService';
@@ -56,7 +59,7 @@ interface PlayerInfo {
   country?: string;
 }
 
-type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event';
+type CardType = 'match' | 'badge' | 'stats' | 'challenge' | 'tournament' | 'h2h' | 'sponsored-event' | 'palmares' | 'event-leaderboard';
 
 const PLATFORM_PRESETS: { id: string; format: ShareCardFormat; label: string; icon: string; color: string }[] = [
   { id: 'instagram', format: 'square', label: 'Instagram', icon: 'crop-square', color: '#E4405F' },
@@ -72,6 +75,8 @@ const TYPE_INFO: Record<CardType, { fr: string; en: string; icon: string; iconCo
   tournament: { fr: 'Resultat de tournoi', en: 'Tournament Result', icon: 'emoji-events', iconColor: '#F59E0B' },
   h2h: { fr: 'Confrontation directe', en: 'Head to Head', icon: 'compare-arrows', iconColor: '#8B5CF6' },
   'sponsored-event': { fr: 'Defi sponsorise', en: 'Sponsored Event', icon: 'campaign', iconColor: '#7C3AED' },
+  palmares: { fr: 'Palmares', en: 'Career', icon: 'emoji-events', iconColor: '#FFD700' },
+  'event-leaderboard': { fr: 'Classement defis', en: 'Event Leaderboard', icon: 'leaderboard', iconColor: '#7C3AED' },
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -233,6 +238,25 @@ export default function ShareCardScreen() {
   }, [cardType, matches, selfPlayer, selectedOpponentId, players, h2hOpponents, eloData, playerName, fr]);
 
   // Sponsored event data
+  // Gold sponsor for tournament card
+  const [goldSponsor, setGoldSponsor] = useState<{ displayName: string; photo?: string } | null>(null);
+  React.useEffect(() => {
+    fetchAmbassadors().then(({ ambassadors }) => {
+      const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
+      if (gold) setGoldSponsor({ displayName: gold.displayName, photo: gold.photo });
+    });
+  }, []);
+
+  // Event leaderboard data
+  const [eventLeaderboardData, setEventLeaderboardData] = useState<{ entries: EventLeaderboardEntry[]; totalEvents: number; totalParticipants: number } | null>(null);
+  React.useEffect(() => {
+    if (cardType !== 'event-leaderboard') return;
+    fetchEventLeaderboard().then(({ entries: lbEntries, recentEvents }) => {
+      const totalP = lbEntries.length;
+      setEventLeaderboardData({ entries: lbEntries, totalEvents: recentEvents.length, totalParticipants: totalP });
+    }).catch(() => {});
+  }, [cardType]);
+
   const [sponsoredEvent, setSponsoredEvent] = useState<SponsoredEvent | null>(null);
   const [sponsoredEventParticipantCount, setSponsoredEventParticipantCount] = useState(0);
   const [sponsoredEventLoading, setSponsoredEventLoading] = useState(false);
@@ -369,6 +393,87 @@ export default function ShareCardScreen() {
       case 'h2h':
         if (h2hData) return `${h2hData.playerA.name} vs ${h2hData.playerB.name}`;
         return 'H2H';
+      case 'palmares':
+        return `${playerName} - ${tournaments.filter(t => t.finalResult === '1er').length} ${fr ? 'titres' : 'titles'}`;
+      case 'event-leaderboard':
+        return fr ? 'Classement Defis' : 'Event Leaderboard';
+      case 'palmares': {
+        // Build season groups from tournaments data
+        const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
+        const seasonMap = new Map<number, { year: number; tournaments: Array<{ name: string; date: string; result?: string; format?: string; city?: string }>; titles: number; podiums: number; totalMatches: number; wins: number }>();
+        finishedTournaments.forEach(t => {
+          const year = new Date(t.date).getFullYear();
+          if (!seasonMap.has(year)) seasonMap.set(year, { year, tournaments: [], titles: 0, podiums: 0, totalMatches: 0, wins: 0 });
+          const sg = seasonMap.get(year)!;
+          sg.tournaments.push({ name: t.name, date: t.date, result: t.finalResult, format: t.format, city: t.location?.city });
+          if (t.finalResult === '1er') { sg.titles++; sg.podiums++; }
+          else if (t.finalResult === '2ème' || t.finalResult === '3ème') sg.podiums++;
+          const tMatches = matches.filter(m => m.tournamentId === t.id);
+          sg.totalMatches += tMatches.length;
+          sg.wins += tMatches.filter(m => m.winner === 'A').length;
+        });
+        const sortedSeasons = Array.from(seasonMap.values()).sort((a, b) => b.year - a.year);
+        sortedSeasons.forEach(s => s.tournaments.sort((a, b) => {
+          const ranks: Record<string, number> = { '1er': 1, '2ème': 2, '3ème': 3 };
+          return (ranks[a.result || ''] || 99) - (ranks[b.result || ''] || 99);
+        }));
+        const totalFinished = finishedTournaments.length;
+        const totalTitles = finishedTournaments.filter(t => t.finalResult === '1er').length;
+        const totalPodiums = finishedTournaments.filter(t => ['1er', '2ème', '3ème'].includes(t.finalResult || '')).length;
+        const palmaresMatches = matches.filter(m => finishedTournaments.some(t => t.id === m.tournamentId));
+        const palmaresWins = palmaresMatches.filter(m => m.winner === 'A').length;
+        const palmaresWinRate = palmaresMatches.length > 0 ? Math.round((palmaresWins / palmaresMatches.length) * 100) : 0;
+        let totalCarreaux = 0;
+        palmaresMatches.forEach(m => {
+          if (m.playerActions) m.playerActions.filter(pa => pa.team === 'A').forEach(pa => { totalCarreaux += pa.actions.carreaux; });
+        });
+        if (totalFinished === 0) return <EmptyCard message={fr ? 'Aucun tournoi termine' : 'No finished tournaments'} />;
+        return (
+          <ShareCardPalmares
+            playerName={playerName}
+            eloRating={eloData?.rating}
+            eloColor={eloData?.color}
+            eloRankLabel={eloData?.label}
+            clubName={clubName}
+            geoRank={geoRank ? { city: geoRank.city?.rank ? { name: geoRank.city.name, rank: geoRank.city.rank } : undefined, country: geoRank.country?.rank ? { name: geoRank.country.name, rank: geoRank.country.rank } : undefined } : null}
+            seasons={sortedSeasons}
+            totalTournaments={totalFinished}
+            totalTitles={totalTitles}
+            totalPodiums={totalPodiums}
+            totalMatches={palmaresMatches.length}
+            totalWins={palmaresWins}
+            avgWinRate={palmaresWinRate}
+            totalCarreaux={totalCarreaux}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
+      case 'event-leaderboard': {
+        if (!eventLeaderboardData || eventLeaderboardData.entries.length === 0) return <EmptyCard message={fr ? 'Aucun classement disponible' : 'No leaderboard data'} />;
+        const myRank = user?.id ? eventLeaderboardData.entries.findIndex(e => e.userId === user.id) + 1 : undefined;
+        const lbEntries = eventLeaderboardData.entries.map(e => ({
+          userName: e.userName,
+          wins: e.wins,
+          podiums: e.podiums,
+          avgScore: e.avgScore,
+          eventsCompleted: e.eventsCompleted,
+          isCurrentUser: user?.id === e.userId,
+        }));
+        return (
+          <ShareCardEventLeaderboard
+            entries={lbEntries}
+            totalEvents={eventLeaderboardData.totalEvents}
+            totalParticipants={eventLeaderboardData.totalParticipants}
+            playerName={playerName}
+            playerRank={myRank && myRank > 0 ? myRank : undefined}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
       case 'sponsored-event':
         if (sponsoredEvent) return sponsoredEvent.title;
         return 'Event';
@@ -509,6 +614,15 @@ export default function ShareCardScreen() {
         );
       case 'tournament':
         if (!tournament) return <EmptyCard message={fr ? 'Tournoi introuvable' : 'Tournament not found'} />;
+        const tournamentMatches = matches.filter(m => m.tournamentId === tournament.id).map(m => ({
+          id: m.id,
+          teamANames: m.teamA.playerNames,
+          teamBNames: m.teamB.playerNames,
+          scoreA: m.teamA.score,
+          scoreB: m.teamB.score,
+          winner: m.winner,
+          tournamentPhase: m.tournamentPhase,
+        }));
         return (
           <ShareCardTournament
             tournament={tournament}
@@ -518,6 +632,8 @@ export default function ShareCardScreen() {
             eloRankLabel={eloData?.label}
             clubName={clubName}
             geoRank={geoRankData}
+            tournamentMatches={tournamentMatches}
+            goldSponsor={goldSponsor}
             language={language}
             colorTheme={activeTheme}
             format={activeFormat}
@@ -536,6 +652,83 @@ export default function ShareCardScreen() {
             format={activeFormat}
           />
         );
+      case 'palmares': {
+        // Build season groups from tournaments data
+        const finishedTournaments = tournaments.filter(t => t.status === 'Terminé');
+        const seasonMap = new Map<number, { year: number; tournaments: Array<{ name: string; date: string; result?: string; format?: string; city?: string }>; titles: number; podiums: number; totalMatches: number; wins: number }>();
+        finishedTournaments.forEach(t => {
+          const year = new Date(t.date).getFullYear();
+          if (!seasonMap.has(year)) seasonMap.set(year, { year, tournaments: [], titles: 0, podiums: 0, totalMatches: 0, wins: 0 });
+          const sg = seasonMap.get(year)!;
+          sg.tournaments.push({ name: t.name, date: t.date, result: t.finalResult, format: t.format, city: t.location?.city });
+          if (t.finalResult === '1er') { sg.titles++; sg.podiums++; }
+          else if (t.finalResult === '2ème' || t.finalResult === '3ème') sg.podiums++;
+          const tMatches = matches.filter(m => m.tournamentId === t.id);
+          sg.totalMatches += tMatches.length;
+          sg.wins += tMatches.filter(m => m.winner === 'A').length;
+        });
+        const sortedSeasons = Array.from(seasonMap.values()).sort((a, b) => b.year - a.year);
+        sortedSeasons.forEach(s => s.tournaments.sort((a, b) => {
+          const ranks: Record<string, number> = { '1er': 1, '2ème': 2, '3ème': 3 };
+          return (ranks[a.result || ''] || 99) - (ranks[b.result || ''] || 99);
+        }));
+        const totalFinished = finishedTournaments.length;
+        const totalTitles = finishedTournaments.filter(t => t.finalResult === '1er').length;
+        const totalPodiums = finishedTournaments.filter(t => ['1er', '2ème', '3ème'].includes(t.finalResult || '')).length;
+        const palmaresMatches = matches.filter(m => finishedTournaments.some(t => t.id === m.tournamentId));
+        const palmaresWins = palmaresMatches.filter(m => m.winner === 'A').length;
+        const palmaresWinRate = palmaresMatches.length > 0 ? Math.round((palmaresWins / palmaresMatches.length) * 100) : 0;
+        let totalCarreaux = 0;
+        palmaresMatches.forEach(m => {
+          if (m.playerActions) m.playerActions.filter(pa => pa.team === 'A').forEach(pa => { totalCarreaux += pa.actions.carreaux; });
+        });
+        if (totalFinished === 0) return <EmptyCard message={fr ? 'Aucun tournoi termine' : 'No finished tournaments'} />;
+        return (
+          <ShareCardPalmares
+            playerName={playerName}
+            eloRating={eloData?.rating}
+            eloColor={eloData?.color}
+            eloRankLabel={eloData?.label}
+            clubName={clubName}
+            geoRank={geoRank ? { city: geoRank.city?.rank ? { name: geoRank.city.name, rank: geoRank.city.rank } : undefined, country: geoRank.country?.rank ? { name: geoRank.country.name, rank: geoRank.country.rank } : undefined } : null}
+            seasons={sortedSeasons}
+            totalTournaments={totalFinished}
+            totalTitles={totalTitles}
+            totalPodiums={totalPodiums}
+            totalMatches={palmaresMatches.length}
+            totalWins={palmaresWins}
+            avgWinRate={palmaresWinRate}
+            totalCarreaux={totalCarreaux}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
+      case 'event-leaderboard': {
+        if (!eventLeaderboardData || eventLeaderboardData.entries.length === 0) return <EmptyCard message={fr ? 'Aucun classement disponible' : 'No leaderboard data'} />;
+        const myRank = user?.id ? eventLeaderboardData.entries.findIndex(e => e.userId === user.id) + 1 : undefined;
+        const lbEntries = eventLeaderboardData.entries.map(e => ({
+          userName: e.userName,
+          wins: e.wins,
+          podiums: e.podiums,
+          avgScore: e.avgScore,
+          eventsCompleted: e.eventsCompleted,
+          isCurrentUser: user?.id === e.userId,
+        }));
+        return (
+          <ShareCardEventLeaderboard
+            entries={lbEntries}
+            totalEvents={eventLeaderboardData.totalEvents}
+            totalParticipants={eventLeaderboardData.totalParticipants}
+            playerName={playerName}
+            playerRank={myRank && myRank > 0 ? myRank : undefined}
+            language={language}
+            colorTheme={activeTheme}
+            format={activeFormat}
+          />
+        );
+      }
       case 'sponsored-event':
         if (sponsoredEventLoading) return <EmptyCard message={fr ? 'Chargement...' : 'Loading...'} />;
         if (!sponsoredEvent) return <EmptyCard message={fr ? 'Evenement introuvable' : 'Event not found'} />;

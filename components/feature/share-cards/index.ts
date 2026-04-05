@@ -5,4 +5,6 @@ export { default as ShareCardChallenge } from './ShareCardChallenge';
 export { default as ShareCardTournament } from './ShareCardTournament';
 export { default as ShareCardH2H } from './ShareCardH2H';
 export { default as ShareCardSponsoredEvent } from './ShareCardSponsoredEvent';
+export { default as ShareCardPalmares } from './ShareCardPalmares';
+export { default as ShareCardEventLeaderboard } from './ShareCardEventLeaderboard';
 export { default as ShareCardWatermark } from './ShareCardWatermark';
