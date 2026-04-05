@@ -1,3 +1,4 @@
+
 /**
  * AppContext — Global application state provider.
  *
@@ -5,7 +6,7 @@
  * DB row mappers live in services/dbMappers.ts.
  * This file retains: state declarations, data loading, sync logic, computed values, and provider wiring.
  */
-import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { logModification } from '@/services/modificationLogService';
@@ -119,10 +120,10 @@ interface AppContextType {
   challengeStats: ChallengeStats;
   boulesSets: BoulesSet[];
   loading: boolean;
-  
+
   // Current user's player info
   selfPlayer: Player | null;
-  
+
   // Add Actions
   addMatch: (match: Omit<Match, 'id'>) => Promise<string | null>;
   addPlayer: (player: Omit<Player, 'id'>) => Promise<void>;
@@ -130,13 +131,13 @@ interface AppContextType {
   addTournament: (tournament: Omit<Tournament, 'id'>) => Promise<void>;
   addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<string | null>;
   addTerrain: (terrain: Omit<Terrain, 'id'>) => Promise<void>;
-  
+
   // Boules Sets CRUD
   addBoulesSet: (set: Omit<BoulesSet, 'id'>) => Promise<void>;
   updateBoulesSet: (id: string, updates: Partial<BoulesSet>) => Promise<void>;
   deleteBoulesSet: (id: string) => Promise<void>;
   setPrimaryBoulesSet: (id: string) => Promise<void>;
-  
+
   // Update Actions
   updateMatch: (id: string, updates: Partial<Match>) => Promise<void>;
   updatePlayer: (id: string, updates: Partial<Player>) => Promise<void>;
@@ -145,7 +146,7 @@ interface AppContextType {
   updateTerrain: (id: string, updates: Partial<Terrain>) => Promise<void>;
   updateChallenge: (id: string, updates: Partial<Challenge>) => Promise<void>;
   updateBracketMatch: (tournamentId: string, bracketMatchId: string, updates: Partial<BracketMatch>) => void;
-  
+
   // Delete Actions
   deleteMatch: (id: string) => Promise<void>;
   deletePlayer: (id: string) => Promise<void>;
@@ -154,7 +155,7 @@ interface AppContextType {
   deleteClub: (id: string) => Promise<void>;
   deleteTournament: (id: string) => Promise<void>;
   deleteBoulesSet: (id: string) => Promise<void>;
-  
+
   // Favorites
   favoriteTerrainIds: string[];
   toggleFavoriteTerrain: (terrainId: string) => void;
@@ -162,18 +163,18 @@ interface AppContextType {
   favoriteClubIds: string[];
   toggleFavoriteClub: (clubId: string) => void;
   isFavoriteClub: (clubId: string) => boolean;
-  
+
   // Tournament Notifications
   tournamentNotifications: string[];
   toggleTournamentNotification: (tournamentId: string) => void;
   isTournamentNotificationEnabled: (tournamentId: string) => boolean;
-  
+
   // Shared items permissions
   getSharedPermission: (itemId: string) => 'read' | 'write' | null;
   isSharedItem: (itemId: string) => boolean;
   sharedMatchIds: string[];
   sharedChallengeIds: string[];
-  
+
   // Getters
   getPlayerById: (id: string) => Player | undefined;
   getClubById: (id: string) => Club | undefined;
@@ -182,7 +183,7 @@ interface AppContextType {
   getTerrainById: (id: string) => Terrain | undefined;
   getMatchesByPlayer: (playerId: string) => Match[];
   getMatchesByTournament: (tournamentId: string) => Match[];
-  
+
   // Head-to-head comparison
   getHeadToHead: (player1Id: string, player2Id: string) => HeadToHead;
   getCommonOpponents: (player1Id: string, player2Id: string) => string[];
@@ -201,7 +202,7 @@ interface AppContextType {
 
   // Retry failed operations
   retryFailedOps: (opIds?: string[]) => Promise<void>;
-  
+
   // Premium (ad-free)
   isPremium: boolean;
   setIsPremium: (val: boolean) => void;
@@ -218,6 +219,38 @@ interface AppContextType {
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
+
+// ===== Split contexts for granular subscriptions =====
+type AppDataType = Pick<AppContextType,
+  'players' | 'clubs' | 'tournaments' | 'matches' | 'challenges' | 'terrains' |
+  'boulesSets' | 'userStats' | 'challengeStats' | 'selfPlayer' | 'loading' |
+  'sharedMatchIds' | 'sharedChallengeIds' | 'favoriteTerrainIds' | 'favoriteClubIds' |
+  'tournamentNotifications'
+>;
+
+type AppUIType = Pick<AppContextType,
+  'isPremium' | 'isAdmin' | 'batterySaverEnabled' |
+  'isReplayingQueue' | 'replayProgress' | 'currentConflict' | 'conflictRemaining'
+>;
+
+type AppActionsType = Pick<AppContextType,
+  'addMatch' | 'addPlayer' | 'addClub' | 'addTournament' | 'addChallenge' | 'addTerrain' |
+  'addBoulesSet' | 'updateBoulesSet' | 'deleteBoulesSet' | 'setPrimaryBoulesSet' |
+  'updateMatch' | 'updatePlayer' | 'updateClub' | 'updateTournament' | 'updateTerrain' |
+  'updateChallenge' | 'updateBracketMatch' |
+  'deleteMatch' | 'deletePlayer' | 'deleteChallenge' | 'deleteTerrain' | 'deleteClub' | 'deleteTournament' |
+  'toggleFavoriteTerrain' | 'isFavoriteTerrain' | 'toggleFavoriteClub' | 'isFavoriteClub' |
+  'toggleTournamentNotification' | 'isTournamentNotificationEnabled' |
+  'getSharedPermission' | 'isSharedItem' |
+  'getPlayerById' | 'getClubById' | 'getTournamentById' | 'getMatchById' | 'getTerrainById' |
+  'getMatchesByPlayer' | 'getMatchesByTournament' | 'getHeadToHead' | 'getCommonOpponents' |
+  'setItemPublic' | 'resolveConflict' | 'retryFailedOps' | 'refreshData' |
+  'setIsPremium' | 'setBatterySaver'
+>;
+
+const AppDataContext = createContext<AppDataType | undefined>(undefined);
+const AppUIContext = createContext<AppUIType | undefined>(undefined);
+const AppActionsContext = createContext<AppActionsType | undefined>(undefined);
 
 // ============================================
 // Provider
@@ -236,7 +269,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const syncCountRef = useRef(0);
   const [syncConfig, setSyncConfigState] = useState<SyncConfig>(getSyncConfig());
   const syncConfigRef = useRef(syncConfig);
-  
+
   // ===== Core data state =====
   const [players, setPlayers] = useState<Player[]>([]);
   const [clubs, setClubs] = useState<Club[]>([]);
@@ -254,7 +287,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [sharedMatchPermissions, setSharedMatchPermissions] = useState<Record<string, 'read' | 'write'>>({});
   const [tournamentNotifications, setTournamentNotifications] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPremium, setIsPremiumState] = useState(false);
+  const [isPremiumState, setIsPremiumState] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isReplayingQueue, setIsReplayingQueue] = useState(false);
   const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
@@ -751,6 +784,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           prefetchImages({
             players: dbPlayers,
             terrains: terrainsRes.data ? terrainsRes.data.map(mapTerrainFromDb) : [],
+            matches: matchesRes.data ? matchesRes.data.map(mapMatchFromDb) : [],
           });
         }, 1200);
       }
@@ -1137,82 +1171,149 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const { getPlayerById, getClubById, getTournamentById, getMatchById, getTerrainById, getMatchesByPlayer, getMatchesByTournament, getHeadToHead, getCommonOpponents } = getters;
 
   // ===== Provider =====
+  const dataValue: AppDataType = useMemo(() => ({
+    players: playersWithStats,
+    clubs: clubsWithMemberCount,
+    tournaments,
+    matches,
+    challenges,
+    terrains,
+    boulesSets,
+    userStats,
+    challengeStats,
+    selfPlayer,
+    loading,
+    sharedMatchIds,
+    sharedChallengeIds,
+    favoriteTerrainIds,
+    favoriteClubIds,
+    tournamentNotifications,
+  }), [
+    playersWithStats, clubsWithMemberCount, tournaments, matches, challenges, terrains,
+    boulesSets, userStats, challengeStats, selfPlayer, loading,
+    sharedMatchIds, sharedChallengeIds, favoriteTerrainIds, favoriteClubIds, tournamentNotifications,
+  ]);
+
+  const uiValue: AppUIType = useMemo(() => ({
+    isPremium: isPremiumState,
+    isAdmin,
+    batterySaverEnabled: syncConfig.batterySaverEnabled,
+    isReplayingQueue,
+    replayProgress,
+    currentConflict,
+    conflictRemaining,
+  }), [isPremiumState, isAdmin, syncConfig.batterySaverEnabled, isReplayingQueue, replayProgress, currentConflict, conflictRemaining]);
+
+  const actionsValue: AppActionsType = useMemo(() => ({
+    addMatch, addPlayer, addClub, addTournament, addChallenge, addTerrain,
+    addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet,
+    updateMatch, updatePlayer, updateClub, updateTournament, updateTerrain,
+    updateChallenge, updateBracketMatch,
+    deleteMatch, deletePlayer, deleteChallenge, deleteTerrain, deleteClub, deleteTournament,
+    toggleFavoriteTerrain, isFavoriteTerrain, toggleFavoriteClub, isFavoriteClub,
+    toggleTournamentNotification, isTournamentNotificationEnabled,
+    getSharedPermission, isSharedItem,
+    getPlayerById, getClubById, getTournamentById, getMatchById, getTerrainById,
+    getMatchesByPlayer, getMatchesByTournament, getHeadToHead, getCommonOpponents,
+    setItemPublic, resolveConflict, retryFailedOps, refreshData,
+    setIsPremium, setBatterySaver,
+  }), [
+    addMatch, addPlayer, addClub, addTournament, addChallenge, addTerrain,
+    addBoulesSet, updateBoulesSet, deleteBoulesSet, setPrimaryBoulesSet,
+    updateMatch, updatePlayer, updateClub, updateTournament, updateTerrain,
+    updateChallenge, updateBracketMatch,
+    deleteMatch, deletePlayer, deleteChallenge, deleteTerrain, deleteClub, deleteTournament,
+    toggleFavoriteTerrain, isFavoriteTerrain, toggleFavoriteClub, isFavoriteClub,
+    toggleTournamentNotification, isTournamentNotificationEnabled,
+    getSharedPermission, isSharedItem,
+    getPlayerById, getClubById, getTournamentById, getMatchById, getTerrainById,
+    getMatchesByPlayer, getMatchesByTournament, getHeadToHead, getCommonOpponents,
+    setItemPublic, resolveConflict, retryFailedOps, refreshData,
+    setIsPremium, setBatterySaver,
+  ]);
+
   return (
-    <AppContext.Provider
-      value={{
-        players: playersWithStats,
-        clubs: clubsWithMemberCount,
-        tournaments,
-        matches,
-        challenges,
-        terrains,
-        userStats,
-        challengeStats,
-        boulesSets,
-        loading,
-        addBoulesSet,
-        updateBoulesSet,
-        deleteBoulesSet,
-        setPrimaryBoulesSet,
-        addMatch,
-        addPlayer,
-        addClub,
-        addTournament,
-        addChallenge,
-        addTerrain,
-        updateMatch,
-        updatePlayer,
-        updateClub,
-        updateTournament,
-        updateTerrain,
-        updateChallenge,
-        updateBracketMatch,
-        deleteMatch,
-        deletePlayer,
-        deleteChallenge,
-        deleteTerrain,
-        deleteClub,
-        deleteTournament,
-        favoriteTerrainIds,
-        toggleFavoriteTerrain,
-        isFavoriteTerrain,
-        favoriteClubIds,
-        toggleFavoriteClub,
-        isFavoriteClub,
-        tournamentNotifications,
-        toggleTournamentNotification,
-        isTournamentNotificationEnabled,
-        getSharedPermission,
-        isSharedItem,
-        sharedMatchIds,
-        sharedChallengeIds,
-        getPlayerById,
-        getClubById,
-        getTournamentById,
-        getMatchById,
-        getTerrainById,
-        getMatchesByPlayer,
-        getMatchesByTournament,
-        getHeadToHead,
-        getCommonOpponents,
-        retryFailedOps,
-        refreshData,
-        selfPlayer,
-        isPremium,
-        setIsPremium,
-        isAdmin,
-        batterySaverEnabled: syncConfig.batterySaverEnabled,
-        setBatterySaver,
-        setItemPublic,
-        isReplayingQueue,
-        replayProgress,
-        currentConflict,
-        conflictRemaining,
-        resolveConflict,
-      }}
-    >
-      {children}
-    </AppContext.Provider>
+    <AppDataContext.Provider value={dataValue}>
+      <AppUIContext.Provider value={uiValue}>
+        <AppActionsContext.Provider value={actionsValue}>
+          <AppContext.Provider
+            value={{
+              players: playersWithStats,
+              clubs: clubsWithMemberCount,
+              tournaments,
+              matches,
+              challenges,
+              terrains,
+              userStats,
+              challengeStats,
+              boulesSets,
+              loading,
+              addBoulesSet,
+              updateBoulesSet,
+              deleteBoulesSet,
+              setPrimaryBoulesSet,
+              addMatch,
+              addPlayer,
+              addClub,
+              addTournament,
+              addChallenge,
+              addTerrain,
+              updateMatch,
+              updatePlayer,
+              updateClub,
+              updateTournament,
+              updateTerrain,
+              updateChallenge,
+              updateBracketMatch,
+              deleteMatch,
+              deletePlayer,
+              deleteChallenge,
+              deleteTerrain,
+              deleteClub,
+              deleteTournament,
+              favoriteTerrainIds,
+              toggleFavoriteTerrain,
+              isFavoriteTerrain,
+              favoriteClubIds,
+              toggleFavoriteClub,
+              isFavoriteClub,
+              tournamentNotifications,
+              toggleTournamentNotification,
+              isTournamentNotificationEnabled,
+              getSharedPermission,
+              isSharedItem,
+              sharedMatchIds,
+              sharedChallengeIds,
+              getPlayerById,
+              getClubById,
+              getTournamentById,
+              getMatchById,
+              getTerrainById,
+              getMatchesByPlayer,
+              getMatchesByTournament,
+              getHeadToHead,
+              getCommonOpponents,
+              retryFailedOps,
+              refreshData,
+              selfPlayer,
+              isPremium: isPremiumState,
+              setIsPremium,
+              isAdmin,
+              batterySaverEnabled: syncConfig.batterySaverEnabled,
+              setBatterySaver,
+              setItemPublic,
+              isReplayingQueue,
+              replayProgress,
+              currentConflict,
+              conflictRemaining,
+              resolveConflict,
+            }}
+          >
+            {children}
+          </AppContext.Provider>
+        </AppActionsContext.Provider>
+      </AppUIContext.Provider>
+    </AppDataContext.Provider>
   );
 }
 
@@ -1220,6 +1321,42 @@ export function useApp() {
   const context = useContext(AppContext);
   if (!context) {
     throw new Error('useApp must be used within AppProvider');
+  }
+  return context;
+}
+
+/**
+ * useAppData — Subscribe only to data changes (players, matches, stats, etc.).
+ * Components using this hook will NOT re-render on UI state or action changes.
+ */
+export function useAppData() {
+  const context = useContext(AppDataContext);
+  if (!context) {
+    throw new Error('useAppData must be used within AppProvider');
+  }
+  return context;
+}
+
+/**
+ * useAppUI — Subscribe only to UI state (premium, admin, replay progress, conflicts).
+ * Components using this hook will NOT re-render on data or action changes.
+ */
+export function useAppUI() {
+  const context = useContext(AppUIContext);
+  if (!context) {
+    throw new Error('useAppUI must be used within AppProvider');
+  }
+  return context;
+}
+
+/**
+ * useAppActions — Subscribe only to action functions (CRUD, getters, etc.).
+ * This value is stable (memoized) so consumers rarely re-render.
+ */
+export function useAppActions() {
+  const context = useContext(AppActionsContext);
+  if (!context) {
+    throw new Error('useAppActions must be used within AppProvider');
   }
   return context;
 }

@@ -16,7 +16,7 @@ import { router } from 'expo-router';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { Tournament, Match } from '@/types/petanque';
 import AdBanner from '@/components/ui/AdBanner';
@@ -213,7 +213,7 @@ type ResultFilter = 'all' | 'podium';
 // ============================================
 export default function PalmaresScreen() {
   const insets = useSafeAreaInsets();
-  const { tournaments, matches } = useApp();
+  const { tournaments, matches } = useAppData();
   const { t, language } = useLanguage();
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
@@ -282,7 +282,7 @@ export default function PalmaresScreen() {
   // ELO Seasons
   const [eloSeasons, setEloSeasons] = useState<EloSeasonEntry[]>([]);
   const [eloSeasonsLoading, setEloSeasonsLoading] = useState(true);
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
 
   // Load ELO seasons and check for seasonal reset
   React.useEffect(() => {

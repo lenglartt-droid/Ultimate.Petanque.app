@@ -28,7 +28,7 @@ import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
 import { uploadImageToStorage } from '@/services/storageService';
 import theme, { blurhash } from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
@@ -45,7 +45,8 @@ import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermis
 export default function ClubDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getClubById, players, tournaments, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData, loading: appLoading } = useApp();
+  const { players, tournaments, loading: appLoading } = useAppData();
+  const { getClubById, deleteClub, updateClub, getSharedPermission, setItemPublic, isFavoriteClub, toggleFavoriteClub, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = React.useState(false);
   const [screenWidth, setScreenWidth] = React.useState(() => Dimensions.get('window').width || 375);
   React.useEffect(() => {
@@ -62,7 +63,7 @@ export default function ClubDetailScreen() {
   const { user } = useAuth();
   const { t, language } = useLanguage();
 
-  const { terrains: allTerrains } = useApp();
+  const { terrains: allTerrains } = useAppData();
   const club = getClubById(id!);
   const clubPlayers = players.filter(p => p.clubId === id);
   const clubTournaments = tournaments.filter(tr => tr.clubId === id);

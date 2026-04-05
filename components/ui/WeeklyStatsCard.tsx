@@ -7,13 +7,13 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { computeStreakFromDates, getDailyActivityLast7Days } from '@/services/streakService';
 import { extraTranslations } from '@/constants/i18nExtra';
 
 function WeeklyStatsCard() {
-  const { matches, challenges } = useApp();
+  const { matches, challenges } = useAppData();
   const { t, language } = useLanguage();
   const et = extraTranslations.streak;
 

@@ -22,7 +22,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer, LeaderboardSort, LeaderboardPeriod } from '@/services/leaderboardService';
 import { getEloRank, getEloColor, formatEloDelta, ELO_RANKS } from '@/services/eloService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub, ClubLeaderboardSort } from '@/services/clubLeaderboardService';
@@ -317,7 +317,7 @@ export default function LeaderboardScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
