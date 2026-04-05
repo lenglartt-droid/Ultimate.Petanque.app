@@ -22,7 +22,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { getEloRank } from '@/services/eloService';
 import { fetchPlayerGeoRank } from '@/services/geoLeaderboardService';
 import { computeStreakFromDates } from '@/services/streakService';
@@ -89,7 +89,7 @@ export default function ShareCardScreen() {
   const params = useLocalSearchParams<{ type?: string; id?: string; badgeId?: string; opponentId?: string; eventId?: string }>();
   const { language } = useLanguage();
   const { user } = useAuth();
-  const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players } = useApp();
+  const { matches, challenges, tournaments, selfPlayer, userStats, boulesSets, players } = useAppData();
   const { badges: userBadges } = useBadges();
   const { showAlert } = useAlert();
   const fr = language === 'fr';

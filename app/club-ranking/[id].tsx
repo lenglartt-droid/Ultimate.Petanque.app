@@ -18,7 +18,7 @@ import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
 import RadarChart from '@/components/ui/RadarChart';
 import AdBanner from '@/components/ui/AdBanner';
@@ -28,7 +28,7 @@ export default function ClubRankingScreen() {
   const { id, name } = useLocalSearchParams<{ id: string; name: string }>();
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
 
   const clubName = name ? decodeURIComponent(name) : id || '';
 

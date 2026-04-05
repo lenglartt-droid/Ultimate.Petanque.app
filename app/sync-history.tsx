@@ -16,7 +16,7 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions, useAppUI } from '@/contexts/AppContext';
 import { getSyncHistory, clearSyncHistory, SyncHistoryEntry } from '@/services/syncHistoryService';
 import { getQueueSize, getFailedOperations, clearFailedOperations, removeFailedOperation, FailedOperation } from '@/services/offlineQueueService';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
@@ -59,7 +59,8 @@ const OP_COLORS: Record<string, string> = {
 
 export default function SyncHistoryScreen() {
   const { t, language } = useLanguage();
-  const { refreshData, isReplayingQueue, retryFailedOps } = useApp();
+  const { refreshData, retryFailedOps } = useAppActions();
+  const { isReplayingQueue } = useAppUI();
   const { isConnected } = useNetworkStatus();
   const [history, setHistory] = useState<SyncHistoryEntry[]>([]);
   const [failedOps, setFailedOps] = useState<FailedOperation[]>([]);

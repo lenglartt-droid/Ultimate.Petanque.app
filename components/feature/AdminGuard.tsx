@@ -11,7 +11,7 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, Pressable } from 'react-native';
 import { router } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useApp } from '@/contexts/AppContext';
+import { useAppUI } from '@/contexts/AppContext';
 import { useAuth, useAlert } from '@/template';
 import { getUserPermissions, PermissionKey, ADMIN_PERMISSIONS } from '@/services/adminPermissionService';
 import theme from '@/constants/theme';
@@ -24,7 +24,7 @@ interface AdminGuardProps {
 }
 
 export default function AdminGuard({ children, language = 'fr', requiredPermission }: AdminGuardProps) {
-  const { isAdmin } = useApp();
+  const { isAdmin } = useAppUI();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const fr = language === 'fr';

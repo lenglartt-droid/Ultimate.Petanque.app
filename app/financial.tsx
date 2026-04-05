@@ -14,13 +14,13 @@ import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import Svg, { Rect, G, Text as SvgText, Line } from 'react-native-svg';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { Club } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
 
 export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
-  const { tournaments, clubs, selfPlayer, boulesSets } = useApp();
+  const { tournaments, clubs, selfPlayer, boulesSets } = useAppData();
   const { t, language } = useLanguage();
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);

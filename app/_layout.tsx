@@ -9,7 +9,7 @@ import { LanguageProvider } from '@/contexts/LanguageContext';
 import { ToastProvider } from '@/components/ui/Toast';
 import OfflineBanner from '@/components/ui/OfflineBanner';
 import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
 import { isATTPromptNeeded } from '@/services/trackingService';
@@ -105,7 +105,7 @@ export default function RootLayout() {
 }
 
 function LayoutInner() {
-  const { currentConflict, conflictRemaining, resolveConflict } = useApp();
+  const { currentConflict, conflictRemaining, resolveConflict } = useAppActions();
   const [showATT, setShowATT] = React.useState(false);
   const [banInfo, setBanInfo] = React.useState<BanInfo | null>(null);
 

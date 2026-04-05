@@ -3,6 +3,7 @@ import {
   View,
   Text,
   ScrollView,
+  SectionList,
   Pressable,
   StyleSheet,
   ActivityIndicator,
@@ -15,7 +16,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useBadges } from '@/hooks/useBadges';
 import {
@@ -58,7 +59,7 @@ const CATEGORY_ORDER: BadgeCategory[] = ['all', 'tournament', 'performance', 'co
 // ============================================
 export default function BadgesScreen() {
   const { user } = useAuth();
-  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useApp();
+  const { matches, challenges, userStats, sharedMatchIds, selfPlayer, boulesSets } = useAppData();
   const { language } = useLanguage();
   const { badges: userBadges, xp, loading, totalBadges } = useBadges();
   const isFr = language === 'fr';
@@ -66,6 +67,10 @@ export default function BadgesScreen() {
 
   const [activeCategory, setActiveCategory] = useState<BadgeCategory>('all');
   const [selectedBadgeId, setSelectedBadgeId] = useState<string | null>(null);
+  const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({});
+  const toggleSection = useCallback((key: string) => {
+    setCollapsedSections(prev => ({ ...prev, [key]: !prev[key] }));
+  }, []);
 
   const eloData = useMemo(() => {
     if (!selfPlayer) return { eloRating: ELO_INITIAL, eloTireur: ELO_INITIAL, eloPointeur: ELO_INITIAL, eloMilieu: ELO_INITIAL };
@@ -171,245 +176,25 @@ export default function BadgesScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={s.scroll} contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false}>
-        {/* XP Bar */}
-        <XPBar xp={xp} language={language} />
-
-        {/* Overall Progress Hero */}
-        <LinearGradient colors={['#1E3A8A', '#3B82F6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.progressHero}>
-          <View style={s.progressHeroDecoCircle} />
-          <View style={s.progressHeroTop}>
-            <View style={s.progressHeroLeft}>
-              <Text style={s.progressHeroCount}>{userBadges.length}</Text>
-              <Text style={s.progressHeroMax}>/{totalBadges}</Text>
-            </View>
-            <View style={s.progressHeroRight}>
-              <Text style={s.progressHeroLabel}>{isFr ? 'Badges debloques' : 'Badges unlocked'}</Text>
-              <View style={s.progressHeroBarTrack}>
-                <View style={[s.progressHeroBarFill, { width: `${Math.max(4, Math.round((userBadges.length / totalBadges) * 100))}%` }]} />
-              </View>
-              <Text style={s.progressHeroPercent}>{Math.round((userBadges.length / totalBadges) * 100)}%</Text>
-            </View>
-          </View>
-        </LinearGradient>
-
-        {/* Category Progress Cards — horizontal scroll */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catProgressScroll}>
-          {categoryStats.map(cat => (
-            <Pressable
-              key={cat.id}
-              style={[s.catProgressCard, activeCategory === cat.id && { borderColor: cat.color, borderWidth: 2.5 }]}
-              onPress={() => setActiveCategory(activeCategory === cat.id ? 'all' : cat.id)}
-            >
-              <View style={[s.catProgressIcon, { backgroundColor: cat.color + '15' }]}>
-                <MaterialIcons name={cat.icon as any} size={20} color={cat.color} />
-              </View>
-              <Text style={s.catProgressLabel} numberOfLines={1}>{isFr ? cat.labelFr : cat.labelEn}</Text>
-              <Text style={[s.catProgressCount, { color: cat.color }]}>{cat.unlocked}/{cat.total}</Text>
-              <View style={s.catProgressBarTrack}>
-                <View style={[s.catProgressBarFill, { width: `${Math.max(4, cat.percent)}%`, backgroundColor: cat.color }]} />
-              </View>
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Recently Unlocked */}
-        {recentlyUnlocked.length > 0 && activeCategory === 'all' ? (
-          <View style={s.recentSection}>
-            <View style={s.recentHeader}>
-              <MaterialIcons name="new-releases" size={16} color="#F59E0B" />
-              <Text style={s.recentTitle}>{isFr ? 'Recemment debloques' : 'Recently unlocked'}</Text>
-            </View>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 4 }}>
-              {recentlyUnlocked.slice(0, 6).map(ub => {
-                const badge = BADGES.find(b => b.id === ub.badgeId);
-                if (!badge) return null;
-                return (
-                  <Pressable key={badge.id} onPress={() => setSelectedBadgeId(badge.id)} style={[s.recentBadge, { borderColor: badge.color + '30' }]}>
-                    <View style={[s.recentBadgeIcon, { backgroundColor: badge.color + '20' }]}>
-                      <MaterialIcons name={badge.icon as any} size={22} color={badge.color} />
-                    </View>
-                    <Text style={[s.recentBadgeName, { color: badge.color }]} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
-                    <Text style={s.recentBadgeDate}>
-                      {new Date(ub.unlockedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        ) : null}
-
-        {/* Category Filter Chips */}
-        <View style={s.filterRow}>
-          {CATEGORY_ORDER.map(catId => {
-            const isActive = activeCategory === catId;
-            const meta = catId === 'all' ? { icon: 'grid-view', color: theme.primary } : CATEGORY_META[catId];
-            const label = catId === 'all' ? (isFr ? 'Tous' : 'All') : getBadgeCategoryLabel(catId, lang);
-            const count = catId === 'all' ? BADGES.length : BADGES.filter(b => b.category === catId).length;
-            return (
-              <Pressable
-                key={catId}
-                style={[s.filterChip, isActive && { backgroundColor: meta.color, borderColor: meta.color }]}
-                onPress={() => setActiveCategory(catId)}
-              >
-                <MaterialIcons name={meta.icon as any} size={13} color={isActive ? '#FFF' : meta.color} />
-                <Text style={[s.filterChipText, isActive && { color: '#FFF' }]}>{label}</Text>
-                <View style={[s.filterChipCount, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
-                  <Text style={[s.filterChipCountText, isActive && { color: '#FFF' }]}>{count}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-
-        {/* Active category summary */}
-        {activeCatStats ? (
-          <View style={[s.catSummaryCard, { borderLeftColor: activeCatStats.color, borderLeftWidth: 4 }]}>
-            <View style={s.catSummaryTop}>
-              <View style={[s.catSummaryIcon, { backgroundColor: activeCatStats.color + '15' }]}>
-                <MaterialIcons name={activeCatStats.icon as any} size={22} color={activeCatStats.color} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.catSummaryTitle}>{isFr ? activeCatStats.labelFr : activeCatStats.labelEn}</Text>
-                <Text style={s.catSummarySub}>{activeCatStats.unlocked} / {activeCatStats.total} {isFr ? 'debloques' : 'unlocked'}</Text>
-              </View>
-              <Text style={[s.catSummaryPercent, { color: activeCatStats.color }]}>{activeCatStats.percent}%</Text>
-            </View>
-            <View style={s.catSummaryBarTrack}>
-              <View style={[s.catSummaryBarFill, { width: `${Math.max(3, activeCatStats.percent)}%`, backgroundColor: activeCatStats.color }]} />
-            </View>
-          </View>
-        ) : null}
-
-        {/* Unlocked Badges */}
-        {unlockedBadges.length > 0 ? (
-          <>
-            <View style={s.listSectionHeader}>
-              <MaterialIcons name="check-circle" size={16} color={theme.success} />
-              <Text style={s.listSectionTitle}>{isFr ? 'Debloques' : 'Unlocked'} ({unlockedBadges.length})</Text>
-            </View>
-            {unlockedBadges.map((badge, index) => (
-              <Pressable key={badge.id} onPress={() => setSelectedBadgeId(badge.id)}>
-                <View style={[s.badgeCard, { borderLeftWidth: 3, borderLeftColor: badge.color }]}>
-                  <View style={s.badgeCardTop}>
-                    <View style={[s.badgeCardIcon, { backgroundColor: badge.color + '20' }]}>
-                      <MaterialIcons name={badge.icon as any} size={28} color={badge.color} />
-                      <View style={[s.badgeCheckmark, { backgroundColor: badge.color }]}>
-                        <MaterialIcons name="check" size={10} color="#FFF" />
-                      </View>
-                    </View>
-                    <View style={s.badgeCardInfo}>
-                      <View style={s.badgeCardNameRow}>
-                        <Text style={s.badgeCardName} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
-                        <View style={[s.badgeXpChip, { backgroundColor: badge.color + '15' }]}>
-                          <MaterialIcons name="bolt" size={12} color={badge.color} />
-                          <Text style={[s.badgeXpText, { color: badge.color }]}>+{badge.xpReward}</Text>
-                        </View>
-                      </View>
-                      <Text style={s.badgeCardDesc} numberOfLines={2}>{getBadgeDescription(badge.id, lang)}</Text>
-                      <View style={s.badgeUnlockDate}>
-                        <MaterialIcons name="check-circle" size={14} color={badge.color} />
-                        <Text style={[s.badgeUnlockDateText, { color: badge.color }]}>
-                          {isFr ? 'Debloque le' : 'Unlocked'}{' '}
-                          {new Date(badge.unlockedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                        </Text>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </>
-        ) : null}
-
-        {/* Locked Badges */}
-        {lockedBadges.length > 0 ? (
-          <>
-            <View style={s.listSectionHeader}>
-              <MaterialIcons name="lock-outline" size={16} color={theme.textMuted} />
-              <Text style={[s.listSectionTitle, { color: theme.textMuted }]}>{isFr ? 'A debloquer' : 'Locked'} ({lockedBadges.length})</Text>
-            </View>
-            {lockedBadges.map((badge, index) => (
-              <Pressable key={badge.id} onPress={() => setSelectedBadgeId(badge.id)}>
-                <View style={[s.badgeCard, { opacity: 0.7 }]}>
-                  <View style={s.badgeCardTop}>
-                    <View style={[s.badgeCardIcon, { backgroundColor: theme.backgroundSecondary }]}>
-                      <MaterialIcons name={badge.icon as any} size={28} color={theme.textMuted + '60'} />
-                    </View>
-                    <View style={s.badgeCardInfo}>
-                      <View style={s.badgeCardNameRow}>
-                        <Text style={[s.badgeCardName, { color: theme.textSecondary }]} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
-                        <View style={s.badgeXpChip}>
-                          <MaterialIcons name="bolt" size={12} color={theme.textMuted} />
-                          <Text style={s.badgeXpText}>+{badge.xpReward}</Text>
-                        </View>
-                      </View>
-                      <Text style={s.badgeCardDesc} numberOfLines={2}>{getBadgeDescription(badge.id, lang)}</Text>
-                      <View style={s.badgeProgressSection}>
-                        <View style={s.badgeProgressBarOuter}>
-                          <View style={[s.badgeProgressBarInner, { width: '2%', backgroundColor: badge.color + '40' }]} />
-                        </View>
-                      </View>
-                    </View>
-                  </View>
-                </View>
-              </Pressable>
-            ))}
-          </>
-        ) : null}
-
-        {/* XP Breakdown */}
-        <View style={s.xpCard}>
-          <View style={s.xpCardHeader}>
-            <MaterialIcons name="bolt" size={18} color="#F59E0B" />
-            <Text style={s.xpCardTitle}>{isFr ? 'Sources d\'XP' : 'XP Sources'}</Text>
-          </View>
-          <View style={s.xpGrid}>
-            {[
-              { icon: 'sports', color: '#3B82F6', label: isFr ? 'Matchs' : 'Matches', value: `+${XP_PER_MATCH}` },
-              { icon: 'star', color: '#F59E0B', label: 'Carreaux', value: `+${XP_PER_CARREAU}` },
-              { icon: 'share', color: '#EC4899', label: isFr ? 'Partages' : 'Shares', value: `+${XP_PER_SHARE_ACCEPTED}` },
-              { icon: 'military-tech', color: '#10B981', label: 'Badges', value: `+${XP_PER_BADGE}` },
-            ].map((item, i) => (
-              <View key={i} style={s.xpGridItem}>
-                <View style={[s.xpGridIcon, { backgroundColor: item.color + '15' }]}>
-                  <MaterialIcons name={item.icon as any} size={16} color={item.color} />
-                </View>
-                <Text style={s.xpGridLabel}>{item.label}</Text>
-                <Text style={[s.xpGridValue, { color: item.color }]}>{item.value}</Text>
-              </View>
-            ))}
-          </View>
-        </View>
-
-        {/* Level Milestones */}
-        <View style={s.milestonesCard}>
-          <Text style={s.sectionLabel}>{isFr ? 'NIVEAUX' : 'LEVELS'}</Text>
-          <View style={s.milestoneTrack}>
-            {XP_LEVELS.map((lvl, i) => {
-              const reached = xp >= lvl.minXp;
-              const isCurrent = level.name === lvl.name;
-              const colors = ['#10B981', '#3B82F6', '#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#EC4899', '#FFD700'];
-              const lvlColor = colors[i % colors.length];
-              return (
-                <View key={lvl.name} style={s.milestoneItem}>
-                  {i > 0 ? <View style={[s.milestoneConnector, reached && { backgroundColor: lvlColor + '60' }]} /> : null}
-                  <View style={[s.milestoneCircle, reached && { backgroundColor: lvlColor + '20', borderColor: lvlColor }, isCurrent && { backgroundColor: lvlColor, borderColor: lvlColor }]}>
-                    <MaterialIcons name={lvl.icon as any} size={16} color={isCurrent ? '#FFF' : reached ? lvlColor : theme.textMuted} />
-                  </View>
-                  <Text style={[s.milestoneName, isCurrent && { color: lvlColor, fontWeight: '700' }, reached && !isCurrent && { color: theme.textPrimary }]} numberOfLines={1}>
-                    {isFr ? lvl.name : lvl.nameEn}
-                  </Text>
-                  <Text style={[s.milestoneXp, reached && { color: lvlColor }]}>{lvl.minXp}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+      <BadgesSectionList
+        xp={xp}
+        language={language}
+        isFr={isFr}
+        lang={lang}
+        userBadges={userBadges}
+        totalBadges={totalBadges}
+        categoryStats={categoryStats}
+        activeCategory={activeCategory}
+        setActiveCategory={setActiveCategory}
+        activeCatStats={activeCatStats}
+        recentlyUnlocked={recentlyUnlocked}
+        unlockedBadges={unlockedBadges}
+        lockedBadges={lockedBadges}
+        level={level}
+        setSelectedBadgeId={setSelectedBadgeId}
+        collapsedSections={collapsedSections}
+        toggleSection={toggleSection}
+      />
 
       {/* Badge Detail Modal */}
       <BadgeDetailModal
@@ -421,6 +206,292 @@ export default function BadgesScreen() {
         unlockedAt={selectedBadgeId ? userBadges.find(ub => ub.badgeId === selectedBadgeId)?.unlockedAt || null : null}
       />
     </SafeAreaView>
+  );
+}
+
+// ============================================
+// Virtualized Badge SectionList Component
+// ============================================
+const BadgeItem = React.memo(function BadgeItem({ badge, lang, isFr, isUnlocked, unlockedAt, onPress }: {
+  badge: BadgeDefinition;
+  lang: 'fr' | 'en';
+  isFr: boolean;
+  isUnlocked: boolean;
+  unlockedAt: string | null;
+  onPress: () => void;
+}) {
+  if (isUnlocked && unlockedAt) {
+    return (
+      <Pressable onPress={onPress}>
+        <View style={[s.badgeCard, { borderLeftWidth: 3, borderLeftColor: badge.color }]}>
+          <View style={s.badgeCardTop}>
+            <View style={[s.badgeCardIcon, { backgroundColor: badge.color + '20' }]}>
+              <MaterialIcons name={badge.icon as any} size={28} color={badge.color} />
+              <View style={[s.badgeCheckmark, { backgroundColor: badge.color }]}>
+                <MaterialIcons name="check" size={10} color="#FFF" />
+              </View>
+            </View>
+            <View style={s.badgeCardInfo}>
+              <View style={s.badgeCardNameRow}>
+                <Text style={s.badgeCardName} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
+                <View style={[s.badgeXpChip, { backgroundColor: badge.color + '15' }]}>
+                  <MaterialIcons name="bolt" size={12} color={badge.color} />
+                  <Text style={[s.badgeXpText, { color: badge.color }]}>+{badge.xpReward}</Text>
+                </View>
+              </View>
+              <Text style={s.badgeCardDesc} numberOfLines={2}>{getBadgeDescription(badge.id, lang)}</Text>
+              <View style={s.badgeUnlockDate}>
+                <MaterialIcons name="check-circle" size={14} color={badge.color} />
+                <Text style={[s.badgeUnlockDateText, { color: badge.color }]}>
+                  {isFr ? 'Debloque le' : 'Unlocked'}{' '}
+                  {new Date(unlockedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Pressable>
+    );
+  }
+  return (
+    <Pressable onPress={onPress}>
+      <View style={[s.badgeCard, { opacity: 0.7 }]}>
+        <View style={s.badgeCardTop}>
+          <View style={[s.badgeCardIcon, { backgroundColor: theme.backgroundSecondary }]}>
+            <MaterialIcons name={badge.icon as any} size={28} color={theme.textMuted + '60'} />
+          </View>
+          <View style={s.badgeCardInfo}>
+            <View style={s.badgeCardNameRow}>
+              <Text style={[s.badgeCardName, { color: theme.textSecondary }]} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
+              <View style={s.badgeXpChip}>
+                <MaterialIcons name="bolt" size={12} color={theme.textMuted} />
+                <Text style={s.badgeXpText}>+{badge.xpReward}</Text>
+              </View>
+            </View>
+            <Text style={s.badgeCardDesc} numberOfLines={2}>{getBadgeDescription(badge.id, lang)}</Text>
+            <View style={s.badgeProgressSection}>
+              <View style={s.badgeProgressBarOuter}>
+                <View style={[s.badgeProgressBarInner, { width: '2%', backgroundColor: badge.color + '40' }]} />
+              </View>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Pressable>
+  );
+});
+
+function BadgesSectionList({ xp, language, isFr, lang, userBadges, totalBadges, categoryStats, activeCategory, setActiveCategory, activeCatStats, recentlyUnlocked, unlockedBadges, lockedBadges, level, setSelectedBadgeId, collapsedSections, toggleSection }: {
+  xp: number;
+  language: string;
+  isFr: boolean;
+  lang: 'fr' | 'en';
+  userBadges: any[];
+  totalBadges: number;
+  categoryStats: any[];
+  activeCategory: BadgeCategory;
+  setActiveCategory: (cat: BadgeCategory) => void;
+  activeCatStats: any;
+  recentlyUnlocked: any[];
+  unlockedBadges: any[];
+  lockedBadges: BadgeDefinition[];
+  level: any;
+  setSelectedBadgeId: (id: string) => void;
+  collapsedSections: Record<string, boolean>;
+  toggleSection: (key: string) => void;
+}) {
+  type SectionItem = { type: 'header' } | { type: 'badge'; badge: any; isUnlocked: boolean; unlockedAt: string | null };
+  type Section = { key: string; title: string; data: SectionItem[] };
+
+  const sections = useMemo<Section[]>(() => {
+    const result: Section[] = [];
+
+    // Header section (non-collapsible): XP, progress, categories, filters
+    result.push({ key: 'header', title: '', data: [{ type: 'header' }] });
+
+    // Unlocked section
+    if (unlockedBadges.length > 0) {
+      const isCollapsed = collapsedSections['unlocked'];
+      const items: SectionItem[] = isCollapsed ? [] : unlockedBadges.map(b => ({ type: 'badge' as const, badge: b, isUnlocked: true, unlockedAt: b.unlockedAt }));
+      result.push({ key: 'unlocked', title: `${isFr ? 'Debloques' : 'Unlocked'} (${unlockedBadges.length})`, data: items });
+    }
+
+    // Locked section
+    if (lockedBadges.length > 0) {
+      const isCollapsed = collapsedSections['locked'];
+      const items: SectionItem[] = isCollapsed ? [] : lockedBadges.map(b => ({ type: 'badge' as const, badge: b, isUnlocked: false, unlockedAt: null }));
+      result.push({ key: 'locked', title: `${isFr ? 'A debloquer' : 'Locked'} (${lockedBadges.length})`, data: items });
+    }
+
+    // Footer section: XP sources + levels
+    result.push({ key: 'footer', title: '', data: [{ type: 'header' }] });
+
+    return result;
+  }, [unlockedBadges, lockedBadges, collapsedSections, isFr]);
+
+  const renderItem = useCallback(({ item, section }: { item: SectionItem; section: Section }) => {
+    if (section.key === 'header' && item.type === 'header') {
+      return (
+        <View style={s.scrollContent}>
+          <XPBar xp={xp} language={language} />
+          <LinearGradient colors={['#1E3A8A', '#3B82F6']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.progressHero}>
+            <View style={s.progressHeroDecoCircle} />
+            <View style={s.progressHeroTop}>
+              <View style={s.progressHeroLeft}>
+                <Text style={s.progressHeroCount}>{userBadges.length}</Text>
+                <Text style={s.progressHeroMax}>/{totalBadges}</Text>
+              </View>
+              <View style={s.progressHeroRight}>
+                <Text style={s.progressHeroLabel}>{isFr ? 'Badges debloques' : 'Badges unlocked'}</Text>
+                <View style={s.progressHeroBarTrack}>
+                  <View style={[s.progressHeroBarFill, { width: `${Math.max(4, Math.round((userBadges.length / totalBadges) * 100))}%` }]} />
+                </View>
+                <Text style={s.progressHeroPercent}>{Math.round((userBadges.length / totalBadges) * 100)}%</Text>
+              </View>
+            </View>
+          </LinearGradient>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.catProgressScroll}>
+            {categoryStats.map((cat: any) => (
+              <Pressable key={cat.id} style={[s.catProgressCard, activeCategory === cat.id && { borderColor: cat.color, borderWidth: 2.5 }]} onPress={() => setActiveCategory(activeCategory === cat.id ? 'all' : cat.id)}>
+                <View style={[s.catProgressIcon, { backgroundColor: cat.color + '15' }]}><MaterialIcons name={cat.icon as any} size={20} color={cat.color} /></View>
+                <Text style={s.catProgressLabel} numberOfLines={1}>{isFr ? cat.labelFr : cat.labelEn}</Text>
+                <Text style={[s.catProgressCount, { color: cat.color }]}>{cat.unlocked}/{cat.total}</Text>
+                <View style={s.catProgressBarTrack}><View style={[s.catProgressBarFill, { width: `${Math.max(4, cat.percent)}%`, backgroundColor: cat.color }]} /></View>
+              </Pressable>
+            ))}
+          </ScrollView>
+          {recentlyUnlocked.length > 0 && activeCategory === 'all' ? (
+            <View style={s.recentSection}>
+              <View style={s.recentHeader}><MaterialIcons name="new-releases" size={16} color="#F59E0B" /><Text style={s.recentTitle}>{isFr ? 'Recemment debloques' : 'Recently unlocked'}</Text></View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingRight: 4 }}>
+                {recentlyUnlocked.slice(0, 6).map(ub => {
+                  const badge = BADGES.find(b => b.id === ub.badgeId);
+                  if (!badge) return null;
+                  return (
+                    <Pressable key={badge.id} onPress={() => setSelectedBadgeId(badge.id)} style={[s.recentBadge, { borderColor: badge.color + '30' }]}>
+                      <View style={[s.recentBadgeIcon, { backgroundColor: badge.color + '20' }]}><MaterialIcons name={badge.icon as any} size={22} color={badge.color} /></View>
+                      <Text style={[s.recentBadgeName, { color: badge.color }]} numberOfLines={1}>{getBadgeName(badge.id, lang)}</Text>
+                      <Text style={s.recentBadgeDate}>{new Date(ub.unlockedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          ) : null}
+          <View style={s.filterRow}>
+            {CATEGORY_ORDER.map(catId => {
+              const isActive = activeCategory === catId;
+              const meta = catId === 'all' ? { icon: 'grid-view', color: theme.primary } : CATEGORY_META[catId];
+              const label = catId === 'all' ? (isFr ? 'Tous' : 'All') : getBadgeCategoryLabel(catId, lang);
+              const count = catId === 'all' ? BADGES.length : BADGES.filter(b => b.category === catId).length;
+              return (
+                <Pressable key={catId} style={[s.filterChip, isActive && { backgroundColor: meta.color, borderColor: meta.color }]} onPress={() => setActiveCategory(catId)}>
+                  <MaterialIcons name={meta.icon as any} size={13} color={isActive ? '#FFF' : meta.color} />
+                  <Text style={[s.filterChipText, isActive && { color: '#FFF' }]}>{label}</Text>
+                  <View style={[s.filterChipCount, isActive && { backgroundColor: 'rgba(255,255,255,0.25)' }]}><Text style={[s.filterChipCountText, isActive && { color: '#FFF' }]}>{count}</Text></View>
+                </Pressable>
+              );
+            })}
+          </View>
+          {activeCatStats ? (
+            <View style={[s.catSummaryCard, { borderLeftColor: activeCatStats.color, borderLeftWidth: 4 }]}>
+              <View style={s.catSummaryTop}>
+                <View style={[s.catSummaryIcon, { backgroundColor: activeCatStats.color + '15' }]}><MaterialIcons name={activeCatStats.icon as any} size={22} color={activeCatStats.color} /></View>
+                <View style={{ flex: 1 }}><Text style={s.catSummaryTitle}>{isFr ? activeCatStats.labelFr : activeCatStats.labelEn}</Text><Text style={s.catSummarySub}>{activeCatStats.unlocked} / {activeCatStats.total} {isFr ? 'debloques' : 'unlocked'}</Text></View>
+                <Text style={[s.catSummaryPercent, { color: activeCatStats.color }]}>{activeCatStats.percent}%</Text>
+              </View>
+              <View style={s.catSummaryBarTrack}><View style={[s.catSummaryBarFill, { width: `${Math.max(3, activeCatStats.percent)}%`, backgroundColor: activeCatStats.color }]} /></View>
+            </View>
+          ) : null}
+        </View>
+      );
+    }
+
+    if (section.key === 'footer' && item.type === 'header') {
+      return (
+        <View style={s.scrollContent}>
+          <View style={s.xpCard}>
+            <View style={s.xpCardHeader}><MaterialIcons name="bolt" size={18} color="#F59E0B" /><Text style={s.xpCardTitle}>{isFr ? "Sources d'XP" : 'XP Sources'}</Text></View>
+            <View style={s.xpGrid}>
+              {[
+                { icon: 'sports', color: '#3B82F6', label: isFr ? 'Matchs' : 'Matches', value: `+${XP_PER_MATCH}` },
+                { icon: 'star', color: '#F59E0B', label: 'Carreaux', value: `+${XP_PER_CARREAU}` },
+                { icon: 'share', color: '#EC4899', label: isFr ? 'Partages' : 'Shares', value: `+${XP_PER_SHARE_ACCEPTED}` },
+                { icon: 'military-tech', color: '#10B981', label: 'Badges', value: `+${XP_PER_BADGE}` },
+              ].map((it, i) => (
+                <View key={i} style={s.xpGridItem}><View style={[s.xpGridIcon, { backgroundColor: it.color + '15' }]}><MaterialIcons name={it.icon as any} size={16} color={it.color} /></View><Text style={s.xpGridLabel}>{it.label}</Text><Text style={[s.xpGridValue, { color: it.color }]}>{it.value}</Text></View>
+              ))}
+            </View>
+          </View>
+          <View style={s.milestonesCard}>
+            <Text style={s.sectionLabel}>{isFr ? 'NIVEAUX' : 'LEVELS'}</Text>
+            <View style={s.milestoneTrack}>
+              {XP_LEVELS.map((lvl, i) => {
+                const reached = xp >= lvl.minXp;
+                const isCurrent = level.name === lvl.name;
+                const colors = ['#10B981', '#3B82F6', '#F59E0B', '#F97316', '#EF4444', '#8B5CF6', '#EC4899', '#FFD700'];
+                const lvlColor = colors[i % colors.length];
+                return (
+                  <View key={lvl.name} style={s.milestoneItem}>
+                    {i > 0 ? <View style={[s.milestoneConnector, reached && { backgroundColor: lvlColor + '60' }]} /> : null}
+                    <View style={[s.milestoneCircle, reached && { backgroundColor: lvlColor + '20', borderColor: lvlColor }, isCurrent && { backgroundColor: lvlColor, borderColor: lvlColor }]}><MaterialIcons name={lvl.icon as any} size={16} color={isCurrent ? '#FFF' : reached ? lvlColor : theme.textMuted} /></View>
+                    <Text style={[s.milestoneName, isCurrent && { color: lvlColor, fontWeight: '700' }, reached && !isCurrent && { color: theme.textPrimary }]} numberOfLines={1}>{isFr ? lvl.name : lvl.nameEn}</Text>
+                    <Text style={[s.milestoneXp, reached && { color: lvlColor }]}>{lvl.minXp}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+          <View style={{ height: 40 }} />
+        </View>
+      );
+    }
+
+    if (item.type === 'badge') {
+      return (
+        <View style={s.scrollContent}>
+          <BadgeItem badge={item.badge} lang={lang} isFr={isFr} isUnlocked={item.isUnlocked} unlockedAt={item.unlockedAt} onPress={() => setSelectedBadgeId(item.badge.id)} />
+        </View>
+      );
+    }
+    return null;
+  }, [xp, language, isFr, lang, userBadges.length, totalBadges, categoryStats, activeCategory, activeCatStats, recentlyUnlocked, level]);
+
+  const renderSectionHeader = useCallback(({ section }: { section: Section }) => {
+    if (section.key === 'header' || section.key === 'footer') return null;
+    const isCollapsed = collapsedSections[section.key === 'unlocked' ? 'unlocked' : 'locked'];
+    const isUnlockedSection = section.key === 'unlocked';
+    return (
+      <Pressable style={[s.scrollContent, s.collapsibleHeader]} onPress={() => toggleSection(section.key === 'unlocked' ? 'unlocked' : 'locked')}>
+        <View style={s.listSectionHeader}>
+          <MaterialIcons name={isUnlockedSection ? 'check-circle' : 'lock-outline'} size={16} color={isUnlockedSection ? theme.success : theme.textMuted} />
+          <Text style={[s.listSectionTitle, !isUnlockedSection && { color: theme.textMuted }]}>{section.title}</Text>
+          <View style={{ flex: 1 }} />
+          <MaterialIcons name={isCollapsed ? 'expand-more' : 'expand-less'} size={20} color={theme.textMuted} />
+        </View>
+      </Pressable>
+    );
+  }, [collapsedSections, toggleSection]);
+
+  const keyExtractor = useCallback((item: SectionItem, index: number) => {
+    if (item.type === 'badge') return item.badge.id;
+    return `section-${index}`;
+  }, []);
+
+  return (
+    <SectionList
+      sections={sections}
+      keyExtractor={keyExtractor}
+      renderItem={renderItem}
+      renderSectionHeader={renderSectionHeader}
+      stickySectionHeadersEnabled={false}
+      showsVerticalScrollIndicator={false}
+      initialNumToRender={10}
+      maxToRenderPerBatch={8}
+      windowSize={5}
+      removeClippedSubviews={Platform.OS !== 'web'}
+      style={s.scroll}
+    />
   );
 }
 
@@ -584,6 +655,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 20 },
+  collapsibleHeader: { paddingTop: 6, paddingBottom: 0 },
   sectionLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 14 },
 
   // Progress Hero

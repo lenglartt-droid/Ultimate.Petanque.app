@@ -22,7 +22,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -98,7 +98,8 @@ export default function NotificationsHubScreen() {
   const { showAlert } = useAlert();
   const params = useLocalSearchParams<{ tab?: string }>();
   const fr = language === 'fr';
-  const { tournaments, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { tournaments } = useAppData();
+  const { toggleTournamentNotification, isTournamentNotificationEnabled } = useAppActions();
 
   const [activeTab, setActiveTab] = useState<TabKey>((params.tab as TabKey) || 'invitations');
 

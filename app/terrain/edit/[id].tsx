@@ -24,7 +24,7 @@ import * as Location from '@/services/location';
 import * as ImagePicker from 'expo-image-picker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAlert } from '@/template';
 import {
@@ -82,7 +82,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function EditTerrainScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { getTerrainById, updateTerrain, clubs, loading: appLoading } = useApp();
+  const { clubs, loading: appLoading } = useAppData();
+  const { getTerrainById, updateTerrain } = useAppActions();
   const { t } = useLanguage();
   const { showAlert } = useAlert();
   const { user } = useAuth();

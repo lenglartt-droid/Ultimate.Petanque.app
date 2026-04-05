@@ -24,7 +24,7 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
 import config, { PlayerRole } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -64,7 +64,7 @@ function ProgressDots({ current, total }: { current: number; total: number }) {
 export default function OnboardingScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { updatePlayer } = useApp();
+  const { updatePlayer } = useAppActions();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
 

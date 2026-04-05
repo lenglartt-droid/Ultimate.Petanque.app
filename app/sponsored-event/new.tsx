@@ -8,7 +8,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
 import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { getMyAmbassadorRecord, createSponsoredEvent, checkChallengeLimit } from '@/services/sponsoredEventService';
 import DateTimePicker from '@react-native-community/datetimepicker';
 
@@ -25,7 +25,7 @@ export default function NewSponsoredEventScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();
-  const { terrains } = useApp();
+  const { terrains } = useAppData();
 
   const [loading, setLoading] = useState(true);
   const [ambassador, setAmbassador] = useState<any>(null);

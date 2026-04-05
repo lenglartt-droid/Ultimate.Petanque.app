@@ -20,7 +20,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions } from '@/contexts/AppContext';
 import { useToast } from '@/components/ui/Toast';
 import {
   getShareNotifications,
@@ -64,7 +64,7 @@ export default function ShareHubScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { refreshData } = useApp();
+  const { refreshData } = useAppActions();
   const { showToast } = useToast();
   const params = useLocalSearchParams<{ tab?: string; deepLinkCode?: string; deepLinkType?: string }>();
   const fr = language === 'fr';

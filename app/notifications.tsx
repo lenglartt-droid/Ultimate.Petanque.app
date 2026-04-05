@@ -17,7 +17,7 @@ import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   requestNotificationPermissions,
@@ -30,7 +30,8 @@ import {
 
 export default function NotificationsScreen() {
   const insets = useSafeAreaInsets();
-  const { tournaments, tournamentNotifications, toggleTournamentNotification, isTournamentNotificationEnabled } = useApp();
+  const { tournaments, tournamentNotifications } = useAppData();
+  const { toggleTournamentNotification, isTournamentNotificationEnabled } = useAppActions();
   const { t, language } = useLanguage();
   
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');

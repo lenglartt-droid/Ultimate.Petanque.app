@@ -21,7 +21,7 @@ import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchGeoLeaderboard, GeoEntry, fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
 import { fetchLeaderboard, sortLeaderboard, LeaderboardPlayer } from '@/services/leaderboardService';
 import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
@@ -43,7 +43,7 @@ function MedalIcon({ rank }: { rank: number }) {
 function LeaderboardHub() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { selfPlayer } = useApp();
+  const { selfPlayer } = useAppData();
   const isFr = language === 'fr';
 
   const [hubTab, setHubTab] = useState<HubTab>('geo');

@@ -22,7 +22,7 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
@@ -52,7 +52,8 @@ const POINT_COLORS: Record<number, string> = { 0: '#EF4444', 1: '#F59E0B', 3: '#
 export default function ChallengeDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { challenges, getSharedPermission, isSharedItem, refreshData, updateChallenge, deleteChallenge, loading: appLoading } = useApp();
+  const { challenges, loading: appLoading } = useAppData();
+  const { getSharedPermission, isSharedItem, refreshData, updateChallenge, deleteChallenge } = useAppActions();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();

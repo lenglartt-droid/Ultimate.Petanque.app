@@ -6,7 +6,7 @@ import { router } from 'expo-router';
 
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData } from '@/contexts/AppContext';
 import { fetchEloSeasons, fetchEloHistory, getEloRank, formatEloDelta, EloSeasonEntry, EloHistoryEntry, ELO_INITIAL, ELO_RANKS, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
 
 interface SeasonAward {
@@ -22,7 +22,7 @@ interface SeasonAward {
 export default function EloAwardsScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
-  const { selfPlayer, matches } = useApp();
+  const { selfPlayer, matches } = useAppData();
   const isFr = language === 'fr';
 
   const [seasons, setSeasons] = useState<EloSeasonEntry[]>([]);

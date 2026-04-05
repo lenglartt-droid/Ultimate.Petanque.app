@@ -22,7 +22,7 @@ import { Image } from 'expo-image';
 import theme, { blurhash } from '@/constants/theme';
 import { createShareLink, ShareItemType, AssociatedItem } from '@/services/shareService';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { router } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
@@ -78,7 +78,8 @@ interface ShareModalProps {
 export default function ShareModal({ visible, onClose, itemType, itemId, itemName, forceReadOnly = false }: ShareModalProps) {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
-  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges, updatePlayer, updateClub, selfPlayer, players } = useApp();
+  const { challenges, selfPlayer, players } = useAppData();
+  const { getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, updatePlayer, updateClub } = useAppActions();
   const { user } = useAuth();
   const fr = language === 'fr';
 

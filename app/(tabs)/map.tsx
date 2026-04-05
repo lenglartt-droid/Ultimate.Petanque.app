@@ -23,7 +23,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Linking } from 'react-native';
 import theme from '@/constants/theme';
 import config from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
@@ -513,7 +513,8 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 // ============================================
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
-  const { clubs, tournaments, terrains, players, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, setItemPublic } = useApp();
+  const { clubs, tournaments, terrains, players } = useAppData();
+   const { refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, setItemPublic } = useAppActions();
   const { user } = useAuth();
   const { showAlert } = useAlert();
   const { showToast } = useToast();

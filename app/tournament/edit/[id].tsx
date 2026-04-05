@@ -21,7 +21,7 @@ import * as Haptics from '@/services/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
 import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory, RegistrationType, TournamentScope } from '@/constants/config';
-import { useApp } from '@/contexts/AppContext';
+import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 
@@ -89,7 +89,8 @@ function StepIndicator({ step, total, label }: { step: number; total: number; la
 export default function EditTournamentScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { getTournamentById, updateTournament, clubs, terrains, loading: appLoading } = useApp();
+  const { clubs, terrains, loading: appLoading } = useAppData();
+  const { getTournamentById, updateTournament } = useAppActions();
   const { t, language } = useLanguage();
 
   const tournament = getTournamentById(id!);

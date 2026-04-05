@@ -15,14 +15,15 @@ import Animated, {
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { getLastSyncTimestamp } from '@/services/cacheService';
 import { getQueueSize } from '@/services/offlineQueueService';
-import { useApp } from '@/contexts/AppContext';
+import { useAppActions, useAppUI } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import theme from '@/constants/theme';
 
 export default function OfflineBanner() {
   const insets = useSafeAreaInsets();
   const { isConnected } = useNetworkStatus();
-  const { refreshData, isReplayingQueue, replayProgress } = useApp();
+  const { refreshData } = useAppActions();
+  const { isReplayingQueue, replayProgress } = useAppUI();
   const { t, language } = useLanguage();
   const [lastSync, setLastSync] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
