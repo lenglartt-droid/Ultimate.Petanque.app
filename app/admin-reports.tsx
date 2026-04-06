@@ -18,7 +18,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
@@ -234,7 +234,7 @@ export default function AdminReportsScreen() {
       >
         {/* Summary Cards */}
         {currentWeek ? (
-          <Animated.View entering={FadeInDown.duration(300)}>
+          <View>
             <Text style={s.sectionTitle}>{fr ? 'CETTE SEMAINE' : 'THIS WEEK'}</Text>
             <View style={s.summaryGrid}>
               {([
@@ -263,11 +263,11 @@ export default function AdminReportsScreen() {
                 );
               })}
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Metric Selector */}
-        <Animated.View entering={FadeInDown.duration(300).delay(100)}>
+        <View>
           <Text style={s.sectionTitle}>{fr ? 'TENDANCES' : 'TRENDS'}</Text>
           <View style={s.metricSelector}>
             {(['users', 'matches', 'clubs'] as const).map(key => {
@@ -281,10 +281,10 @@ export default function AdminReportsScreen() {
               );
             })}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Trend Chart */}
-        <Animated.View entering={FadeInDown.duration(300).delay(150)}>
+        <View>
           <View style={s.chartCard}>
             {(() => {
               const values = snapshots.map(s => currentConfig.getNew(s));
@@ -309,10 +309,10 @@ export default function AdminReportsScreen() {
               });
             })()}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Week-over-Week Detail Table */}
-        <Animated.View entering={FadeInDown.duration(300).delay(200)}>
+        <View>
           <Text style={s.sectionTitle}>{fr ? 'DETAIL PAR SEMAINE' : 'WEEKLY DETAIL'}</Text>
           <View style={s.tableCard}>
             {/* Header */}
@@ -336,11 +336,11 @@ export default function AdminReportsScreen() {
               );
             })}
           </View>
-        </Animated.View>
+        </View>
 
         {/* Totals */}
         {currentWeek ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(250)}>
+          <View>
             <Text style={s.sectionTitle}>{fr ? 'TOTAUX CUMULES' : 'CUMULATIVE TOTALS'}</Text>
             <View style={s.totalsRow}>
               <View style={s.totalCard}>
@@ -354,7 +354,7 @@ export default function AdminReportsScreen() {
                 <Text style={s.totalLabel}>{fr ? 'Matchs (8 sem.)' : 'Matches (8 wks)'}</Text>
               </View>
             </View>
-          </Animated.View>
+          </View>
         ) : null}
       </ScrollView>
     </SafeAreaView>

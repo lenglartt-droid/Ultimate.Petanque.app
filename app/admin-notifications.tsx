@@ -18,7 +18,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -426,7 +426,7 @@ export default function AdminNotificationsScreen() {
       >
         {/* ====== PUSH TYPE MANAGEMENT ====== */}
         {showPushManagement ? (
-          <Animated.View entering={FadeInDown.duration(300)}>
+          <View>
             <View style={s.pushMgmtHeader}>
               <View style={s.pushMgmtHeaderIcon}>
                 <MaterialIcons name="notifications-off" size={22} color="#EF4444" />
@@ -549,7 +549,7 @@ export default function AdminNotificationsScreen() {
                 </Text>
               </View>
             ) : null}
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Summary */}
@@ -603,7 +603,7 @@ export default function AdminNotificationsScreen() {
             const bgColor = notif.severity === 'critical' ? '#FEF2F2' : notif.severity === 'warning' ? '#FFFBEB' : '#F0F9FF';
             const borderColor = notif.severity === 'critical' ? '#FECACA' : notif.severity === 'warning' ? '#FDE68A' : '#BAE6FD';
             return (
-              <Animated.View key={notif.id} entering={FadeInDown.duration(200).delay(Math.min(idx * 20, 200))}>
+              <View key={notif.id}>
                 <Pressable
                   style={[s.notifCard, { backgroundColor: notif.isRead ? '#FFF' : bgColor, borderColor: notif.isRead ? '#F1F5F9' : borderColor }]}
                   onPress={() => {
@@ -707,7 +707,7 @@ export default function AdminNotificationsScreen() {
                     </Pressable>
                   </View>
                 ) : null}
-              </Animated.View>
+              </View>
             );
           })
         )}

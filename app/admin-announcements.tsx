@@ -25,7 +25,8 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+const Animated = { View: View };
+const _a: any = new Proxy({}, { get: () => _a, apply: () => _a }); const FadeInDown = _a; const FadeIn = _a;
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';

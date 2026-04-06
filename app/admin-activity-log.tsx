@@ -19,7 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -324,7 +324,7 @@ export default function AdminActivityLogScreen() {
           filteredLogs.map((log, idx) => {
             const cfg = ACTION_CONFIG[log.actionType] || { iconFr: log.actionType, iconEn: log.actionType, color: '#64748B', icon: 'info' };
             return (
-              <Animated.View key={log.id} entering={FadeInDown.duration(200).delay(Math.min(idx * 15, 300))}>
+              <View key={log.id}>
                 <View style={s.logCard}>
                   <View style={[s.logIcon, { backgroundColor: cfg.color + '12' }]}>
                     <MaterialIcons name={cfg.icon as any} size={18} color={cfg.color} />
@@ -346,7 +346,7 @@ export default function AdminActivityLogScreen() {
                   </View>
                   <Text style={s.logTimeAgo}>{formatDate(log.createdAt)}</Text>
                 </View>
-              </Animated.View>
+              </View>
             );
           })
         )}
