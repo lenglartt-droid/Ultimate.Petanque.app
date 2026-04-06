@@ -452,6 +452,37 @@ export default function DirectoryScreen() {
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
+  // Meetups loaded from Supabase for activity scoring
+  const [terrainMeetupsMap, setTerrainMeetupsMap] = useState<Map<string, { date: string }[]>>(new Map());
+  const meetupLoadRef = useRef(false);
+  useEffect(() => {
+    if (!showActiveNow || meetupLoadRef.current) return;
+    meetupLoadRef.current = true;
+    const loadMeetups = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const today = new Date().toISOString().slice(0, 10);
+        const { data } = await supabase
+          .from('terrain_meetups')
+          .select('terrain_id, date')
+          .eq('status', 'active')
+          .gte('date', today);
+        if (data) {
+          const map = new Map<string, { date: string }[]>();
+          data.forEach((r: any) => {
+            const arr = map.get(r.terrain_id) || [];
+            arr.push({ date: r.date });
+            map.set(r.terrain_id, arr);
+          });
+          setTerrainMeetupsMap(map);
+        }
+      } catch { /* silent */ }
+    };
+    loadMeetups();
+  }, [showActiveNow]);
+  // Reset meetup load flag when filter is toggled off
+  useEffect(() => { if (!showActiveNow) meetupLoadRef.current = false; }, [showActiveNow]);
+
   const terrainActivityMap = useMemo(() => {
     const scoreMap = new Map<string, { score: number; matchCount: number; peakLabel: string }>();
     if (!showActiveNow) return scoreMap;
@@ -474,15 +505,23 @@ export default function DirectoryScreen() {
       // Bonus: tournaments happening today at this terrain
       const todayTournaments = allAppTournaments.filter(t => t.terrainId === tr.id && (t.status === 'En cours' || (t.status === 'À venir' && t.date && t.date.slice(0, 10) === todayStr)));
       const tournamentBonus = todayTournaments.length * 25;
+      // Bonus: meetups scheduled today at this terrain (from Supabase)
+      const terrainMeetups = terrainMeetupsMap.get(tr.id) || [];
+      const meetupsToday = terrainMeetups.filter(mt => mt.date.slice(0, 10) === todayStr);
+      const meetupBonus = meetupsToday.length * 30;
       // Score: weighted combination
       const hourScore = sameDayHourCount * 10;
       const dayScore = sameDayCount * 3;
       const totalScore = Math.min(terrainMatches.length, 10);
-      const rawScore = hourScore + dayScore + totalScore + tournamentBonus;
+      const rawScore = hourScore + dayScore + totalScore + tournamentBonus + meetupBonus;
       if (rawScore > 0) {
         const dayNames = language === 'fr' ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         let peakLabel = '';
-        if (todayTournaments.length > 0) {
+        if (meetupsToday.length > 0) {
+          peakLabel = meetupsToday.length === 1
+            ? `${language === 'fr' ? 'RDV prevu aujourd\'hui' : 'Meetup today'}`
+            : `${meetupsToday.length} ${language === 'fr' ? 'RDV aujourd\'hui' : 'meetups today'}`;
+        } else if (todayTournaments.length > 0) {
           peakLabel = todayTournaments.length === 1
             ? `${language === 'fr' ? 'Tournoi aujourd\'hui' : 'Tournament today'}`
             : `${todayTournaments.length} ${language === 'fr' ? 'tournois aujourd\'hui' : 'tournaments today'}`;
@@ -491,11 +530,11 @@ export default function DirectoryScreen() {
         } else {
           peakLabel = `${sameDayCount} ${language === 'fr' ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
         }
-        scoreMap.set(tr.id, { score: rawScore, matchCount: terrainMatches.length + todayTournaments.length, peakLabel });
+        scoreMap.set(tr.id, { score: rawScore, matchCount: terrainMatches.length + todayTournaments.length + meetupsToday.length, peakLabel });
       }
     });
     return scoreMap;
-  }, [showActiveNow, terrains, allAppMatches, allAppTournaments, language]);
+  }, [showActiveNow, terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language]);
 
   const filteredTerrains = useMemo(() => {
     let result = terrains.filter(tr => {
