@@ -68,26 +68,35 @@ export async function submitClubClaim(params: {
     return { error: error.message };
   }
 
-  // Send push notification to club owner
+  // Send push notification to admins (not to current owner)
   try {
-    // Get club name for the notification
     const { data: clubData } = await supabase
       .from('clubs')
       .select('name')
       .eq('id', params.clubId)
       .single();
 
-    await supabase.functions.invoke('send-push', {
-      body: {
-        type: 'club_claim',
-        payload: {
-          ownerUserId: params.currentOwnerId,
-          requesterName: params.requesterName || 'Un utilisateur',
-          clubName: clubData?.name || 'votre club',
-          clubId: params.clubId,
-        },
-      },
-    });
+    // Notify all admin users
+    const { data: admins } = await supabase
+      .from('user_profiles')
+      .select('id')
+      .eq('is_admin', true);
+
+    for (const admin of (admins || [])) {
+      try {
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'club_claim',
+            payload: {
+              ownerUserId: admin.id,
+              requesterName: params.requesterName || 'Un utilisateur',
+              clubName: clubData?.name || 'club',
+              clubId: params.clubId,
+            },
+          },
+        });
+      } catch { /* silent */ }
+    }
   } catch { /* push failure non-blocking */ }
 
   return { error: null };
@@ -257,4 +266,186 @@ export async function hasExistingClaim(clubId: string, userId: string): Promise<
 
   if (data) return { hasClaim: true, status: data.status };
   return { hasClaim: false, status: null };
+}
+
+/** Submit verification request (owner sends proof to admin) */
+export async function submitVerificationRequest(params: {
+  clubId: string;
+  userId: string;
+  userName?: string;
+  userEmail?: string;
+  roleInClub: string;
+  proofUrl?: string;
+  message?: string;
+}): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+
+  // Use club_claim_requests table with a special marker
+  const { data: existing } = await supabase
+    .from('club_claim_requests')
+    .select('id, status')
+    .eq('club_id', params.clubId)
+    .eq('requester_user_id', params.userId)
+    .single();
+
+  if (existing && existing.status === 'pending') {
+    return { error: 'verification_already_pending' };
+  }
+  if (existing && existing.status === 'accepted') {
+    return { error: 'verification_already_accepted' };
+  }
+  if (existing) {
+    await supabase.from('club_claim_requests').delete().eq('id', existing.id);
+  }
+
+  // Owner verifying their own club: current_owner_id = user_id
+  const { error } = await supabase.from('club_claim_requests').insert({
+    club_id: params.clubId,
+    requester_user_id: params.userId,
+    current_owner_id: params.userId,
+    requester_name: params.userName || null,
+    requester_email: params.userEmail || null,
+    message: params.message || `Role: ${params.roleInClub}`,
+    proof_url: params.proofUrl || null,
+    status: 'pending',
+  });
+
+  if (error) return { error: error.message };
+
+  // Notify admins
+  try {
+    const { data: clubData } = await supabase.from('clubs').select('name').eq('id', params.clubId).single();
+    const { data: admins } = await supabase.from('user_profiles').select('id').eq('is_admin', true);
+    for (const admin of (admins || [])) {
+      try {
+        await supabase.functions.invoke('send-push', {
+          body: { type: 'club_claim', payload: { ownerUserId: admin.id, requesterName: params.userName || 'Un utilisateur', clubName: clubData?.name || 'club', clubId: params.clubId } },
+        });
+      } catch { /* silent */ }
+    }
+  } catch { /* silent */ }
+
+  return { error: null };
+}
+
+/** Get all pending claims/verification requests (admin use) */
+export async function getAllPendingClaims(): Promise<{ claims: ClubClaimRequest[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('club_claim_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: false });
+
+  if (error) return { claims: [], error: error.message };
+
+  const claims: ClubClaimRequest[] = (data || []).map((r: any) => ({
+    id: r.id,
+    clubId: r.club_id,
+    requesterUserId: r.requester_user_id,
+    currentOwnerId: r.current_owner_id,
+    requesterName: r.requester_name,
+    requesterEmail: r.requester_email,
+    message: r.message,
+    proofUrl: r.proof_url,
+    status: r.status,
+    respondedAt: r.responded_at,
+    createdAt: r.created_at,
+  }));
+
+  return { claims, error: null };
+}
+
+/** Get claim processing stats for admin dashboard */
+export async function getClaimProcessingStats(): Promise<{
+  processedThisMonth: number;
+  acceptedThisMonth: number;
+  declinedThisMonth: number;
+  avgResponseTimeHours: number;
+  pendingCount: number;
+  oldestPendingDays: number;
+}> {
+  const supabase = getSupabaseClient();
+  const startOfMonth = new Date();
+  startOfMonth.setDate(1);
+  startOfMonth.setHours(0, 0, 0, 0);
+
+  // Get processed claims this month
+  const { data: processed } = await supabase
+    .from('club_claim_requests')
+    .select('status, created_at, responded_at')
+    .in('status', ['accepted', 'declined'])
+    .gte('responded_at', startOfMonth.toISOString());
+
+  const processedList = processed || [];
+  const acceptedThisMonth = processedList.filter(r => r.status === 'accepted').length;
+  const declinedThisMonth = processedList.filter(r => r.status === 'declined').length;
+
+  // Calculate average response time
+  let totalHours = 0;
+  let countWithTime = 0;
+  processedList.forEach(r => {
+    if (r.created_at && r.responded_at) {
+      const diff = new Date(r.responded_at).getTime() - new Date(r.created_at).getTime();
+      totalHours += diff / (1000 * 60 * 60);
+      countWithTime++;
+    }
+  });
+  const avgResponseTimeHours = countWithTime > 0 ? Math.round((totalHours / countWithTime) * 10) / 10 : 0;
+
+  // Get pending count and oldest
+  const { data: pending } = await supabase
+    .from('club_claim_requests')
+    .select('created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  const pendingCount = await supabase
+    .from('club_claim_requests')
+    .select('id', { count: 'exact', head: true })
+    .eq('status', 'pending');
+
+  let oldestPendingDays = 0;
+  if (pending && pending.length > 0) {
+    oldestPendingDays = Math.round((Date.now() - new Date(pending[0].created_at).getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  return {
+    processedThisMonth: processedList.length,
+    acceptedThisMonth,
+    declinedThisMonth,
+    avgResponseTimeHours,
+    pendingCount: pendingCount.count || 0,
+    oldestPendingDays,
+  };
+}
+
+/** Send detailed verification decision notification to club owner */
+export async function sendVerificationDecisionNotification(params: {
+  targetUserId: string;
+  clubName: string;
+  clubId: string;
+  decision: 'accepted' | 'declined';
+  requestType: 'verification' | 'claim';
+  adminMessage?: string;
+}): Promise<void> {
+  const supabase = getSupabaseClient();
+  try {
+    await supabase.functions.invoke('send-push', {
+      body: {
+        type: 'club_verification_decision',
+        payload: {
+          targetUserId: params.targetUserId,
+          clubName: params.clubName,
+          clubId: params.clubId,
+          decision: params.decision,
+          requestType: params.requestType,
+          adminMessage: params.adminMessage,
+        },
+      },
+    });
+  } catch (e) {
+    console.log('[ClubClaim] Decision notification error:', e);
+  }
 }

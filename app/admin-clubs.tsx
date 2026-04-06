@@ -33,6 +33,7 @@ import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { detectDuplicateClubs, pickBestClub, getClubMergePreview, mergeClubs, getClubMergeHistory, getClubHealthTrends, ClubDuplicateGroup } from '@/services/adminClubService';
+import { getAllPendingClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest, getClaimProcessingStats, sendVerificationDecisionNotification } from '@/services/clubClaimService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { ClubsSkeleton } from '@/components/ui/AdminSkeleton';
@@ -130,6 +131,13 @@ export default function AdminClubsScreen() {
   // Merge history
   const [mergeHistory, setMergeHistory] = useState<{ id: string; targetName: string; sourceName: string; createdAt: string; sourceSnapshot: any }[]>([]);
   const [showMergeHistory, setShowMergeHistory] = useState(false);
+
+  // Pending claims/verification requests
+  const [pendingClaims, setPendingClaims] = useState<(ClubClaimRequest & { clubName?: string })[]>([]);
+  const [showPendingClaims, setShowPendingClaims] = useState(false);
+  const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
+  const [claimFilter, setClaimFilter] = useState<'all' | 'verification' | 'claim'>('all');
+  const [claimStats, setClaimStats] = useState<{ processedThisMonth: number; acceptedThisMonth: number; declinedThisMonth: number; avgResponseTimeHours: number; pendingCount: number; oldestPendingDays: number } | null>(null);
 
   // Health trends
   const [healthTrends, setHealthTrends] = useState<{ month: string; score: number; matches: number; members: number; color: string }[]>([]);
@@ -334,7 +342,25 @@ export default function AdminClubsScreen() {
     setMergeHistory(logs);
   }, []);
 
-  useEffect(() => { loadClubs(); loadClubMatchCounts(); loadMergeHistory(); }, [loadClubs, loadClubMatchCounts, loadMergeHistory]);
+  // Load pending claims
+  const loadPendingClaims = useCallback(async () => {
+    const { claims } = await getAllPendingClaims();
+    // Enrich with club names
+    const enriched = claims.map(c => {
+      const club = clubs.find(cl => cl.id === c.clubId);
+      return { ...c, clubName: club?.name || c.clubId.substring(0, 8) };
+    });
+    setPendingClaims(enriched);
+  }, [clubs]);
+
+  // Load claim stats
+  const loadClaimStats = useCallback(async () => {
+    const stats = await getClaimProcessingStats();
+    setClaimStats(stats);
+  }, []);
+
+  useEffect(() => { loadClubs(); loadClubMatchCounts(); loadMergeHistory(); loadClaimStats(); }, [loadClubs, loadClubMatchCounts, loadMergeHistory, loadClaimStats]);
+  useEffect(() => { if (clubs.length > 0) loadPendingClaims(); }, [clubs.length, loadPendingClaims]);
   useEffect(() => { if (clubs.length > 0) computeHealthScores(); }, [clubs, computeHealthScores]);
 
   // Detect club duplicates when clubs load
@@ -750,6 +776,237 @@ export default function AdminClubsScreen() {
                 </View>
               </View>
             </View>
+          </Animated.View>
+        ) : null}
+
+        {/* Pending Claims / Verification Requests — Enhanced Dashboard */}
+        {pendingClaims.length > 0 || (claimStats && claimStats.processedThisMonth > 0) ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(10)}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#BFDBFE' }}
+              onPress={() => { setShowPendingClaims(!showPendingClaims); Haptics.selectionAsync(); }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#2563EB15', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="verified-user" size={18} color="#2563EB" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#1E40AF' }}>
+                  {pendingClaims.length > 0 ? (fr ? `${pendingClaims.length} demande(s) en attente` : `${pendingClaims.length} pending request(s)`) : (fr ? 'Demandes de verification' : 'Verification Requests')}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 2 }}>
+                  {fr ? 'Verifications et reclamations de clubs' : 'Club verifications and claims'}
+                </Text>
+              </View>
+              <MaterialIcons name={showPendingClaims ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showPendingClaims ? (
+              <View style={{ gap: 8, marginBottom: 14 }}>
+                {/* Stats Banner */}
+                {claimStats ? (
+                  <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#F0FDF4', borderRadius: 10, paddingVertical: 10, gap: 2 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#10B981' }}>{claimStats.processedThisMonth}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Traites ce mois' : 'This month'}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 10, paddingVertical: 10, gap: 2 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#22C55E' }}>{claimStats.acceptedThisMonth}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Acceptes' : 'Accepted'}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 10, paddingVertical: 10, gap: 2 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>{claimStats.declinedThisMonth}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Refuses' : 'Declined'}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 10, paddingVertical: 10, gap: 2 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '800', color: '#3B82F6' }}>{claimStats.avgResponseTimeHours < 24 ? `${Math.round(claimStats.avgResponseTimeHours)}h` : `${Math.round(claimStats.avgResponseTimeHours / 24)}j`}</Text>
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Temps moy.' : 'Avg time'}</Text>
+                      </View>
+                    </View>
+                    {claimStats.oldestPendingDays > 2 ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                        <MaterialIcons name="warning-amber" size={14} color="#D97706" />
+                        <Text style={{ fontSize: 11, color: '#92400E' }}>
+                          {fr ? `Demande la plus ancienne : ${claimStats.oldestPendingDays} jour(s)` : `Oldest request: ${claimStats.oldestPendingDays} day(s)`}
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {/* Filter Tabs */}
+                {pendingClaims.length > 0 ? (
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+                    {([
+                      { key: 'all' as const, label: fr ? 'Tout' : 'All', color: '#64748B', count: pendingClaims.length },
+                      { key: 'verification' as const, label: fr ? 'Verifications' : 'Verifications', color: '#F59E0B', count: pendingClaims.filter(c => c.requesterUserId === c.currentOwnerId).length },
+                      { key: 'claim' as const, label: fr ? 'Reclamations' : 'Claims', color: '#3B82F6', count: pendingClaims.filter(c => c.requesterUserId !== c.currentOwnerId).length },
+                    ]).map(f => {
+                      const isActive = claimFilter === f.key;
+                      return (
+                        <Pressable
+                          key={f.key}
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 8, borderRadius: 10, backgroundColor: isActive ? f.color + '15' : '#F8FAFC', borderWidth: 1.5, borderColor: isActive ? f.color + '40' : '#E2E8F0' }}
+                          onPress={() => { Haptics.selectionAsync(); setClaimFilter(f.key); }}
+                        >
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? f.color : '#94A3B8' }}>{f.label}</Text>
+                          <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: isActive ? f.color + '25' : '#F1F5F9', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '800', color: isActive ? f.color : '#94A3B8' }}>{f.count}</Text>
+                          </View>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : null}
+
+                {/* Filtered Claims List */}
+                {pendingClaims
+                  .filter(claim => {
+                    if (claimFilter === 'all') return true;
+                    const isOwnerVerification = claim.requesterUserId === claim.currentOwnerId;
+                    if (claimFilter === 'verification') return isOwnerVerification;
+                    return !isOwnerVerification;
+                  })
+                  .map(claim => {
+                  const isOwnerVerification = claim.requesterUserId === claim.currentOwnerId;
+                  return (
+                    <View key={claim.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: isOwnerVerification ? '#F59E0B30' : '#3B82F630', borderLeftWidth: 3, borderLeftColor: isOwnerVerification ? '#F59E0B' : '#3B82F6' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <MaterialIcons name={isOwnerVerification ? 'verified' : 'assignment-ind'} size={16} color={isOwnerVerification ? '#F59E0B' : '#3B82F6'} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            {isOwnerVerification ? (fr ? 'Verification' : 'Verification') : (fr ? 'Reclamation' : 'Claim')}: {claim.clubName}
+                          </Text>
+                          <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                            {fr ? 'Par' : 'By'} {claim.requesterName || claim.requesterEmail || claim.requesterUserId.substring(0, 8)}
+                          </Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: '#94A3B8' }}>
+                          {new Date(claim.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                        </Text>
+                      </View>
+                      {claim.message ? (
+                        <View style={{ backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8, marginBottom: 8 }}>
+                          <Text style={{ fontSize: 11, color: '#475569', fontStyle: 'italic' }}>{claim.message}</Text>
+                        </View>
+                      ) : null}
+                      {/* Inline Proof Preview */}
+                      {claim.proofUrl ? (
+                        <Pressable style={{ borderRadius: 10, overflow: 'hidden', marginBottom: 10, borderWidth: 1, borderColor: '#2563EB20' }} onPress={() => Linking.openURL(claim.proofUrl!)}>
+                          {claim.proofUrl.toLowerCase().endsWith('.pdf') ? (
+                            <View style={{ width: '100%', height: 70, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FEF2F2', flexDirection: 'row', gap: 8 }}>
+                              <MaterialIcons name="picture-as-pdf" size={28} color="#EF4444" />
+                              <View>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#0F172A' }}>PDF</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8' }}>{fr ? 'Appuyez pour ouvrir' : 'Tap to open'}</Text>
+                              </View>
+                            </View>
+                          ) : (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 8, backgroundColor: '#F8FAFC' }}>
+                              <Image source={{ uri: claim.proofUrl }} style={{ width: 64, height: 64, borderRadius: 8 }} contentFit="cover" transition={200} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#2563EB' }}>{fr ? 'Preuve jointe' : 'Attached proof'}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{fr ? 'Appuyez pour agrandir' : 'Tap to enlarge'}</Text>
+                              </View>
+                              <MaterialIcons name="open-in-new" size={16} color="#2563EB" />
+                            </View>
+                          )}
+                        </Pressable>
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', borderRadius: 8, padding: 8, marginBottom: 10 }}>
+                          <MaterialIcons name="warning-amber" size={14} color="#D97706" />
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#92400E' }}>{fr ? 'Aucune preuve fournie' : 'No proof provided'}</Text>
+                        </View>
+                      )}
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                          style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }}
+                          onPress={() => {
+                            Alert.alert(
+                              fr ? 'Refuser' : 'Decline',
+                              fr ? 'Refuser cette demande ?' : 'Decline this request?',
+                              [
+                                { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                                { text: fr ? 'Refuser' : 'Decline', style: 'destructive', onPress: async () => {
+                                  setProcessingClaimId(claim.id);
+                                  await declineClubClaim(claim.id);
+                                  setPendingClaims(prev => prev.filter(c => c.id !== claim.id));
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  logAdminAction({ actionType: 'club_unverify', actionDetail: `Declined ${isOwnerVerification ? 'verification' : 'claim'} for ${claim.clubName}`, targetType: 'club', targetId: claim.clubId, targetName: claim.clubName || '' });
+                                  // Send detailed decision notification
+                                  sendVerificationDecisionNotification({
+                                    targetUserId: claim.requesterUserId,
+                                    clubName: claim.clubName || '',
+                                    clubId: claim.clubId,
+                                    decision: 'declined',
+                                    requestType: isOwnerVerification ? 'verification' : 'claim',
+                                  });
+                                  loadClaimStats();
+                                  setProcessingClaimId(null);
+                                }},
+                              ]
+                            );
+                          }}
+                          disabled={processingClaimId === claim.id}
+                        >
+                          <MaterialIcons name="close" size={14} color="#EF4444" />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{fr ? 'Refuser' : 'Decline'}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#2563EB' }}
+                          onPress={() => {
+                            Alert.alert(
+                              fr ? 'Accepter' : 'Accept',
+                              isOwnerVerification
+                                ? (fr ? 'Verifier ce club et donner acces a l\'Analytique ?' : 'Verify this club and grant Analytics access?')
+                                : (fr ? 'Transferer la propriete et verifier ce club ?' : 'Transfer ownership and verify this club?'),
+                              [
+                                { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                                { text: fr ? 'Accepter' : 'Accept', onPress: async () => {
+                                  setProcessingClaimId(claim.id);
+                                  if (isOwnerVerification) {
+                                    // Just verify the club
+                                    const supabase = getSupabaseClient();
+                                    await supabase.from('clubs').update({ is_verified: true, updated_at: new Date().toISOString() }).eq('id', claim.clubId);
+                                    await supabase.from('club_claim_requests').update({ status: 'accepted', responded_at: new Date().toISOString() }).eq('id', claim.id);
+                                    setClubs(prev => prev.map(c => c.id === claim.clubId ? { ...c, isVerified: true } : c));
+                                  } else {
+                                    // Transfer ownership + verify
+                                    await acceptClubClaim(claim.id);
+                                    setClubs(prev => prev.map(c => c.id === claim.clubId ? { ...c, isVerified: true, userId: claim.requesterUserId } : c));
+                                  }
+                                  setPendingClaims(prev => prev.filter(c => c.id !== claim.id));
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  logAdminAction({ actionType: 'club_verify', actionDetail: `Accepted ${isOwnerVerification ? 'verification' : 'claim'} for ${claim.clubName}`, targetType: 'club', targetId: claim.clubId, targetName: claim.clubName || '' });
+                                  // Send detailed decision notification
+                                  sendVerificationDecisionNotification({
+                                    targetUserId: claim.requesterUserId,
+                                    clubName: claim.clubName || '',
+                                    clubId: claim.clubId,
+                                    decision: 'accepted',
+                                    requestType: isOwnerVerification ? 'verification' : 'claim',
+                                  });
+                                  loadClaimStats();
+                                  setProcessingClaimId(null);
+                                }},
+                              ]
+                            );
+                          }}
+                          disabled={processingClaimId === claim.id}
+                        >
+                          {processingClaimId === claim.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                            <>
+                              <MaterialIcons name="check" size={14} color="#FFF" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Accepter' : 'Accept'}</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
           </Animated.View>
         ) : null}
 

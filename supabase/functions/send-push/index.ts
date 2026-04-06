@@ -1364,6 +1364,64 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // CLUB_VERIFICATION_DECISION: Detailed notification for verification/claim decision
+    // Sends a rich push with decision summary and next steps
+    // ============================================================
+    else if (type === 'club_verification_decision') {
+      const { targetUserId, clubName, clubId: decisionClubId, decision, requestType, adminMessage } = payload || {};
+      // decision: 'accepted' | 'declined'
+      // requestType: 'verification' | 'claim'
+      if (!targetUserId || !decisionClubId || !decision) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/clubId/decision' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAccepted = decision === 'accepted';
+        const isVerification = requestType === 'verification';
+
+        let title: string;
+        let body: string;
+
+        if (isAccepted) {
+          if (isVerification) {
+            title = `\u2705 Club "${clubName || 'votre club'}" verifie !`;
+            body = `Felicitations ! Votre demande de verification a ete acceptee. Le badge bleu est visible sur votre fiche. Vous avez desormais acces a la page Analytique (stats detaillees, matchmaking, comparaisons nationales, export CSV/PDF).`;
+          } else {
+            title = `\u2705 Reclamation acceptee : "${clubName || 'votre club'}"`;
+            body = `Votre reclamation a ete validee par l'equipe admin. Vous etes desormais proprietaire et le club est verifie. Acces a l'Analytique debloque (stats, matchmaking, export).`;
+          }
+        } else {
+          if (isVerification) {
+            title = `\u274C Verification refusee : "${clubName || 'votre club'}"`;
+            body = `Votre demande de verification n'a pas ete acceptee.${adminMessage ? ` Motif : ${adminMessage}` : ''} Vous pouvez soumettre une nouvelle preuve depuis la page de votre club.`;
+          } else {
+            title = `\u274C Reclamation refusee : "${clubName || 'votre club'}"`;
+            body = `Votre reclamation de propriete n'a pas ete acceptee.${adminMessage ? ` Motif : ${adminMessage}` : ''} Si vous estimez qu'il s'agit d'une erreur, contactez le support.`;
+          }
+        }
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'club_verification', clubId: decisionClubId, decision, requestType },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // APPEAL_DEADLINE: Notify all admin users about overdue ban appeals
     // ============================================================
     else if (type === 'appeal_deadline') {
