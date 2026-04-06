@@ -2,12 +2,12 @@
   "expo": {
     "name": "Ultimate Petanque",
     "slug": "ppss-petanque-scorer",
-    "version": "1.2.0",
+    "version": "1.15.0",
     "orientation": "portrait",
     "icon": "./assets/images/app-logo.png",
     "scheme": "ultimatepetanque",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": false,
+    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",

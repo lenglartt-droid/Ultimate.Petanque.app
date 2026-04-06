@@ -61,6 +61,24 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[send-push] Trigger: ${type}, sender: ${user.id}`);
 
+    // ---- Check if this push type is globally disabled by admin ----
+    try {
+      const { data: appCfg } = await supabaseAdmin
+        .from('app_config')
+        .select('disabled_push_types')
+        .eq('id', 'main')
+        .single();
+      const disabledTypes: string[] = appCfg?.disabled_push_types || [];
+      if (Array.isArray(disabledTypes) && disabledTypes.includes(type)) {
+        console.log(`[send-push] Type "${type}" is globally disabled by admin. Skipping.`);
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'type_disabled_by_admin' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+    } catch (cfgErr) {
+      console.log('[send-push] Could not check disabled_push_types, proceeding:', cfgErr);
+    }
+
     let sent = 0;
     let errors = 0;
 
@@ -1545,6 +1563,54 @@ Deno.serve(async (req: Request) => {
           `La fusion de votre ${typeLabel} "${itemName}" dans "${targetName}" a ete annulee par un administrateur. Votre fiche est de nouveau disponible.`,
           { type: 'merge_undo', itemType, itemName },
           { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // CLUB_INVITATION_REMINDER: Remind player about pending invitation
+    // ============================================================
+    else if (type === 'club_invitation_reminder') {
+      const { targetUserId, clubName, clubId: reminderClubId, inviterName, reminderDay, invitationId } = payload || {};
+      if (!targetUserId || !reminderClubId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/clubId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check notification preference
+      const enabled = await isNotifEnabled(targetUserId, 'club_invitation');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isUrgent = reminderDay >= 21;
+        const daysLeft = 30 - (reminderDay || 7);
+        const title = isUrgent
+          ? `\u{26A0}\u{FE0F} Dernier rappel : ${clubName || 'un club'}`
+          : `\u{1F514} Invitation en attente : ${clubName || 'un club'}`;
+        const body = isUrgent
+          ? `L'invitation de "${clubName}" par ${inviterName || 'un club'} expire dans ${daysLeft} jours. Repondez maintenant !`
+          : `${inviterName || 'Un club'} vous a invite a rejoindre "${clubName}" il y a ${reminderDay || 7} jours. Acceptez ou declinez avant l'expiration.`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'club_invitation_reminder', clubId: reminderClubId, invitationId },
+          { channelId: 'share-requests', priority: isUrgent ? 'high' : 'default' }
         ));
         const tickets = await sendPushNotifications(messages);
         sent = tickets.filter((t: any) => t.status === 'ok').length;

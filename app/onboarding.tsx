@@ -273,7 +273,10 @@ export default function OnboardingScreen() {
         <SafeAreaView style={s.fullScreen}>
           <View style={s.langContent}>
             <View style={s.langHeader}>
-              <MaterialIcons name="translate" size={44} color="#60A5FA" />
+              <Image source={require('@/assets/images/app-logo.png')} style={s.langLogo} contentFit="contain" transition={300} />
+              <Text style={s.langAppName}>Ultimate Petanque</Text>
+              <View style={{ height: 16 }} />
+              <MaterialIcons name="translate" size={32} color="#60A5FA" />
               <Text style={s.langTitle}>Choose your language</Text>
               <Text style={s.langSubtitle}>Choisissez votre langue</Text>
             </View>
@@ -902,7 +905,9 @@ const s = StyleSheet.create({
 
   // Language
   langContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 32, paddingTop: 32 },
-  langHeader: { alignItems: 'center', marginBottom: 32, gap: 10 },
+  langLogo: { width: 120, height: 120, marginBottom: 4 },
+  langAppName: { fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: 1, marginBottom: 0 },
+  langHeader: { alignItems: 'center', marginBottom: 32, gap: 8 },
   langTitle: { fontSize: 24, fontWeight: '700', color: '#FFF', textAlign: 'center' },
   langSubtitle: { fontSize: 15, color: '#94A3B8', textAlign: 'center' },
   langOptions: { width: '100%', gap: 12, marginBottom: 32 },
