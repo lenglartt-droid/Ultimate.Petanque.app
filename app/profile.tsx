@@ -1848,6 +1848,17 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
+              {/* Club Invitations */}
+              <View style={styles.compactMenuDivider} />
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/club-invitations' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="mail" size={16} color="#7C3AED" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Invitations Club' : 'Club Invitations'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Rejoindre un club, historique' : 'Join a club, history'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
               {/* Unified Share Hub */}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); setUnreadShareCount(0); router.push('/share-hub' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="share" size={16} color={theme.success} />
