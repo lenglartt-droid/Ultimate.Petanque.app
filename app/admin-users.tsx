@@ -27,8 +27,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
+
+const NoAnimView = ({ entering, ...props }: any) => <View {...props} />;
+const Animated = { View: NoAnimView };
+const _noop: any = () => _noop; _noop.duration = _noop; _noop.delay = _noop; _noop.springify = _noop; _noop.damping = _noop;
+const FadeInDown = _noop; const FadeIn = _noop;
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminGuard from '@/components/feature/AdminGuard';

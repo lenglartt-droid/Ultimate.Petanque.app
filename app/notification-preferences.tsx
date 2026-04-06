@@ -157,6 +157,21 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
     ],
   },
   {
+    titleFr: 'Carte & Proximite',
+    titleEn: 'Map & Proximity',
+    items: [
+      {
+        key: 'terrain_proximity',
+        icon: 'near-me',
+        color: '#22C55E',
+        labelFr: 'Alerte terrain a proximite',
+        labelEn: 'Nearby terrain alert',
+        descFr: 'Alerte quand vous etes a proximite d\'un terrain ou des joueurs jouent habituellement a cette heure.',
+        descEn: 'Alert when you are near a terrain where players usually play at this time.',
+      },
+    ],
+  },
+  {
     titleFr: 'Club',
     titleEn: 'Club',
     items: [
