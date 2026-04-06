@@ -220,8 +220,7 @@ export default function TerrainDetailScreen() {
   const [linkedClubs, setLinkedClubs] = useState<{ id: string; name: string; city?: string; logo?: string }[]>([]);
 
   // Compute terrain statistics from matches
-  const { matches: allMatches } = useAppData();
-  const { players: allPlayers } = useAppData();
+  const { matches: allMatches, players: allPlayers } = useAppData();
 
   // Peak hours by day of week
   const [peakHours, setPeakHours] = useState<{ day: number; hours: number[]; peakHour: number; matchCount: number }[]>([]);
@@ -294,7 +293,7 @@ export default function TerrainDetailScreen() {
       setTerrainReviews(revs);
       setTerrainRating(computeRatingStats(revs));
       if (user?.id) {
-        const mine = revs.find(r => r.userId === user.id);
+        const mine = revs.find(r => r.userId === user?.id);
         if (mine) setMyReview(mine);
       }
       // Fetch votes after reviews load
@@ -360,7 +359,7 @@ export default function TerrainDetailScreen() {
   const handleSubmitReview = React.useCallback(async () => {
     if (!terrain || !user || reviewRating === 0 || submittingReview) return;
     setSubmittingReview(true);
-    const selfPlayer = allPlayers.find(p => p.userId === user.id);
+    const selfPlayer = allPlayers.find(p => (p as any).userId === user?.id);
     // Upload review photo if present
     let finalPhotoUrl = reviewPhotoUrl || undefined;
     if (reviewPhotoUri && !reviewPhotoUrl) {
@@ -436,7 +435,8 @@ export default function TerrainDetailScreen() {
   const hasPhotos = terrain.photos && terrain.photos.length > 0;
 
   const openMaps = () => {
-    const { latitude, longitude } = terrain.location;
+    const latitude = terrain.location?.latitude || 0;
+    const longitude = terrain.location?.longitude || 0;
     const label = encodeURIComponent(terrain.name);
     const url = Platform.select({
       ios: `maps:0,0?q=${label}@${latitude},${longitude}`,
@@ -708,7 +708,7 @@ export default function TerrainDetailScreen() {
           {(terrain.location?.latitude || terrain.location?.longitude) ? (
             <Pressable
               style={styles.mapButton}
-              onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(terrain.location.latitude), lng: String(terrain.location.longitude), name: terrain.name } } as any)}
+              onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(terrain.location?.latitude || 0), lng: String(terrain.location?.longitude || 0), name: terrain.name } } as any)}
             >
               <MaterialIcons name="map" size={20} color={theme.primary} />
               <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>

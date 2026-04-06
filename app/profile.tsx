@@ -1678,6 +1678,20 @@ export default function ProfileScreen() {
 
             <Pressable 
               style={[styles.playerCardLink, { marginTop: 10 }]}
+              onPress={() => router.push('/following' as any)}
+            >
+              <View style={[styles.playerCardLinkIcon, { backgroundColor: '#EC4899' + '15' }]}>
+                <MaterialIcons name="person-add" size={24} color="#EC4899" />
+              </View>
+              <View style={styles.playerCardLinkInfo}>
+                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Mes abonnements' : 'My Following'}</Text>
+                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Joueurs suivis et abonnes' : 'Following and followers'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              style={[styles.playerCardLink, { marginTop: 10 }]}
               onPress={() => router.push('/palmares')}
             >
               <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>

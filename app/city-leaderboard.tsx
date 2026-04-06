@@ -257,7 +257,7 @@ export default function CityLeaderboardScreen() {
           <View style={cs.playerInfo}>
             <View style={cs.avatarWrap}>
               {item.avatar ? (
-                <Image source={{ uri: item.avatar }} style={cs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                <Image source={{ uri: item.avatar }} style={cs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
               ) : (
                 <View style={[cs.avatar, { backgroundColor: isMe ? theme.primary : theme.textMuted + '30', alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ fontSize: 14, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{item.name.charAt(0)}</Text>

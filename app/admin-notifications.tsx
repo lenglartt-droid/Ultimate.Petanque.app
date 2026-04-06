@@ -63,6 +63,7 @@ const PUSH_TYPES: { id: string; label: { fr: string; en: string }; desc: { fr: s
   { id: 'share_request', label: { fr: 'Demande de partage', en: 'Share request' }, desc: { fr: 'Partage de match/defi', en: 'Match/challenge share request' }, icon: 'share', color: '#0EA5E9', category: 'sharing' },
   { id: 'witness_request', label: { fr: 'Demande attestation', en: 'Witness request' }, desc: { fr: 'Demande d\'attestation de match', en: 'Match attestation request' }, icon: 'visibility', color: '#6366F1', category: 'sharing' },
   { id: 'witness_attested', label: { fr: 'Match atteste', en: 'Match attested' }, desc: { fr: 'Un temoin a atteste un match', en: 'Witness attested a match' }, icon: 'verified', color: '#10B981', category: 'sharing' },
+  { id: 'new_follower', label: { fr: 'Nouvel abonne', en: 'New follower' }, desc: { fr: 'Notifie quand un joueur commence a vous suivre', en: 'Notifies when a player starts following you' }, icon: 'person-add', color: '#EC4899', category: 'sharing' },
   // Club
   { id: 'club_invitation', label: { fr: 'Invitation club', en: 'Club invitation' }, desc: { fr: 'Invitation a rejoindre un club', en: 'Invitation to join a club' }, icon: 'mail', color: '#7C3AED', category: 'club' },
   { id: 'club_invitation_response', label: { fr: 'Reponse invitation', en: 'Invitation response' }, desc: { fr: 'Reponse a une invitation club', en: 'Response to a club invitation' }, icon: 'how-to-reg', color: '#10B981', category: 'club' },

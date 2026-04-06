@@ -29,6 +29,7 @@ import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
+import { isFollowingPlayer, toggleFollowPlayer, getFollowerCount, getFollowingCount } from '@/services/activityFeedService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
@@ -149,6 +150,10 @@ export default function PlayerDetailScreen() {
   const [invitingToMeetup, setInvitingToMeetup] = React.useState<string | null>(null);
 
   const [showReportModal, setShowReportModal] = React.useState(false);
+  const [isFollowing, setIsFollowing] = React.useState(false);
+  const [togglingFollow, setTogglingFollow] = React.useState(false);
+  const [followerCount, setFollowerCount] = React.useState(0);
+  const [followingCount, setFollowingCount] = React.useState(0);
   const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
   const [reportReason, setReportReason] = React.useState<ReportReason | ''>('');
   const [reportDetails, setReportDetails] = React.useState('');
@@ -175,6 +180,32 @@ export default function PlayerDetailScreen() {
   }, [player?.id, player?.stats?.matchesPlayed]);
   const isSelfPlayer = selfPlayer && player?.id === selfPlayer.id;
   const { showAlert } = useAlert();
+
+  // Check follow status + load follower/following counts
+  React.useEffect(() => {
+    if (!user?.id || !id || isSelf) return;
+    isFollowingPlayer(user.id, id).then(setIsFollowing).catch(() => {});
+  }, [user?.id, id, isSelf]);
+
+  React.useEffect(() => {
+    if (!id) return;
+    getFollowerCount(id).then(setFollowerCount).catch(() => {});
+    if (playerUserId) {
+      getFollowingCount(playerUserId).then(setFollowingCount).catch(() => {});
+    }
+  }, [id, playerUserId]);
+
+  const handleToggleFollow = React.useCallback(async () => {
+    if (!user?.id || !id || togglingFollow) return;
+    setTogglingFollow(true);
+    Haptics.selectionAsync();
+    const { following, error } = await toggleFollowPlayer(user.id, id);
+    if (!error) {
+      setIsFollowing(following);
+      setFollowerCount(prev => following ? prev + 1 : Math.max(0, prev - 1));
+    }
+    setTogglingFollow(false);
+  }, [user?.id, id, togglingFollow]);
 
   React.useEffect(() => {
     if (!player) return;
@@ -429,6 +460,17 @@ export default function PlayerDetailScreen() {
           <Pressable style={s.headerIconBtn} onPress={handleOpenSharePreview}>
             <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
+          {!isSelf && user?.id ? (
+            <Pressable
+              style={[s.headerIconBtn, { backgroundColor: isFollowing ? '#EC4899' + '15' : theme.backgroundSecondary }]}
+              onPress={handleToggleFollow}
+              disabled={togglingFollow}
+            >
+              {togglingFollow ? <ActivityIndicator size="small" color="#EC4899" /> : (
+                <MaterialIcons name={isFollowing ? 'person-remove' : 'person-add'} size={20} color={isFollowing ? '#EC4899' : theme.textSecondary} />
+              )}
+            </Pressable>
+          ) : null}
           {isRealUser ? (
             <Pressable style={[s.headerIconBtn, { backgroundColor: theme.error + '10' }]} onPress={() => { Haptics.selectionAsync(); setShowReportModal(true); }}>
               <MaterialIcons name="flag" size={20} color={theme.error} />
@@ -490,7 +532,23 @@ export default function PlayerDetailScreen() {
                   </View>
                 </View>
 
-                <View style={s.heroNameRow}>
+                {/* Follower / Following counters */}
+              {(followerCount > 0 || followingCount > 0 || playerUserId) ? (
+                <Pressable style={s.followStatsRow} onPress={() => { Haptics.selectionAsync(); if (isSelf) router.push('/following' as any); }}>
+                  <View style={s.followStatItem}>
+                    <Text style={s.followStatValue}>{followerCount}</Text>
+                    <Text style={s.followStatLabel}>{language === 'fr' ? 'abonnes' : 'followers'}</Text>
+                  </View>
+                  <View style={s.followStatDivider} />
+                  <View style={s.followStatItem}>
+                    <Text style={s.followStatValue}>{followingCount}</Text>
+                    <Text style={s.followStatLabel}>{language === 'fr' ? 'abonnements' : 'following'}</Text>
+                  </View>
+                  {isSelf ? <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} style={{ marginLeft: 4 }} /> : null}
+                </Pressable>
+              ) : null}
+
+              <View style={s.heroNameRow}>
                   <Text style={s.heroName}>{player.name}</Text>
                   {ambassadorData ? (
                     <View style={s.ambassadorBadge}>
@@ -1313,6 +1371,13 @@ const s = StyleSheet.create({
   mipCreateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: theme.primary, paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 },
 
   // Unified ranking hub
+  // Follow stats
+  followStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 14, paddingVertical: 10, paddingHorizontal: 20, marginBottom: 10, gap: 0 },
+  followStatItem: { alignItems: 'center' as const, paddingHorizontal: 14 },
+  followStatValue: { fontSize: 17, fontWeight: '800' as const, color: theme.textPrimary },
+  followStatLabel: { fontSize: 10, color: theme.textMuted, marginTop: 1, fontWeight: '600' as const },
+  followStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
+
   rankingHub: { width: '100%' as const, marginBottom: 4 },
   // Geo Rank inline
   geoRankInlineCard: { width: '100%' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 12, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
