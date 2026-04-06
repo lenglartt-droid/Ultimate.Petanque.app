@@ -1121,96 +1121,89 @@ export default function AdminClubsScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Admin Merge Logs (all users) */}
+        {/* Admin Merge Logs — Compact Button */}
         {adminMergeLogs.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(15)}>
-            <Pressable
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FEF3C7', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#FDE68A' }}
-              onPress={() => { setShowAdminMergeLogs(!showAdminMergeLogs); Haptics.selectionAsync(); }}
-            >
-              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#D9770615', alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name="manage-history" size={18} color="#D97706" />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>
-                  {fr ? `${adminMergeLogs.length} fusion(s) globale(s)` : `${adminMergeLogs.length} global merge(s)`}
-                </Text>
-                <Text style={{ fontSize: 11, color: '#D97706', marginTop: 2 }}>
-                  {fr ? 'Historique de toutes les fusions (tous utilisateurs)' : 'All users merge history (admin undo)'}
-                </Text>
-              </View>
-              <MaterialIcons name={showAdminMergeLogs ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
-            </Pressable>
-
-            {showAdminMergeLogs ? (
-              <View style={{ gap: 8, marginBottom: 14 }}>
-                {adminMergeLogs.map(log => {
-                  const dateStr = new Date(log.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-                  return (
-                    <View key={log.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#FDE68A', borderLeftWidth: 3, borderLeftColor: '#D97706' }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <MaterialIcons name="merge-type" size={16} color="#D97706" />
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
-                            <Text style={{ color: '#EF4444', textDecorationLine: 'line-through' }}>{log.sourceName}</Text>
-                            {' \u2192 '}
-                            <Text style={{ color: '#10B981' }}>{log.targetName}</Text>
-                          </Text>
-                          <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{dateStr}</Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <MaterialIcons name="person" size={9} color="#64748B" />
-                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.userId.substring(0, 8)}</Text>
-                        </View>
-                      </View>
-                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.mergeType}</Text>
-                        </View>
-                        {log.sourceSnapshot?.city ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
-                            <MaterialIcons name="place" size={9} color="#64748B" />
-                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.sourceSnapshot.city}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Pressable
-                        style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#DC2626' }, undoingMergeId === log.id && { opacity: 0.5 }]}
-                        onPress={() => {
-                          Alert.alert(
-                            fr ? 'Annuler la fusion' : 'Undo Merge',
-                            fr ? `Recree "${log.sourceName}" et inverse les transferts ? Cette action est admin uniquement.` : `Re-create "${log.sourceName}" and reverse transfers? Admin only action.`,
-                            [
-                              { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
-                              { text: fr ? 'Confirmer' : 'Confirm', style: 'destructive', onPress: async () => {
-                                setUndoingMergeId(log.id);
-                                const { error } = await adminUndoMerge(log);
-                                setUndoingMergeId(null);
-                                if (error) {
-                                  showAlert(fr ? 'Erreur' : 'Error', error);
-                                } else {
-                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                                  showAlert(fr ? 'Fusion annulee' : 'Merge undone', fr ? `"${log.sourceName}" a ete recree.` : `"${log.sourceName}" has been re-created.`);
-                                  setAdminMergeLogs(prev => prev.filter(l => l.id !== log.id));
-                                  logAdminAction({ actionType: 'club_verify', actionDetail: `Admin undo merge: re-created ${log.sourceName}`, targetType: log.mergeType as any, targetId: log.sourceId, targetName: log.sourceName });
-                                  loadClubs();
-                                }
-                              }},
-                            ]
-                          );
-                        }}
-                        disabled={undoingMergeId === log.id}
-                      >
-                        {undoingMergeId === log.id ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="undo" size={14} color="#FFF" />}
-                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Annuler la fusion' : 'Undo Merge'}</Text>
-                      </Pressable>
-                    </View>
-                  );
-                })}
-              </View>
-            ) : null}
-          </Animated.View>
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#FEF3C7', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 12, borderWidth: 1.5, borderColor: '#FDE68A' }}
+            onPress={() => { setShowAdminMergeLogs(true); Haptics.selectionAsync(); }}
+          >
+            <MaterialIcons name="manage-history" size={18} color="#D97706" />
+            <Text style={{ flex: 1, fontSize: 13, fontWeight: '700', color: '#92400E' }}>
+              {fr ? `${adminMergeLogs.length} fusion(s) globale(s)` : `${adminMergeLogs.length} global merge(s)`}
+            </Text>
+            <MaterialIcons name="chevron-right" size={18} color="#D97706" />
+          </Pressable>
         ) : null}
+
+        {/* Admin Merge Logs Modal */}
+        <Modal visible={showAdminMergeLogs} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAdminMergeLogs(false)}>
+          <SafeAreaView style={s.modalContainer}>
+            <View style={s.modalHeader}>
+              <Pressable style={s.backBtn} onPress={() => setShowAdminMergeLogs(false)}><MaterialIcons name="close" size={24} color="#0F172A" /></Pressable>
+              <Text style={s.headerTitle}>{fr ? 'Fusions globales' : 'Global Merges'}</Text>
+              <View style={{ width: 40 }} />
+            </View>
+            <ScrollView style={s.scroll} contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+              {adminMergeLogs.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 48, gap: 8 }}>
+                  <MaterialIcons name="merge-type" size={40} color="#CBD5E1" />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Aucune fusion' : 'No merges'}</Text>
+                </View>
+              ) : adminMergeLogs.map(log => {
+                const dateStr = new Date(log.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                return (
+                  <View key={log.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: '#FDE68A', borderLeftWidth: 3, borderLeftColor: '#D97706' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                      <MaterialIcons name="merge-type" size={16} color="#D97706" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                          <Text style={{ color: '#EF4444', textDecorationLine: 'line-through' }}>{log.sourceName}</Text>
+                          {' \u2192 '}
+                          <Text style={{ color: '#10B981' }}>{log.targetName}</Text>
+                        </Text>
+                        <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{dateStr}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <MaterialIcons name="person" size={9} color="#64748B" />
+                        <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.userId.substring(0, 8)}</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#DC2626' }, undoingMergeId === log.id && { opacity: 0.5 }]}
+                      onPress={() => {
+                        Alert.alert(
+                          fr ? 'Annuler la fusion' : 'Undo Merge',
+                          fr ? `Recree "${log.sourceName}" et inverse les transferts ?` : `Re-create "${log.sourceName}" and reverse transfers?`,
+                          [
+                            { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                            { text: fr ? 'Confirmer' : 'Confirm', style: 'destructive', onPress: async () => {
+                              setUndoingMergeId(log.id);
+                              const { error } = await adminUndoMerge(log);
+                              setUndoingMergeId(null);
+                              if (error) {
+                                showAlert(fr ? 'Erreur' : 'Error', error);
+                              } else {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                showAlert(fr ? 'Fusion annulee' : 'Merge undone', fr ? `"${log.sourceName}" a ete recree.` : `"${log.sourceName}" has been re-created.`);
+                                setAdminMergeLogs(prev => prev.filter(l => l.id !== log.id));
+                                logAdminAction({ actionType: 'club_verify', actionDetail: `Admin undo merge: re-created ${log.sourceName}`, targetType: log.mergeType as any, targetId: log.sourceId, targetName: log.sourceName });
+                                loadClubs();
+                              }
+                            }},
+                          ]
+                        );
+                      }}
+                      disabled={undoingMergeId === log.id}
+                    >
+                      {undoingMergeId === log.id ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="undo" size={14} color="#FFF" />}
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Annuler la fusion' : 'Undo Merge'}</Text>
+                    </Pressable>
+                  </View>
+                );
+              })}
+            </ScrollView>
+          </SafeAreaView>
+        </Modal>
 
         {/* Club Duplicates Detection */}
         {clubDuplicates.length > 0 ? (

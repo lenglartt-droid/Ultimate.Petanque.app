@@ -80,6 +80,8 @@ Deno.serve(async (req: Request) => {
       recentMatchesRes,
       // Onboarding step logs
       onboardingLogsRes,
+      // Push token analytics
+      pushTokensRes,
     ] = await Promise.all([
       supabaseAdmin.from('user_profiles').select('id, is_premium, created_at, consent_date'),
       supabaseAdmin.from('players').select('id', { count: 'exact', head: true }),
@@ -101,6 +103,8 @@ Deno.serve(async (req: Request) => {
       supabaseAdmin.from('matches').select('user_id, date').gte('date', sixtyDaysAgo),
       // For onboarding funnel
       supabaseAdmin.from('onboarding_step_logs').select('session_id, step_number, step_name, action, created_at').gte('created_at', onboardingCutoff).order('created_at', { ascending: true }),
+      // Push token analytics
+      supabaseAdmin.from('push_tokens').select('user_id, active, platform, updated_at'),
     ]);
 
     const users = usersRes.data || [];
@@ -120,13 +124,14 @@ Deno.serve(async (req: Request) => {
     const overdueAppeals = pendingAppeals.filter((a: any) => new Date(a.created_at).getTime() < overdueThreshold).length;
 
     // ── ELO distribution ──
-    const eloBuckets = { bronze: 0, silver: 0, gold: 0, diamond: 0, master: 0 };
+    const eloBuckets = { bronze: 0, silver: 0, gold: 0, diamond: 0, master: 0, grand_master: 0 };
     (eloPlayersRes.data || []).forEach((p: any) => {
       const elo = p.elo_rating || 1000;
-      if (elo >= 1800) eloBuckets.master++;
+      if (elo >= 2000) eloBuckets.grand_master++;
+      else if (elo >= 1800) eloBuckets.master++;
       else if (elo >= 1500) eloBuckets.diamond++;
       else if (elo >= 1200) eloBuckets.gold++;
-      else if (elo >= 1000) eloBuckets.silver++;
+      else if (elo >= 1100) eloBuckets.silver++;
       else eloBuckets.bronze++;
     });
 
@@ -185,11 +190,28 @@ Deno.serve(async (req: Request) => {
     // ── Push analytics ──
     const pushData = pushLogsRes.data || [];
     const pushSent = pushData.reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0);
+    const pushErrors = pushData.reduce((s: number, a: any) => s + (a.push_error_count || 0), 0);
     const pushByType: Record<string, number> = {};
     pushData.forEach((a: any) => {
       const t = a.target_type || 'all';
       pushByType[t] = (pushByType[t] || 0) + (a.push_sent_count || 0);
     });
+
+    // Daily push stats (last 7 days)
+    const pushDaily: { date: string; sent: number; errors: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 24 * 60 * 60 * 1000);
+      const dayStr = d.toISOString().slice(0, 10);
+      let daySent = 0;
+      let dayErrors = 0;
+      pushData.forEach((a: any) => {
+        if (a.created_at && a.created_at.startsWith(dayStr)) {
+          daySent += a.push_sent_count || 0;
+          dayErrors += a.push_error_count || 0;
+        }
+      });
+      pushDaily.push({ date: dayStr, sent: daySent, errors: dayErrors });
+    }
 
     // ── Maintenance ──
     const maintenanceActive = appConfigRes.data?.maintenance_mode || false;
@@ -223,6 +245,28 @@ Deno.serve(async (req: Request) => {
       }
     });
     decliningClubs.sort((a, b) => a.delta - b.delta);
+
+    // ── Push Token Analytics ──
+    const allPushTokens = pushTokensRes.data || [];
+    const activeTokens = allPushTokens.filter((t: any) => t.active);
+    const inactiveTokens = allPushTokens.filter((t: any) => !t.active);
+    const usersWithActiveToken = new Set(activeTokens.map((t: any) => t.user_id));
+    const tokenCoverage = users.length > 0 ? Math.round((usersWithActiveToken.size / users.length) * 100) : 0;
+    const deactivatedThisWeek = inactiveTokens.filter((t: any) => t.updated_at && t.updated_at >= sevenDaysAgo).length;
+    const platformBreakdown: Record<string, number> = {};
+    activeTokens.forEach((t: any) => {
+      const p = t.platform || 'unknown';
+      platformBreakdown[p] = (platformBreakdown[p] || 0) + 1;
+    });
+    const pushTokenAnalytics = {
+      totalTokens: allPushTokens.length,
+      activeTokens: activeTokens.length,
+      inactiveTokens: inactiveTokens.length,
+      usersWithToken: usersWithActiveToken.size,
+      coverage: tokenCoverage,
+      deactivatedThisWeek,
+      platforms: platformBreakdown,
+    };
 
     // ── Onboarding step analytics ──
     const onboardingLogs = onboardingLogsRes.data || [];
@@ -326,10 +370,11 @@ Deno.serve(async (req: Request) => {
       growthDelta,
       recentSignups,
       unverifiedClubs: unverifiedClubs.slice(0, 10),
-      pushAnalytics: { sent: pushSent, types: pushByType },
+      pushAnalytics: { sent: pushSent, errors: pushErrors, types: pushByType, daily: pushDaily },
       decliningClubs: decliningClubs.slice(0, 10),
       onboardingStats,
       onboardingAnalytics,
+      pushTokenAnalytics,
       activityLogs: (activityLogsRes.data || []).map((row: any) => ({
         id: row.id,
         adminUserId: row.admin_user_id,
