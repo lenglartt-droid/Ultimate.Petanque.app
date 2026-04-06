@@ -513,8 +513,8 @@ function getClubFaq(fr: boolean): FAQCategory[] {
           id: 'cb1',
           q: fr ? 'Comment creer la fiche de mon club ?' : 'How do I create my club card?',
           a: fr
-            ? 'Depuis l\'annuaire > onglet Clubs > "+ Club". Renseignez nom, ville, adresse, description, equipements, contact et logo. Plus la fiche est complete, plus votre score de completude sera eleve, ce qui facilite la verification.'
-            : 'From directory > Clubs tab > "+ Club". Enter name, city, address, description, facilities, contact and logo. The more complete the card, the higher your completeness score, which facilitates verification.',
+            ? 'Depuis l\'annuaire > onglet Clubs > "+ Club". Renseignez nom, ville, adresse, description, equipements, contact et logo. Vous devenez automatiquement proprietaire de la fiche. Une checklist de verification apparait sur la page du club pour vous guider vers le badge verifie.'
+            : 'From directory > Clubs tab > "+ Club". Enter name, city, address, description, facilities, contact and logo. You automatically become the card owner. A verification checklist appears on the club page to guide you toward the verified badge.',
         },
         {
           id: 'cb2',
@@ -537,28 +537,35 @@ function getClubFaq(fr: boolean): FAQCategory[] {
       category: fr ? 'Verification & Badge Verifie' : 'Verification & Verified Badge',
       icon: 'verified',
       color: '#2563EB',
-      description: fr ? 'Obtenir le badge bleu pour votre club' : 'Get the blue badge for your club',
+      description: fr ? 'Obtenir le badge bleu et debloquer l\'Analytique' : 'Get the blue badge and unlock Analytics',
       questions: [
         {
           id: 'cv1',
           q: fr ? 'Comment obtenir le badge "Verifie" ?' : 'How do I get the "Verified" badge?',
           a: fr
-            ? 'Le badge bleu est attribue de deux manieres : (1) Remplissez les criteres de completude (adresse, 2+ membres, description, contact, logo, 5+ matchs) et l\'equipe admin validera. (2) Revendiquez un club existant : si un joueur a cree votre fiche club avant vous, appuyez sur "Revendiquer ce club" en bas de la page. Le proprietaire recoit la demande et peut accepter le transfert.'
-            : 'The blue badge is awarded in two ways: (1) Meet completeness criteria (address, 2+ members, description, contact, logo, 5+ matches) and the admin team will validate. (2) Claim an existing club: if a player created your club card before you, tap "Claim this club" at bottom of the page. The owner receives the request and can accept the transfer.',
+            ? 'Suivez la checklist de verification visible sur la page de votre club : (1) Adresse renseignee, (2) 2+ membres, (3) Description ajoutee, (4) Contact (email ou telephone), (5) Logo du club, (6) Envoi d\'une preuve de votre role administratif (president, tresorier, secretaire...) dans le comite du club. Une fois la checklist complete, l\'equipe admin examine votre preuve et valide le badge. Vous recevez une notification push de confirmation.'
+            : 'Follow the verification checklist visible on your club page: (1) Address provided, (2) 2+ members, (3) Description added, (4) Contact (email or phone), (5) Club logo, (6) Send proof of your administrative role (president, treasurer, secretary...) in the club committee. Once the checklist is complete, the admin team reviews your proof and validates the badge. You receive a push notification confirmation.',
+        },
+        {
+          id: 'cv1b',
+          q: fr ? 'Quels avantages apporte le badge verifie ?' : 'What advantages does the verified badge bring?',
+          a: fr
+            ? 'Le badge verifie debloque : (1) La page Analytique du club avec statistiques detaillees de tous les membres, matchmaking automatique des doublettes/triplettes optimales, comparaison nationale avec la moyenne des autres clubs, evolution mensuelle, et export CSV/PDF. (2) Priorite sur la carte avec marqueur distinctif bleu. (3) Badge "Proprietaire" affiche sur la fiche du club. (4) Confiance accrue des joueurs car les informations sont validees par un representant officiel.'
+            : 'The verified badge unlocks: (1) Club Analytics page with detailed member stats, automatic matchmaking for optimal doubles/triples, national comparison with other clubs average, monthly evolution, and CSV/PDF export. (2) Priority on the map with distinctive blue marker. (3) "Owner" badge displayed on the club card. (4) Increased player trust as information is validated by an official representative.',
         },
         {
           id: 'cv2',
-          q: fr ? 'Que signifie le badge "Verifie" pour les joueurs ?' : 'What does "Verified" mean for players?',
+          q: fr ? 'Comment revendiquer un club deja cree par un autre joueur ?' : 'How do I claim a club already created by another player?',
           a: fr
-            ? 'Le badge bleu garantit aux joueurs que le club est gere par son representant officiel. Les informations (horaires, contact, equipements, localisation) sont fiables et a jour. Les clubs verifies apparaissent en priorite sur la carte avec un marqueur distinctif.'
-            : 'The blue badge guarantees players the club is managed by its official representative. Information (hours, contact, facilities, location) is reliable and up to date. Verified clubs appear as a priority on the map with a distinctive marker.',
+            ? 'Si la fiche de votre club a deja ete creee par un autre utilisateur, appuyez sur "Revendiquer ce club" en bas de la page. Envoyez un message explicatif et une preuve de votre role (photo de carte de club, document officiel, etc.). La demande est envoyee directement a l\'equipe admin (pas au proprietaire actuel) qui examine la preuve et decide. Si acceptee, vous devenez proprietaire, le club est verifie, et vous accedez a l\'Analytique. L\'ancien proprietaire conserve un badge Contributeur.'
+            : 'If your club card was already created by another user, tap "Claim this club" at the bottom of the page. Send an explanatory message and proof of your role (club card photo, official document, etc.). The request is sent directly to the admin team (not the current owner) who reviews the proof and decides. If accepted, you become owner, the club is verified, and you get access to Analytics. The original owner keeps a Contributor badge.',
         },
         {
           id: 'cv3',
-          q: fr ? 'Ou voir les demandes de revendication recues ?' : 'Where do I see received claim requests?',
+          q: fr ? 'Ou suivre l\'etat de ma demande de verification ou de reclamation ?' : 'Where do I track my verification or claim request status?',
           a: fr
-            ? 'Deux endroits : (1) Sur la page de votre club > section "Revendications en attente". (2) Dans le Hub Notifications > onglet "Clubs". Vous pouvez accepter ou refuser depuis les deux. L\'ancien proprietaire conserve un badge Contributeur.'
-            : 'Two places: (1) On your club page > "Pending Claims" section. (2) In Notification Hub > "Claims" tab. You can accept or decline from both. The original owner keeps a Contributor badge.',
+            ? 'Sur la page de votre club, la checklist de verification affiche le statut de votre preuve : "En attente de validation admin" quand la preuve a ete envoyee, ou "Preuve envoyee" avec un indicateur. Vous recevez une notification push quand l\'admin a traite votre demande (acceptation ou refus).'
+            : 'On your club page, the verification checklist shows the status of your proof: "Awaiting admin validation" when proof has been sent, or "Proof sent" with an indicator. You receive a push notification when admin has processed your request (acceptance or refusal).',
         },
       ],
     },
