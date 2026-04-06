@@ -17,7 +17,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeIn, FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Linking } from 'react-native';
@@ -254,9 +254,54 @@ const pMarkerStyles = StyleSheet.create({
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
+// Animated pulse ring for active-now markers
+const ActiveNowPulse = React.memo(() => {
+  const pulse1 = useSharedValue(0);
+  const pulse2 = useSharedValue(0);
+
+  React.useEffect(() => {
+    pulse1.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1500 }),
+        withTiming(0, { duration: 0 })
+      ),
+      -1,
+      false
+    );
+    // Staggered second ring
+    const timer = setTimeout(() => {
+      pulse2.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1500 }),
+          withTiming(0, { duration: 0 })
+        ),
+        -1,
+        false
+      );
+    }, 750);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const ring1Style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + pulse1.value * 0.8 }],
+    opacity: 1 - pulse1.value,
+  }));
+  const ring2Style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + pulse2.value * 0.8 }],
+    opacity: 1 - pulse2.value,
+  }));
+
+  return (
+    <>
+      <Animated.View style={[styles.activeNowPulseRing, ring1Style]} />
+      <Animated.View style={[styles.activeNowPulseRing, ring2Style]} />
+    </>
+  );
+});
+
 const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean }) => (
   <View style={styles.markerWrapper}>
-    {isActiveNow ? <View style={styles.activeNowPulse} /> : null}
+    {isActiveNow ? <ActiveNowPulse /> : null}
     <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, isActiveNow && { borderColor: '#22C55E', borderWidth: 3, width: 36, height: 36, borderRadius: 18 }]}>
       <MaterialIcons name={icon as any} size={isActiveNow ? 16 : 14} color="#FFF" />
     </View>
@@ -2251,7 +2296,7 @@ const styles = StyleSheet.create({
   // Fallback badge for players with terrain/club location
   fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
-  activeNowPulse: { position: 'absolute' as const, width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E30', borderWidth: 2, borderColor: '#22C55E40' },
+  activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' },
   // Cluster markers
   clusterOuter: {
     alignItems: 'center', justifyContent: 'center',

@@ -20,6 +20,8 @@ export interface NotificationPreferences {
   new_follower: boolean;
   club_invitation: boolean;
   club_invitation_reminder: boolean;
+  terrain_proximity: boolean;
+  terrain_proximity_radius: number; // meters: 1000, 3000, 5000, 10000
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -36,7 +38,16 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   new_follower: true,
   club_invitation: true,
   club_invitation_reminder: true,
+  terrain_proximity: true,
+  terrain_proximity_radius: 3000,
 };
+
+export const PROXIMITY_RADIUS_OPTIONS = [
+  { value: 1000, labelFr: '1 km', labelEn: '1 km' },
+  { value: 3000, labelFr: '3 km', labelEn: '3 km' },
+  { value: 5000, labelFr: '5 km', labelEn: '5 km' },
+  { value: 10000, labelFr: '10 km', labelEn: '10 km' },
+];
 
 /**
  * Load notification preferences for the current user.

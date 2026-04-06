@@ -47,6 +47,8 @@ import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNo
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchActivityFeed } from '@/services/activityFeedService';
+import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@/services/terrainProximityService';
+import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -184,6 +186,11 @@ export default function HomeScreen() {
   // Feed notification badge
   const [feedUnreadCount, setFeedUnreadCount] = useState(0);
 
+  // Proximity alert
+  const [nearbyTerrains, setNearbyTerrains] = useState<NearbyActiveTerrain[]>([]);
+  const [proximityDismissed, setProximityDismissed] = useState(false);
+  const proximityLoadedRef = React.useRef(false);
+
   // Countdown
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -295,10 +302,26 @@ export default function HomeScreen() {
           loadUpcomingEvents(),
           loadFeedUnread(),
         ]);
+        // Phase 3: Proximity check (needs location permission, defer further)
+        setTimeout(() => loadProximityAlert(), 2000);
       }, 1500);
     };
     loadCritical();
-  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread]);
+  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert]);
+
+  // Load nearby active terrains (proximity alert)
+  const loadProximityAlert = useCallback(async () => {
+    if (proximityLoadedRef.current) return;
+    proximityLoadedRef.current = true;
+    try {
+      // Check user preference first
+      const prefs = await loadNotificationPreferences();
+      if (!prefs.terrain_proximity) return;
+      const radius = prefs.terrain_proximity_radius || 3000;
+      const { terrains: nearby } = await findNearbyActiveTerrains(radius, language);
+      if (nearby.length > 0) setNearbyTerrains(nearby);
+    } catch { /* silent */ }
+  }, [language]);
 
   // Load feed unread count
   const loadFeedUnread = useCallback(async () => {
@@ -394,6 +417,7 @@ export default function HomeScreen() {
     const s: HomeSection[] = [];
     s.push({ key: 'hero', data: ['hero'] });
     s.push({ key: 'actions', data: ['actions'] });
+    if (nearbyTerrains.length > 0 && !proximityDismissed) s.push({ key: 'proximity' as SectionKey, data: ['proximity' as SectionKey] });
     // Geographic Ranking Widget — above full leaderboard
     s.push({ key: 'geoRanking', data: ['geoRanking'] });
     // Leaderboard Hub — prominent position
@@ -419,7 +443,7 @@ export default function HomeScreen() {
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
-  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language]);
+  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -504,6 +528,59 @@ export default function HomeScreen() {
             <MiniRankingWidget />
           </View>
         );
+
+      // ===== PROXIMITY ALERT =====
+      case 'proximity' as SectionKey:
+        return nearbyTerrains.length > 0 && !proximityDismissed ? (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={st.proximityCard}>
+              <Pressable style={st.proximityClose} onPress={() => setProximityDismissed(true)} hitSlop={8}>
+                <MaterialIcons name="close" size={16} color="#16A34A" />
+              </Pressable>
+              <View style={st.proximityHeader}>
+                <View style={st.proximityIconBg}>
+                  <MaterialIcons name="near-me" size={22} color="#22C55E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.proximityTitle}>{language === 'fr' ? 'Terrains actifs pres de vous' : 'Active courts near you'}</Text>
+                  <Text style={st.proximitySub}>{nearbyTerrains.length} {language === 'fr' ? 'terrain(s) avec activite' : 'court(s) with activity'}</Text>
+                </View>
+              </View>
+              {nearbyTerrains.slice(0, 3).map((t, i) => (
+                <Pressable
+                  key={t.id}
+                  style={st.proximityItem}
+                  onPress={() => router.push(`/terrain/${t.id}` as any)}
+                >
+                  <View style={st.proximityItemLeft}>
+                    <View style={st.proximityItemIcon}>
+                      <MaterialIcons name="sports-soccer" size={16} color="#22C55E" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.proximityItemName} numberOfLines={1}>{t.name}</Text>
+                      <Text style={st.proximityItemLabel} numberOfLines={1}>{t.activityLabel}</Text>
+                    </View>
+                  </View>
+                  <View style={st.proximityItemRight}>
+                    <View style={st.proximityDistBadge}>
+                      <MaterialIcons name="place" size={10} color="#16A34A" />
+                      <Text style={st.proximityDistText}>{formatDistance(t.distance, language)}</Text>
+                    </View>
+                    {t.hasMeetupToday ? <View style={st.proximityMeetupDot}><MaterialIcons name="event" size={9} color="#FFF" /></View> : null}
+                    {t.hasTournamentToday ? <View style={st.proximityTournamentDot}><MaterialIcons name="emoji-events" size={9} color="#FFF" /></View> : null}
+                  </View>
+                </Pressable>
+              ))}
+              <Pressable
+                style={st.proximityCta}
+                onPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any)}
+              >
+                <MaterialIcons name="map" size={16} color="#FFF" />
+                <Text style={st.proximityCtaText}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null;
 
       // ===== QUICK ACTIONS =====
       case 'actions':
@@ -764,7 +841,7 @@ export default function HomeScreen() {
     isTablet, greeting, displayName, selfPlayer, pendingInviteCount, eventNotifCount, pendingWitnessMatchCount,
     totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t, eloDecayWarning, placementInfo,
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors,
-    now, screenWidth, user?.id, matches, recentResults,
+    now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
   ]);
 
   const keyExtractor = useCallback((item: SectionKey) => item, []);
@@ -987,6 +1064,26 @@ const st = StyleSheet.create({
   seasonStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.1)' },
   seasonBarWrap: { flexDirection: 'row' as const, height: 6, borderRadius: 3, overflow: 'hidden' as const, backgroundColor: 'rgba(255,255,255,0.08)' },
   seasonBarFill: { height: '100%' as any, borderRadius: 3 },
+
+  // PROXIMITY ALERT
+  proximityCard: { backgroundColor: '#F0FDF4', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BBF7D0', position: 'relative' as const },
+  proximityClose: { position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10 },
+  proximityHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 14, paddingRight: 32 },
+  proximityIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#22C55E18', alignItems: 'center' as const, justifyContent: 'center' as const },
+  proximityTitle: { fontSize: 15, fontWeight: '700' as const, color: '#14532D' },
+  proximitySub: { fontSize: 11, fontWeight: '600' as const, color: '#16A34A', marginTop: 2 },
+  proximityItem: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, marginBottom: 6, borderWidth: 1, borderColor: '#DCFCE7' },
+  proximityItemLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, flex: 1, minWidth: 0 },
+  proximityItemIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  proximityItemName: { fontSize: 13, fontWeight: '600' as const, color: '#14532D' },
+  proximityItemLabel: { fontSize: 10, color: '#16A34A', marginTop: 1 },
+  proximityItemRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginLeft: 8 },
+  proximityDistBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  proximityDistText: { fontSize: 10, fontWeight: '700' as const, color: '#16A34A' },
+  proximityMeetupDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#3B82F6', alignItems: 'center' as const, justifyContent: 'center' as const },
+  proximityTournamentDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', alignItems: 'center' as const, justifyContent: 'center' as const },
+  proximityCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#22C55E', paddingVertical: 12, borderRadius: 12, marginTop: 6 },
+  proximityCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
 
   // DIVIDERS
   divider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, marginBottom: 20 },
