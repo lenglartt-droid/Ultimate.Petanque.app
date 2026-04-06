@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders'];
 
     const results: Record<string, any> = {};
 
@@ -1122,7 +1122,139 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 12: Clean up old analytics (older than 365 days)
+    // TASK 12: Invitation Reminders (7 days and 21 days)
+    // Sends push notifications to players who haven't responded
+    // ============================================================
+    if (tasks.includes('invitation_reminders')) {
+      console.log('[weekly-cron] Sending invitation reminders...');
+      try {
+        const now = new Date();
+        const threshold7d = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+        const threshold8d = new Date(now.getTime() - 8 * 24 * 60 * 60 * 1000).toISOString();
+        const threshold21d = new Date(now.getTime() - 21 * 24 * 60 * 60 * 1000).toISOString();
+        const threshold22d = new Date(now.getTime() - 22 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Fetch pending invitations in the 7-day window (created 7-8 days ago)
+        const { data: reminder7d } = await supabaseAdmin
+          .from('club_invitations')
+          .select('id, club_id, club_name, club_logo, inviter_name, invited_player_id, invited_player_name, invited_user_id, message, created_at')
+          .eq('status', 'pending')
+          .lt('created_at', threshold7d)
+          .gte('created_at', threshold8d);
+
+        // Fetch pending invitations in the 21-day window (created 21-22 days ago)
+        const { data: reminder21d } = await supabaseAdmin
+          .from('club_invitations')
+          .select('id, club_id, club_name, club_logo, inviter_name, invited_player_id, invited_player_name, invited_user_id, message, created_at')
+          .eq('status', 'pending')
+          .lt('created_at', threshold21d)
+          .gte('created_at', threshold22d);
+
+        let sent7 = 0, sent21 = 0, errors7 = 0, errors21 = 0;
+
+        // Process 7-day reminders
+        const invitations7 = reminder7d || [];
+        for (const inv of invitations7) {
+          if (!inv.invited_user_id) continue;
+          try {
+            // Check notification preference
+            const { data: prefData } = await supabaseAdmin
+              .from('user_preferences')
+              .select('notification_preferences')
+              .eq('user_id', inv.invited_user_id)
+              .maybeSingle();
+            const prefs = prefData?.notification_preferences || {};
+            if (prefs.club_invitation === false) continue;
+
+            const { data: tokens } = await supabaseAdmin
+              .from('push_tokens')
+              .select('token')
+              .eq('user_id', inv.invited_user_id)
+              .eq('active', true);
+
+            if (tokens && tokens.length > 0) {
+              const messages = tokens.map((t: any) => buildPushMessage(
+                t.token,
+                `\u{1F514} Invitation en attente : ${inv.club_name}`,
+                `${inv.inviter_name || 'Un club'} vous a invite a rejoindre "${inv.club_name}" il y a 7 jours. Acceptez ou declinez avant l'expiration automatique.`,
+                { type: 'club_invitation_reminder', clubId: inv.club_id, invitationId: inv.id, reminderDay: 7 },
+                { channelId: 'share-requests' }
+              ));
+              const tickets = await sendPushNotifications(messages);
+              sent7 += tickets.filter((t: any) => t.status === 'ok').length;
+              errors7 += tickets.filter((t: any) => t.status === 'error').length;
+
+              // Deactivate invalid tokens
+              for (let i = 0; i < tickets.length; i++) {
+                if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                  const invalidToken = messages[i]?.to;
+                  if (invalidToken) {
+                    await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                  }
+                }
+              }
+            }
+          } catch { /* silent per-invitation */ }
+        }
+
+        // Process 21-day reminders (urgent — 9 days before expiration)
+        const invitations21 = reminder21d || [];
+        for (const inv of invitations21) {
+          if (!inv.invited_user_id) continue;
+          try {
+            // Check notification preference
+            const { data: prefData } = await supabaseAdmin
+              .from('user_preferences')
+              .select('notification_preferences')
+              .eq('user_id', inv.invited_user_id)
+              .maybeSingle();
+            const prefs = prefData?.notification_preferences || {};
+            if (prefs.club_invitation === false) continue;
+
+            const { data: tokens } = await supabaseAdmin
+              .from('push_tokens')
+              .select('token')
+              .eq('user_id', inv.invited_user_id)
+              .eq('active', true);
+
+            if (tokens && tokens.length > 0) {
+              const messages = tokens.map((t: any) => buildPushMessage(
+                t.token,
+                `\u{26A0}\u{FE0F} Dernier rappel : ${inv.club_name}`,
+                `L'invitation de "${inv.club_name}" par ${inv.inviter_name || 'un club'} expire dans 9 jours. Repondez maintenant pour ne pas la perdre !`,
+                { type: 'club_invitation_reminder', clubId: inv.club_id, invitationId: inv.id, reminderDay: 21 },
+                { channelId: 'share-requests', priority: 'high' }
+              ));
+              const tickets = await sendPushNotifications(messages);
+              sent21 += tickets.filter((t: any) => t.status === 'ok').length;
+              errors21 += tickets.filter((t: any) => t.status === 'error').length;
+
+              // Deactivate invalid tokens
+              for (let i = 0; i < tickets.length; i++) {
+                if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                  const invalidToken = messages[i]?.to;
+                  if (invalidToken) {
+                    await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                  }
+                }
+              }
+            }
+          } catch { /* silent per-invitation */ }
+        }
+
+        console.log(`[weekly-cron] Invitation reminders: 7d=${sent7} sent/${invitations7.length} eligible, 21d=${sent21} sent/${invitations21.length} eligible`);
+        results.invitation_reminders = {
+          reminder_7d: { eligible: invitations7.length, sent: sent7, errors: errors7 },
+          reminder_21d: { eligible: invitations21.length, sent: sent21, errors: errors21 },
+        };
+      } catch (remErr: any) {
+        console.error('[weekly-cron] Invitation reminders error:', remErr.message);
+        results.invitation_reminders = { error: remErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 13: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');

@@ -502,8 +502,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'ci4',
           q: fr ? 'Les invitations expirent-elles ?' : 'Do invitations expire?',
           a: fr
-            ? 'Oui. Les invitations sans reponse apres 30 jours sont automatiquement expirees par le systeme. Le proprietaire du club recoit une notification push l\'informant des invitations expirees. Les invitations expirees apparaissent aussi dans le fil d\'activite communautaire.'
-            : 'Yes. Invitations without a response after 30 days are automatically expired by the system. The club owner receives a push notification informing them of expired invitations. Expired invitations also appear in the community activity feed.',
+            ? 'Oui. Les invitations sans reponse apres 30 jours sont automatiquement expirees par le systeme. Avant l\'expiration, deux rappels sont envoyes au joueur : un premier rappel apres 7 jours sans reponse, et un second rappel urgent a 21 jours (9 jours avant l\'expiration). Le proprietaire du club recoit une notification push l\'informant des invitations expirees. Les invitations expirees apparaissent aussi dans le fil d\'activite communautaire.'
+            : 'Yes. Invitations without a response after 30 days are automatically expired by the system. Before expiration, two reminders are sent to the player: a first reminder after 7 days without response, and an urgent second reminder at 21 days (9 days before expiration). The club owner receives a push notification informing them of expired invitations. Expired invitations also appear in the community activity feed.',
         },
         {
           id: 'ci5',

@@ -100,7 +100,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -417,6 +417,7 @@ export default function HomeScreen() {
     // Ad banner at bottom — second placement after all content
     if (matches.length > 0 || challenges.length > 0) s.push({ key: 'adBanner2', data: ['adBanner2'] });
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
+    if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
   }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language]);
 
@@ -710,6 +711,19 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <Image
               source={require('@/assets/images/banner-fr-promo.png')}
+              style={{ width: '100%', height: undefined, aspectRatio: 1200 / 628, borderRadius: 16 }}
+              contentFit="cover"
+              transition={300}
+            />
+          </View>
+        );
+
+      // ===== EN PROMO BANNER =====
+      case 'enBanner':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <Image
+              source={require('@/assets/images/banner-en-promo.png')}
               style={{ width: '100%', height: undefined, aspectRatio: 1200 / 628, borderRadius: 16 }}
               contentFit="cover"
               transition={300}
