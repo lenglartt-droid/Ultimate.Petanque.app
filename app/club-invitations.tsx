@@ -3,6 +3,7 @@
  *
  * Dedicated page for managing received club invitations.
  * Lists pending invitations with accept/decline buttons,
+ * supports decline reason, displays invitation messages,
  * and auto-updates member status in the club.
  */
 
@@ -15,6 +16,8 @@ import {
   StyleSheet,
   ActivityIndicator,
   RefreshControl,
+  TextInput,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -40,6 +43,7 @@ export default function ClubInvitationsScreen() {
   const { showAlert } = useAlert();
   const { players } = useAppData();
   const { refreshPlayers } = useAppActions();
+  const selfPlayer = players.find(p => p.userId === user?.id);
   const fr = language === 'fr';
 
   const [loading, setLoading] = useState(true);
@@ -48,6 +52,10 @@ export default function ClubInvitationsScreen() {
   const [processingId, setProcessingId] = useState<string | null>(null);
   const [tab, setTab] = useState<'pending' | 'all' | 'sent'>('pending');
   const [sentInvitations, setSentInvitations] = useState<ClubInvitation[]>([]);
+
+  // Decline reason modal
+  const [showDeclineModal, setShowDeclineModal] = useState<ClubInvitation | null>(null);
+  const [declineReason, setDeclineReason] = useState('');
 
   const loadInvitations = useCallback(async () => {
     try {
@@ -81,7 +89,6 @@ export default function ClubInvitationsScreen() {
     Haptics.selectionAsync();
 
     try {
-      // Update invitation status
       await updateInvitationStatus(invitation.id, 'accepted');
 
       // Update player's club assignment in database
@@ -109,7 +116,22 @@ export default function ClubInvitationsScreen() {
         }).eq('id', invitation.clubId);
       }
 
-      // Refresh local state
+      // Send push notification to club owner
+      try {
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'club_invitation_response',
+            payload: {
+              targetUserId: invitation.inviterUserId,
+              playerName: selfPlayer?.name || user?.username || user?.email || '',
+              clubName: invitation.clubName,
+              clubId: invitation.clubId,
+              response: 'accepted',
+            },
+          },
+        });
+      } catch { /* silent */ }
+
       setInvitations(prev => prev.map(inv =>
         inv.id === invitation.id ? { ...inv, status: 'accepted' } : inv
       ));
@@ -120,7 +142,6 @@ export default function ClubInvitationsScreen() {
         fr ? `Vous avez rejoint ${invitation.clubName}` : `You joined ${invitation.clubName}`
       );
 
-      // Refresh players context
       try { refreshPlayers(); } catch { /* silent */ }
     } catch (e: any) {
       showAlert(fr ? 'Erreur' : 'Error', e.message || 'Failed to accept invitation');
@@ -129,16 +150,37 @@ export default function ClubInvitationsScreen() {
     setProcessingId(null);
   }, [user?.id, players, fr, showAlert, refreshPlayers]);
 
-  const handleDecline = useCallback(async (invitation: ClubInvitation) => {
+  const handleDecline = useCallback(async (invitation: ClubInvitation, reason?: string) => {
     setProcessingId(invitation.id);
     Haptics.selectionAsync();
 
     try {
-      await updateInvitationStatus(invitation.id, 'declined');
+      await updateInvitationStatus(invitation.id, 'declined', reason || undefined);
+
+      // Send push notification to club owner
+      try {
+        const supabase = getSupabaseClient();
+        await supabase.functions.invoke('send-push', {
+          body: {
+            type: 'club_invitation_response',
+            payload: {
+              targetUserId: invitation.inviterUserId,
+              playerName: selfPlayer?.name || user?.username || user?.email || '',
+              clubName: invitation.clubName,
+              clubId: invitation.clubId,
+              response: 'declined',
+              declineReason: reason || undefined,
+            },
+          },
+        });
+      } catch { /* silent */ }
+
       setInvitations(prev => prev.map(inv =>
-        inv.id === invitation.id ? { ...inv, status: 'declined' } : inv
+        inv.id === invitation.id ? { ...inv, status: 'declined', declineReason: reason || undefined } : inv
       ));
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setShowDeclineModal(null);
+      setDeclineReason('');
     } catch (e: any) {
       showAlert(fr ? 'Erreur' : 'Error', e.message);
     }
@@ -321,6 +363,24 @@ export default function ClubInvitationsScreen() {
                     )}
                   </View>
 
+                  {/* Invitation message from club */}
+                  {inv.message ? (
+                    <View style={s.invMessageBox}>
+                      <MaterialIcons name="format-quote" size={14} color="#7C3AED" />
+                      <Text style={s.invMessageText}>{inv.message}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* Decline reason (visible to sent tab) */}
+                  {isDeclined && inv.declineReason && tab === 'sent' ? (
+                    <View style={[s.invMessageBox, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                      <MaterialIcons name="info-outline" size={14} color="#EF4444" />
+                      <Text style={[s.invMessageText, { color: '#991B1B' }]}>
+                        {fr ? 'Raison du refus : ' : 'Decline reason: '}{inv.declineReason}
+                      </Text>
+                    </View>
+                  ) : null}
+
                   {/* Date */}
                   <Text style={s.invDate}>{dateStr}</Text>
 
@@ -329,7 +389,10 @@ export default function ClubInvitationsScreen() {
                     <View style={s.invActions}>
                       <Pressable
                         style={[s.invBtn, s.invBtnDecline]}
-                        onPress={() => handleDecline(inv)}
+                        onPress={() => {
+                          setDeclineReason('');
+                          setShowDeclineModal(inv);
+                        }}
                         disabled={processingId === inv.id}
                       >
                         <MaterialIcons name="close" size={16} color="#EF4444" />
@@ -370,192 +433,112 @@ export default function ClubInvitationsScreen() {
           <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
           <Text style={s.infoText}>
             {fr
-              ? 'Quand vous acceptez une invitation, votre fiche joueur est automatiquement associee au club et le compteur de membres est mis a jour.'
-              : 'When you accept an invitation, your player card is automatically linked to the club and the member count is updated.'}
+              ? 'Quand vous acceptez une invitation, votre fiche joueur est automatiquement associee au club. Si vous refusez, vous pouvez expliquer la raison et le proprietaire du club la verra.'
+              : 'When you accept an invitation, your player card is automatically linked to the club. If you decline, you can explain the reason and the club owner will see it.'}
           </Text>
         </View>
       </ScrollView>
+
+      {/* Decline Reason Modal */}
+      <Modal visible={showDeclineModal !== null} animationType="fade" transparent>
+        <View style={s.declineOverlay}>
+          <View style={s.declineCard}>
+            <Text style={s.declineTitle}>{fr ? 'Refuser l\'invitation' : 'Decline Invitation'}</Text>
+            <Text style={s.declineSub}>
+              {fr
+                ? `Refuser l'invitation de ${showDeclineModal?.clubName}. Vous pouvez optionnellement expliquer la raison.`
+                : `Decline the invitation from ${showDeclineModal?.clubName}. You can optionally explain the reason.`}
+            </Text>
+            <TextInput
+              style={s.declineInput}
+              placeholder={fr ? 'Raison du refus (optionnel)...' : 'Decline reason (optional)...'}
+              placeholderTextColor={theme.textMuted}
+              value={declineReason}
+              onChangeText={setDeclineReason}
+              multiline
+              numberOfLines={3}
+              maxLength={250}
+            />
+            <View style={s.declineActions}>
+              <Pressable
+                style={s.declineCancelBtn}
+                onPress={() => { setShowDeclineModal(null); setDeclineReason(''); }}
+              >
+                <Text style={s.declineCancelText}>{fr ? 'Annuler' : 'Cancel'}</Text>
+              </Pressable>
+              <Pressable
+                style={s.declineConfirmBtn}
+                onPress={() => showDeclineModal ? handleDecline(showDeclineModal, declineReason.trim() || undefined) : null}
+                disabled={processingId === showDeclineModal?.id}
+              >
+                {processingId === showDeclineModal?.id ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <Text style={s.declineConfirmText}>{fr ? 'Refuser' : 'Decline'}</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
 const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
-
-  // Hero
-  hero: {
-    backgroundColor: theme.surface,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  heroIcon: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#7C3AED12',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
+  hero: { backgroundColor: theme.surface, borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 16 },
+  heroIcon: { width: 64, height: 64, borderRadius: 32, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center', marginBottom: 14 },
   heroTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 },
   heroSub: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 10 },
-  heroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
+  heroBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FEF3C7', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 },
   heroBadgeText: { fontSize: 13, fontWeight: '700', color: '#D97706' },
-
-  // Tabs
   tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 14,
-    backgroundColor: theme.surface,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-  },
+  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
   tabActive: { backgroundColor: '#7C3AED', borderColor: '#7C3AED' },
   tabText: { fontSize: 13, fontWeight: '700', color: '#64748B' },
   tabTextActive: { color: '#FFF' },
-  tabBadge: {
-    minWidth: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 5,
-  },
+  tabBadge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   tabBadgeText: { fontSize: 10, fontWeight: '800', color: '#64748B' },
-
-  // Empty
-  emptyState: {
-    backgroundColor: theme.surface,
-    borderRadius: 20,
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#F1F5F9',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
+  emptyState: { backgroundColor: theme.surface, borderRadius: 20, padding: 40, alignItems: 'center' },
+  emptyIcon: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
   emptySub: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
-
-  // Invitation card
-  invCard: {
-    backgroundColor: theme.surface,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 10,
-    borderWidth: 1.5,
-    borderColor: theme.border,
-    borderLeftWidth: 4,
-    borderLeftColor: '#7C3AED',
-  },
+  invCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1.5, borderColor: theme.border, borderLeftWidth: 4, borderLeftColor: '#7C3AED' },
   invHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
   invLogo: { width: 44, height: 44, borderRadius: 12 },
-  invLogoPlaceholder: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#7C3AED12',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  invLogoPlaceholder: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
   invClubName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   invInviter: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   invDate: { fontSize: 11, color: theme.textMuted, marginBottom: 10 },
-
-  // Status badge
-  statusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 10,
-  },
+  invMessageBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, backgroundColor: '#7C3AED08', borderRadius: 10, padding: 10, marginBottom: 8, borderWidth: 1, borderColor: '#7C3AED15' },
+  invMessageText: { flex: 1, fontSize: 13, color: '#4C1D95', fontStyle: 'italic', lineHeight: 19 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   statusText: { fontSize: 11, fontWeight: '700' },
-
-  // Actions
   invActions: { flexDirection: 'row', gap: 10 },
-  invBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderRadius: 12,
-  },
-  invBtnDecline: {
-    backgroundColor: '#FEF2F2',
-    borderWidth: 1,
-    borderColor: '#FECACA',
-  },
-  invBtnAccept: {
-    backgroundColor: '#7C3AED',
-  },
+  invBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12 },
+  invBtnDecline: { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' },
+  invBtnAccept: { backgroundColor: '#7C3AED' },
   invBtnText: { fontSize: 14, fontWeight: '700' },
-
-  // View club
-  viewClubBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    backgroundColor: '#7C3AED10',
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: '#7C3AED20',
-  },
+  viewClubBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: '#7C3AED10', borderRadius: 10, borderWidth: 1, borderColor: '#7C3AED20' },
   viewClubBtnText: { fontSize: 13, fontWeight: '700', color: '#7C3AED' },
-
-  // Info
-  infoBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    backgroundColor: theme.surface,
-    borderRadius: 14,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: theme.border,
-    marginTop: 8,
-  },
+  infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: theme.border, marginTop: 8 },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
+  // Decline modal
+  declineOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 32 },
+  declineCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 24, maxWidth: 420, alignSelf: 'center', width: '100%' },
+  declineTitle: { fontSize: 18, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
+  declineSub: { fontSize: 13, color: theme.textSecondary, lineHeight: 20, marginBottom: 16 },
+  declineInput: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, fontSize: 15, color: theme.textPrimary, minHeight: 80, textAlignVertical: 'top', borderWidth: 1, borderColor: theme.border, marginBottom: 16 },
+  declineActions: { flexDirection: 'row', gap: 10 },
+  declineCancelBtn: { flex: 1, alignItems: 'center', paddingVertical: 14, backgroundColor: theme.backgroundSecondary, borderRadius: 12 },
+  declineCancelText: { fontSize: 15, fontWeight: '600', color: theme.textSecondary },
+  declineConfirmBtn: { flex: 1.5, alignItems: 'center', paddingVertical: 14, backgroundColor: '#EF4444', borderRadius: 12 },
+  declineConfirmText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
 });

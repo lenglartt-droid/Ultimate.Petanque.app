@@ -911,6 +911,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="club-invitations" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="season-detail" 
                 options={{ 
                   presentation: 'card',

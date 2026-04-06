@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations'];
 
     const results: Record<string, any> = {};
 
@@ -1056,7 +1056,73 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 11: Clean up old analytics (older than 365 days)
+    // TASK 11: Expire old club invitations (30+ days without response)
+    // ============================================================
+    if (tasks.includes('expire_invitations')) {
+      console.log('[weekly-cron] Expiring old club invitations...');
+      try {
+        const threshold30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Find pending invitations older than 30 days
+        const { data: expiredInvitations } = await supabaseAdmin
+          .from('club_invitations')
+          .select('id, club_id, club_name, inviter_user_id, invited_player_name')
+          .eq('status', 'pending')
+          .lt('created_at', threshold30d);
+
+        if (expiredInvitations && expiredInvitations.length > 0) {
+          const ids = expiredInvitations.map(i => i.id);
+          // Update status to expired
+          await supabaseAdmin
+            .from('club_invitations')
+            .update({ status: 'declined', decline_reason: 'Expired after 30 days', updated_at: new Date().toISOString() })
+            .in('id', ids);
+
+          // Notify club owners about expired invitations
+          const ownerNotifs = new Map<string, { clubName: string; count: number; playerNames: string[] }>();
+          expiredInvitations.forEach(inv => {
+            const existing = ownerNotifs.get(inv.inviter_user_id) || { clubName: inv.club_name, count: 0, playerNames: [] };
+            existing.count++;
+            existing.playerNames.push(inv.invited_player_name);
+            ownerNotifs.set(inv.inviter_user_id, existing);
+          });
+
+          for (const [ownerId, info] of ownerNotifs) {
+            try {
+              const { data: ownerTokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('token')
+                .eq('user_id', ownerId)
+                .eq('active', true);
+
+              if (ownerTokens && ownerTokens.length > 0) {
+                const names = info.playerNames.slice(0, 3).join(', ');
+                const extra = info.count > 3 ? ` +${info.count - 3}` : '';
+                const messages = ownerTokens.map(t => buildPushMessage(
+                  t.token,
+                  `\u23F0 ${info.count} invitation(s) expiree(s)`,
+                  `Les invitations pour ${names}${extra} dans ${info.clubName} ont expire apres 30 jours sans reponse.`,
+                  { type: 'club_invitation_response', clubId: null },
+                  { channelId: 'share-requests' }
+                ));
+                await sendPushNotifications(messages);
+              }
+            } catch { /* silent */ }
+          }
+
+          console.log(`[weekly-cron] Expired ${expiredInvitations.length} club invitations`);
+          results.expire_invitations = { expired: expiredInvitations.length };
+        } else {
+          results.expire_invitations = { expired: 0 };
+        }
+      } catch (invErr: any) {
+        console.error('[weekly-cron] Invitation expiry error:', invErr.message);
+        results.expire_invitations = { error: invErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 12: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');

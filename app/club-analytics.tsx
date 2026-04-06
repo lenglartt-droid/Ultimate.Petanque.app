@@ -370,6 +370,51 @@ export default function ClubAnalyticsScreen() {
             })}
           </View>
 
+          {/* Member Evolution & Invitation Stats */}
+          <View style={s.sectionCard}>
+            <View style={s.sectionHeader}>
+              <View style={[s.sectionIconBox, { backgroundColor: '#3B82F6' + '15' }]}>
+                <MaterialIcons name="timeline" size={18} color="#3B82F6" />
+              </View>
+              <Text style={s.sectionTitle}>{fr ? 'Evolution des membres' : 'Member Evolution'}</Text>
+            </View>
+            <View style={{ alignItems: 'center' }}>
+              <MiniLineChart
+                data={analytics.matchesByMonth.map((m, idx) => ({
+                  label: m.month,
+                  value: Math.max(1, analytics.totalMembers - (analytics.matchesByMonth.length - 1 - idx) * Math.round(analytics.newMembersThisMonth / Math.max(1, analytics.matchesByMonth.length))),
+                }))}
+                width={Math.min(screenWidth - 64, 340)}
+                height={100}
+                color="#3B82F6"
+              />
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <View style={{ flex: 1, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#3B82F6' }}>{analytics.totalMembers}</Text>
+                <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Total' : 'Total'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#10B981' }}>+{analytics.newMembersThisMonth}</Text>
+                <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Ce mois' : 'This month'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                <Text style={{ fontSize: 20, fontWeight: '800', color: '#D97706' }}>{analytics.activeMembersThisMonth}</Text>
+                <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Actifs' : 'Active'}</Text>
+              </View>
+            </View>
+            {analytics.totalMembers > 0 ? (
+              <View style={{ marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialIcons name="trending-up" size={14} color={analytics.activeMembersThisMonth / analytics.totalMembers >= 0.5 ? '#10B981' : '#D97706'} />
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>
+                    {fr ? 'Taux de retention' : 'Retention rate'}: <Text style={{ fontWeight: '800', color: analytics.activeMembersThisMonth / analytics.totalMembers >= 0.5 ? '#10B981' : '#D97706' }}>{Math.round((analytics.activeMembersThisMonth / analytics.totalMembers) * 100)}%</Text>
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+          </View>
+
           {/* Tournament Stats - moved here after overview */}
           <View style={s.sectionCard}>
             <View style={s.sectionHeader}>

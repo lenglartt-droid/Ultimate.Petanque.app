@@ -22,7 +22,11 @@ export type FeedItemType =
   | 'weekly_record'
   | 'event_created'
   | 'event_completed'
-  | 'meetup_created';
+  | 'meetup_created'
+  | 'club_invitation_sent'
+  | 'club_invitation_accepted'
+  | 'club_invitation_declined'
+  | 'club_invitation_expired';
 
 export interface FeedItem {
   id: string;
@@ -94,6 +98,20 @@ export interface FeedMeetupCreated {
   shareCode: string;
 }
 
+export interface FeedClubInvitation {
+  invitationId: string;
+  clubId: string;
+  clubName: string;
+  clubLogo?: string;
+  inviterName: string;
+  inviterUserId: string;
+  invitedPlayerName: string;
+  invitedUserId?: string;
+  status: 'pending' | 'accepted' | 'declined';
+  declineReason?: string;
+  message?: string;
+}
+
 // ============================================
 // Fetch functions
 // ============================================
@@ -108,7 +126,7 @@ export async function fetchActivityFeed(limit: number = 30): Promise<{ items: Fe
 
   try {
     // Parallel fetch all sources
-    const [eloRes, badgesRes, weeklyRes, eventsRes, meetupsRes] = await Promise.all([
+    const [eloRes, badgesRes, weeklyRes, eventsRes, meetupsRes, invitationsRes] = await Promise.all([
       // 1. Significant ELO changes (|delta| >= 15 for interesting moves)
       supabase
         .from('elo_history')
@@ -146,6 +164,13 @@ export async function fetchActivityFeed(limit: number = 30): Promise<{ items: Fe
         .select('id, title, date, terrain_name, max_participants, share_code, created_at, status')
         .eq('status', 'active')
         .order('created_at', { ascending: false })
+        .limit(limit),
+
+      // 6. Club invitations (all statuses for activity feed)
+      supabase
+        .from('club_invitations')
+        .select('id, club_id, club_name, club_logo, inviter_user_id, inviter_name, invited_player_name, invited_user_id, status, decline_reason, message, created_at, updated_at')
+        .order('updated_at', { ascending: false })
         .limit(limit),
     ]);
 
@@ -322,6 +347,51 @@ export async function fetchActivityFeed(limit: number = 30): Promise<{ items: Fe
             shareCode: row.share_code,
           } as FeedMeetupCreated,
         });
+      }
+    }
+
+    // Process club invitations
+    if (invitationsRes.data) {
+      for (const row of invitationsRes.data) {
+        const invData: FeedClubInvitation = {
+          invitationId: row.id,
+          clubId: row.club_id,
+          clubName: row.club_name,
+          clubLogo: row.club_logo || undefined,
+          inviterName: row.inviter_name,
+          inviterUserId: row.inviter_user_id,
+          invitedPlayerName: row.invited_player_name,
+          invitedUserId: row.invited_user_id || undefined,
+          status: row.status,
+          declineReason: row.decline_reason || undefined,
+          message: row.message || undefined,
+        };
+
+        if (row.status === 'accepted') {
+          items.push({
+            id: `inv-accepted-${row.id}`,
+            type: 'club_invitation_accepted',
+            timestamp: row.updated_at || row.created_at,
+            data: invData,
+          });
+        } else if (row.status === 'declined') {
+          // Check if expired (decline_reason contains 'Expired')
+          const isExpired = row.decline_reason && row.decline_reason.includes('Expired');
+          items.push({
+            id: `inv-${isExpired ? 'expired' : 'declined'}-${row.id}`,
+            type: isExpired ? 'club_invitation_expired' : 'club_invitation_declined',
+            timestamp: row.updated_at || row.created_at,
+            data: invData,
+          });
+        } else {
+          // pending = sent
+          items.push({
+            id: `inv-sent-${row.id}`,
+            type: 'club_invitation_sent',
+            timestamp: row.created_at,
+            data: invData,
+          });
+        }
       }
     }
 
