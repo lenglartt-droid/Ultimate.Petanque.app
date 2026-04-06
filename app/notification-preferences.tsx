@@ -145,6 +145,15 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
         descFr: 'Celebration quand vous debloquez un nouveau badge ou montez de niveau XP.',
         descEn: 'Celebration when you unlock a new badge or level up in XP.',
       },
+      {
+        key: 'new_follower',
+        icon: 'person-add',
+        color: '#EC4899',
+        labelFr: 'Nouveaux abonnes',
+        labelEn: 'New followers',
+        descFr: 'Notification quand un joueur commence a vous suivre, avec votre nombre total d\'abonnes.',
+        descEn: 'Notification when a player starts following you, with your total follower count.',
+      },
     ],
   },
 ];

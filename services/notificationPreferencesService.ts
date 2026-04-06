@@ -17,6 +17,7 @@ export interface NotificationPreferences {
   inactivity_warning: boolean;
   witness_request: boolean;
   badge_unlock: boolean;
+  new_follower: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -30,6 +31,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   inactivity_warning: true,
   witness_request: true,
   badge_unlock: true,
+  new_follower: true,
 };
 
 /**

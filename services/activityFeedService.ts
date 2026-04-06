@@ -156,9 +156,54 @@ export async function toggleFollowPlayer(userId: string, playerId: string): Prom
       .upsert({ user_id: userId, followed_player_ids: updated, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
     // Cache locally
     await AsyncStorage.setItem(`${FOLLOWED_PLAYERS_KEY}_${userId}`, JSON.stringify(updated)).catch(() => {});
+
+    // Send push notification to the followed player when following (not unfollowing)
+    if (!isFollowing) {
+      _sendNewFollowerPush(userId, playerId).catch(() => {});
+    }
+
     return { following: !isFollowing, error: null };
   } catch (e: any) {
     return { following: false, error: e.message || 'Failed to toggle follow' };
+  }
+}
+
+/**
+ * Internal: Send a new_follower push notification.
+ * Resolves follower name, target user ID, and total follower count.
+ */
+async function _sendNewFollowerPush(followerUserId: string, followedPlayerId: string): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    // Get follower name
+    const { data: followerProfile } = await supabase
+      .from('user_profiles')
+      .select('username, avatar')
+      .eq('id', followerUserId)
+      .single();
+    // Get the followed player's user_id (to send the push to)
+    const { data: playerData } = await supabase
+      .from('players')
+      .select('user_id')
+      .eq('id', followedPlayerId)
+      .single();
+    if (!playerData?.user_id || playerData.user_id === followerUserId) return;
+    // Count total followers
+    const totalFollowers = await getFollowerCount(followedPlayerId);
+    // Invoke send-push edge function
+    await supabase.functions.invoke('send-push', {
+      body: {
+        type: 'new_follower',
+        payload: {
+          targetUserId: playerData.user_id,
+          followerName: followerProfile?.username || 'Un joueur',
+          followerAvatar: followerProfile?.avatar || null,
+          totalFollowers,
+        },
+      },
+    });
+  } catch {
+    // Silent — push failure should not break the follow action
   }
 }
 
