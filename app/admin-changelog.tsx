@@ -32,6 +32,26 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.21.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'blur-on', text: 'Enhanced cluster markers with gradient and category counters', color: '#7C3AED' },
+      { icon: 'animation', text: 'Burst animation on cluster tap', color: '#3B82F6' },
+      { icon: 'help-outline', text: 'FAQ updated with cluster visual details', color: '#10B981' },
+    ],
+    details: [
+      'Cluster markers redesigned with diagonal LinearGradient from dominant to secondary type color',
+      'Per-category mini-pills inside clusters showing icon + count for each type (terrains, clubs, players, tournaments)',
+      'Outer glow ring with semi-transparent dominant color border for depth effect',
+      'Cluster sizes increased: 48px (small), 56px (medium), 64px (large) for better readability',
+      'Burst animation on cluster tap: 3 concentric rings expand and fade in cascade (500ms) with dominant type color',
+      'Rings staggered at 0ms/80ms/160ms for visual cascade effect using Reanimated withSequence',
+      'Color-coded type dots preserved at bottom of cluster for quick category identification',
+      'FAQ updated with cluster enhancement description in map filtering section',
+    ],
+  },
+  {
     version: '1.20.0',
     date: '2026-04-06',
     type: 'minor',

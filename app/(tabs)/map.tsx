@@ -321,33 +321,60 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
   </View>
 ));
 
+const CLUSTER_COLOR_MAP: Record<string, string> = {
+  terrains: theme.success,
+  clubs: theme.accent,
+  tournaments: theme.carreauColor,
+  players: theme.primary,
+};
+const CLUSTER_ICON_MAP: Record<string, string> = {
+  terrains: 'sports-soccer',
+  clubs: 'home',
+  tournaments: 'emoji-events',
+  players: 'person',
+};
+
 const ClusterMarkerView = React.memo(({ count, typeCounts }: { count: number; typeCounts: Record<string, number> }) => {
-  // Determine dominant type color
-  const colorMap: Record<string, string> = {
-    terrains: theme.success,
-    clubs: theme.accent,
-    tournaments: theme.carreauColor,
-    players: theme.primary,
-  };
-  
-  const dominantType = Object.entries(typeCounts).reduce((a, b) => b[1] > a[1] ? b : a, ['', 0] as [string, number]);
-  const dominantColor = colorMap[dominantType[0]] || theme.primary;
-  const typeCount = Object.keys(typeCounts).filter(k => typeCounts[k] > 0).length;
-  
-  // Size based on count
-  const size = count <= 5 ? 44 : count <= 15 ? 52 : 60;
+  const sorted = Object.entries(typeCounts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
+  const dominantType = sorted[0]?.[0] || 'players';
+  const dominantColor = CLUSTER_COLOR_MAP[dominantType] || theme.primary;
+  const secondaryType = sorted[1]?.[0];
+  const secondaryColor = secondaryType ? (CLUSTER_COLOR_MAP[secondaryType] || theme.textMuted) : dominantColor;
+
+  const size = count <= 5 ? 48 : count <= 15 ? 56 : 64;
   const fontSize = count <= 5 ? 15 : count <= 15 ? 17 : 19;
+  const outerSize = size + 14;
+  const showCategoryPills = sorted.length > 1;
 
   return (
-    <View style={[styles.clusterOuter, { width: size + 12, height: size + 12, borderRadius: (size + 12) / 2, backgroundColor: dominantColor + '20' }]}>
-      <View style={[styles.clusterInner, { width: size, height: size, borderRadius: size / 2, backgroundColor: dominantColor }]}>
+    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+      {/* Outer glow ring */}
+      <View style={[styles.clusterOuter, { width: outerSize, height: outerSize, borderRadius: outerSize / 2, backgroundColor: dominantColor + '18', borderColor: dominantColor + '30' }]} />
+      {/* Gradient core */}
+      <LinearGradient
+        colors={[dominantColor, secondaryColor, dominantColor + 'DD']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.clusterInner, { width: size, height: size, borderRadius: size / 2, position: 'absolute' }]}
+      >
         <Text style={[styles.clusterCount, { fontSize }]}>{count}</Text>
-      </View>
-      {/* Type indicator dots */}
-      {typeCount > 1 ? (
-        <View style={styles.clusterDots}>
-          {Object.entries(typeCounts).filter(([, c]) => c > 0).map(([type]) => (
-            <View key={type} style={[styles.clusterDot, { backgroundColor: colorMap[type] || theme.textMuted }]} />
+        {/* Category mini-pills inside circle */}
+        {showCategoryPills ? (
+          <View style={styles.clusterPillRow}>
+            {sorted.slice(0, 3).map(([type, cnt]) => (
+              <View key={type} style={styles.clusterPill}>
+                <MaterialIcons name={(CLUSTER_ICON_MAP[type] || 'place') as any} size={7} color="#FFF" />
+                <Text style={styles.clusterPillText}>{cnt}</Text>
+              </View>
+            ))}
+          </View>
+        ) : null}
+      </LinearGradient>
+      {/* Bottom type dots */}
+      {sorted.length > 1 ? (
+        <View style={[styles.clusterDots, { bottom: -4 }]}>
+          {sorted.map(([type]) => (
+            <View key={type} style={[styles.clusterDot, { backgroundColor: CLUSTER_COLOR_MAP[type] || theme.textMuted }]} />
           ))}
         </View>
       ) : null}
@@ -1087,6 +1114,13 @@ export default function MapScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     if (!mapRef.current) return;
 
+    // Trigger burst animation with dominant cluster color
+    const typeCounts: Record<string, number> = {};
+    cluster.items.forEach(item => { typeCounts[item.itemType] = (typeCounts[item.itemType] || 0) + 1; });
+    const dominant = Object.entries(typeCounts).sort((a, b) => b[1] - a[1])[0];
+    const burstC = dominant ? (CLUSTER_COLOR_MAP[dominant[0]] || theme.primary) : theme.primary;
+    triggerBurst(burstC);
+
     // Calculate bounding region for cluster items
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
     cluster.items.forEach(item => {
@@ -1302,6 +1336,38 @@ export default function MapScreen() {
   // Active now mode from directory
   const [activeNowMode, setActiveNowMode] = useState(false);
   const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
+
+  // Cluster burst animation
+  const [burstVisible, setBurstVisible] = useState(false);
+  const [burstColor, setBurstColor] = useState(theme.primary);
+  const burstRing1 = useSharedValue(0);
+  const burstRing2 = useSharedValue(0);
+  const burstRing3 = useSharedValue(0);
+
+  const burstRing1Style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + burstRing1.value * 2.5 }],
+    opacity: 1 - burstRing1.value,
+  }));
+  const burstRing2Style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + burstRing2.value * 2 }],
+    opacity: 1 - burstRing2.value,
+  }));
+  const burstRing3Style = useAnimatedStyle(() => ({
+    transform: [{ scale: 1 + burstRing3.value * 1.5 }],
+    opacity: 1 - burstRing3.value,
+  }));
+
+  const triggerBurst = useCallback((color: string) => {
+    setBurstColor(color);
+    setBurstVisible(true);
+    burstRing1.value = 0;
+    burstRing2.value = 0;
+    burstRing3.value = 0;
+    burstRing1.value = withTiming(1, { duration: 500 });
+    burstRing2.value = withSequence(withTiming(0, { duration: 80 }), withTiming(1, { duration: 420 }));
+    burstRing3.value = withSequence(withTiming(0, { duration: 160 }), withTiming(1, { duration: 340 }));
+    setTimeout(() => setBurstVisible(false), 550);
+  }, []);
 
   // Handle filter param from directory
   useEffect(() => {
@@ -1561,6 +1627,15 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' ? renderList() : renderMap()}
+
+      {/* Cluster burst animation overlay */}
+      {burstVisible ? (
+        <View style={styles.burstOverlay} pointerEvents="none">
+          <Animated.View style={[styles.burstRing, { borderColor: burstColor }, burstRing1Style]} />
+          <Animated.View style={[styles.burstRing, { borderColor: burstColor, width: 48, height: 48, borderRadius: 24 }, burstRing2Style]} />
+          <Animated.View style={[styles.burstRing, { borderColor: burstColor, width: 36, height: 36, borderRadius: 18, borderWidth: 3 }, burstRing3Style]} />
+        </View>
+      ) : null}
 
       {/* ========== GRADIENT HERO HEADER ========== */}
       <View style={[styles.heroHeader, { paddingTop: insets.top }]}>
@@ -2299,7 +2374,9 @@ const styles = StyleSheet.create({
   activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' },
   // Cluster markers
   clusterOuter: {
+    position: 'absolute' as const,
     alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5,
   },
   clusterInner: {
     alignItems: 'center', justifyContent: 'center',
@@ -2309,12 +2386,43 @@ const styles = StyleSheet.create({
   clusterCount: {
     fontWeight: '800', color: '#FFF',
   },
+  clusterPillRow: {
+    flexDirection: 'row' as const, gap: 3, marginTop: 1,
+  },
+  clusterPill: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 1,
+    backgroundColor: 'rgba(255,255,255,0.28)', borderRadius: 6,
+    paddingHorizontal: 3, paddingVertical: 1,
+  },
+  clusterPillText: {
+    fontSize: 7, fontWeight: '800' as const, color: '#FFF',
+  },
   clusterDots: {
-    position: 'absolute', bottom: -2,
+    position: 'absolute' as const,
     flexDirection: 'row', gap: 3,
   },
   clusterDot: {
     width: 7, height: 7, borderRadius: 3.5, borderWidth: 1.5, borderColor: '#FFF',
+  },
+  burstOverlay: {
+    position: 'absolute' as const,
+    top: '50%' as any,
+    left: '50%' as any,
+    marginTop: -30,
+    marginLeft: -30,
+    width: 60,
+    height: 60,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    zIndex: 50,
+  },
+  burstRing: {
+    position: 'absolute' as const,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    borderWidth: 2.5,
+    backgroundColor: 'transparent',
   },
   // Selected card
   selectedCard: { position: 'absolute', left: 16, right: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },

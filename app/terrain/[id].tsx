@@ -1040,21 +1040,39 @@ export default function TerrainDetailScreen() {
           const hasAnyData = peakHours.length === 7 && (allMatches.some(m => m.terrainId === terrain.id) || meetups.length > 0);
           return hasAnyData ? (
           <View style={styles.section}>
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'HEURES D\'AFFLUENCE MOYENNES' : 'AVERAGE PEAK HOURS'}</Text>
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialIcons name="schedule" size={18} color="#6366F1" />
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'HEURES D\'AFFLUENCE' : 'PEAK HOURS'}</Text>
+            <View style={{ backgroundColor: theme.surface, borderRadius: 20, overflow: 'hidden', ...theme.shadows.card }}>
+              {/* Header with total stats */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 16, paddingBottom: 12 }}>
+                <View style={{ width: 44, height: 44, borderRadius: 14, backgroundColor: '#6366F110', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="insights" size={22} color="#6366F1" />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Affluence par jour' : 'Activity by day'}</Text>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Base sur les matchs et RDV enregistres' : 'Based on recorded matches and meetups'}</Text>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.textPrimary }}>{language === 'fr' ? 'Affluence hebdomadaire' : 'Weekly Activity'}</Text>
+                  <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 2 }}>
+                    {(() => {
+                      const total = peakHours.reduce((s, ph) => s + ph.matchCount, 0);
+                      return `${total} ${language === 'fr' ? 'activites enregistrees' : 'recorded activities'}`;
+                    })()}
+                  </Text>
                 </View>
+                {/* Best day highlight */}
+                {(() => {
+                  const dayNames = language === 'fr' ? ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                  const bestDay = peakHours.reduce((best, ph) => ph.matchCount > best.matchCount ? ph : best, peakHours[0]);
+                  return bestDay.matchCount > 0 ? (
+                    <View style={{ alignItems: 'center', backgroundColor: '#6366F110', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', letterSpacing: 0.3 }}>{language === 'fr' ? 'MEILLEUR' : 'BEST'}</Text>
+                      <Text style={{ fontSize: 14, fontWeight: '800', color: '#6366F1', marginTop: 1 }}>{dayNames[bestDay.day]}</Text>
+                    </View>
+                  ) : null;
+                })()}
               </View>
-              {/* Season Selector */}
-              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+
+              {/* Season Selector - pill style */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 6, paddingBottom: 14 }}>
                 {([
-                  { id: 'all' as const, label: language === 'fr' ? 'Toutes' : 'All', icon: 'date-range', color: '#6366F1' },
+                  { id: 'all' as const, label: language === 'fr' ? 'Toutes saisons' : 'All seasons', icon: 'date-range', color: '#6366F1' },
                   { id: 'spring' as const, label: language === 'fr' ? 'Printemps' : 'Spring', icon: 'local-florist', color: '#10B981' },
                   { id: 'summer' as const, label: language === 'fr' ? 'Ete' : 'Summer', icon: 'wb-sunny', color: '#F59E0B' },
                   { id: 'autumn' as const, label: language === 'fr' ? 'Automne' : 'Autumn', icon: 'eco', color: '#D97706' },
@@ -1064,60 +1082,75 @@ export default function TerrainDetailScreen() {
                   return (
                     <Pressable
                       key={season.id}
-                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: isActive ? season.color : theme.backgroundSecondary, borderWidth: 1.5, borderColor: isActive ? season.color : theme.border }}
-                      onPress={() => setPeakSeason(season.id)}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: isActive ? season.color : 'transparent', borderWidth: 1.5, borderColor: isActive ? season.color : theme.border }}
+                      onPress={() => { setPeakSeason(season.id); Haptics.selectionAsync(); }}
                     >
-                      <MaterialIcons name={season.icon as any} size={12} color={isActive ? '#FFF' : season.color} />
-                      <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#FFF' : theme.textSecondary }}>{season.label}</Text>
+                      <MaterialIcons name={season.icon as any} size={13} color={isActive ? '#FFF' : season.color} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#FFF' : theme.textSecondary }}>{season.label}</Text>
                     </Pressable>
                   );
                 })}
-              </View>
+              </ScrollView>
+
+              {/* No data for selected season */}
+              {peakSeason !== 'all' && !peakHours.some(ph => ph.matchCount > 0) ? (
+                <View style={{ alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24 }}>
+                  <View style={{ width: 56, height: 56, borderRadius: 28, backgroundColor: theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
+                    <MaterialIcons name="cloud-off" size={28} color={theme.textMuted} />
+                  </View>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textSecondary, textAlign: 'center' }}>
+                    {language === 'fr' ? 'Aucune donnee pour cette saison' : 'No data for this season'}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: theme.textMuted, marginTop: 4, textAlign: 'center' }}>
+                    {language === 'fr' ? 'Jouez des matchs pour alimenter les statistiques' : 'Play matches to populate statistics'}
+                  </Text>
+                </View>
+              ) : (
+              <>
+              {/* Day-by-day bar chart */}
+              <View style={{ paddingHorizontal: 16, paddingBottom: 16 }}>
               {(() => {
                 const dayNames = language === 'fr'
                   ? ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
                   : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-                const dayFull = language === 'fr'
-                  ? ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
-                  : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
                 const maxCount = Math.max(...peakHours.map(ph => ph.matchCount), 1);
-                // Reorder: Mon-Sun
                 const orderedDays = [1, 2, 3, 4, 5, 6, 0];
                 return (
-                  <View style={{ gap: 6 }}>
+                  <View style={{ gap: 4 }}>
                     {orderedDays.map(dayIdx => {
                       const ph = peakHours[dayIdx];
-                      const barWidth = ph.matchCount > 0 ? Math.max(8, (ph.matchCount / maxCount) * 100) : 0;
+                      const barWidth = ph.matchCount > 0 ? Math.max(6, (ph.matchCount / maxCount) * 100) : 0;
                       const isToday = new Date().getDay() === dayIdx;
                       const hasActivity = ph.matchCount > 0;
-                      // Find top 2 peak hours for this day
-                      const topHours = ph.hours
-                        .map((v, h) => ({ h, v }))
-                        .filter(x => x.v > 0)
-                        .sort((a, b) => b.v - a.v)
-                        .slice(0, 2);
-                      const peakLabel = topHours.length > 0
-                        ? topHours.map(x => `${x.h}h-${x.h + 1}h`).join(', ')
-                        : (language === 'fr' ? 'Aucune donnee' : 'No data');
+                      const topHours = ph.hours.map((v, h) => ({ h, v })).filter(x => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 2);
                       const intensity = ph.matchCount / maxCount;
                       const barColor = intensity >= 0.7 ? '#EF4444' : intensity >= 0.4 ? '#F59E0B' : '#6366F1';
                       return (
-                        <View key={dayIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: dayIdx !== 0 ? 1 : 0, borderBottomColor: theme.border + '40' }}>
-                          <View style={{ width: 36 }}>
+                        <View key={dayIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, backgroundColor: isToday ? '#6366F106' : 'transparent', borderRadius: 10, paddingHorizontal: 4 }}>
+                          <View style={{ width: 32 }}>
                             <Text style={{ fontSize: 12, fontWeight: isToday ? '800' : '600', color: isToday ? '#6366F1' : theme.textPrimary }}>{dayNames[dayIdx]}</Text>
                           </View>
-                          <View style={{ flex: 1, height: 20, backgroundColor: theme.backgroundSecondary, borderRadius: 6, overflow: 'hidden', justifyContent: 'center' }}>
+                          <View style={{ flex: 1, height: 22, backgroundColor: theme.backgroundSecondary, borderRadius: 8, overflow: 'hidden' }}>
                             {hasActivity ? (
-                              <View style={{ height: '100%', width: `${barWidth}%`, backgroundColor: barColor + '30', borderRadius: 6, justifyContent: 'center', paddingLeft: 6 }}>
-                                <View style={{ height: '60%', backgroundColor: barColor, borderRadius: 4, width: '100%' }} />
+                              <View style={{ height: '100%' as any, width: `${barWidth}%`, backgroundColor: barColor, borderRadius: 8, alignItems: 'flex-end', justifyContent: 'center', paddingRight: 6, minWidth: 22 }}>
+                                <Text style={{ fontSize: 9, fontWeight: '800', color: '#FFF' }}>{ph.matchCount}</Text>
                               </View>
-                            ) : null}
+                            ) : (
+                              <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+                                <Text style={{ fontSize: 9, color: theme.textMuted }}>-</Text>
+                              </View>
+                            )}
                           </View>
-                          <View style={{ width: 26, alignItems: 'flex-end' }}>
-                            <Text style={{ fontSize: 11, fontWeight: '700', color: hasActivity ? theme.textPrimary : theme.textMuted }}>{ph.matchCount}</Text>
-                          </View>
-                          <View style={{ width: 72 }}>
-                            <Text style={{ fontSize: 10, fontWeight: '600', color: hasActivity ? barColor : theme.textMuted }} numberOfLines={1}>{peakLabel}</Text>
+                          {/* Peak hour chips */}
+                          <View style={{ width: 68, flexDirection: 'row', gap: 3, justifyContent: 'flex-end' }}>
+                            {topHours.length > 0 ? topHours.slice(0, 1).map(x => (
+                              <View key={x.h} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: barColor + '15', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6 }}>
+                                <MaterialIcons name="schedule" size={8} color={barColor} />
+                                <Text style={{ fontSize: 9, fontWeight: '700', color: barColor }}>{x.h}h</Text>
+                              </View>
+                            )) : (
+                              <Text style={{ fontSize: 9, color: theme.textMuted }}>-</Text>
+                            )}
                           </View>
                         </View>
                       );
@@ -1125,32 +1158,58 @@ export default function TerrainDetailScreen() {
                   </View>
                 );
               })()}
-              {/* Legend */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
-                {[
-                  { color: '#6366F1', label: language === 'fr' ? 'Faible' : 'Low' },
-                  { color: '#F59E0B', label: language === 'fr' ? 'Moyen' : 'Medium' },
-                  { color: '#EF4444', label: language === 'fr' ? 'Eleve' : 'High' },
-                ].map((leg, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: leg.color }} />
-                    <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{leg.label}</Text>
-                  </View>
-                ))}
               </View>
-              {/* No data for selected season */}
-              {peakSeason !== 'all' && !peakHours.some(ph => ph.matchCount > 0) ? (
-                <View style={{ alignItems: 'center', paddingVertical: 12, marginTop: 8 }}>
-                  <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, textAlign: 'center' }}>
-                    {language === 'fr' ? 'Aucune donnee pour cette saison' : 'No data for this season'}
-                  </Text>
+
+              {/* Legend + insights */}
+              <View style={{ borderTopWidth: 1, borderTopColor: theme.border + '50', paddingHorizontal: 16, paddingVertical: 14, gap: 10 }}>
+                {/* Color legend */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                  {[
+                    { color: '#6366F140', label: language === 'fr' ? 'Faible' : 'Low' },
+                    { color: '#6366F1', label: language === 'fr' ? 'Modere' : 'Moderate' },
+                    { color: '#F59E0B', label: language === 'fr' ? 'Moyen' : 'Medium' },
+                    { color: '#EF4444', label: language === 'fr' ? 'Eleve' : 'High' },
+                  ].map((leg, i) => (
+                    <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                      <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: leg.color }} />
+                      <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{leg.label}</Text>
+                    </View>
+                  ))}
                 </View>
-              ) : null}
+                {/* Quick insight */}
+                {(() => {
+                  const dayNamesFull = language === 'fr' ? ['dimanche', 'lundi', 'mardi', 'mercredi', 'jeudi', 'vendredi', 'samedi'] : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                  const bestDay = peakHours.reduce((best, ph) => ph.matchCount > best.matchCount ? ph : best, peakHours[0]);
+                  if (bestDay.matchCount === 0) return null;
+                  const topHour = bestDay.hours.indexOf(Math.max(...bestDay.hours));
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#6366F108', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#6366F115' }}>
+                      <MaterialIcons name="tips-and-updates" size={16} color="#6366F1" />
+                      <Text style={{ flex: 1, fontSize: 12, color: theme.textSecondary, lineHeight: 17 }}>
+                        {language === 'fr'
+                          ? `Le ${dayNamesFull[bestDay.day]} est le jour le plus actif, surtout vers ${topHour}h.`
+                          : `${dayNamesFull[bestDay.day]} is the most active day, especially around ${topHour > 12 ? topHour - 12 : topHour}${topHour >= 12 ? 'PM' : 'AM'}.`}
+                      </Text>
+                    </View>
+                  );
+                })()}
+              </View>
+              </>
+              )}
             </View>
           </View>
         ) : null;
         })()}
+
+        {/* Activity History Button */}
+        <Pressable
+          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#6366F112', paddingVertical: 14, borderRadius: 14, marginBottom: 16, borderWidth: 1.5, borderColor: '#6366F125' }}
+          onPress={() => router.push(`/terrain-activity/${terrain.id}` as any)}
+        >
+          <MaterialIcons name="calendar-month" size={18} color="#6366F1" />
+          <Text style={{ fontSize: 14, fontWeight: '700', color: '#6366F1' }}>{language === 'fr' ? 'Voir l\'historique d\'activite' : 'View Activity History'}</Text>
+          <MaterialIcons name="chevron-right" size={18} color="#6366F1" />
+        </Pressable>
 
         {/* Terrain Activity & Frequent Players */}
         {frequentPlayers.length > 0 ? (
