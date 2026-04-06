@@ -17,7 +17,7 @@ import Svg, { Rect, Line, Circle as SvgCircle, Polyline, Text as SvgText, G } fr
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
-import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics, TeamSuggestion, H2HPair } from '@/services/clubAnalyticsService';
+import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics, TeamSuggestion, H2HPair, InvitationStats } from '@/services/clubAnalyticsService';
 import { getEloRank } from '@/services/eloService';
 import { Platform } from 'react-native';
 
@@ -414,6 +414,142 @@ export default function ClubAnalyticsScreen() {
               </View>
             ) : null}
           </View>
+
+          {/* Invitation Statistics */}
+          {analytics.invitationStats && analytics.invitationStats.totalSent > 0 ? (
+            <View style={s.sectionCard}>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: '#7C3AED' + '15' }]}>
+                  <MaterialIcons name="mail" size={18} color="#7C3AED" />
+                </View>
+                <Text style={s.sectionTitle}>{fr ? 'Statistiques Invitations' : 'Invitation Statistics'}</Text>
+              </View>
+              {/* KPI Row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, backgroundColor: '#EFF6FF', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#3B82F6' }}>{analytics.invitationStats.totalSent}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Envoyees' : 'Sent'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: '#DCFCE7', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#10B981' }}>{analytics.invitationStats.accepted}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Acceptees' : 'Accepted'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#EF4444' }}>{analytics.invitationStats.declined}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Refusees' : 'Declined'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: '#FEF3C7', borderRadius: 12, padding: 12, alignItems: 'center', gap: 2 }}>
+                  <Text style={{ fontSize: 20, fontWeight: '800', color: '#D97706' }}>{analytics.invitationStats.pending}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'En attente' : 'Pending'}</Text>
+                </View>
+              </View>
+              {/* Acceptance Rate & Response Time */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: theme.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <MaterialIcons name="check-circle" size={16} color={analytics.invitationStats.acceptanceRate >= 50 ? '#10B981' : '#D97706'} />
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: analytics.invitationStats.acceptanceRate >= 50 ? '#10B981' : '#D97706' }}>{analytics.invitationStats.acceptanceRate}%</Text>
+                  </View>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{fr ? 'Taux acceptation' : 'Acceptance rate'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, alignItems: 'center', gap: 4, borderWidth: 1, borderColor: theme.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <MaterialIcons name="schedule" size={16} color="#3B82F6" />
+                    <Text style={{ fontSize: 22, fontWeight: '900', color: '#3B82F6' }}>
+                      {analytics.invitationStats.avgResponseTimeHours < 24
+                        ? `${Math.round(analytics.invitationStats.avgResponseTimeHours)}h`
+                        : `${Math.round(analytics.invitationStats.avgResponseTimeHours / 24)}j`}
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{fr ? 'Temps reponse moy.' : 'Avg response time'}</Text>
+                </View>
+              </View>
+              {/* Acceptance Rate Evolution */}
+              {analytics.invitationStats.monthlyAcceptanceRate && analytics.invitationStats.monthlyAcceptanceRate.some(m => m.sent > 0) ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 10, textTransform: 'uppercase' }}>{fr ? 'Taux acceptation par mois' : 'Acceptance rate by month'}</Text>
+                  <View style={{ alignItems: 'center' }}>
+                    <MiniLineChart
+                      data={analytics.invitationStats.monthlyAcceptanceRate.map(m => ({ label: m.month, value: m.rate }))}
+                      width={Math.min(screenWidth - 64, 340)}
+                      height={100}
+                      color="#10B981"
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                    {analytics.invitationStats.monthlyAcceptanceRate.filter(m => m.sent > 0).length > 1 ? (() => {
+                      const rates = analytics.invitationStats.monthlyAcceptanceRate.filter(m => m.sent > 0);
+                      const first = rates[0]?.rate || 0;
+                      const last = rates[rates.length - 1]?.rate || 0;
+                      const trend = last - first;
+                      return (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: trend >= 0 ? '#DCFCE7' : '#FEF2F2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                          <MaterialIcons name={trend >= 0 ? 'trending-up' : 'trending-down'} size={12} color={trend >= 0 ? '#10B981' : '#EF4444'} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: trend >= 0 ? '#10B981' : '#EF4444' }}>{trend >= 0 ? '+' : ''}{trend}%</Text>
+                        </View>
+                      );
+                    })() : null}
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Most Responsive Players */}
+              {analytics.invitationStats.mostResponsivePlayers && analytics.invitationStats.mostResponsivePlayers.length > 0 ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 10, textTransform: 'uppercase' }}>{fr ? 'Joueurs les plus reactifs' : 'Most responsive players'}</Text>
+                  {analytics.invitationStats.mostResponsivePlayers.map((player, pidx) => (
+                    <View key={pidx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: pidx < analytics.invitationStats.mostResponsivePlayers.length - 1 ? 1 : 0, borderBottomColor: theme.border + '60' }}>
+                      <View style={{ width: 24, height: 24, borderRadius: 8, backgroundColor: pidx === 0 ? '#F59E0B20' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                        {pidx === 0 ? <MaterialIcons name="bolt" size={14} color="#F59E0B" /> : <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8' }}>{pidx + 1}</Text>}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{player.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                          <Text style={{ fontSize: 10, color: '#64748B' }}>{player.invitationsReceived} {fr ? 'recues' : 'received'}</Text>
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>{player.accepted} {fr ? 'acceptees' : 'accepted'}</Text>
+                        </View>
+                      </View>
+                      <View style={{ alignItems: 'flex-end' }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: player.avgResponseHours < 24 ? '#DCFCE7' : player.avgResponseHours < 72 ? '#FEF3C7' : '#FEF2F2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                          <MaterialIcons name="schedule" size={10} color={player.avgResponseHours < 24 ? '#10B981' : player.avgResponseHours < 72 ? '#D97706' : '#EF4444'} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: player.avgResponseHours < 24 ? '#10B981' : player.avgResponseHours < 72 ? '#D97706' : '#EF4444' }}>
+                            {player.avgResponseHours < 24 ? `${Math.round(player.avgResponseHours)}h` : `${Math.round(player.avgResponseHours / 24)}j`}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {/* Monthly Chart */}
+              {analytics.invitationStats.byMonth.some(m => m.sent > 0) ? (
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 10, textTransform: 'uppercase' }}>{fr ? 'Par mois' : 'By month'}</Text>
+                  <View style={{ alignItems: 'center' }}>
+                    <MiniBarChart
+                      data={analytics.invitationStats.byMonth.map(m => ({ label: m.month, value: m.sent }))}
+                      width={Math.min(screenWidth - 64, 340)}
+                      height={100}
+                      color="#7C3AED"
+                    />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+                    {[
+                      { color: '#10B981', label: fr ? 'Acceptees' : 'Accepted', value: analytics.invitationStats.accepted },
+                      { color: '#EF4444', label: fr ? 'Refusees' : 'Declined', value: analytics.invitationStats.declined },
+                      { color: '#94A3B8', label: fr ? 'Expirees' : 'Expired', value: analytics.invitationStats.expired },
+                    ].map((item, idx) => (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: item.color }} />
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#64748B' }}>{item.label}: {item.value}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              ) : null}
+            </View>
+          ) : null}
 
           {/* Tournament Stats - moved here after overview */}
           <View style={s.sectionCard}>

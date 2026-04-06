@@ -72,6 +72,11 @@ const feedStrings = {
   digestBadges: { fr: 'badges debloques', en: 'badges unlocked' },
   digestBiggestMove: { fr: 'Plus gros mouvement ELO', en: 'Biggest ELO move' },
   digestMostBadge: { fr: 'Badge le plus debloque', en: 'Most unlocked badge' },
+  digestPersonal: { fr: 'Votre semaine', en: 'Your week' },
+  digestYourElo: { fr: 'Votre ELO', en: 'Your ELO' },
+  digestYourMatches: { fr: 'Vos matchs', en: 'Your matches' },
+  digestYourBadges: { fr: 'Badges cette semaine', en: 'Badges this week' },
+  digestClubPerf: { fr: 'Performance du club', en: 'Club performance' },
   congratsSent: { fr: 'Felicitations envoyees !', en: 'Congrats sent!' },
   viewProfile: { fr: 'Voir le profil', en: 'View profile' },
   eventCreated: { fr: 'Nouveau defi cree', en: 'New challenge created' },
@@ -594,7 +599,7 @@ export default function ActivityFeedScreen() {
     const [feedResult, carouselResult, digestResult] = await Promise.all([
       fetchActivityFeed(40),
       fetchFeedCarouselData(),
-      fetchWeeklyDigest(),
+      fetchWeeklyDigest(user?.id),
     ]);
     setFeedItems(feedResult.items);
     prevItemCountRef.current = feedResult.items.length;
@@ -822,6 +827,40 @@ export default function ActivityFeedScreen() {
                   {ft('digestBiggestMove', lang)}: <Text style={{ fontWeight: '800', color: '#34D399' }}>+{weeklyDigest.biggestEloMove.delta}</Text> {weeklyDigest.biggestEloMove.playerName} ({weeklyDigest.biggestEloMove.eloAfter})
                 </Text>
               </Pressable>
+            ) : null}
+
+            {/* Personal Stats */}
+            {weeklyDigest.personal && weeklyDigest.personal.matchesPlayed > 0 ? (
+              <View style={{ marginTop: 10, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' }}>
+                <Text style={ds.digestSectionTitle}>{ft('digestPersonal', lang)}</Text>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 10, alignItems: 'center', gap: 2 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: weeklyDigest.personal.eloDelta >= 0 ? '#34D399' : '#F87171' }}>
+                      {weeklyDigest.personal.eloDelta >= 0 ? '+' : ''}{weeklyDigest.personal.eloDelta}
+                    </Text>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.5)' }}>ELO</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: 'rgba(255,255,255,0.7)' }}>{weeklyDigest.personal.eloAfter}</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 10, alignItems: 'center', gap: 2 }}>
+                    <Text style={{ fontSize: 18, fontWeight: '900', color: '#60A5FA' }}>{weeklyDigest.personal.matchesPlayed}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.5)' }}>{ft('digestYourMatches', lang)}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#34D399' }}>{weeklyDigest.personal.wins}W</Text>
+                  </View>
+                  {weeklyDigest.personal.badgesUnlocked.length > 0 ? (
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 10, alignItems: 'center', gap: 2 }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#FBBF24' }}>{weeklyDigest.personal.badgesUnlocked.length}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.5)' }}>Badges</Text>
+                    </View>
+                  ) : null}
+                  {weeklyDigest.personal.clubMatchesThisWeek > 0 ? (
+                    <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, padding: 10, alignItems: 'center', gap: 2 }}>
+                      <Text style={{ fontSize: 18, fontWeight: '900', color: '#A78BFA' }}>{weeklyDigest.personal.clubWinRate}%</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.5)' }}>Club</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.5)' }}>{weeklyDigest.personal.clubMatchesThisWeek} {ft('matches', lang)}</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
             ) : null}
 
             {/* Most Unlocked Badge */}

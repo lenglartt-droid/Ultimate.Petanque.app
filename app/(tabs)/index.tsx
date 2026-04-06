@@ -45,6 +45,8 @@ import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchActivityFeed } from '@/services/activityFeedService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -179,6 +181,9 @@ export default function HomeScreen() {
   // Weekly leaderboard
   const [weeklyRank, setWeeklyRank] = useState<{ rank: number; direction: string; diff: number; matchesThisWeek: number } | null>(null);
 
+  // Feed notification badge
+  const [feedUnreadCount, setFeedUnreadCount] = useState(0);
+
   // Countdown
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -288,11 +293,31 @@ export default function HomeScreen() {
           loadAmbassadors(),
           loadMeetups(),
           loadUpcomingEvents(),
+          loadFeedUnread(),
         ]);
       }, 1500);
     };
     loadCritical();
-  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests]);
+  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread]);
+
+  // Load feed unread count
+  const loadFeedUnread = useCallback(async () => {
+    try {
+      const lastSeen = await AsyncStorage.getItem('feed_last_seen_ts');
+      const { items } = await fetchActivityFeed(20);
+      if (!lastSeen) {
+        // First time: mark as seen, no badge
+        if (items.length > 0) {
+          await AsyncStorage.setItem('feed_last_seen_ts', items[0].timestamp);
+        }
+        setFeedUnreadCount(0);
+        return;
+      }
+      const lastSeenTs = new Date(lastSeen).getTime();
+      const unread = items.filter(i => new Date(i.timestamp).getTime() > lastSeenTs).length;
+      setFeedUnreadCount(unread);
+    } catch { setFeedUnreadCount(0); }
+  }, []);
 
   // Polling — unified into single interval to reduce timer overhead
   useEffect(() => {
@@ -318,6 +343,7 @@ export default function HomeScreen() {
       loadUpcomingEvents(),
       loadWeeklyRank(),
       loadAmbassadors(),
+      loadFeedUnread(),
     ]);
     setRefreshing(false);
   }, [refreshData, loadMeetups, loadWitnessRequests, loadUpcomingEvents, loadWeeklyRank, loadAmbassadors]);
@@ -406,8 +432,18 @@ export default function HomeScreen() {
                 <Text style={st.heroName} numberOfLines={1}>{displayName}</Text>
               </View>
               <View style={st.heroTopActions}>
-                <Pressable style={st.heroIconBtn} onPress={() => { router.push('/activity-feed' as any); }}>
+                <Pressable style={st.heroIconBtn} onPress={async () => {
+                  // Mark feed as seen
+                  try {
+                    await AsyncStorage.setItem('feed_last_seen_ts', new Date().toISOString());
+                    setFeedUnreadCount(0);
+                  } catch { /* silent */ }
+                  router.push('/activity-feed' as any);
+                }}>
                   <MaterialIcons name="dynamic-feed" size={20} color="rgba(255,255,255,0.7)" />
+                  {feedUnreadCount > 0 ? (
+                    <View style={st.heroBadge}><Text style={st.heroBadgeText}>{feedUnreadCount > 9 ? '9+' : feedUnreadCount}</Text></View>
+                  ) : null}
                 </Pressable>
                 <Pressable style={st.heroIconBtn} onPress={() => router.push('/scanner' as any)}>
                   <MaterialIcons name="qr-code-scanner" size={20} color="rgba(255,255,255,0.7)" />

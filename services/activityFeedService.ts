@@ -459,13 +459,24 @@ export interface WeeklyDigest {
   biggestEloMove: { playerName: string; playerId: string; delta: number; eloAfter: number } | null;
   mostUnlockedBadgeId: string | null;
   mostUnlockedBadgeCount: number;
+  // Personal stats for the connected user
+  personal: {
+    eloBefore: number;
+    eloAfter: number;
+    eloDelta: number;
+    matchesPlayed: number;
+    wins: number;
+    badgesUnlocked: string[];
+    clubMatchesThisWeek: number;
+    clubWinRate: number;
+  } | null;
 }
 
 /**
  * Fetches a weekly digest — aggregated stats for the current week (since Monday).
  * Top 3 players, most unlocked badge, biggest ELO move, total matches.
  */
-export async function fetchWeeklyDigest(): Promise<{ digest: WeeklyDigest | null }> {
+export async function fetchWeeklyDigest(userId?: string): Promise<{ digest: WeeklyDigest | null }> {
   const supabase = getSupabaseClient();
   try {
     const now = new Date();
@@ -542,6 +553,65 @@ export async function fetchWeeklyDigest(): Promise<{ digest: WeeklyDigest | null
 
     const totalMatches = (weeklyRes.data || []).reduce((s: number, r: any) => s + (r.matches_played || 0), 0);
 
+    // Personal stats for connected user
+    let personal: WeeklyDigest['personal'] = null;
+    if (userId) {
+      try {
+        // Get user's player
+        const { data: myPlayer } = await supabase.from('players').select('id, elo_rating, club_id').eq('user_id', userId).limit(1).single();
+        if (myPlayer) {
+          // ELO changes this week
+          const { data: myEloHistory } = await supabase
+            .from('elo_history')
+            .select('elo_before, elo_after, elo_delta, won')
+            .eq('user_id', userId)
+            .gte('recorded_at', monday.toISOString())
+            .order('recorded_at', { ascending: true });
+
+          const myMatches = myEloHistory?.length || 0;
+          const myWins = myEloHistory?.filter((e: any) => e.won).length || 0;
+          const firstElo = myEloHistory?.[0]?.elo_before || myPlayer.elo_rating || 1000;
+          const lastElo = myEloHistory?.length ? myEloHistory[myEloHistory.length - 1].elo_after : (myPlayer.elo_rating || 1000);
+
+          // Badges this week
+          const { data: myBadges } = await supabase
+            .from('user_badges')
+            .select('badge_id')
+            .eq('user_id', userId)
+            .gte('unlocked_at', monday.toISOString());
+
+          // Club matches this week (if in a club)
+          let clubMatchesThisWeek = 0;
+          let clubWinRate = 0;
+          if (myPlayer.club_id) {
+            const { data: clubPlayers } = await supabase.from('players').select('user_id').eq('club_id', myPlayer.club_id);
+            const clubUserIds = (clubPlayers || []).map((p: any) => p.user_id);
+            if (clubUserIds.length > 0) {
+              const { data: clubElo } = await supabase
+                .from('elo_history')
+                .select('user_id, won')
+                .in('user_id', clubUserIds)
+                .gte('recorded_at', monday.toISOString());
+              clubMatchesThisWeek = clubElo?.length || 0;
+              const clubWins = clubElo?.filter((e: any) => e.won).length || 0;
+              clubWinRate = clubMatchesThisWeek > 0 ? Math.round((clubWins / clubMatchesThisWeek) * 100) : 0;
+            }
+          }
+
+          personal = {
+            eloBefore: firstElo,
+            eloAfter: lastElo,
+            eloDelta: lastElo - firstElo,
+            matchesPlayed: myMatches,
+            wins: myWins,
+            badgesUnlocked: (myBadges || []).map((b: any) => b.badge_id),
+            clubMatchesThisWeek,
+            clubWinRate,
+          };
+        }
+      } catch { /* silent */ }
+    }
+
     return {
       digest: {
         weekStart,
@@ -551,6 +621,7 @@ export async function fetchWeeklyDigest(): Promise<{ digest: WeeklyDigest | null
         biggestEloMove,
         mostUnlockedBadgeId,
         mostUnlockedBadgeCount,
+        personal,
       },
     };
   } catch (e) {
