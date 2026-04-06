@@ -338,13 +338,17 @@ const SubFilterChip = React.memo(({ label, icon, isActive, color, onPress }: { l
 interface TerrainSubFiltersProps {
   terrainTypeFilter: string | null;
   terrainEnvFilter: 'indoor' | 'outdoor' | null;
+  terrainLightingFilter: boolean | null;
+  terrainCoveredFilter: boolean | null;
+  terrainParkingFilter: boolean | null;
   onTerrainTypePress: (id: string) => void;
   onTerrainEnvPress: (id: 'indoor' | 'outdoor') => void;
+  onTerrainCharPress: (key: 'lighting' | 'covered' | 'parking') => void;
   onClear: () => void;
   count: number;
   language: string;
 }
-const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, onTerrainTypePress, onTerrainEnvPress, onClear, count, language }: TerrainSubFiltersProps) => (
+const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, onTerrainTypePress, onTerrainEnvPress, onTerrainCharPress, onClear, count, language }: TerrainSubFiltersProps) => (
   <View style={styles.subFiltersContainer}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
       <View style={styles.subFilterLabel}>
@@ -365,7 +369,16 @@ const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, onT
         return <SubFilterChip key={env.id} label={env.label} icon={env.icon} isActive={terrainEnvFilter === env.id} color={envColor} onPress={() => onTerrainEnvPress(env.id as 'indoor' | 'outdoor')} />;
       })}
     </ScrollView>
-    {(terrainTypeFilter || terrainEnvFilter) ? (
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="tune" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Caracteristiques' : 'Features'}</Text>
+      </View>
+      <SubFilterChip label={language === 'fr' ? 'Eclairage' : 'Lighting'} icon="lightbulb" isActive={terrainLightingFilter === true} color="#EAB308" onPress={() => onTerrainCharPress('lighting')} />
+      <SubFilterChip label={language === 'fr' ? 'Couvert' : 'Covered'} icon="roofing" isActive={terrainCoveredFilter === true} color="#6366F1" onPress={() => onTerrainCharPress('covered')} />
+      <SubFilterChip label="Parking" icon="local-parking" isActive={terrainParkingFilter === true} color="#0EA5E9" onPress={() => onTerrainCharPress('parking')} />
+    </ScrollView>
+    {(terrainTypeFilter || terrainEnvFilter || terrainLightingFilter || terrainCoveredFilter || terrainParkingFilter) ? (
       <View style={styles.subFilterActiveBar}>
         <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'terrain(s) filtre(s)' : 'terrain(s) filtered'}</Text>
         <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
@@ -420,14 +433,18 @@ const TournamentSubFilters = React.memo(({ tournamentFormatFilter, tournamentSta
 
 interface PlayerSubFiltersProps {
   eloRankFilter: EloRankTier | null;
+  eloRangeFilter: 'placement' | null;
   trustFilter: 'verified' | 'high' | 'medium_low' | null;
+  roleFilter: string | null;
   onEloRankPress: (tier: EloRankTier) => void;
+  onEloRangePress: (key: 'placement') => void;
   onTrustPress: (key: 'verified' | 'high' | 'medium_low') => void;
+  onRolePress: (role: string) => void;
   onClear: () => void;
   count: number;
   language: string;
 }
-const PlayerSubFilters = React.memo(({ eloRankFilter, trustFilter, onEloRankPress, onTrustPress, onClear, count, language }: PlayerSubFiltersProps) => (
+const PlayerSubFilters = React.memo(({ eloRankFilter, eloRangeFilter, trustFilter, roleFilter, onEloRankPress, onEloRangePress, onTrustPress, onRolePress, onClear, count, language }: PlayerSubFiltersProps) => (
   <View style={styles.subFiltersContainer}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
       <View style={styles.subFilterLabel}>
@@ -437,6 +454,18 @@ const PlayerSubFilters = React.memo(({ eloRankFilter, trustFilter, onEloRankPres
       {ELO_RANKS_REVERSED.map(rank => (
         <SubFilterChip key={rank.tier} label={language === 'fr' ? rank.label.fr : rank.label.en} icon={rank.icon} isActive={eloRankFilter === rank.tier} color={rank.color} onPress={() => onEloRankPress(rank.tier)} />
       ))}
+      <SubFilterChip label={language === 'fr' ? 'Placement' : 'Placement'} icon="hourglass-empty" isActive={eloRangeFilter === 'placement'} color="#A855F7" onPress={() => onEloRangePress('placement')} />
+    </ScrollView>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+      <View style={styles.subFilterLabel}>
+        <MaterialIcons name="sports" size={12} color={theme.textMuted} />
+        <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Role' : 'Role'}</Text>
+      </View>
+      {(['Tireur', 'Pointeur', 'Milieu'] as const).map(role => {
+        const roleColor = role === 'Tireur' ? '#F97316' : role === 'Pointeur' ? '#3B82F6' : '#8B5CF6';
+        const roleIcon = role === 'Tireur' ? 'gps-fixed' : role === 'Pointeur' ? 'radio-button-on' : 'swap-horiz';
+        return <SubFilterChip key={role} label={role} icon={roleIcon} isActive={roleFilter === role} color={roleColor} onPress={() => onRolePress(role)} />;
+      })}
     </ScrollView>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
       <View style={styles.subFilterLabel}>
@@ -447,7 +476,7 @@ const PlayerSubFilters = React.memo(({ eloRankFilter, trustFilter, onEloRankPres
         <SubFilterChip key={opt.key} label={opt.label} icon={opt.icon} isActive={trustFilter === opt.key} color={opt.color} onPress={() => onTrustPress(opt.key)} />
       ))}
     </ScrollView>
-    {(eloRankFilter || trustFilter) ? (
+    {(eloRankFilter || eloRangeFilter || trustFilter || roleFilter) ? (
       <View style={styles.subFilterActiveBar}>
         <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'joueur(s) filtre(s)' : 'player(s) filtered'}</Text>
         <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
@@ -524,6 +553,9 @@ export default function MapScreen() {
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
+  const [searchSuggestions, setSearchSuggestions] = useState<{ label: string; type: string; count?: number; lat?: number; lng?: number }[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
   const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
@@ -545,9 +577,19 @@ export default function MapScreen() {
   const [eloRankFilter, setEloRankFilter] = useState<EloRankTier | null>(null);
   const [trustFilter, setTrustFilter] = useState<'verified' | 'high' | 'medium_low' | null>(null);
 
-  // Terrain sub-filters (type & environment)
+  // Terrain sub-filters (type & environment & characteristics)
   const [terrainTypeFilter, setTerrainTypeFilter] = useState<string | null>(null);
   const [terrainEnvFilter, setTerrainEnvFilter] = useState<'indoor' | 'outdoor' | null>(null);
+  const [terrainLightingFilter, setTerrainLightingFilter] = useState<boolean | null>(null);
+  const [terrainCoveredFilter, setTerrainCoveredFilter] = useState<boolean | null>(null);
+  const [terrainParkingFilter, setTerrainParkingFilter] = useState<boolean | null>(null);
+
+  // Club sub-filters (facilities)
+  const [clubFacilityFilter, setClubFacilityFilter] = useState<string | null>(null);
+
+  // Player extra sub-filters
+  const [playerRoleFilter, setPlayerRoleFilter] = useState<string | null>(null);
+  const [eloRangeFilter, setEloRangeFilter] = useState<'placement' | null>(null);
 
   // Tournament sub-filters (format & status)
   const [tournamentFormatFilter, setTournamentFormatFilter] = useState<string | null>(null);
@@ -783,11 +825,19 @@ export default function MapScreen() {
         const rank = getEloRank(elo);
         if (rank.tier !== eloRankFilter) return false;
       }
+      if (eloRangeFilter === 'placement') {
+        const mp = item.matchesPlayed ?? item.stats?.matchesPlayed ?? 0;
+        if (mp >= 10) return false;
+      }
       if (trustFilter) {
         const trustScore = item.trustScore ?? item.trust_score ?? 75;
         if (trustFilter === 'verified' && trustScore < 80) return false;
         if (trustFilter === 'high' && (trustScore < 65 || trustScore >= 80)) return false;
         if (trustFilter === 'medium_low' && trustScore >= 65) return false;
+      }
+      if (playerRoleFilter) {
+        const role = item.role || '';
+        if (role !== playerRoleFilter) return false;
       }
       return true;
     };
@@ -800,6 +850,18 @@ export default function MapScreen() {
       if (terrainEnvFilter) {
         const env = item.environment || 'outdoor';
         if (env !== terrainEnvFilter) return false;
+      }
+      if (terrainLightingFilter === true && !item.lighting) return false;
+      if (terrainCoveredFilter === true && !item.covered) return false;
+      if (terrainParkingFilter === true && !item.parking) return false;
+      return true;
+    };
+
+    // Club sub-filter matching
+    const matchClubSubFilters = (item: any) => {
+      if (clubFacilityFilter) {
+        const facilities = item.facilities || [];
+        if (!facilities.includes(clubFacilityFilter)) return false;
       }
       return true;
     };
@@ -819,8 +881,9 @@ export default function MapScreen() {
       if (showPublic) addItems(filterTerrains(pubData.terrains), 'terrains', true);
     }
     if (filter === 'all' || filter === 'clubs') {
-      if (showOwn) addItems(ownData.clubs, 'clubs', false);
-      if (showPublic) addItems(pubData.clubs, 'clubs', true);
+      const filterClubs = (arr: any[]) => clubFacilityFilter ? arr.filter(matchClubSubFilters) : arr;
+      if (showOwn) addItems(filterClubs(ownData.clubs), 'clubs', false);
+      if (showPublic) addItems(filterClubs(pubData.clubs), 'clubs', true);
     }
     if (filter === 'all' || filter === 'tournaments') {
       // Only show upcoming/in-progress tournaments on map (exclude Terminé)
@@ -834,7 +897,7 @@ export default function MapScreen() {
       if (showPublic) addItems(filterTournaments(pubData.tournaments), 'tournaments', true);
     }
     if (filter === 'all' || filter === 'players') {
-      const filterPlayers = (arr: any[]) => (eloRankFilter || trustFilter) ? arr.filter(matchPlayerSubFilters) : arr;
+      const filterPlayers = (arr: any[]) => (eloRankFilter || eloRangeFilter || trustFilter || playerRoleFilter) ? arr.filter(matchPlayerSubFilters) : arr;
       if (showOwn) addItems(filterPlayers(ownData.players), 'players', false);
       if (showPublic) addItems(filterPlayers(pubData.players), 'players', true);
     }
@@ -866,7 +929,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, trustFilter, terrainTypeFilter, terrainEnvFilter, tournamentFormatFilter, tournamentStatusFilter]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter]);
 
   // Compute clusters with debounced region to avoid expensive re-clustering on every pan
   const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1021,10 +1084,18 @@ export default function MapScreen() {
     if (f !== 'players') {
       setEloRankFilter(null);
       setTrustFilter(null);
+      setPlayerRoleFilter(null);
+      setEloRangeFilter(null);
     }
     if (f !== 'terrains') {
       setTerrainTypeFilter(null);
       setTerrainEnvFilter(null);
+      setTerrainLightingFilter(null);
+      setTerrainCoveredFilter(null);
+      setTerrainParkingFilter(null);
+    }
+    if (f !== 'clubs') {
+      setClubFacilityFilter(null);
     }
     if (f !== 'tournaments') {
       setTournamentFormatFilter(null);
@@ -1063,16 +1134,48 @@ export default function MapScreen() {
     setTournamentStatusFilter(prev => prev === key ? null : key);
   }, []);
 
+  const handlePlayerRoleToggle = useCallback((role: string) => {
+    Haptics.selectionAsync();
+    setPlayerRoleFilter(prev => prev === role ? null : role);
+  }, []);
+
+  const handleEloRangeToggle = useCallback((key: 'placement') => {
+    Haptics.selectionAsync();
+    setEloRangeFilter(prev => prev === key ? null : key);
+  }, []);
+
   const handleClearPlayerSubFilters = useCallback(() => {
     Haptics.selectionAsync();
     setEloRankFilter(null);
     setTrustFilter(null);
+    setPlayerRoleFilter(null);
+    setEloRangeFilter(null);
+  }, []);
+
+  const handleTerrainCharToggle = useCallback((key: 'lighting' | 'covered' | 'parking') => {
+    Haptics.selectionAsync();
+    if (key === 'lighting') setTerrainLightingFilter(prev => prev === true ? null : true);
+    else if (key === 'covered') setTerrainCoveredFilter(prev => prev === true ? null : true);
+    else setTerrainParkingFilter(prev => prev === true ? null : true);
+  }, []);
+
+  const handleClubFacilityToggle = useCallback((facility: string) => {
+    Haptics.selectionAsync();
+    setClubFacilityFilter(prev => prev === facility ? null : facility);
+  }, []);
+
+  const handleClearClubSubFilters = useCallback(() => {
+    Haptics.selectionAsync();
+    setClubFacilityFilter(null);
   }, []);
 
   const handleClearTerrainSubFilters = useCallback(() => {
     Haptics.selectionAsync();
     setTerrainTypeFilter(null);
     setTerrainEnvFilter(null);
+    setTerrainLightingFilter(null);
+    setTerrainCoveredFilter(null);
+    setTerrainParkingFilter(null);
   }, []);
 
   const handleClearTournamentSubFilters = useCallback(() => {
@@ -1384,9 +1487,9 @@ export default function MapScreen() {
 
 
 
-      {/* Ad Banner - floating above bottom panel */}
+      {/* Ad Banner - floating at top-center below hero header */}
       {Platform.OS !== 'web' ? (
-        <View style={styles.floatingAdBanner}>
+        <View style={[styles.floatingAdBanner, { bottom: undefined, top: insets.top + 130 }]}>
           <AdBanner position="inline" />
         </View>
       ) : null}
@@ -1417,12 +1520,117 @@ export default function MapScreen() {
           <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
             <View style={styles.searchBar}>
               <MaterialIcons name="search" size={18} color={theme.textMuted} />
-              <TextInput style={styles.searchInput} placeholder={t('map', 'search')} placeholderTextColor={theme.textMuted} value={search} onChangeText={setSearch} autoFocus />
+              <TextInput
+                style={styles.searchInput}
+                placeholder={language === 'fr' ? 'Ville, terrain, club, joueur...' : 'City, terrain, club, player...'}
+                placeholderTextColor={theme.textMuted}
+                value={search}
+                onChangeText={(text) => {
+                  setSearch(text);
+                  // Debounced suggestions
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  if (text.trim().length < 2) { setSearchSuggestions([]); setShowSuggestions(false); return; }
+                  searchDebounceRef.current = setTimeout(() => {
+                    const q = text.toLowerCase().trim();
+                    const suggestions: { label: string; type: string; count?: number; lat?: number; lng?: number; icon?: string; color?: string }[] = [];
+                    // City suggestions
+                    const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
+                    [...ownData.terrains, ...ownData.clubs, ...ownData.players, ...pubData.terrains, ...pubData.clubs, ...pubData.players].forEach(item => {
+                      const city = item.city || item.location?.city;
+                      if (city && city.toLowerCase().includes(q)) {
+                        const existing = cityMap.get(city) || { count: 0 };
+                        existing.count++;
+                        if (!existing.lat && item.location?.latitude) { existing.lat = item.location.latitude; existing.lng = item.location.longitude; }
+                        cityMap.set(city, existing);
+                      }
+                    });
+                    cityMap.forEach((v, city) => {
+                      suggestions.push({ label: city, type: language === 'fr' ? 'Ville' : 'City', count: v.count, lat: v.lat, lng: v.lng, icon: 'location-city', color: '#3B82F6' });
+                    });
+                    // Item name suggestions (top 5)
+                    const nameMatches: typeof suggestions = [];
+                    const typeLabels: Record<string, { label: string; icon: string; color: string }> = {
+                      terrains: { label: language === 'fr' ? 'Terrain' : 'Terrain', icon: 'sports-soccer', color: theme.success },
+                      clubs: { label: 'Club', icon: 'home', color: theme.accent },
+                      players: { label: language === 'fr' ? 'Joueur' : 'Player', icon: 'person', color: theme.primary },
+                    };
+                    const addNameMatches = (items: any[], itemType: string) => {
+                      items.filter(it => it.name?.toLowerCase().includes(q)).slice(0, 3).forEach(it => {
+                        const tl = typeLabels[itemType];
+                        if (tl) nameMatches.push({ label: it.name, type: tl.label, lat: it.location?.latitude, lng: it.location?.longitude, icon: tl.icon, color: tl.color });
+                      });
+                    };
+                    addNameMatches([...ownData.terrains, ...pubData.terrains], 'terrains');
+                    addNameMatches([...ownData.clubs, ...pubData.clubs], 'clubs');
+                    addNameMatches([...ownData.players, ...pubData.players], 'players');
+                    suggestions.push(...nameMatches.slice(0, 5));
+                    // Dedup
+                    const seen = new Set<string>();
+                    const deduped = suggestions.filter(s => { const key = `${s.label}-${s.type}`; if (seen.has(key)) return false; seen.add(key); return true; });
+                    setSearchSuggestions(deduped.slice(0, 8));
+                    setShowSuggestions(deduped.length > 0);
+                  }, 200);
+                }}
+                autoFocus
+              />
               {search.length > 0 ? (
-                <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+                <Pressable onPress={() => { setSearch(''); setSearchSuggestions([]); setShowSuggestions(false); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
               ) : null}
             </View>
-            {search.trim() ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
+            {/* Quick filter chips */}
+            {!search.trim() ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChipsRow}>
+                {[{ label: language === 'fr' ? 'Pres de moi' : 'Near me', icon: 'my-location', onPress: () => {
+                  if (mapRef.current) {
+                    mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
+                  }
+                }},
+                { label: 'Paris', icon: 'location-city', onPress: () => { setSearch('Paris'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 48.8566, longitude: 2.3522, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
+                { label: 'Marseille', icon: 'location-city', onPress: () => { setSearch('Marseille'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 43.2965, longitude: 5.3698, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
+                { label: 'Lyon', icon: 'location-city', onPress: () => { setSearch('Lyon'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 45.7640, longitude: 4.8357, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
+                ].map((chip, i) => (
+                  <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
+                    <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />
+                    <Text style={styles.suggestionChipText}>{chip.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {/* Suggestions dropdown */}
+            {showSuggestions && searchSuggestions.length > 0 ? (
+              <ScrollView style={styles.suggestionsContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                {searchSuggestions.map((sug, idx) => (
+                  <Pressable
+                    key={`${sug.label}-${sug.type}-${idx}`}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSearch(sug.label);
+                      setShowSuggestions(false);
+                      // Zoom to suggestion location if available
+                      if (sug.lat && sug.lng && mapRef.current) {
+                        mapRef.current.animateToRegion({
+                          latitude: sug.lat,
+                          longitude: sug.lng,
+                          latitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                          longitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                        }, 500);
+                      }
+                    }}
+                  >
+                    <View style={[styles.suggestionIcon, { backgroundColor: ((sug as any).color || theme.primary) + '12' }]}>
+                      <MaterialIcons name={((sug as any).icon || 'place') as any} size={16} color={(sug as any).color || theme.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
+                      <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` \u2022 ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
+                    </View>
+                    {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {search.trim() && !showSuggestions ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
           </Animated.View>
         ) : null}
 
@@ -1436,17 +1644,45 @@ export default function MapScreen() {
           ))}
         </ScrollView>
 
-        {/* Terrain sub-filters: type & environment */}
+        {/* Terrain sub-filters: type & environment & characteristics */}
         {filter === 'terrains' ? (
           <TerrainSubFilters
             terrainTypeFilter={terrainTypeFilter}
             terrainEnvFilter={terrainEnvFilter}
+            terrainLightingFilter={terrainLightingFilter}
+            terrainCoveredFilter={terrainCoveredFilter}
+            terrainParkingFilter={terrainParkingFilter}
             onTerrainTypePress={handleTerrainTypeToggle}
             onTerrainEnvPress={handleTerrainEnvToggle}
+            onTerrainCharPress={handleTerrainCharToggle}
             onClear={handleClearTerrainSubFilters}
             count={counts.terrains}
             language={language}
           />
+        ) : null}
+
+        {/* Club sub-filters: facilities/equipment */}
+        {filter === 'clubs' ? (
+          <View style={styles.subFiltersContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="build" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Equipements' : 'Facilities'}</Text>
+              </View>
+              {(['Parking', 'Buvette', 'Toilettes', 'Eclairage', 'Boulodrome couvert', 'Vestiaires', 'Location de boules', 'Wi-Fi', 'Restaurant'] as const).map(fac => (
+                <SubFilterChip key={fac} label={fac} isActive={clubFacilityFilter === fac} color={theme.accent} onPress={() => handleClubFacilityToggle(fac)} />
+              ))}
+            </ScrollView>
+            {clubFacilityFilter ? (
+              <View style={styles.subFilterActiveBar}>
+                <Text style={styles.subFilterActiveText}>{counts.clubs} {language === 'fr' ? 'club(s) filtre(s)' : 'club(s) filtered'}</Text>
+                <Pressable style={styles.subFilterClearBtn} onPress={handleClearClubSubFilters}>
+                  <MaterialIcons name="close" size={12} color={theme.primary} />
+                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
         ) : null}
 
         {/* Tournament sub-filters: format & status */}
@@ -1462,13 +1698,17 @@ export default function MapScreen() {
           />
         ) : null}
 
-        {/* Player sub-filters: ELO rank & trust score */}
+        {/* Player sub-filters: ELO rank, role & trust score */}
         {filter === 'players' ? (
           <PlayerSubFilters
             eloRankFilter={eloRankFilter}
+            eloRangeFilter={eloRangeFilter}
             trustFilter={trustFilter}
+            roleFilter={playerRoleFilter}
             onEloRankPress={handleEloRankToggle}
+            onEloRangePress={handleEloRangeToggle}
             onTrustPress={handleTrustToggle}
+            onRolePress={handlePlayerRoleToggle}
             onClear={handleClearPlayerSubFilters}
             count={counts.players}
             language={language}
@@ -1887,6 +2127,14 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
+  suggestionsContainer: { backgroundColor: '#FFF', borderRadius: 12, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', maxHeight: 220, overflow: 'hidden' as const },
+  suggestionItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  suggestionIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  suggestionLabel: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+  suggestionMeta: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
+  suggestionChipsRow: { flexDirection: 'row' as const, gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  suggestionChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#F1F5F9', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
+  suggestionChipText: { fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
   filters: { paddingHorizontal: 12, paddingTop: 6, paddingBottom: 4, gap: 5 },
   chip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 11, paddingVertical: 7, borderRadius: 18, backgroundColor: '#F1F5F9', borderWidth: 1.5, borderColor: '#E2E8F0' },
   chipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
@@ -2031,10 +2279,10 @@ const styles = StyleSheet.create({
   manageEmptyText: { fontSize: 17, fontWeight: '700', color: theme.textPrimary, marginTop: 16 },
   manageEmptyDesc: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8, maxWidth: 300, lineHeight: 20 },
 
-  // Floating ad banner above bottom panel
+  // Floating ad banner - repositioned to top area to not block filters
   floatingAdBanner: {
-    position: 'absolute' as const, bottom: 120, left: 0, right: 0,
-    paddingHorizontal: 12, opacity: 0.95,
+    position: 'absolute' as const, left: 12, right: 12,
+    opacity: 0.92, zIndex: 15,
   },
   // No-Geo Banner
   noGeoBanner: {

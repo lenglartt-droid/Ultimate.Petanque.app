@@ -47,8 +47,9 @@ import { getSupabaseClient, useAuth } from '@/template';
 import ShareStatusSection from '@/components/ui/ShareStatusSection';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import AdBanner from '@/components/ui/AdBanner';
-import { fetchEloHistory, EloHistoryEntry } from '@/services/eloService';
-import Svg, { Circle, Line, G, Polygon, Text as SvgText } from 'react-native-svg';
+import { fetchEloHistory, EloHistoryEntry, getEloRank } from '@/services/eloService';
+import Svg, { Circle, Line, G, Polygon, Text as SvgText, Polyline as SvgPolyline } from 'react-native-svg';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
 
@@ -135,15 +136,18 @@ export default function HistoryScreen() {
   // ELO delta map: matchId → eloDelta
   const [eloDeltas, setEloDeltas] = useState<Map<string, number>>(new Map());
 
-  // Load ELO history for current user to get match deltas
+  // ELO history for season sparkline
+  const [eloHistory, setEloHistory] = useState<EloHistoryEntry[]>([]);
+
+  // Load ELO history for current user to get match deltas + sparkline
   useEffect(() => {
     if (!user?.id) return;
-    const loadEloDeltas = async () => {
+    const loadEloData = async () => {
       try {
         const supabase = getSupabaseClient();
         const { data } = await supabase
           .from('elo_history')
-          .select('match_id, elo_delta')
+          .select('match_id, elo_delta, elo_after, recorded_at')
           .eq('user_id', user.id)
           .not('match_id', 'is', null)
           .order('recorded_at', { ascending: false })
@@ -156,10 +160,25 @@ export default function HistoryScreen() {
             }
           }
           setEloDeltas(map);
+          // Build monthly ELO sparkline from history
+          const histEntries: EloHistoryEntry[] = data.map((r: any) => ({
+            id: r.match_id,
+            playerId: '',
+            userId: user!.id,
+            eloBefore: (r.elo_after || 1000) - (r.elo_delta || 0),
+            eloAfter: r.elo_after || 1000,
+            eloDelta: r.elo_delta || 0,
+            matchId: r.match_id,
+            opponentElo: 1000,
+            opponentName: '',
+            won: r.elo_delta >= 0,
+            recordedAt: r.recorded_at,
+          }));
+          setEloHistory(histEntries.reverse());
         }
       } catch { /* silent */ }
     };
-    loadEloDeltas();
+    loadEloData();
   }, [user?.id, matches.length]);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -795,16 +814,143 @@ export default function HistoryScreen() {
 
   const selectedPeriodLabel = t('history', PERIOD_KEYS[selectedPeriod]);
 
-  // List header with challenge stats
+  // Season summary data
+  const seasonData = useMemo(() => {
+    const currentYear = new Date().getFullYear();
+    const seasonMatches = matches.filter(m => new Date(m.date).getFullYear() === currentYear);
+    if (seasonMatches.length < 3) return null;
+    const seasonWins = seasonMatches.filter(m => m.winner === 'A').length;
+    const seasonLosses = seasonMatches.length - seasonWins;
+    const seasonWinRate = seasonMatches.length > 0 ? Math.round((seasonWins / seasonMatches.length) * 100) : 0;
+    const seasonChallenges = challenges.filter(c => new Date(c.date).getFullYear() === currentYear);
+    const bestCarreauRate = seasonChallenges.length > 0
+      ? Math.max(...seasonChallenges.filter(c => c.type !== 'precision' && (c.totalShots || 0) > 0).map(c => Math.round(((c.carreauCount || 0) / (c.totalShots || 1)) * 100)), 0)
+      : 0;
+    // Build monthly ELO sparkline
+    const monthlyElo: Array<{ month: string; elo: number }> = [];
+    const now = new Date();
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const nextD = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const ml = d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' });
+      const monthEntries = eloHistory.filter(e => {
+        const rd = new Date(e.recordedAt);
+        return rd >= d && rd < nextD;
+      });
+      const lastEntry = monthEntries.length > 0 ? monthEntries[monthEntries.length - 1] : null;
+      if (lastEntry) {
+        monthlyElo.push({ month: ml, elo: lastEntry.eloAfter });
+      } else if (monthlyElo.length > 0) {
+        monthlyElo.push({ month: ml, elo: monthlyElo[monthlyElo.length - 1].elo });
+      }
+    }
+    return { currentYear, seasonMatches: seasonMatches.length, seasonWins, seasonLosses, seasonWinRate, bestCarreauRate, monthlyElo };
+  }, [matches, challenges, eloHistory, language]);
+
+  // List header with challenge stats + season summary
   const ListHeader = useCallback(() => {
+    const parts: React.ReactNode[] = [];
+    // Season summary card
+    if (seasonData) {
+      const selfPlayer = (user as any);
+      const elo = eloHistory.length > 0 ? eloHistory[eloHistory.length - 1].eloAfter : 1000;
+      const eloR = getEloRank(elo);
+      const sparkW = Math.min(screenWidth - 64, 280);
+      const sparkH = 50;
+      const mElo = seasonData.monthlyElo;
+      parts.push(
+        <View key="season" style={{ marginBottom: 16 }}>
+          <LinearGradient colors={['#0F172A', '#1E293B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 18, padding: 18 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(96,165,250,0.15)', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="calendar-today" size={18} color="#60A5FA" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#FFFFFF' }}>{language === 'fr' ? `Saison ${seasonData.currentYear}` : `Season ${seasonData.currentYear}`}</Text>
+                <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>{seasonData.seasonMatches} {language === 'fr' ? 'matchs joues' : 'matches played'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: eloR.color + '20', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                <MaterialIcons name={eloR.icon as any} size={12} color={eloR.color} />
+                <Text style={{ fontSize: 14, fontWeight: '800', color: eloR.color }}>{elo}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, marginBottom: 12 }}>
+              {[
+                { value: seasonData.seasonWins, label: language === 'fr' ? 'Victoires' : 'Wins', color: '#22C55E' },
+                { value: seasonData.seasonLosses, label: language === 'fr' ? 'Defaites' : 'Losses', color: '#EF4444' },
+                { value: `${seasonData.seasonWinRate}%`, label: language === 'fr' ? 'Taux V.' : 'Win %', color: '#60A5FA' },
+                { value: `${seasonData.bestCarreauRate}%`, label: 'Carreau', color: '#F59E0B' },
+              ].map((s, i) => (
+                <React.Fragment key={i}>
+                  {i > 0 ? <View style={{ width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.1)' }} /> : null}
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 20, fontWeight: '800', color: s.color }}>{s.value}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.45)', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{s.label}</Text>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+            {/* ELO Sparkline */}
+            {mElo.length >= 2 ? (() => {
+              const vals = mElo.map(m => m.elo);
+              const minE = Math.min(...vals);
+              const maxE = Math.max(...vals);
+              const rangeE = Math.max(maxE - minE, 1);
+              const padL = 4;
+              const padR = 4;
+              const padT = 4;
+              const padB = 16;
+              const iW = sparkW - padL - padR;
+              const iH = sparkH - padT - padB;
+              const stepX = iW / (mElo.length - 1);
+              const pts = mElo.map((m, i) => ({
+                x: padL + i * stepX,
+                y: padT + iH - ((m.elo - minE) / rangeE) * iH,
+              }));
+              const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
+              return (
+                <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                  <Svg width={sparkW} height={sparkH}>
+                    <Line x1={padL} y1={padT + iH} x2={sparkW - padR} y2={padT + iH} stroke="rgba(255,255,255,0.1)" strokeWidth={0.5} />
+                    <SvgPolyline points={polyline} fill="none" stroke="#60A5FA" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+                    {pts.map((p, i) => (
+                      <Circle key={i} cx={p.x} cy={p.y} r={3} fill="#60A5FA" stroke="#0F172A" strokeWidth={2} />
+                    ))}
+                    {mElo.map((m, i) => (
+                      <SvgText key={i} x={pts[i].x} y={sparkH - 2} fontSize="8" fill="rgba(255,255,255,0.4)" textAnchor="middle" fontWeight="600">{m.month}</SvgText>
+                    ))}
+                    <SvgText x={pts[pts.length - 1].x + 2} y={pts[pts.length - 1].y - 6} fontSize="10" fill="#60A5FA" fontWeight="800">{mElo[mElo.length - 1].elo}</SvgText>
+                  </Svg>
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.35)', marginTop: 2 }}>{language === 'fr' ? 'Evolution ELO' : 'ELO Evolution'}</Text>
+                </View>
+              );
+            })() : null}
+            {/* Win/Loss mini bar */}
+            <View style={{ flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.08)' }}>
+              <View style={{ flex: Math.max(seasonData.seasonWins, 0.1), backgroundColor: '#22C55E', borderRadius: 3 }} />
+              <View style={{ flex: Math.max(seasonData.seasonLosses, 0.1), backgroundColor: '#EF4444', borderRadius: 3 }} />
+            </View>
+            {/* Detail button */}
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 12, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' }}
+              onPress={() => { Haptics.selectionAsync(); router.push('/season-detail' as any); }}
+            >
+              <MaterialIcons name="bar-chart" size={16} color="#60A5FA" />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#60A5FA' }}>{language === 'fr' ? 'Voir le detail de la saison' : 'View season details'}</Text>
+              <MaterialIcons name="chevron-right" size={16} color="#60A5FA" />
+            </Pressable>
+          </LinearGradient>
+        </View>
+      );
+    }
     if (contentFilter === 'challenges' && filteredChallenges.length > 0) {
-      return <ChallengeStatsSummary challenges={filteredChallenges} t={t} />;
+      parts.push(<ChallengeStatsSummary key="cs" challenges={filteredChallenges} t={t} />);
     }
     if (contentFilter === 'training' && trainingSubFilter === 'challenges' && filteredChallenges.length > 0) {
-      return <ChallengeStatsSummary challenges={filteredChallenges} t={t} />;
+      parts.push(<ChallengeStatsSummary key="cs" challenges={filteredChallenges} t={t} />);
     }
-    return null;
-  }, [contentFilter, trainingSubFilter, filteredChallenges, t]);
+    return parts.length > 0 ? <>{parts}</> : null;
+  }, [contentFilter, trainingSubFilter, filteredChallenges, t, seasonData, eloHistory, language, screenWidth, user]);
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -815,6 +961,57 @@ export default function HistoryScreen() {
         </Pressable>
         <Text style={styles.headerTitle}>{t('history', 'history')}</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
+          {/* CSV Export Button */}
+          <Pressable
+            style={[styles.periodBtn, { backgroundColor: '#10B981' + '15' }]}
+            onPress={async () => {
+              Haptics.selectionAsync();
+              try {
+                const allItems = contentFilter === 'meetups' ? [] : (finalListData.filter(i => i.type === 'match') as any[]);
+                const matchItems = allItems.map((i: any) => i.data as Match);
+                if (matchItems.length === 0) {
+                  Alert.alert(language === 'fr' ? 'Aucun match' : 'No matches', language === 'fr' ? 'Aucun match a exporter avec les filtres actuels.' : 'No matches to export with current filters.');
+                  return;
+                }
+                const rows: string[] = [];
+                rows.push('Date,' + (language === 'fr' ? 'Adversaire,Score,Resultat,Format,Terrain,Duree (min)' : 'Opponent,Score,Result,Format,Terrain,Duration (min)'));
+                matchItems.forEach((m: Match) => {
+                  const isWin = m.winner === 'A';
+                  const opp = m.teamB.playerNames.join(' & ');
+                  const score = `${m.teamA.score}-${m.teamB.score}`;
+                  const result = isWin ? (language === 'fr' ? 'Victoire' : 'Win') : (language === 'fr' ? 'Defaite' : 'Loss');
+                  const format = m.format;
+                  const terrainObj = m.terrainId ? terrains.find(tr => tr.id === m.terrainId) : null;
+                  const terrainName = terrainObj?.name || '';
+                  const dur = m.duration || '';
+                  const dateStr = new Date(m.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: '2-digit', month: '2-digit', year: 'numeric' });
+                  rows.push(`${dateStr},"${opp}",${score},${result},${format},"${terrainName}",${dur}`);
+                });
+                const csv = rows.join('\n');
+                if (Platform.OS === 'web') {
+                  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url; a.download = `matches_export_${new Date().toISOString().slice(0, 10)}.csv`; a.click();
+                  URL.revokeObjectURL(url);
+                } else {
+                  const FSModule = require('expo-file-system');
+                  const SharingModule = require('expo-sharing');
+                  const fileName = `matches_export_${new Date().toISOString().slice(0, 10)}.csv`;
+                  const fileUri = `${FSModule.cacheDirectory}${fileName}`;
+                  await FSModule.writeAsStringAsync(fileUri, csv, { encoding: FSModule.EncodingType.UTF8 });
+                  if (await SharingModule.isAvailableAsync()) {
+                    await SharingModule.shareAsync(fileUri, { mimeType: 'text/csv', dialogTitle: fileName });
+                  }
+                }
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              } catch (e) {
+                console.log('CSV export error:', e);
+              }
+            }}
+          >
+            <MaterialIcons name="download" size={18} color="#10B981" />
+          </Pressable>
           <Pressable
             style={[styles.periodBtn, showAdvancedFilters && { backgroundColor: theme.accent + '15' }]}
             onPress={() => { Haptics.selectionAsync(); setShowAdvancedFilters(!showAdvancedFilters); }}

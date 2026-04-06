@@ -660,7 +660,7 @@ export default function ClubDetailScreen() {
 
           {/* Geographic Ranking */}
           {clubGeoRank && (clubGeoRank.city || clubGeoRank.country || clubGeoRank.continent) ? (
-            <View style={styles.geoRankSection}>
+            <View style={[styles.geoRankSection, { alignSelf: 'stretch' }]}>
               <View style={styles.geoRankHeader}>
                 <MaterialIcons name="public" size={14} color="#3B82F6" />
                 <Text style={styles.geoRankTitle}>{language === 'fr' ? 'Classement geographique' : 'Geographic Ranking'}</Text>
@@ -696,7 +696,7 @@ export default function ClubDetailScreen() {
 
           {/* Facilities inline */}
           {club.facilities && club.facilities.length > 0 ? (
-            <View style={styles.inlineFacilitiesSection}>
+            <View style={[styles.inlineFacilitiesSection, { alignSelf: 'stretch' }]}>
               <View style={styles.facilitiesGridInline}>
                 {club.facilities.map((facility, index) => (
                   <View key={index} style={styles.facilityTagInline}>
@@ -710,7 +710,7 @@ export default function ClubDetailScreen() {
 
           {/* Contact inline */}
           {(club.contactEmail || club.contactPhone) && !isSharedItem && (club.showContactPublic !== false || !club.isPublic) ? (
-            <View style={styles.inlineContactSection}>
+            <View style={[styles.inlineContactSection, { alignSelf: 'stretch' }]}>
               {club.contactEmail ? (
                 <Pressable style={styles.contactRowInline} onPress={() => Linking.openURL(`mailto:${club.contactEmail}`)}>
                   <MaterialIcons name="email" size={18} color={theme.primary} />
@@ -728,7 +728,7 @@ export default function ClubDetailScreen() {
 
           {/* Social / Web links */}
           {(club.website || club.facebookUrl || club.instagramHandle) ? (
-            <View style={styles.inlineContactSection}>
+            <View style={[styles.inlineContactSection, { alignSelf: 'stretch' }]}>
               {club.website ? (
                 <Pressable style={styles.contactRowInline} onPress={() => { const url = club.website!.startsWith('http') ? club.website! : `https://${club.website}`; Linking.openURL(url); }}>
                   <MaterialIcons name="language" size={18} color={theme.accent} />
@@ -1421,7 +1421,7 @@ const styles = StyleSheet.create({
   scrollContentTablet: { maxWidth: 960, alignSelf: 'center' as const, width: '100%', paddingHorizontal: 24 },
   tabletRow: { flexDirection: 'row' as const, gap: 16 },
   tabletHalf: { flex: 1 },
-  clubCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 16, alignItems: 'center', ...theme.shadows.card },
+  clubCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 20, marginBottom: 16, alignItems: 'center', overflow: 'hidden' as const, ...theme.shadows.card },
   clubCardTablet: { maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   clubIconPressable: { marginBottom: 12 },
   clubIcon: { width: 88, height: 88, borderRadius: 20, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center', ...theme.shadows.cardElevated },
@@ -1433,21 +1433,21 @@ const styles = StyleSheet.create({
   clubMeta: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   clubMetaText: { fontSize: 14, color: theme.textSecondary },
   clubDescription: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
-  geoRankSection: { marginTop: 12, width: '100%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12 },
+  geoRankSection: { marginTop: 12, width: '100%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12, overflow: 'hidden' as const },
   geoRankHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   geoRankTitle: { fontSize: 12, fontWeight: '700', color: '#3B82F6', letterSpacing: 0.5 },
-  geoRankRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  geoRankBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.surface, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: theme.border },
-  geoRankBadgeLabel: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, maxWidth: 80 },
+  geoRankRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, maxWidth: '100%' as any },
+  geoRankBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.surface, paddingHorizontal: 8, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: theme.border, flexShrink: 1, maxWidth: '100%' as any, overflow: 'hidden' as const },
+  geoRankBadgeLabel: { fontSize: 10, fontWeight: '600', color: theme.textPrimary, flexShrink: 1 },
   geoRankBadgeRank: { fontSize: 13, fontWeight: '800' },
   geoRankBadgeTotal: { fontSize: 10, color: theme.textMuted },
-  inlineFacilitiesSection: { marginTop: 12, width: '100%' },
-  facilitiesGridInline: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  inlineFacilitiesSection: { marginTop: 12, width: '100%', overflow: 'hidden' as const },
+  facilitiesGridInline: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
   facilityTagInline: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 },
   facilityTextInline: { fontSize: 13, color: theme.textPrimary },
-  inlineContactSection: { marginTop: 10, width: '100%', gap: 6 },
-  contactRowInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6 },
-  contactTextInline: { fontSize: 14, color: theme.primary },
+  inlineContactSection: { marginTop: 10, width: '100%', gap: 6, overflow: 'hidden' as const },
+  contactRowInline: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 6, maxWidth: '100%' as any, overflow: 'hidden' as const },
+  contactTextInline: { fontSize: 13, color: theme.primary, flexShrink: 1 },
   section: { marginBottom: 24 },
   sectionTitle: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 12 },
   sectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 },

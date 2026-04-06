@@ -24,6 +24,7 @@ import { getEloRank, EloHistoryEntry } from '@/services/eloService';
 import { Match } from '@/types/petanque';
 import * as Haptics from '@/services/haptics';
 import ShareModal from '@/components/ui/ShareModal';
+import { ShareCardSeason } from '@/components/feature/share-cards';
 
 interface MonthlyDetail {
   month: string;
@@ -566,6 +567,26 @@ export default function SeasonDetailScreen() {
         itemType="player"
         itemId={user?.id || ''}
         itemName={fr ? `Bilan Saison ${currentYear}` : `Season ${currentYear} Summary`}
+        customCardComponent={
+          <ShareCardSeason
+            playerName={user?.username || user?.email?.split('@')[0] || (fr ? 'Joueur' : 'Player')}
+            year={currentYear}
+            matchesPlayed={currentSeason.matches}
+            wins={currentSeason.wins}
+            losses={currentSeason.losses}
+            winRate={currentSeason.winRate}
+            carreaux={currentSeason.carreaux}
+            eloRating={currentElo}
+            eloColor={eloR.color}
+            eloRankLabel={eloR.label[fr ? 'fr' : 'en']}
+            eloIcon={eloR.icon}
+            seasonPeak={seasonPeak}
+            bestMonth={bestMonth ? { name: bestMonth.month, delta: bestMonth.eloDelta, wins: bestMonth.wins, matches: bestMonth.matches } : null}
+            streak={streak.count >= 2 ? { type: streak.type as 'win' | 'loss', count: streak.count } : null}
+            monthlyElo={seasonData?.monthlyElo}
+            language={fr ? 'fr' : 'en'}
+          />
+        }
       />
     </SafeAreaView>
   );
