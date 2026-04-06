@@ -53,13 +53,17 @@ export default function NotificationsScreen() {
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tournaments, tournamentNotifications, isTournamentNotificationEnabled]);
 
-  // Auto-disable notifications for tournaments that are finished or in progress
+  // Auto-disable notifications for tournaments that are finished, in progress, or past date
   useEffect(() => {
-    const finishedWithNotifs = tournamentsWithNotifications.filter(
-      t => t.status === 'Terminé' || t.status === 'En cours'
-    );
-    if (finishedWithNotifs.length > 0) {
-      finishedWithNotifs.forEach(async (t) => {
+    const now = new Date();
+    const staleWithNotifs = tournamentsWithNotifications.filter(t => {
+      if (t.status === 'Terminé' || t.status === 'En cours') return true;
+      // Also catch tournaments whose date has passed but status was never updated
+      const tournamentDate = new Date(t.date);
+      return tournamentDate < now;
+    });
+    if (staleWithNotifs.length > 0) {
+      staleWithNotifs.forEach(async (t) => {
         await cancelTournamentNotifications(t.id);
         toggleTournamentNotification(t.id);
       });

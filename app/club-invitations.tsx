@@ -381,6 +381,41 @@ export default function ClubInvitationsScreen() {
                     </View>
                   ) : null}
 
+                  {/* Reminder status + expiration countdown for pending invitations */}
+                  {isPending ? (() => {
+                    const createdDate = new Date(inv.createdAt);
+                    const nowDate = new Date();
+                    const daysSinceCreated = Math.floor((nowDate.getTime() - createdDate.getTime()) / (1000 * 60 * 60 * 24));
+                    const daysUntilExpiry = Math.max(0, 30 - daysSinceCreated);
+                    const reminderSent7 = daysSinceCreated >= 7;
+                    const reminderSent21 = daysSinceCreated >= 21;
+                    return (
+                      <View style={s.reminderRow}>
+                        {/* Expiration countdown */}
+                        <View style={[s.reminderChip, daysUntilExpiry <= 9 ? { backgroundColor: '#FEF2F2', borderColor: '#FECACA' } : { backgroundColor: '#FEF3C7', borderColor: '#FDE68A' }]}>
+                          <MaterialIcons name="timer" size={11} color={daysUntilExpiry <= 9 ? '#EF4444' : '#D97706'} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: daysUntilExpiry <= 9 ? '#EF4444' : '#D97706' }}>
+                            {daysUntilExpiry === 0
+                              ? (fr ? 'Expire aujourd\'hui' : 'Expires today')
+                              : `${fr ? 'Expire dans' : 'Expires in'} ${daysUntilExpiry}${fr ? 'j' : 'd'}`}
+                          </Text>
+                        </View>
+                        {/* Reminder indicators */}
+                        {reminderSent21 ? (
+                          <View style={[s.reminderChip, { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+                            <MaterialIcons name="notifications-active" size={11} color="#EF4444" />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#EF4444' }}>{fr ? 'Dernier rappel envoye' : 'Final reminder sent'}</Text>
+                          </View>
+                        ) : reminderSent7 ? (
+                          <View style={[s.reminderChip, { backgroundColor: '#EFF6FF', borderColor: '#BFDBFE' }]}>
+                            <MaterialIcons name="notifications" size={11} color="#3B82F6" />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#3B82F6' }}>{fr ? 'Rappel envoye' : 'Reminder sent'}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    );
+                  })() : null}
+
                   {/* Date */}
                   <Text style={s.invDate}>{dateStr}</Text>
 
@@ -530,6 +565,9 @@ const s = StyleSheet.create({
   viewClubBtnText: { fontSize: 13, fontWeight: '700', color: '#7C3AED' },
   infoBox: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, backgroundColor: theme.surface, borderRadius: 14, padding: 14, borderWidth: 1, borderColor: theme.border, marginTop: 8 },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
+  // Reminder indicators
+  reminderRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 },
+  reminderChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
   // Decline modal
   declineOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 32 },
   declineCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 24, maxWidth: 420, alignSelf: 'center', width: '100%' },
