@@ -31,8 +31,72 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '1.8.0',
+    version: '1.12.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'edit', text: 'Admin club edit/delete access', color: '#DC2626' },
+      { icon: 'history', text: 'Claim history tab + admin merge undo', color: '#7C3AED' },
+      { icon: 'update', text: 'Auto-updated changelog', color: '#3B82F6' },
+    ],
+    details: [
+      'Admin can now edit or delete any club card from the management page',
+      'Claim history tab shows all processed verifications/claims with status and dates',
+      'Admin can view all user merge history and undo merges (no 24h limit)',
+      'Changelog auto-syncs with app version from app.json',
+    ],
+  },
+  {
+    version: '1.11.0',
+    date: '2026-04-05',
+    type: 'minor',
+    highlights: [
+      { icon: 'email', text: 'Club verification decision notifications', color: '#2563EB' },
+      { icon: 'dashboard', text: 'Enhanced admin claims dashboard', color: '#10B981' },
+    ],
+    details: [
+      'Push notification with decision summary when admin accepts/declines verification or claim',
+      'Admin claims dashboard with stats banner, type filters, inline proof preview, and no-proof alert',
+    ],
+  },
+  {
+    version: '1.10.0',
+    date: '2026-04-04',
+    type: 'minor',
+    highlights: [
+      { icon: 'checklist', text: 'Club verification checklist (6 steps)', color: '#F59E0B' },
+      { icon: 'verified-user', text: 'Revised club verification/claim process', color: '#2563EB' },
+      { icon: 'analytics', text: 'Analytics restricted to verified clubs', color: '#8B5CF6' },
+    ],
+    details: [
+      'Verification checklist with 6 steps including admin proof upload as final step',
+      'Claims and proofs now sent to admin team (not club owner) for validation',
+      'Club creator becomes owner automatically; claim transfers ownership on admin approval',
+      'Analytics page restricted to verified clubs; non-verified clubs see a locked info page',
+      'Admin clubs page updated with pending verification/claim review section',
+      'FAQ clubs section rewritten with new verification process and Analytics advantages',
+    ],
+  },
+  {
+    version: '1.9.0',
     date: '2026-04-03',
+    type: 'minor',
+    highlights: [
+      { icon: 'auto-awesome', text: '6th ELO league: Grand Master (2000+)', color: '#FFD700' },
+      { icon: 'celebration', text: 'Enhanced league promotion modal', color: '#7C3AED' },
+      { icon: 'sports', text: 'Match score adaptive font sizing', color: '#3B82F6' },
+    ],
+    details: [
+      'Added Grand Master (Grand Maitre) as 6th ELO tier at 2000+ across all files',
+      'League promotion modal enhanced with gold particles for Grand Master',
+      'Match score box uses fixed width + adaptive font to prevent resizing at 10-13',
+      'Directory ELO filter updated with 6 tiers',
+      'FAQ updated with 6 leagues info in all relevant sections',
+    ],
+  },
+  {
+    version: '1.8.0',
+    date: '2026-04-02',
     type: 'minor',
     highlights: [
       { icon: 'shield', text: 'Admin Role Guard on all admin pages', color: '#DC2626' },
