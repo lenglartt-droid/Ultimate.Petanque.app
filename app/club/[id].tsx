@@ -4,6 +4,7 @@ import {
   View,
   Text,
   ScrollView,
+  FlatList,
   Pressable,
   StyleSheet,
   Linking,
@@ -1450,18 +1451,24 @@ export default function ClubDetailScreen() {
                 ) : null}
               </View>
             </View>
-            <ScrollView style={{ maxHeight: 400 }} showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}>
-              {inviteFilteredPlayersMemo.length === 0 ? (
+            <FlatList
+              data={inviteFilteredPlayersMemo as any[]}
+              keyExtractor={(item: any) => item.id}
+              style={{ maxHeight: 400 }}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 20 }}
+              initialNumToRender={10}
+              ListEmptyComponent={
                 <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                   <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
                   <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun joueur trouve' : 'No players found'}</Text>
                 </View>
-              ) : null}
-              {(inviteFilteredPlayersMemo as any[]).map((player: any) => {
+              }
+              renderItem={({ item: player }: { item: any }) => {
                 const isMember = clubPlayers.some(cp => cp.id === player.id);
                 const isInvited = player._isInvited || clubInvitations.some(i => i.invitedPlayerId === player.id);
                 return (
-                  <View key={player.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: theme.border }}>
                     <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
                       {player.avatar ? (
                         <Image source={{ uri: player.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
@@ -1504,8 +1511,8 @@ export default function ClubDetailScreen() {
                     )}
                   </View>
                 );
-              })}
-            </ScrollView>
+              }}
+            />
           </View>
         </View>
       </Modal>
