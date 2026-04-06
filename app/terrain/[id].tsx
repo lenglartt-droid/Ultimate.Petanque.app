@@ -1037,7 +1037,7 @@ export default function TerrainDetailScreen() {
 
         {/* Peak Hours Section */}
         {(() => {
-          const hasAnyData = allMatches.some(m => m.terrainId === terrain.id) || meetups.length > 0;
+          const hasAnyData = peakHours.length === 7 && (allMatches.some(m => m.terrainId === terrain.id) || meetups.length > 0);
           return hasAnyData ? (
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{language === 'fr' ? 'HEURES D\'AFFLUENCE MOYENNES' : 'AVERAGE PEAK HOURS'}</Text>

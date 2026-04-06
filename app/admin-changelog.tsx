@@ -32,6 +32,27 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.16.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'mail', text: 'Club invitation notification toggles', color: '#7C3AED' },
+      { icon: 'person-add', text: 'New follower push notification', color: '#EC4899' },
+      { icon: 'schedule', text: 'Terrain peak hours seasonal filter fix', color: '#6366F1' },
+    ],
+    details: [
+      'Club invitation and invitation reminder toggles added to Notification Preferences (new Club category)',
+      'NotificationPreferences service updated with club_invitation and club_invitation_reminder keys',
+      'New follower push notification: sends push with follower name and total follower count when a player starts following you',
+      'new_follower type added to send-push edge function with user preference check',
+      'Toggle for new_follower added in Notification Preferences (Sharing category)',
+      'Terrain detail crash fixed: peakHours rendering guarded with peakHours.length === 7 check before accessing array indices',
+      'Terrain detail: consolidated duplicate useAppData() calls, added optional chaining on terrain.location',
+      'Admin push management: new_follower type added to Sharing category',
+      'FAQ updated with follower notification info in follow player answer',
+    ],
+  },
+  {
     version: '1.15.0',
     date: '2026-04-06',
     type: 'minor',
