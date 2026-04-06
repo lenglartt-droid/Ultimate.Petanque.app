@@ -1619,6 +1619,47 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // NEW_FOLLOWER: Notify player when someone starts following them
+    // ============================================================
+    else if (type === 'new_follower') {
+      const { targetUserId, followerName, followerAvatar, totalFollowers } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check notification preference
+      const enabled = await isNotifEnabled(targetUserId, 'new_follower');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const followerLabel = followerName || 'Un joueur';
+        const totalLabel = totalFollowers > 1 ? ` Vous avez desormais ${totalFollowers} abonne(s).` : '';
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F464} Nouvel abonne !`,
+          `${followerLabel} a commence a vous suivre.${totalLabel}`,
+          { type: 'new_follower' },
+          { channelId: 'share-requests', priority: 'default' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // CLUB_INVITATION: Notify player when invited to join a club
     // ============================================================
     else if (type === 'club_invitation') {
