@@ -10,6 +10,9 @@
  */
 import { getSupabaseClient } from '@/template';
 import { getEloRank } from '@/services/eloService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const FOLLOWED_PLAYERS_KEY = 'followed_player_ids';
 
 // ============================================
 // Types
@@ -110,6 +113,77 @@ export interface FeedClubInvitation {
   status: 'pending' | 'accepted' | 'declined';
   declineReason?: string;
   message?: string;
+}
+
+// ============================================
+// Follow Player Functions
+// ============================================
+
+/**
+ * Check if current user follows a given player.
+ */
+export async function isFollowingPlayer(userId: string, playerId: string): Promise<boolean> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('followed_player_ids')
+      .eq('user_id', userId)
+      .single();
+    const ids: string[] = data?.followed_player_ids || [];
+    return ids.includes(playerId);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Toggle follow/unfollow a player. Returns new following state.
+ */
+export async function toggleFollowPlayer(userId: string, playerId: string): Promise<{ following: boolean; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('followed_player_ids')
+      .eq('user_id', userId)
+      .single();
+    const current: string[] = data?.followed_player_ids || [];
+    const isFollowing = current.includes(playerId);
+    const updated = isFollowing ? current.filter(id => id !== playerId) : [...current, playerId];
+    await supabase
+      .from('user_preferences')
+      .upsert({ user_id: userId, followed_player_ids: updated, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    // Cache locally
+    await AsyncStorage.setItem(`${FOLLOWED_PLAYERS_KEY}_${userId}`, JSON.stringify(updated)).catch(() => {});
+    return { following: !isFollowing, error: null };
+  } catch (e: any) {
+    return { following: false, error: e.message || 'Failed to toggle follow' };
+  }
+}
+
+/**
+ * Get list of followed player IDs for a user.
+ */
+export async function getFollowedPlayerIds(userId: string): Promise<string[]> {
+  try {
+    // Try cache first
+    const cached = await AsyncStorage.getItem(`${FOLLOWED_PLAYERS_KEY}_${userId}`).catch(() => null);
+    if (cached) {
+      try { const ids = JSON.parse(cached); if (Array.isArray(ids)) return ids; } catch { /* parse error */ }
+    }
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('user_preferences')
+      .select('followed_player_ids')
+      .eq('user_id', userId)
+      .single();
+    const ids: string[] = data?.followed_player_ids || [];
+    await AsyncStorage.setItem(`${FOLLOWED_PLAYERS_KEY}_${userId}`, JSON.stringify(ids)).catch(() => {});
+    return ids;
+  } catch {
+    return [];
+  }
 }
 
 // ============================================

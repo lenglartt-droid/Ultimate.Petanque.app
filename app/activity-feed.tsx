@@ -46,6 +46,7 @@ import {
   FeedClubInvitation,
   fetchWeeklyDigest,
   WeeklyDigest,
+  getFollowedPlayerIds,
 } from '@/services/activityFeedService';
 import { checkFeedNotifications } from '@/services/feedNotificationService';
 import { useAuth } from '@/template';
@@ -546,10 +547,11 @@ const ReactionBar = React.memo(({ feedItemId, reactions, onReact }: {
 // ============================================
 // FILTER CHIPS
 // ============================================
-type FeedFilter = 'all' | 'matches' | 'badges' | 'events' | 'records' | 'invitations';
+type FeedFilter = 'all' | 'following' | 'matches' | 'badges' | 'events' | 'records' | 'invitations';
 
 const FEED_FILTERS: { id: FeedFilter; icon: keyof typeof MaterialIcons.glyphMap; labelFr: string; labelEn: string }[] = [
   { id: 'all', icon: 'layers', labelFr: 'Tout', labelEn: 'All' },
+  { id: 'following', icon: 'person-add', labelFr: 'Abonnements', labelEn: 'Following' },
   { id: 'matches', icon: 'sports', labelFr: 'Matchs', labelEn: 'Matches' },
   { id: 'badges', icon: 'emoji-events', labelFr: 'Badges', labelEn: 'Badges' },
   { id: 'invitations', icon: 'mail', labelFr: 'Invitations', labelEn: 'Invitations' },
@@ -559,6 +561,7 @@ const FEED_FILTERS: { id: FeedFilter; icon: keyof typeof MaterialIcons.glyphMap;
 
 const FILTER_TYPES: Record<FeedFilter, string[]> = {
   all: [],
+  following: [], // handled separately via player ID filtering
   matches: ['match_result', 'elo_milestone'],
   badges: ['badge_unlock'],
   invitations: ['club_invitation_sent', 'club_invitation_accepted', 'club_invitation_declined', 'club_invitation_expired'],
@@ -588,6 +591,7 @@ export default function ActivityFeedScreen() {
   const prevItemCountRef = useRef(0);
   const flatListRef = useRef<FlatList>(null);
   const [reactionsMap, setReactionsMap] = useState<Map<string, FeedItemReactions>>(new Map());
+  const [followedPlayerIds, setFollowedPlayerIds] = useState<string[]>([]);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -596,11 +600,13 @@ export default function ActivityFeedScreen() {
   }, []);
 
   const loadFeed = useCallback(async () => {
-    const [feedResult, carouselResult, digestResult] = await Promise.all([
+    const [feedResult, carouselResult, digestResult, followedIds] = await Promise.all([
       fetchActivityFeed(40),
       fetchFeedCarouselData(),
       fetchWeeklyDigest(user?.id),
+      user?.id ? getFollowedPlayerIds(user.id) : Promise.resolve([]),
     ]);
+    setFollowedPlayerIds(followedIds);
     setFeedItems(feedResult.items);
     prevItemCountRef.current = feedResult.items.length;
     // Batch-load reactions for all feed items
@@ -665,22 +671,42 @@ export default function ActivityFeedScreen() {
   // Filtered items
   const filteredItems = useMemo(() => {
     if (activeFilter === 'all') return feedItems;
+    if (activeFilter === 'following') {
+      if (followedPlayerIds.length === 0) return [];
+      return feedItems.filter(item => {
+        const data = item.data;
+        // Match results & ELO milestones — check playerId
+        if (data?.playerId && followedPlayerIds.includes(data.playerId)) return true;
+        // Badges — check userId
+        if (data?.userId && followedPlayerIds.includes(data.userId)) return true;
+        // Weekly records — check userId
+        if (item.type === 'weekly_record' && data?.userId && followedPlayerIds.includes(data.userId)) return true;
+        return false;
+      });
+    }
     const types = FILTER_TYPES[activeFilter];
     return feedItems.filter(item => types.includes(item.type));
-  }, [feedItems, activeFilter]);
+  }, [feedItems, activeFilter, followedPlayerIds]);
 
   // Filter counts
   const filterCounts = useMemo(() => {
-    const counts: Record<FeedFilter, number> = { all: feedItems.length, matches: 0, badges: 0, invitations: 0, events: 0, records: 0 };
+    const counts: Record<FeedFilter, number> = { all: feedItems.length, following: 0, matches: 0, badges: 0, invitations: 0, events: 0, records: 0 };
     feedItems.forEach(item => {
       if (FILTER_TYPES.matches.includes(item.type)) counts.matches++;
       if (FILTER_TYPES.badges.includes(item.type)) counts.badges++;
       if (FILTER_TYPES.invitations.includes(item.type)) counts.invitations++;
       if (FILTER_TYPES.events.includes(item.type)) counts.events++;
       if (FILTER_TYPES.records.includes(item.type)) counts.records++;
+      // Count following
+      if (followedPlayerIds.length > 0) {
+        const data = item.data;
+        if ((data?.playerId && followedPlayerIds.includes(data.playerId)) || (data?.userId && followedPlayerIds.includes(data.userId))) {
+          counts.following++;
+        }
+      }
     });
     return counts;
-  }, [feedItems]);
+  }, [feedItems, followedPlayerIds]);
 
   // Handle reaction toggle
   const handleReaction = useCallback(async (feedItemId: string, reactionType: ReactionType) => {

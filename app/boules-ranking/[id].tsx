@@ -491,7 +491,7 @@ const s = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFF' },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 2 },
-  headerIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' as const },
+  headerIconWrap: { width: 48, height: 48, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' as const, alignItems: 'center' as const, justifyContent: 'center' as const },
   headerBrandRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, marginLeft: 52 },
   headerBrandText: { fontSize: 13, color: 'rgba(255,255,255,0.7)' },
 

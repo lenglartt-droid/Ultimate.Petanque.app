@@ -2469,7 +2469,7 @@ const s = StyleSheet.create({
   // Boules rows
   boulesRow: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 10, ...theme.shadows.card },
   boulesHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
-  boulesIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#D97706' + '12', overflow: 'hidden' as const },
+  boulesIconWrap: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#D97706' + '12', overflow: 'hidden' as const, alignItems: 'center' as const, justifyContent: 'center' as const },
   boulesName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   boulesRoleSection: { marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '30' },
   boulesRoleTitle: { fontSize: 10, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 6 },
