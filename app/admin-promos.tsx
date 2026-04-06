@@ -15,7 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import { getSupabaseClient } from '@/template';
 import { useAuth, useAlert } from '@/template';
@@ -386,7 +386,7 @@ export default function AdminPromosScreen() {
     const isFull = promo.current_uses >= promo.max_uses;
 
     return (
-      <Animated.View entering={FadeIn.duration(300)} style={styles.promoCard}>
+      <View style={styles.promoCard}>
         <View style={styles.promoTopRow}>
           <View style={styles.promoCodeBadge}>
             <Text style={styles.promoCodeText}>{promo.code}</Text>
@@ -471,7 +471,7 @@ export default function AdminPromosScreen() {
             <MaterialIcons name="chevron-right" size={16} color={theme.primary} />
           </Pressable>
         ) : null}
-      </Animated.View>
+      </View>
     );
   };
 
@@ -506,7 +506,7 @@ export default function AdminPromosScreen() {
           contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 32 }]}
           showsVerticalScrollIndicator={false}
           ListHeaderComponent={
-            <Animated.View entering={FadeInDown.duration(400)} style={styles.statsRow}>
+            <View style={styles.statsRow}>
               <View style={[styles.statCard, { backgroundColor: theme.primary + '12' }]}>
                 <MaterialIcons name="confirmation-number" size={22} color={theme.primary} />
                 <Text style={[styles.statValue, { color: theme.primary }]}>{totalCodes}</Text>
@@ -527,7 +527,7 @@ export default function AdminPromosScreen() {
                 <Text style={[styles.statValue, { color: theme.error }]}>{expiredCodes}</Text>
                 <Text style={styles.statLabel}>{fr ? 'Expires' : 'Expired'}</Text>
               </View>
-            </Animated.View>
+            </View>
           }
           ListEmptyComponent={
             <View style={styles.emptyListContainer}>

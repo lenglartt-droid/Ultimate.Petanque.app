@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
@@ -483,7 +483,7 @@ export default function AdminAntiCheatScreen() {
             const scoreColor = getTrustScoreColor(p.trustScore);
             const level = getLevelFromScore(p.trustScore);
             return (
-              <Animated.View key={p.id} entering={FadeInDown.duration(300).delay(Math.min(idx * 40, 400))}>
+              <View key={p.id}>
                 <Pressable
                   style={[st.playerCard, { borderLeftColor: getStatusColor(p.status) }]}
                   onPress={() => { setSelectedPlayer(p); setAdminNotes(p.adminNotes || ''); }}
@@ -546,7 +546,7 @@ export default function AdminAntiCheatScreen() {
                     ) : null}
                   </View>
                 </Pressable>
-              </Animated.View>
+              </View>
             );
           })
         )}

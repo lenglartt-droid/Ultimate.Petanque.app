@@ -28,6 +28,7 @@ import * as Haptics from '@/services/haptics';
 
 // Animations removed for performance — Animated.View aliased to View
 const Animated = { View: View };
+const _a: any = new Proxy({}, { get: () => _a, apply: () => _a }); const FadeInDown = _a; const FadeIn = _a; const FadeInUp = _a;
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
