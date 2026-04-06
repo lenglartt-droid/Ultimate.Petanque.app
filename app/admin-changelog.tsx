@@ -32,6 +32,28 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.15.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'notifications-off', text: 'Admin granular push type management', color: '#EF4444' },
+      { icon: 'history', text: 'Push disable/enable audit history', color: '#7C3AED' },
+      { icon: 'image', text: 'App logo on onboarding language page', color: '#3B82F6' },
+    ],
+    details: [
+      'Admin can disable/enable each of the 27 push notification types individually from Admin Notifications',
+      'Push types organized by 6 categories (Competitive, Events, Sharing, Club, Sponsor, Admin) with bulk toggle per category',
+      'send-push edge function checks disabled_push_types in app_config before every send — disabled types return type_disabled_by_admin',
+      'Push disable/enable history log showing all admin toggle actions with timestamps',
+      'App logo displayed prominently on onboarding language selection page',
+      'Version bumped to 1.15.0 with auto-sync across profile, changelog, and app.json',
+      'Image caching optimized: blurhash placeholders added to 20+ list images across leaderboard, activity feed, city leaderboard',
+      'Club logos adapted to tile sizes in directory, leaderboard, admin, and invitations pages',
+      'Brand logos (boules, partners) and app logo on share cards adapted to container sizes',
+      'Analytics locked page updated with 11 detailed advantages for verified clubs',
+    ],
+  },
+  {
     version: '1.14.0',
     date: '2026-04-06',
     type: 'minor',

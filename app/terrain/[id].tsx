@@ -222,6 +222,20 @@ export default function TerrainDetailScreen() {
   // Compute terrain statistics from matches
   const { matches: allMatches } = useAppData();
   const { players: allPlayers } = useAppData();
+
+  // Peak hours by day of week
+  const [peakHours, setPeakHours] = useState<{ day: number; hours: number[]; peakHour: number; matchCount: number }[]>([]);
+  const [peakSeason, setPeakSeason] = useState<'all' | 'spring' | 'summer' | 'autumn' | 'winter'>('all');
+
+  // Helper: get season from a date
+  const getSeasonFromDate = (d: Date): 'spring' | 'summer' | 'autumn' | 'winter' => {
+    const month = d.getMonth(); // 0-11
+    if (month >= 2 && month <= 4) return 'spring';
+    if (month >= 5 && month <= 7) return 'summer';
+    if (month >= 8 && month <= 10) return 'autumn';
+    return 'winter';
+  };
+
   useEffect(() => {
     if (!terrain?.id) return;
     // Count matches at this terrain
@@ -245,9 +259,33 @@ export default function TerrainDetailScreen() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
     setFrequentPlayers(sorted);
-    // Match count for activity display
-    // Ratings are now from the reviews table
-  }, [terrain?.id, allMatches.length]);
+
+    // Compute peak hours by day of week from matches + meetups, filtered by season
+    const filteredMatches = peakSeason === 'all' ? terrainMatches : terrainMatches.filter(m => getSeasonFromDate(new Date(m.date)) === peakSeason);
+    const filteredMeetups = peakSeason === 'all' ? meetups : meetups.filter(mt => getSeasonFromDate(new Date(mt.date)) === peakSeason);
+    // dayHours[dayOfWeek][hour] = count
+    const dayHours: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+    filteredMatches.forEach(m => {
+      const d = new Date(m.date);
+      const dow = d.getDay(); // 0=Sun
+      const h = d.getHours();
+      dayHours[dow][h]++;
+    });
+    filteredMeetups.forEach(mt => {
+      const d = new Date(mt.date);
+      const dow = d.getDay();
+      const h = d.getHours();
+      dayHours[dow][h]++;
+    });
+    const peakData = dayHours.map((hours, day) => {
+      const total = hours.reduce((s, v) => s + v, 0);
+      let peakHour = 0;
+      let peakVal = 0;
+      hours.forEach((v, h) => { if (v > peakVal) { peakVal = v; peakHour = h; } });
+      return { day, hours, peakHour, matchCount: total };
+    });
+    setPeakHours(peakData);
+  }, [terrain?.id, allMatches.length, meetups.length, peakSeason]);
 
   // Fetch terrain reviews + votes
   useEffect(() => {
@@ -996,6 +1034,123 @@ export default function TerrainDetailScreen() {
             );
           })}
         </View>
+
+        {/* Peak Hours Section */}
+        {(() => {
+          const hasAnyData = allMatches.some(m => m.terrainId === terrain.id) || meetups.length > 0;
+          return hasAnyData ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'HEURES D\'AFFLUENCE MOYENNES' : 'AVERAGE PEAK HOURS'}</Text>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="schedule" size={18} color="#6366F1" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Affluence par jour' : 'Activity by day'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Base sur les matchs et RDV enregistres' : 'Based on recorded matches and meetups'}</Text>
+                </View>
+              </View>
+              {/* Season Selector */}
+              <View style={{ flexDirection: 'row', gap: 6, marginBottom: 14, flexWrap: 'wrap' }}>
+                {([
+                  { id: 'all' as const, label: language === 'fr' ? 'Toutes' : 'All', icon: 'date-range', color: '#6366F1' },
+                  { id: 'spring' as const, label: language === 'fr' ? 'Printemps' : 'Spring', icon: 'local-florist', color: '#10B981' },
+                  { id: 'summer' as const, label: language === 'fr' ? 'Ete' : 'Summer', icon: 'wb-sunny', color: '#F59E0B' },
+                  { id: 'autumn' as const, label: language === 'fr' ? 'Automne' : 'Autumn', icon: 'eco', color: '#D97706' },
+                  { id: 'winter' as const, label: language === 'fr' ? 'Hiver' : 'Winter', icon: 'ac-unit', color: '#3B82F6' },
+                ] as const).map(season => {
+                  const isActive = peakSeason === season.id;
+                  return (
+                    <Pressable
+                      key={season.id}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, backgroundColor: isActive ? season.color : theme.backgroundSecondary, borderWidth: 1.5, borderColor: isActive ? season.color : theme.border }}
+                      onPress={() => setPeakSeason(season.id)}
+                    >
+                      <MaterialIcons name={season.icon as any} size={12} color={isActive ? '#FFF' : season.color} />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: isActive ? '#FFF' : theme.textSecondary }}>{season.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+              {(() => {
+                const dayNames = language === 'fr'
+                  ? ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam']
+                  : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+                const dayFull = language === 'fr'
+                  ? ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
+                  : ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const maxCount = Math.max(...peakHours.map(ph => ph.matchCount), 1);
+                // Reorder: Mon-Sun
+                const orderedDays = [1, 2, 3, 4, 5, 6, 0];
+                return (
+                  <View style={{ gap: 6 }}>
+                    {orderedDays.map(dayIdx => {
+                      const ph = peakHours[dayIdx];
+                      const barWidth = ph.matchCount > 0 ? Math.max(8, (ph.matchCount / maxCount) * 100) : 0;
+                      const isToday = new Date().getDay() === dayIdx;
+                      const hasActivity = ph.matchCount > 0;
+                      // Find top 2 peak hours for this day
+                      const topHours = ph.hours
+                        .map((v, h) => ({ h, v }))
+                        .filter(x => x.v > 0)
+                        .sort((a, b) => b.v - a.v)
+                        .slice(0, 2);
+                      const peakLabel = topHours.length > 0
+                        ? topHours.map(x => `${x.h}h-${x.h + 1}h`).join(', ')
+                        : (language === 'fr' ? 'Aucune donnee' : 'No data');
+                      const intensity = ph.matchCount / maxCount;
+                      const barColor = intensity >= 0.7 ? '#EF4444' : intensity >= 0.4 ? '#F59E0B' : '#6366F1';
+                      return (
+                        <View key={dayIdx} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderBottomWidth: dayIdx !== 0 ? 1 : 0, borderBottomColor: theme.border + '40' }}>
+                          <View style={{ width: 36 }}>
+                            <Text style={{ fontSize: 12, fontWeight: isToday ? '800' : '600', color: isToday ? '#6366F1' : theme.textPrimary }}>{dayNames[dayIdx]}</Text>
+                          </View>
+                          <View style={{ flex: 1, height: 20, backgroundColor: theme.backgroundSecondary, borderRadius: 6, overflow: 'hidden', justifyContent: 'center' }}>
+                            {hasActivity ? (
+                              <View style={{ height: '100%', width: `${barWidth}%`, backgroundColor: barColor + '30', borderRadius: 6, justifyContent: 'center', paddingLeft: 6 }}>
+                                <View style={{ height: '60%', backgroundColor: barColor, borderRadius: 4, width: '100%' }} />
+                              </View>
+                            ) : null}
+                          </View>
+                          <View style={{ width: 26, alignItems: 'flex-end' }}>
+                            <Text style={{ fontSize: 11, fontWeight: '700', color: hasActivity ? theme.textPrimary : theme.textMuted }}>{ph.matchCount}</Text>
+                          </View>
+                          <View style={{ width: 72 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '600', color: hasActivity ? barColor : theme.textMuted }} numberOfLines={1}>{peakLabel}</Text>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                );
+              })()}
+              {/* Legend */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 16, marginTop: 14, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                {[
+                  { color: '#6366F1', label: language === 'fr' ? 'Faible' : 'Low' },
+                  { color: '#F59E0B', label: language === 'fr' ? 'Moyen' : 'Medium' },
+                  { color: '#EF4444', label: language === 'fr' ? 'Eleve' : 'High' },
+                ].map((leg, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: leg.color }} />
+                    <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{leg.label}</Text>
+                  </View>
+                ))}
+              </View>
+              {/* No data for selected season */}
+              {peakSeason !== 'all' && !peakHours.some(ph => ph.matchCount > 0) ? (
+                <View style={{ alignItems: 'center', paddingVertical: 12, marginTop: 8 }}>
+                  <MaterialIcons name="info-outline" size={16} color={theme.textMuted} />
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 4, textAlign: 'center' }}>
+                    {language === 'fr' ? 'Aucune donnee pour cette saison' : 'No data for this season'}
+                  </Text>
+                </View>
+              ) : null}
+            </View>
+          </View>
+        ) : null;
+        })()}
 
         {/* Terrain Activity & Frequent Players */}
         {frequentPlayers.length > 0 ? (

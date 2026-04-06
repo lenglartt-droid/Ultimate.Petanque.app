@@ -29,6 +29,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminGuard from '@/components/feature/AdminGuard';
+import { Switch } from 'react-native';
 
 interface AdminNotification {
   id: string;
@@ -46,6 +47,52 @@ interface AdminNotification {
 
 const READ_KEY = 'admin_notif_read_ids';
 
+// All push notification types in the app with labels and categories
+const PUSH_TYPES: { id: string; label: { fr: string; en: string }; desc: { fr: string; en: string }; icon: string; color: string; category: string }[] = [
+  // Competitif
+  { id: 'ranking_changed', label: { fr: 'Changement de classement', en: 'Ranking changed' }, desc: { fr: 'Notifie quand le rang change', en: 'Notifies when rank changes' }, icon: 'leaderboard', color: '#D97706', category: 'competitive' },
+  { id: 'elo_rank_changed', label: { fr: 'Changement de ligue ELO', en: 'ELO league change' }, desc: { fr: 'Promotion/relegation de ligue', en: 'League promotion/relegation' }, icon: 'military-tech', color: '#7C3AED', category: 'competitive' },
+  { id: 'weekly_summary', label: { fr: 'Resume hebdomadaire', en: 'Weekly summary' }, desc: { fr: 'Resume des performances le lundi', en: 'Performance summary on Mondays' }, icon: 'date-range', color: '#2563EB', category: 'competitive' },
+  { id: 'trust_score_improved', label: { fr: 'Score de confiance', en: 'Trust score improved' }, desc: { fr: 'Amelioration du score de confiance', en: 'Trust score improved' }, icon: 'shield', color: '#10B981', category: 'competitive' },
+  { id: 'trust_weekly_tip', label: { fr: 'Conseil confiance', en: 'Trust tip' }, desc: { fr: 'Conseils pour ameliorer le score', en: 'Tips to improve trust score' }, icon: 'lightbulb', color: '#F59E0B', category: 'competitive' },
+  // Evenements
+  { id: 'event_created', label: { fr: 'Nouvel evenement', en: 'New event' }, desc: { fr: 'Evenement sponsorise cree a proximite', en: 'Sponsored event created nearby' }, icon: 'campaign', color: '#7C3AED', category: 'events' },
+  { id: 'event_reminder', label: { fr: 'Rappel evenement', en: 'Event reminder' }, desc: { fr: 'Rappel avant un evenement sponsorise', en: 'Reminder before sponsored event' }, icon: 'alarm', color: '#EF4444', category: 'events' },
+  { id: 'meetup_invitation', label: { fr: 'Invitation RDV', en: 'Meetup invitation' }, desc: { fr: 'Invitation a un rendez-vous petanque', en: 'Invitation to a petanque meetup' }, icon: 'event', color: '#3B82F6', category: 'events' },
+  // Partage
+  { id: 'share_request', label: { fr: 'Demande de partage', en: 'Share request' }, desc: { fr: 'Partage de match/defi', en: 'Match/challenge share request' }, icon: 'share', color: '#0EA5E9', category: 'sharing' },
+  { id: 'witness_request', label: { fr: 'Demande attestation', en: 'Witness request' }, desc: { fr: 'Demande d\'attestation de match', en: 'Match attestation request' }, icon: 'visibility', color: '#6366F1', category: 'sharing' },
+  { id: 'witness_attested', label: { fr: 'Match atteste', en: 'Match attested' }, desc: { fr: 'Un temoin a atteste un match', en: 'Witness attested a match' }, icon: 'verified', color: '#10B981', category: 'sharing' },
+  // Club
+  { id: 'club_invitation', label: { fr: 'Invitation club', en: 'Club invitation' }, desc: { fr: 'Invitation a rejoindre un club', en: 'Invitation to join a club' }, icon: 'mail', color: '#7C3AED', category: 'club' },
+  { id: 'club_invitation_response', label: { fr: 'Reponse invitation', en: 'Invitation response' }, desc: { fr: 'Reponse a une invitation club', en: 'Response to a club invitation' }, icon: 'how-to-reg', color: '#10B981', category: 'club' },
+  { id: 'club_invitation_reminder', label: { fr: 'Rappel invitation', en: 'Invitation reminder' }, desc: { fr: 'Rappel pour invitations en attente', en: 'Reminder for pending invitations' }, icon: 'notifications', color: '#F59E0B', category: 'club' },
+  { id: 'club_claim', label: { fr: 'Reclamation club', en: 'Club claim' }, desc: { fr: 'Demande de revendication de propriete', en: 'Ownership claim request' }, icon: 'assignment-ind', color: '#DC2626', category: 'club' },
+  { id: 'club_verification', label: { fr: 'Verification club', en: 'Club verification' }, desc: { fr: 'Decision de verification admin', en: 'Admin verification decision' }, icon: 'verified-user', color: '#2563EB', category: 'club' },
+  { id: 'club_verification_decision', label: { fr: 'Decision verification', en: 'Verification decision' }, desc: { fr: 'Decision detaillee de verification', en: 'Detailed verification decision' }, icon: 'gavel', color: '#1E40AF', category: 'club' },
+  { id: 'co_admin', label: { fr: 'Co-admin club', en: 'Club co-admin' }, desc: { fr: 'Ajout/retrait co-administrateur', en: 'Co-admin added/removed' }, icon: 'group', color: '#7C3AED', category: 'club' },
+  // Sponsor
+  { id: 'sponsor_push', label: { fr: 'Push sponsor', en: 'Sponsor push' }, desc: { fr: 'Notification envoyee par un sponsor', en: 'Notification sent by a sponsor' }, icon: 'campaign', color: '#D4A017', category: 'sponsor' },
+  { id: 'ambassador_promotion', label: { fr: 'Promotion ambassadeur', en: 'Ambassador promotion' }, desc: { fr: 'Promotion au niveau superieur', en: 'Promoted to next level' }, icon: 'emoji-events', color: '#7C3AED', category: 'sponsor' },
+  // Admin
+  { id: 'maintenance', label: { fr: 'Maintenance', en: 'Maintenance' }, desc: { fr: 'Notification de maintenance', en: 'Maintenance notification' }, icon: 'build', color: '#94A3B8', category: 'admin' },
+  { id: 'maintenance_end', label: { fr: 'Fin maintenance', en: 'Maintenance end' }, desc: { fr: 'Fin de la maintenance', en: 'Maintenance completed' }, icon: 'check-circle', color: '#10B981', category: 'admin' },
+  { id: 'announcement', label: { fr: 'Annonce', en: 'Announcement' }, desc: { fr: 'Annonce admin ciblee', en: 'Targeted admin announcement' }, icon: 'volume-up', color: '#3B82F6', category: 'admin' },
+  { id: 'moderation_action', label: { fr: 'Action moderation', en: 'Moderation action' }, desc: { fr: 'Avertissement/suspension/ban', en: 'Warning/suspension/ban' }, icon: 'security', color: '#EF4444', category: 'admin' },
+  { id: 'appeal_deadline', label: { fr: 'Appel en retard', en: 'Overdue appeal' }, desc: { fr: 'Rappel pour appels de ban en retard', en: 'Reminder for overdue ban appeals' }, icon: 'timer-off', color: '#DC2626', category: 'admin' },
+  { id: 'ban_appeal_response', label: { fr: 'Reponse appel ban', en: 'Ban appeal response' }, desc: { fr: 'Decision sur un appel de ban', en: 'Ban appeal decision' }, icon: 'gavel', color: '#D97706', category: 'admin' },
+  { id: 'merge_undo', label: { fr: 'Fusion annulee', en: 'Merge undone' }, desc: { fr: 'Annulation de fusion par admin', en: 'Admin undid a merge' }, icon: 'undo', color: '#F59E0B', category: 'admin' },
+];
+
+const PUSH_CATEGORIES: { id: string; label: { fr: string; en: string }; icon: string; color: string }[] = [
+  { id: 'competitive', label: { fr: 'Competitif & Classement', en: 'Competitive & Rankings' }, icon: 'emoji-events', color: '#D97706' },
+  { id: 'events', label: { fr: 'Evenements & RDV', en: 'Events & Meetups' }, icon: 'event', color: '#7C3AED' },
+  { id: 'sharing', label: { fr: 'Partage & Attestation', en: 'Sharing & Attestation' }, icon: 'share', color: '#0EA5E9' },
+  { id: 'club', label: { fr: 'Club', en: 'Club' }, icon: 'home', color: '#2563EB' },
+  { id: 'sponsor', label: { fr: 'Sponsors & Ambassadeurs', en: 'Sponsors & Ambassadors' }, icon: 'campaign', color: '#D4A017' },
+  { id: 'admin', label: { fr: 'Administration', en: 'Administration' }, icon: 'admin-panel-settings', color: '#EF4444' },
+];
+
 export default function AdminNotificationsScreen() {
   const insets = useSafeAreaInsets();
   const { language } = useLanguage();
@@ -59,12 +106,99 @@ export default function AdminNotificationsScreen() {
   const { showAlert } = useAlert();
   const [processingAction, setProcessingAction] = useState<string | null>(null);
 
+  // Push type management
+  const [showPushManagement, setShowPushManagement] = useState(false);
+  const [disabledPushTypes, setDisabledPushTypes] = useState<Set<string>>(new Set());
+  const [loadingPushConfig, setLoadingPushConfig] = useState(false);
+  const [savingPushConfig, setSavingPushConfig] = useState(false);
+
+  // Push disable history
+  const [pushHistory, setPushHistory] = useState<{ id: string; action: string; detail: string; date: string; adminName?: string }[]>([]);
+  const [loadingPushHistory, setLoadingPushHistory] = useState(false);
+  const [showPushHistory, setShowPushHistory] = useState(false);
+
   // Load read IDs from storage
   useEffect(() => {
     AsyncStorage.getItem(READ_KEY).then(val => {
       if (val) try { setReadIds(new Set(JSON.parse(val))); } catch { /* silent */ }
     }).catch(() => {});
   }, []);
+
+  // Load disabled push types from app_config
+  const loadPushConfig = useCallback(async () => {
+    setLoadingPushConfig(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.from('app_config').select('disabled_push_types').eq('id', 'main').single();
+      if (data?.disabled_push_types && Array.isArray(data.disabled_push_types)) {
+        setDisabledPushTypes(new Set(data.disabled_push_types));
+      }
+    } catch { /* silent */ }
+    setLoadingPushConfig(false);
+  }, []);
+
+  useEffect(() => { loadPushConfig(); }, [loadPushConfig]);
+
+  // Load push toggle history from admin_activity_logs
+  const loadPushHistory = useCallback(async () => {
+    setLoadingPushHistory(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from('admin_activity_logs')
+        .select('id, admin_name, action_detail, created_at, metadata')
+        .like('action_detail', '%Push type%')
+        .order('created_at', { ascending: false })
+        .limit(50);
+      // Also get category toggles
+      const { data: catData } = await supabase
+        .from('admin_activity_logs')
+        .select('id, admin_name, action_detail, created_at, metadata')
+        .like('action_detail', '%Category%')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      const all = [...(data || []), ...(catData || [])].sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      setPushHistory(all.map((r: any) => ({
+        id: r.id,
+        action: r.metadata?.disabled ? 'disabled' : 'enabled',
+        detail: r.action_detail || '',
+        date: r.created_at,
+        adminName: r.admin_name,
+      })));
+    } catch { /* silent */ }
+    setLoadingPushHistory(false);
+  }, []);
+
+  useEffect(() => { if (showPushManagement) loadPushHistory(); }, [showPushManagement, loadPushHistory]);
+
+  const togglePushType = useCallback(async (pushType: string) => {
+    Haptics.selectionAsync();
+    const next = new Set(disabledPushTypes);
+    if (next.has(pushType)) next.delete(pushType); else next.add(pushType);
+    setDisabledPushTypes(next);
+    setSavingPushConfig(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.from('app_config').update({ disabled_push_types: [...next], updated_at: new Date().toISOString() }).eq('id', 'main');
+      logAdminAction({ actionType: 'club_verify' as any, actionDetail: `Push type "${pushType}" ${next.has(pushType) ? 'disabled' : 'enabled'}`, metadata: { pushType, disabled: next.has(pushType) } });
+    } catch { /* silent */ }
+    setSavingPushConfig(false);
+  }, [disabledPushTypes]);
+
+  const toggleAllInCategory = useCallback(async (categoryId: string, disable: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    const next = new Set(disabledPushTypes);
+    const catTypes = PUSH_TYPES.filter(pt => pt.category === categoryId);
+    catTypes.forEach(pt => { if (disable) next.add(pt.id); else next.delete(pt.id); });
+    setDisabledPushTypes(next);
+    setSavingPushConfig(true);
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.from('app_config').update({ disabled_push_types: [...next], updated_at: new Date().toISOString() }).eq('id', 'main');
+      logAdminAction({ actionType: 'club_verify' as any, actionDetail: `Category "${categoryId}" ${disable ? 'disabled' : 'enabled'} (${catTypes.length} types)`, metadata: { category: categoryId, disabled: disable } });
+    } catch { /* silent */ }
+    setSavingPushConfig(false);
+  }, [disabledPushTypes]);
 
   const markAsRead = useCallback((id: string) => {
     setReadIds(prev => {
@@ -269,11 +403,16 @@ export default function AdminNotificationsScreen() {
     <SafeAreaView edges={['top']} style={s.container}>
       <View style={s.header}>
         <Text style={s.headerTitle}>{fr ? 'Notifications' : 'Notifications'}</Text>
-        {unreadCount > 0 ? (
-          <Pressable style={s.markAllBtn} onPress={markAllAsRead}>
-            <MaterialIcons name="done-all" size={18} color="#3B82F6" />
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {unreadCount > 0 ? (
+            <Pressable style={s.markAllBtn} onPress={markAllAsRead}>
+              <MaterialIcons name="done-all" size={18} color="#3B82F6" />
+            </Pressable>
+          ) : null}
+          <Pressable style={[s.markAllBtn, { backgroundColor: showPushManagement ? '#EF444415' : '#F1F5F9', borderColor: showPushManagement ? '#EF444440' : '#E2E8F0' }]} onPress={() => { Haptics.selectionAsync(); setShowPushManagement(!showPushManagement); }}>
+            <MaterialIcons name="notifications-off" size={18} color={showPushManagement ? '#EF4444' : '#64748B'} />
           </Pressable>
-        ) : <View style={{ width: 40 }} />}
+        </View>
       </View>
 
       <AdminQuickNav currentRoute="/admin-notifications" />
@@ -284,6 +423,134 @@ export default function AdminNotificationsScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {/* ====== PUSH TYPE MANAGEMENT ====== */}
+        {showPushManagement ? (
+          <Animated.View entering={FadeInDown.duration(300)}>
+            <View style={s.pushMgmtHeader}>
+              <View style={s.pushMgmtHeaderIcon}>
+                <MaterialIcons name="notifications-off" size={22} color="#EF4444" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.pushMgmtTitle}>{fr ? 'Gestion des notifications push' : 'Push Notification Management'}</Text>
+                <Text style={s.pushMgmtSubtitle}>
+                  {fr ? `${disabledPushTypes.size} type(s) desactive(s) sur ${PUSH_TYPES.length}` : `${disabledPushTypes.size} type(s) disabled out of ${PUSH_TYPES.length}`}
+                  {savingPushConfig ? (fr ? ' • Sauvegarde...' : ' • Saving...') : ''}
+                </Text>
+              </View>
+              {loadingPushConfig ? <ActivityIndicator size="small" color="#EF4444" /> : null}
+            </View>
+
+            {PUSH_CATEGORIES.map(cat => {
+              const catTypes = PUSH_TYPES.filter(pt => pt.category === cat.id);
+              const disabledInCat = catTypes.filter(pt => disabledPushTypes.has(pt.id)).length;
+              const allDisabled = disabledInCat === catTypes.length;
+              const noneDisabled = disabledInCat === 0;
+              return (
+                <View key={cat.id} style={s.pushCatBlock}>
+                  <View style={s.pushCatHeader}>
+                    <View style={[s.pushCatIcon, { backgroundColor: cat.color + '15' }]}>
+                      <MaterialIcons name={cat.icon as any} size={16} color={cat.color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.pushCatTitle, { color: cat.color }]}>{cat.label[fr ? 'fr' : 'en']}</Text>
+                      <Text style={s.pushCatCount}>
+                        {noneDisabled
+                          ? (fr ? 'Toutes actives' : 'All active')
+                          : allDisabled
+                            ? (fr ? 'Toutes desactivees' : 'All disabled')
+                            : `${disabledInCat}/${catTypes.length} ${fr ? 'desactivee(s)' : 'disabled'}`}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[s.pushCatToggleAll, allDisabled ? { backgroundColor: '#EF444415', borderColor: '#EF444440' } : { backgroundColor: '#DCFCE7', borderColor: '#BBF7D0' }]}
+                      onPress={() => toggleAllInCategory(cat.id, !allDisabled)}
+                    >
+                      <MaterialIcons name={allDisabled ? 'notifications-off' : 'notifications-active'} size={14} color={allDisabled ? '#EF4444' : '#10B981'} />
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: allDisabled ? '#EF4444' : '#10B981' }}>{allDisabled ? (fr ? 'Tout activer' : 'Enable all') : (fr ? 'Tout desactiver' : 'Disable all')}</Text>
+                    </Pressable>
+                  </View>
+                  {catTypes.map(pt => {
+                    const isDisabled = disabledPushTypes.has(pt.id);
+                    return (
+                      <View key={pt.id} style={[s.pushTypeRow, isDisabled && s.pushTypeRowDisabled]}>
+                        <View style={[s.pushTypeIcon, { backgroundColor: isDisabled ? '#F1F5F9' : pt.color + '12' }]}>
+                          <MaterialIcons name={pt.icon as any} size={14} color={isDisabled ? '#CBD5E1' : pt.color} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[s.pushTypeName, isDisabled && { color: '#94A3B8' }]}>{pt.label[fr ? 'fr' : 'en']}</Text>
+                          <Text style={s.pushTypeDesc}>{pt.desc[fr ? 'fr' : 'en']}</Text>
+                        </View>
+                        <Switch
+                          value={!isDisabled}
+                          onValueChange={() => togglePushType(pt.id)}
+                          trackColor={{ false: '#E2E8F0', true: '#10B98140' }}
+                          thumbColor={isDisabled ? '#94A3B8' : '#10B981'}
+                        />
+                      </View>
+                    );
+                  })}
+                </View>
+              );
+            })}
+
+            {/* Push History Toggle */}
+            <Pressable
+              style={s.pushHistoryToggle}
+              onPress={() => { Haptics.selectionAsync(); setShowPushHistory(!showPushHistory); }}
+            >
+              <MaterialIcons name="history" size={16} color="#7C3AED" />
+              <Text style={s.pushHistoryToggleText}>{fr ? 'Historique des modifications' : 'Change history'}</Text>
+              <View style={{ marginLeft: 'auto' }}>
+                <MaterialIcons name={showPushHistory ? 'expand-less' : 'expand-more'} size={18} color="#94A3B8" />
+              </View>
+            </Pressable>
+
+            {showPushHistory ? (
+              <View style={s.pushHistoryBlock}>
+                {loadingPushHistory ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 16 }}><ActivityIndicator size="small" color="#7C3AED" /></View>
+                ) : pushHistory.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                    <MaterialIcons name="history" size={24} color="#CBD5E1" />
+                    <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{fr ? 'Aucune modification' : 'No changes yet'}</Text>
+                  </View>
+                ) : (
+                  pushHistory.slice(0, 20).map((h, hIdx) => {
+                    const isDisabled = h.action === 'disabled';
+                    const dateStr = new Date(h.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+                    return (
+                      <View key={h.id} style={[s.pushHistoryItem, hIdx > 0 && { borderTopWidth: 1, borderTopColor: '#F8FAFC' }]}>
+                        <View style={[s.pushHistoryDot, { backgroundColor: isDisabled ? '#EF444420' : '#10B98120' }]}>
+                          <MaterialIcons name={isDisabled ? 'notifications-off' : 'notifications-active'} size={10} color={isDisabled ? '#EF4444' : '#10B981'} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.pushHistoryDetail} numberOfLines={2}>{h.detail}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                            <Text style={s.pushHistoryDate}>{dateStr}</Text>
+                            {h.adminName ? <Text style={s.pushHistoryAdmin}>{h.adminName}</Text> : null}
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            ) : null}
+
+            {/* Warning banner */}
+            {disabledPushTypes.size > 0 ? (
+              <View style={s.pushWarning}>
+                <MaterialIcons name="warning-amber" size={16} color="#D97706" />
+                <Text style={s.pushWarningText}>
+                  {fr
+                    ? `${disabledPushTypes.size} type(s) de notification desactive(s) globalement. Aucun utilisateur ne recevra ces notifications jusqu'a reactivation.`
+                    : `${disabledPushTypes.size} notification type(s) globally disabled. No user will receive these until re-enabled.`}
+                </Text>
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
         {/* Summary */}
         <View style={s.summaryRow}>
           <View style={[s.summaryCard, { borderColor: '#DC262620' }]}>
@@ -486,4 +753,31 @@ const s = StyleSheet.create({
   emptyIcon: { width: 72, height: 72, borderRadius: 24, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', marginBottom: 16 },
   emptyTitle: { fontSize: 16, fontWeight: '700', color: '#0F172A' },
   emptyDesc: { fontSize: 13, color: '#94A3B8', marginTop: 4 },
+
+  // Push Management
+  pushMgmtHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: '#FEF2F2', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#FECACA' },
+  pushMgmtHeaderIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#EF444415', alignItems: 'center' as const, justifyContent: 'center' as const },
+  pushMgmtTitle: { fontSize: 16, fontWeight: '700' as const, color: '#991B1B' },
+  pushMgmtSubtitle: { fontSize: 12, color: '#EF4444', fontWeight: '600' as const, marginTop: 2 },
+  pushCatBlock: { backgroundColor: '#FFF', borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#F1F5F9', overflow: 'hidden' as const },
+  pushCatHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, padding: 14, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  pushCatIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  pushCatTitle: { fontSize: 14, fontWeight: '700' as const },
+  pushCatCount: { fontSize: 10, fontWeight: '600' as const, color: '#94A3B8', marginTop: 1 },
+  pushCatToggleAll: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1 },
+  pushTypeRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 10, paddingHorizontal: 14, borderBottomWidth: 1, borderBottomColor: '#F8FAFC' },
+  pushTypeRowDisabled: { backgroundColor: '#FAFAFA' },
+  pushTypeIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  pushTypeName: { fontSize: 13, fontWeight: '600' as const, color: '#0F172A' },
+  pushTypeDesc: { fontSize: 10, color: '#94A3B8', marginTop: 1 },
+  pushWarning: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: '#FFFBEB', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: '#FDE68A' },
+  pushWarningText: { flex: 1, fontSize: 12, color: '#92400E', lineHeight: 18 },
+  pushHistoryToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, backgroundColor: '#7C3AED08', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 14, marginBottom: 10, borderWidth: 1, borderColor: '#7C3AED18' },
+  pushHistoryToggleText: { fontSize: 13, fontWeight: '600' as const, color: '#7C3AED' },
+  pushHistoryBlock: { backgroundColor: '#FFF', borderRadius: 14, marginBottom: 12, borderWidth: 1, borderColor: '#F1F5F9', overflow: 'hidden' as const },
+  pushHistoryItem: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, paddingVertical: 10, paddingHorizontal: 14 },
+  pushHistoryDot: { width: 24, height: 24, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, marginTop: 1 },
+  pushHistoryDetail: { fontSize: 12, fontWeight: '600' as const, color: '#0F172A', lineHeight: 16 },
+  pushHistoryDate: { fontSize: 10, color: '#94A3B8', fontWeight: '500' as const },
+  pushHistoryAdmin: { fontSize: 10, color: '#7C3AED', fontWeight: '600' as const },
 });

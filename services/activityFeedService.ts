@@ -186,6 +186,85 @@ export async function getFollowedPlayerIds(userId: string): Promise<string[]> {
   }
 }
 
+/**
+ * Get follower count for a player (how many users follow this player).
+ */
+export async function getFollowerCount(playerId: string): Promise<number> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('user_preferences')
+      .select('user_id')
+      .contains('followed_player_ids', [playerId]);
+    if (error) return 0;
+    return data?.length || 0;
+  } catch {
+    return 0;
+  }
+}
+
+/**
+ * Get following count for a user (how many players they follow).
+ */
+export async function getFollowingCount(userId: string): Promise<number> {
+  const ids = await getFollowedPlayerIds(userId);
+  return ids.length;
+}
+
+/**
+ * Get list of players that a user follows, with details.
+ */
+export async function getFollowingList(userId: string): Promise<{ players: { id: string; name: string; avatar?: string; club?: string; eloRating: number; city?: string; userId?: string }[] }> {
+  try {
+    const ids = await getFollowedPlayerIds(userId);
+    if (ids.length === 0) return { players: [] };
+    const supabase = getSupabaseClient();
+    const { data } = await supabase
+      .from('players')
+      .select('id, name, avatar, club, elo_rating, city, user_id')
+      .in('id', ids);
+    const players = (data || []).map((p: any) => ({
+      id: p.id,
+      name: p.name,
+      avatar: p.avatar,
+      club: p.club,
+      eloRating: p.elo_rating || 1000,
+      city: p.city,
+      userId: p.user_id,
+    }));
+    return { players };
+  } catch {
+    return { players: [] };
+  }
+}
+
+/**
+ * Get list of users who follow a specific player, with details.
+ */
+export async function getFollowersList(playerId: string): Promise<{ followers: { userId: string; username: string; avatar?: string }[] }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: prefData } = await supabase
+      .from('user_preferences')
+      .select('user_id')
+      .contains('followed_player_ids', [playerId]);
+    if (!prefData || prefData.length === 0) return { followers: [] };
+    const userIds = prefData.map((p: any) => p.user_id);
+    const { data: profiles } = await supabase
+      .from('user_profiles')
+      .select('id, username, avatar')
+      .in('id', userIds);
+    const followers = (profiles || []).map((p: any) => ({
+      userId: p.id,
+      username: p.username || '???',
+      avatar: p.avatar,
+    }));
+    return { followers };
+  } catch {
+    return { followers: [] };
+  }
+}
+
 // ============================================
 // Fetch functions
 // ============================================
