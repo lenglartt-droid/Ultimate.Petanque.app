@@ -330,7 +330,7 @@ export default function ClubInvitationsScreen() {
                   {/* Club header */}
                   <View style={s.invHeader}>
                     {inv.clubLogo ? (
-                      <Image source={{ uri: inv.clubLogo }} style={s.invLogo} contentFit="cover" transition={200} />
+                      <Image source={{ uri: inv.clubLogo }} style={s.invLogo} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                     ) : (
                       <View style={s.invLogoPlaceholder}>
                         <MaterialIcons name="home" size={20} color="#7C3AED" />
@@ -547,7 +547,7 @@ const s = StyleSheet.create({
   emptySub: { fontSize: 13, color: theme.textSecondary, textAlign: 'center', lineHeight: 20 },
   invCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 10, borderWidth: 1.5, borderColor: theme.border, borderLeftWidth: 4, borderLeftColor: '#7C3AED' },
   invHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 8 },
-  invLogo: { width: 44, height: 44, borderRadius: 12 },
+  invLogo: { width: 44, height: 44, borderRadius: 12, overflow: 'hidden' as const },
   invLogoPlaceholder: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
   invClubName: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   invInviter: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
