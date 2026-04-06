@@ -443,7 +443,7 @@ export default function EquipmentScreen() {
                       const brandLogo = set.brand ? getBrandImage(set.brand) : null;
                       return brandLogo ? (
                         <View style={[styles.setIconBg, { backgroundColor: '#FFF', overflow: 'hidden' as const }]}>
-                          <Image source={brandLogo} style={{ width: 36, height: 36, borderRadius: 8 }} contentFit="contain" transition={200} />
+                          <Image source={brandLogo} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="contain" transition={200} />
                         </View>
                       ) : (
                         <View style={[styles.setIconBg, set.isPrimary && { backgroundColor: theme.accent + '20' }]}>
@@ -654,7 +654,7 @@ export default function EquipmentScreen() {
                   >
                     <View style={[styles.pickerItemIcon, isSelected && { backgroundColor: theme.primary + '15' }, brandLogo ? { overflow: 'hidden' as const } : undefined]}>
                       {brandLogo ? (
-                        <Image source={brandLogo} style={{ width: 36, height: 36, borderRadius: 8 }} contentFit="contain" transition={200} />
+                        <Image source={brandLogo} style={{ width: 44, height: 44, borderRadius: 12 }} contentFit="contain" transition={200} />
                       ) : (
                         <MaterialIcons name="sports-baseball" size={20} color={isSelected ? theme.primary : theme.textMuted} />
                       )}

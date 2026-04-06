@@ -549,7 +549,7 @@ export default function ClubDetailScreen() {
           ) : canEdit && !isSharedItem && !club?.isVerified ? (
             <Pressable
               style={[styles.editButton, { backgroundColor: '#F59E0B10' }]}
-              onPress={() => showAlert(t('club', 'analyticsVerifiedOnly'), t('club', 'analyticsVerifiedDesc'))}
+              onPress={() => router.push({ pathname: '/club-analytics', params: { id: id! } } as any)}
             >
               <MaterialIcons name="analytics" size={22} color="#F59E0B" />
             </Pressable>

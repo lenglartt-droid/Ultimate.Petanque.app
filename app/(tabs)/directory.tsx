@@ -1777,7 +1777,11 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/club/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
-        <MaterialIcons name="home" size={24} color="#FFF" />
+        {item.logo ? (
+          <Image source={{ uri: item.logo }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" recyclingKey={`club-${item.id}`} />
+        ) : (
+          <MaterialIcons name="home" size={24} color="#FFF" />
+        )}
         {isFavorite ? <View style={styles.favoriteBadge}><MaterialIcons name="favorite" size={10} color={theme.error} /></View>
         : isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
