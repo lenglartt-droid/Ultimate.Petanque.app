@@ -198,7 +198,7 @@ const FeedMatchResultCard = React.memo(({ data, lang, index }: { data: FeedMatch
       <Pressable style={[fs.card, { borderLeftWidth: 3, borderLeftColor: data.won ? '#22C55E' : '#EF4444' }]} onPress={() => { Haptics.selectionAsync(); router.push(`/player/${data.playerId}` as any); }}>
         <View style={fs.cardHeader}>
           {data.playerAvatar ? (
-            <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
           ) : (
             <View style={[fs.avatarFallback, { backgroundColor: rank.color + '20' }]}>
               <Text style={[fs.avatarLetter, { color: rank.color }]}>{data.playerName.charAt(0)}</Text>
@@ -251,7 +251,7 @@ const FeedBadgeCard = React.memo(({ data, lang, index }: { data: FeedBadgeUnlock
       <View style={[fs.card, { borderLeftWidth: 3, borderLeftColor: '#F59E0B' }]}>
         <View style={fs.cardHeader}>
           {data.avatar ? (
-            <Image source={{ uri: data.avatar }} style={fs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            <Image source={{ uri: data.avatar }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
           ) : (
             <View style={[fs.avatarFallback, { backgroundColor: '#F59E0B20' }]}>
               <MaterialIcons name="emoji-events" size={18} color="#F59E0B" />
@@ -284,7 +284,7 @@ const FeedEloMilestoneCard = React.memo(({ data, lang, index }: { data: FeedEloM
       <View style={[fs.card, fs.milestoneCard, { borderLeftWidth: 3, borderLeftColor: data.rankColor }]}>
         <View style={fs.cardHeader}>
           {data.playerAvatar ? (
-            <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
           ) : (
             <View style={[fs.avatarFallback, { backgroundColor: data.rankColor + '20' }]}>
               <MaterialIcons name={data.rankIcon as any} size={18} color={data.rankColor} />
@@ -444,7 +444,7 @@ const FeedClubInvitationCard = React.memo(({ data, type, lang, index, userId }: 
         ) : null}
         <View style={fs.cardHeader}>
           {data.clubLogo ? (
-            <Image source={{ uri: data.clubLogo }} style={fs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            <Image source={{ uri: data.clubLogo }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
           ) : (
             <View style={[fs.avatarFallback, { backgroundColor: cfg.color + '15' }]}>
               <MaterialIcons name="home" size={18} color={cfg.color} />

@@ -20,6 +20,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import { APP_VERSION } from '@/constants/appVersion';
 
 interface ChangelogEntry {
   version: string;
@@ -31,8 +32,43 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
-    version: '1.12.0',
+    version: '1.14.0',
     date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'show-chart', text: 'Match momentum & heatmap in share cards', color: '#7C3AED' },
+      { icon: 'timer', text: 'Invitation reminder UI with countdown', color: '#F59E0B' },
+      { icon: 'bug-report', text: 'Tournament reminder auto-cleanup fix', color: '#EF4444' },
+    ],
+    details: [
+      'Share card match: added momentum chart (score progression) across all 3 formats (square, story, landscape)',
+      'Share card match: added action heatmap (visual distribution of tir/point/carreau per player)',
+      'Club invitations: added reminder status indicators (7d/21d) and expiration countdown for pending invitations',
+      'Tournament notifications: auto-disable reminders for tournaments whose date has passed (not just status-based)',
+      'FAQ updated with share card momentum/heatmap info and invitation reminder details',
+    ],
+  },
+  {
+    version: '1.13.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'alarm', text: 'Automatic invitation reminders (7d + 21d)', color: '#3B82F6' },
+      { icon: 'analytics', text: 'Club invitation analytics + acceptance trends', color: '#10B981' },
+      { icon: 'dynamic-feed', text: 'Feed notification badge + personalized digest', color: '#7C3AED' },
+    ],
+    details: [
+      'Push reminders sent to players 7 days and 21 days after unanswered club invitations',
+      'Club analytics: invitation acceptance rate evolution chart and most responsive players ranking',
+      'Activity feed: unread counter badge on home page with AsyncStorage tracking',
+      'Weekly digest: personalized stats (ELO delta, matches, badges, club performance)',
+      'FR/EN promotional banners on home page based on language',
+      'FAQ updated with invitation reminders, analytics, and feed digest documentation',
+    ],
+  },
+  {
+    version: '1.12.0',
+    date: '2026-04-05',
     type: 'minor',
     highlights: [
       { icon: 'edit', text: 'Admin club edit/delete access', color: '#DC2626' },
@@ -286,7 +322,7 @@ export default function AdminChangelogScreen() {
                 <Text style={s.summaryLabel}>{fr ? 'Fonctionnalites' : 'Features'}</Text>
               </View>
               <View style={[s.summaryItem, { borderColor: '#10B98120' }]}>
-                <Text style={[s.summaryValue, { color: '#10B981' }]}>{CHANGELOG[0]?.version || '-'}</Text>
+                <Text style={[s.summaryValue, { color: '#10B981' }]}>{APP_VERSION}</Text>
                 <Text style={s.summaryLabel}>{fr ? 'Derniere' : 'Latest'}</Text>
               </View>
             </View>

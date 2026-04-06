@@ -28,7 +28,7 @@ export const commonTranslations = {
     apply: { fr: 'Appliquer', en: 'Apply' },
     create: { fr: 'Créer', en: 'Create' },
     add: { fr: 'Ajouter', en: 'Add' },
-    version: { fr: 'Ultimate Petanque v1.2.0', en: 'Ultimate Petanque v1.2.0' },
+    version: { fr: 'Ultimate Petanque v1.14.0', en: 'Ultimate Petanque v1.14.0' },
   },
   tabs: {
     home: { fr: 'Accueil', en: 'Home' },

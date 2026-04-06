@@ -134,6 +134,9 @@ export default function AdminDashboardScreen() {
   // Push analytics
   const [pushStats, setPushStats] = useState({ sent: 0, errors: 0, types: {} as Record<string, number>, daily: [] as { date: string; sent: number; errors: number }[] });
 
+  // Push token analytics
+  const [pushTokenStats, setPushTokenStats] = useState<{ totalTokens: number; activeTokens: number; inactiveTokens: number; usersWithToken: number; coverage: number; deactivatedThisWeek: number; platforms: Record<string, number> }>({ totalTokens: 0, activeTokens: 0, inactiveTokens: 0, usersWithToken: 0, coverage: 0, deactivatedThisWeek: 0, platforms: {} });
+
   // Onboarding analytics
   const [onboardingStats, setOnboardingStats] = useState<{ total: number; withProfile: number; withConsent: number; withRole: number; conversionRate: number; avgDaysToProfile: number }>({ total: 0, withProfile: 0, withConsent: 0, withRole: 0, conversionRate: 0, avgDaysToProfile: 0 });
 
@@ -150,7 +153,7 @@ export default function AdminDashboardScreen() {
   const [showSearch, setShowSearch] = useState(false);
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -288,6 +291,9 @@ export default function AdminDashboardScreen() {
 
       // Push analytics
       setPushStats(res.pushAnalytics || { sent: 0, errors: 0, types: {}, daily: [] });
+
+      // Push token analytics
+      if (res.pushTokenAnalytics) setPushTokenStats(res.pushTokenAnalytics);
 
       // Activity logs
       setActivityLogs((res.activityLogs || []).map((l: any) => ({
@@ -449,6 +455,7 @@ export default function AdminDashboardScreen() {
                 { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
                 { key: 'clubHealthAlerts', label: fr ? 'Sante clubs' : 'Club Health', icon: 'favorite' },
                 { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
+                { key: 'pushTokenAnalytics', label: fr ? 'Tokens Push' : 'Push Tokens', icon: 'phonelink-ring' },
                 { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
                 { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
                 { key: 'activity', label: fr ? 'Activite recente' : 'Recent Activity', icon: 'history' },
@@ -1173,6 +1180,75 @@ export default function AdminDashboardScreen() {
                   <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{fr ? 'Aucune notification envoyee' : 'No notifications sent yet'}</Text>
                 </View>
               )}
+            </View>
+          </Animated.View>
+          );
+
+          if (wKey === 'pushTokenAnalytics') return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>{fr ? 'TOKENS PUSH' : 'PUSH TOKENS'}</Text>
+            <View style={s.chartCard}>
+              {/* KPI row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#10B981' }}>{pushTokenStats.activeTokens}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Actifs' : 'Active'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>{pushTokenStats.inactiveTokens}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Inactifs' : 'Inactive'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#3B82F6' }}>{pushTokenStats.coverage}%</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Couverture' : 'Coverage'}</Text>
+                </View>
+              </View>
+
+              {/* Users with token */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10 }}>
+                <MaterialIcons name="people" size={16} color="#3B82F6" />
+                <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#0F172A' }}>
+                  {pushTokenStats.usersWithToken} {fr ? 'utilisateurs avec token actif' : 'users with active token'}
+                </Text>
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#3B82F6' }}>
+                  {pushTokenStats.usersWithToken}/{stats.totalUsers}
+                </Text>
+              </View>
+
+              {/* Deactivated this week */}
+              {pushTokenStats.deactivatedThisWeek > 0 ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, backgroundColor: '#FEF3C7', borderRadius: 10, padding: 10 }}>
+                  <MaterialIcons name="warning-amber" size={16} color="#D97706" />
+                  <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#92400E' }}>
+                    {pushTokenStats.deactivatedThisWeek} {fr ? 'desactives cette semaine' : 'deactivated this week'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#D97706', fontWeight: '600' }}>DeviceNotRegistered</Text>
+                </View>
+              ) : null}
+
+              {/* Platform breakdown */}
+              {Object.keys(pushTokenStats.platforms).length > 0 ? (
+                <View style={{ gap: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>{fr ? 'Par plateforme' : 'By platform'}</Text>
+                  {(() => {
+                    const maxPlatform = Math.max(...Object.values(pushTokenStats.platforms), 1);
+                    const platformColors: Record<string, string> = { ios: '#000000', android: '#3DDC84', web: '#3B82F6', unknown: '#94A3B8' };
+                    const platformIcons: Record<string, string> = { ios: 'phone-iphone', android: 'phone-android', web: 'computer', unknown: 'device-unknown' };
+                    return Object.entries(pushTokenStats.platforms).sort((a, b) => b[1] - a[1]).map(([platform, count]) => (
+                      <View key={platform} style={s.chartRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, width: 70 }}>
+                          <MaterialIcons name={(platformIcons[platform] || 'device-unknown') as any} size={12} color={platformColors[platform] || '#94A3B8'} />
+                          <Text style={[s.chartLabel, { width: 50 }]}>{platform}</Text>
+                        </View>
+                        <View style={s.chartBarBg}>
+                          <View style={[s.chartBarFill, { width: `${Math.max(4, (count / maxPlatform) * 100)}%`, backgroundColor: platformColors[platform] || '#94A3B8' }]} />
+                        </View>
+                        <Text style={s.chartValue}>{count}</Text>
+                      </View>
+                    ));
+                  })()}
+                </View>
+              ) : null}
             </View>
           </Animated.View>
           );

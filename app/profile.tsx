@@ -50,6 +50,7 @@ import { computeStreakFromDates, getStreakStatus, StreakData } from '@/services/
 import { extraTranslations } from '@/constants/i18nExtra';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
+import { APP_VERSION_DISPLAY } from '@/constants/appVersion';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -188,16 +189,18 @@ export default function ProfileScreen() {
     fetchPlayerGeoRank(selfPlayer.id).then(({ geoRank: gr }) => setGeoRank(gr)).catch(() => {});
   }, [selfPlayer?.isPublic, selfPlayer?.id, user?.id]);
 
-  // Load unread share notification count + pending witness count
+  // Consolidated polling: share notifications, witness count, maintenance, notification prefs
   useEffect(() => {
     if (!user?.id) return;
-    const loadCount = async () => {
-      const count = await getUnreadShareNotificationCount();
-      setUnreadShareCount(count);
-      const matchInviteCount = await getPendingShareRequestCount();
-      setPendingMatchInviteCount(matchInviteCount);
-      // Load pending witness attestation requests
+    const loadPolledData = async () => {
+      // Share notifications + match invites + witness requests
       try {
+        const [count, matchInviteCount] = await Promise.all([
+          getUnreadShareNotificationCount(),
+          getPendingShareRequestCount(),
+        ]);
+        setUnreadShareCount(count);
+        setPendingMatchInviteCount(matchInviteCount);
         const sb = getSupabaseClient();
         const { data: witnessData, error: wErr } = await sb
           .from('match_witness_requests')
@@ -206,19 +209,28 @@ export default function ProfileScreen() {
           .eq('status', 'pending');
         if (!wErr && witnessData) setPendingWitnessCount(witnessData.length);
       } catch { /* silent */ }
+      // Maintenance status (admin only)
+      if (isAdmin) {
+        try {
+          const s = await getMaintenanceStatus();
+          setMaintenanceActive(s.isActive || s.isScheduled);
+        } catch { /* silent */ }
+      }
     };
-    loadCount();
-    const interval = setInterval(loadCount, 30000);
+    loadPolledData();
+    const interval = setInterval(loadPolledData, 30000);
     return () => clearInterval(interval);
-  }, [user?.id]);
+  }, [user?.id, isAdmin]);
 
-  // Load notification preferences
+  // Load notification preferences + ambassador/sponsor status (one-time, no polling)
   useEffect(() => {
     if (!user?.id) return;
     loadNotificationPreferences().then(prefs => {
       setNotifPrefs(prefs);
       setNotifPrefsLoaded(true);
     });
+    isUserAmbassador(user.id).then(setIsAmbassador);
+    isUserSponsor(user.id).then(setIsSponsor);
   }, [user?.id]);
 
   const handleToggleNotifPref = (key: keyof NotificationPreferences) => {
@@ -227,23 +239,6 @@ export default function ProfileScreen() {
     setNotifPrefs(updated);
     saveNotificationPreferences(updated).catch(() => {});
   };
-
-  // Check ambassador & sponsor status
-  useEffect(() => {
-    if (!user?.id) return;
-    isUserAmbassador(user.id).then(setIsAmbassador);
-    isUserSponsor(user.id).then(setIsSponsor);
-  }, [user?.id]);
-
-  // Load maintenance status for admin badge
-  useEffect(() => {
-    if (!isAdmin) return;
-    getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive || s.isScheduled));
-    const interval = setInterval(() => {
-      getMaintenanceStatus().then(s => setMaintenanceActive(s.isActive || s.isScheduled));
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [isAdmin]);
 
   // Load federation card URL
   useEffect(() => {
@@ -2135,7 +2130,7 @@ export default function ProfileScreen() {
         )}
 
         {/* App Version */}
-        <Text style={styles.versionText}>{t('common', 'version')}</Text>
+        <Text style={styles.versionText}>{APP_VERSION_DISPLAY}</Text>
       </ScrollView>
 
       {/* Delete Account Confirmation Modal */}
