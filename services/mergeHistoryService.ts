@@ -180,3 +180,78 @@ export async function deleteMergeLog(logId: string): Promise<{ error: string | n
   const { error } = await supabase.from('merge_logs').delete().eq('id', logId);
   return { error: error?.message || null };
 }
+
+/**
+ * Get all merge logs for admin (any user, no time limit).
+ * Groups by user for admin review.
+ */
+export async function getAllMergeLogsAdmin(limit = 100): Promise<{ logs: MergeLog[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('merge_logs')
+    .select('*')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error) return { logs: [], error: error.message };
+
+  const logs: MergeLog[] = (data || []).map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    mergeType: row.merge_type,
+    targetId: row.target_id,
+    targetName: row.target_name,
+    sourceId: row.source_id,
+    sourceName: row.source_name,
+    sourceSnapshot: row.source_snapshot,
+    reassignedRelations: row.reassigned_relations || [],
+    createdAt: row.created_at,
+  }));
+
+  return { logs, error: null };
+}
+
+/**
+ * Admin undo merge: bypasses 24h window. Re-creates source from snapshot.
+ */
+export async function adminUndoMerge(log: MergeLog): Promise<{ error: string | null }> {
+  const supabase = getSupabaseClient();
+
+  try {
+    const tableMap: Record<string, string> = {
+      player: 'players',
+      club: 'clubs',
+      terrain: 'terrains',
+      tournament: 'tournaments',
+    };
+    const table = tableMap[log.mergeType];
+    if (!table) return { error: 'Unknown merge type' };
+
+    // Re-create the source item from snapshot
+    const snapshot = { ...log.sourceSnapshot };
+    // Ensure user_id is from original owner
+    if (!snapshot.user_id) snapshot.user_id = log.userId;
+
+    const { error: insertError } = await supabase.from(table).insert(snapshot);
+    if (insertError) {
+      if (!insertError.message.includes('duplicate')) {
+        return { error: `Re-create failed: ${insertError.message}` };
+      }
+    }
+
+    // Reverse relation reassignments
+    for (const rel of log.reassignedRelations) {
+      const relTable = tableMap[rel.type] || (rel.type === 'match' ? 'matches' : null);
+      if (!relTable) continue;
+      const revert: Record<string, any> = { [rel.field]: rel.oldValue };
+      await supabase.from(relTable).update(revert).eq('id', rel.id);
+    }
+
+    // Delete the merge log
+    await supabase.from('merge_logs').delete().eq('id', log.id);
+
+    return { error: null };
+  } catch (e: any) {
+    return { error: e?.message || 'Unknown error' };
+  }
+}

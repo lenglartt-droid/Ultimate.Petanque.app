@@ -152,8 +152,8 @@ export default function ClubAnalyticsScreen() {
           </Text>
           <Text style={{ fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
             {fr
-              ? 'La page Analytique est reservee aux clubs verifies. Completez les informations de votre club (adresse, 2+ membres, description, contact, logo) pour obtenir le badge verifie.'
-              : 'The Analytics page is reserved for verified clubs. Complete your club information (address, 2+ members, description, contact, logo) to get the verified badge.'}
+              ? 'La page Analytique est reservee aux clubs verifies. Completez la checklist de verification sur la page de votre club, envoyez une preuve de votre role administratif, et attendez la validation de l\'equipe admin.'
+              : 'The Analytics page is reserved for verified clubs. Complete the verification checklist on your club page, send proof of your administrative role, and await admin team validation.'}
           </Text>
           <Pressable
             style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 }}

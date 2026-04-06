@@ -421,6 +421,35 @@ export async function getClaimProcessingStats(): Promise<{
   };
 }
 
+/** Get processed claim history (admin use) */
+export async function getClaimHistory(limit = 50): Promise<{ claims: ClubClaimRequest[]; error: string | null }> {
+  const supabase = getSupabaseClient();
+  const { data, error } = await supabase
+    .from('club_claim_requests')
+    .select('*')
+    .in('status', ['accepted', 'declined'])
+    .order('responded_at', { ascending: false })
+    .limit(limit);
+
+  if (error) return { claims: [], error: error.message };
+
+  const claims: ClubClaimRequest[] = (data || []).map((r: any) => ({
+    id: r.id,
+    clubId: r.club_id,
+    requesterUserId: r.requester_user_id,
+    currentOwnerId: r.current_owner_id,
+    requesterName: r.requester_name,
+    requesterEmail: r.requester_email,
+    message: r.message,
+    proofUrl: r.proof_url,
+    status: r.status,
+    respondedAt: r.responded_at,
+    createdAt: r.created_at,
+  }));
+
+  return { claims, error: null };
+}
+
 /** Send detailed verification decision notification to club owner */
 export async function sendVerificationDecisionNotification(params: {
   targetUserId: string;
