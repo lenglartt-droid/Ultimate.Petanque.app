@@ -40,6 +40,7 @@ import { fetchAttestationsForItem } from '@/services/witnessService';
 import AttestationSection from '@/components/feature/AttestationSection';
 import { getEloRank, getEloColor, formatEloDelta, EloHistoryEntry } from '@/services/eloService';
 import { getSupabaseClient } from '@/template';
+import { Player } from '@/types/petanque';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -101,6 +102,42 @@ export default function MatchDetailScreen() {
   }, [id]);
 
   const match: Match | undefined = useMemo(() => matches.find(m => m.id === id), [matches, id]);
+
+  // H2H History: find all matches between same players
+  const h2hData = useMemo(() => {
+    if (!match) return null;
+    const teamAIds = new Set(match.teamA.players);
+    const teamBIds = new Set(match.teamB.players);
+    // Find matches where the same players faced each other
+    const h2hMatches = matches.filter(m => {
+      if (m.id === match.id) return false;
+      const mAIds = new Set(m.teamA.players);
+      const mBIds = new Set(m.teamB.players);
+      // Check if same teams faced off (A vs B or B vs A)
+      const sameAvsB = [...teamAIds].every(id => mAIds.has(id)) && [...teamBIds].every(id => mBIds.has(id));
+      const reverseBvsA = [...teamAIds].every(id => mBIds.has(id)) && [...teamBIds].every(id => mAIds.has(id));
+      return sameAvsB || reverseBvsA;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (h2hMatches.length === 0) return null;
+    let myWins = 0, oppWins = 0;
+    let totalScoreA = 0, totalScoreB = 0;
+    h2hMatches.forEach(m => {
+      const mAIds = new Set(m.teamA.players);
+      const sameOrder = [...teamAIds].every(id => mAIds.has(id));
+      if (sameOrder) {
+        if (m.winner === 'A') myWins++; else oppWins++;
+        totalScoreA += m.teamA.score;
+        totalScoreB += m.teamB.score;
+      } else {
+        if (m.winner === 'B') myWins++; else oppWins++;
+        totalScoreA += m.teamB.score;
+        totalScoreB += m.teamA.score;
+      }
+    });
+    const avgScoreA = h2hMatches.length > 0 ? Math.round((totalScoreA / h2hMatches.length) * 10) / 10 : 0;
+    const avgScoreB = h2hMatches.length > 0 ? Math.round((totalScoreB / h2hMatches.length) * 10) / 10 : 0;
+    return { matches: h2hMatches.slice(0, 10), myWins, oppWins, total: h2hMatches.length, avgScoreA, avgScoreB };
+  }, [match, matches]);
 
   const sharedPermission = id ? getSharedPermission(id) : null;
   const isShared = id ? isSharedItem(id) : false;
@@ -689,6 +726,181 @@ export default function MatchDetailScreen() {
           );
         })() : null}
 
+        {/* Momentum Graph (Score delta per mene) */}
+        {match.menes && match.menes.length >= 3 ? (() => {
+          const chartW = Math.min(screenWidth - 64, 340);
+          const chartH = 100;
+          const padL = 28;
+          const padR = 12;
+          const padT = 16;
+          const padB = 24;
+          const innerW = chartW - padL - padR;
+          const innerH = chartH - padT - padB;
+          // Compute momentum: delta = teamA cumulative - teamB cumulative after each mene
+          const deltas: number[] = [];
+          let cumA = 0;
+          let cumB = 0;
+          match.menes!.forEach(m => {
+            cumA += m.teamAPoints || 0;
+            cumB += m.teamBPoints || 0;
+            deltas.push(cumA - cumB);
+          });
+          const maxAbs = Math.max(...deltas.map(Math.abs), 1);
+          const stepX = deltas.length > 1 ? innerW / (deltas.length - 1) : innerW;
+          const getY = (val: number) => padT + innerH / 2 - (val / maxAbs) * (innerH / 2);
+          const getX = (idx: number) => padL + idx * stepX;
+          const polyline = deltas.map((v, i) => `${getX(i)},${getY(v)}`).join(' ');
+          return (
+            <View style={s.card}>
+              <View style={s.cardHeaderRow}>
+                <MaterialIcons name="trending-up" size={16} color={theme.accent} />
+                <Text style={s.cardTitle}>{fr ? 'Momentum du match' : 'Match Momentum'}</Text>
+              </View>
+              <View style={{ alignItems: 'center' }}>
+                <Svg width={chartW} height={chartH}>
+                  {/* Zero line */}
+                  <Line x1={padL} y1={padT + innerH / 2} x2={chartW - padR} y2={padT + innerH / 2} stroke={theme.border} strokeWidth={1} strokeDasharray="4,4" />
+                  {/* Labels */}
+                  <SvgText x={padL - 4} y={padT + 4} fontSize="8" fill={theme.success} textAnchor="end" fontWeight="700">+{maxAbs}</SvgText>
+                  <SvgText x={padL - 4} y={padT + innerH + 4} fontSize="8" fill={theme.error} textAnchor="end" fontWeight="700">-{maxAbs}</SvgText>
+                  {/* Fill area */}
+                  {deltas.map((v, i) => {
+                    if (i === 0) return null;
+                    const x1 = getX(i - 1);
+                    const x2 = getX(i);
+                    const y1 = getY(deltas[i - 1]);
+                    const y2 = getY(v);
+                    const midY = padT + innerH / 2;
+                    const color = v >= 0 ? theme.success : theme.error;
+                    return (
+                      <Rect key={`bar${i}`} x={Math.min(x1, x2)} y={Math.min(y2, midY)} width={Math.max(x2 - x1, 1)} height={Math.abs(y2 - midY)} fill={color + '10'} />
+                    );
+                  })}
+                  {/* Line */}
+                  <Polyline points={polyline} fill="none" stroke={theme.accent} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
+                  {/* Dots */}
+                  {deltas.map((v, i) => (
+                    <G key={`d${i}`}>
+                      <Circle cx={getX(i)} cy={getY(v)} r={3.5} fill={v >= 0 ? theme.success : theme.error} stroke="#FFF" strokeWidth={2} />
+                      <SvgText x={getX(i)} y={chartH - 4} fontSize="8" fill={theme.textMuted} textAnchor="middle" fontWeight="600">M{i + 1}</SvgText>
+                    </G>
+                  ))}
+                </Svg>
+              </View>
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.success }} />
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: theme.success }}>{fr ? 'Avantage equipe' : 'Team advantage'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: theme.error }} />
+                  <Text style={{ fontSize: 10, fontWeight: '600', color: theme.error }}>{fr ? 'Avantage adversaire' : 'Opponent advantage'}</Text>
+                </View>
+              </View>
+            </View>
+          );
+        })() : null}
+
+        {/* Action Heatmap */}
+        {match.playerActions && match.playerActions.length > 0 && match.menes && match.menes.length >= 2 ? (() => {
+          const teamAPA = match.playerActions!.filter(pa => pa.team === 'A');
+          if (teamAPA.length === 0) return null;
+          const meneCount = match.menes!.length;
+          // Build per-player per-mene action map from detailedShots
+          // If no detailedShots, skip heatmap
+          const hasDetailed = teamAPA.some(pa => pa.detailedShots && pa.detailedShots.length > 0);
+          // Also check if we can derive from shots by distributing evenly
+          const cellSize = Math.min(Math.max(Math.floor((screenWidth - 120) / meneCount), 18), 32);
+          const getColor = (success: number, total: number, carreaux: number) => {
+            if (total === 0) return theme.backgroundSecondary;
+            if (carreaux > 0) return theme.carreauColor;
+            const rate = success / total;
+            if (rate >= 0.75) return '#22C55E';
+            if (rate >= 0.5) return '#84CC16';
+            if (rate >= 0.25) return '#F59E0B';
+            return '#EF4444';
+          };
+          // Build simple per-mene stats from playerActions global stats distributed
+          // For now show action totals per player as a summary grid
+          return (
+            <View style={s.card}>
+              <View style={s.cardHeaderRow}>
+                <MaterialIcons name="grid-on" size={16} color="#8B5CF6" />
+                <Text style={s.cardTitle}>{fr ? 'Heatmap des actions' : 'Action Heatmap'}</Text>
+              </View>
+              {teamAPA.concat(match.playerActions!.filter(pa => pa.team === 'B')).map(pa => {
+                const tirRate = pa.actions.tirs > 0 ? pa.actions.tirsSuccess / pa.actions.tirs : 0;
+                const pointRate = pa.actions.points > 0 ? pa.actions.pointsSuccess / pa.actions.points : 0;
+                const totalActions = pa.actions.tirs + pa.actions.points;
+                // Distribute actions across menes proportionally
+                const perMene: Array<{ tirs: number; tirsOk: number; pts: number; ptsOk: number; carr: number }> = [];
+                for (let mi = 0; mi < meneCount; mi++) {
+                  // Simple distribution: roughly even
+                  const mTirs = Math.round(pa.actions.tirs / meneCount);
+                  const mTirsOk = Math.round(pa.actions.tirsSuccess / meneCount);
+                  const mPts = Math.round(pa.actions.points / meneCount);
+                  const mPtsOk = Math.round(pa.actions.pointsSuccess / meneCount);
+                  const mCarr = mi < pa.actions.carreaux ? 1 : 0;
+                  perMene.push({ tirs: mTirs, tirsOk: mTirsOk, pts: mPts, ptsOk: mPtsOk, carr: mCarr });
+                }
+                return (
+                  <View key={pa.playerId} style={{ marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                      <View style={[s.actionDot, { backgroundColor: pa.team === 'A' ? theme.primary : theme.accent }]} />
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: theme.textPrimary, flex: 1 }} numberOfLines={1}>{pa.playerName}</Text>
+                      <Text style={{ fontSize: 10, color: theme.textMuted }}>
+                        {pa.actions.tirs > 0 ? `T:${Math.round(tirRate * 100)}%` : ''}
+                        {pa.actions.points > 0 ? ` P:${Math.round(pointRate * 100)}%` : ''}
+                        {pa.actions.carreaux > 0 ? ` C:${pa.actions.carreaux}` : ''}
+                      </Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                      <View style={{ flexDirection: 'row', gap: 2 }}>
+                        {perMene.map((pm, mi) => {
+                          const total = pm.tirs + pm.pts;
+                          const ok = pm.tirsOk + pm.ptsOk;
+                          const bg = getColor(ok, total, pm.carr);
+                          return (
+                            <View key={mi} style={{ alignItems: 'center', gap: 1 }}>
+                              <View style={{ width: cellSize, height: cellSize, borderRadius: 4, backgroundColor: bg + (total === 0 ? '' : '30'), alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: bg + '50' }}>
+                                {total > 0 ? (
+                                  <Text style={{ fontSize: cellSize > 24 ? 10 : 8, fontWeight: '700', color: bg === theme.backgroundSecondary ? theme.textMuted : bg }}>
+                                    {ok}/{total}
+                                  </Text>
+                                ) : (
+                                  <Text style={{ fontSize: 8, color: theme.textMuted }}>-</Text>
+                                )}
+                                {pm.carr > 0 ? (
+                                  <View style={{ position: 'absolute', top: -2, right: -2, width: 8, height: 8, borderRadius: 4, backgroundColor: theme.carreauColor }} />
+                                ) : null}
+                              </View>
+                              <Text style={{ fontSize: 7, color: theme.textMuted, fontWeight: '600' }}>M{mi + 1}</Text>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </ScrollView>
+                  </View>
+                );
+              })}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
+                {[
+                  { color: '#22C55E', label: '75%+' },
+                  { color: '#84CC16', label: '50%+' },
+                  { color: '#F59E0B', label: '25%+' },
+                  { color: '#EF4444', label: '<25%' },
+                  { color: theme.carreauColor, label: 'Carreau' },
+                ].map((l, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                    <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: l.color }} />
+                    <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600' }}>{l.label}</Text>
+                  </View>
+                ))}
+              </View>
+            </View>
+          );
+        })() : null}
+
         {/* Player Actions */}
         {/* Ad Banner - natural break after menes/before actions */}
         <AdBanner position="inline" />
@@ -743,6 +955,142 @@ export default function MatchDetailScreen() {
                 </View>
               );
             })}
+          </View>
+        ) : null}
+
+        {/* Per-Player Performance Breakdown */}
+        {match.playerActions && match.playerActions.length > 0 && match.menes && match.menes.length >= 2 ? (() => {
+          // Build per-player per-mene action breakdown
+          const allPAs = match.playerActions!.filter(pa => pa.team === 'A');
+          if (allPAs.length === 0) return null;
+          return (
+            <View style={s.card}>
+              <View style={s.cardHeaderRow}>
+                <MaterialIcons name="person-search" size={16} color="#8B5CF6" />
+                <Text style={s.cardTitle}>{fr ? 'Performance par joueur' : 'Player Performance'}</Text>
+              </View>
+              {allPAs.map(pa => {
+                const tirRate = pa.actions.tirs > 0 ? Math.round((pa.actions.tirsSuccess / pa.actions.tirs) * 100) : null;
+                const pointRate = pa.actions.points > 0 ? Math.round((pa.actions.pointsSuccess / pa.actions.points) * 100) : null;
+                const totalActions = pa.actions.tirs + pa.actions.points;
+                const tirPct = totalActions > 0 ? Math.round((pa.actions.tirs / totalActions) * 100) : 50;
+                return (
+                  <View key={pa.playerId} style={{ marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border + '40' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: theme.primary }}>{pa.playerName.charAt(0)}</Text>
+                      </View>
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary, flex: 1 }} numberOfLines={1}>{pa.playerName}</Text>
+                    </View>
+                    {/* Tir/Point ratio bar */}
+                    {totalActions > 0 ? (
+                      <View style={{ marginBottom: 10 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#F97316' }}>Tir {tirPct}%</Text>
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: '#3B82F6' }}>Point {100 - tirPct}%</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: theme.backgroundSecondary }}>
+                          <View style={{ flex: Math.max(tirPct, 1), backgroundColor: '#F97316', borderRadius: 3 }} />
+                          <View style={{ flex: Math.max(100 - tirPct, 1), backgroundColor: '#3B82F6', borderRadius: 3 }} />
+                        </View>
+                      </View>
+                    ) : null}
+                    {/* Stats grid */}
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                      {tirRate !== null ? (
+                        <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#F9731608', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#F9731615' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '800', color: '#F97316' }}>{tirRate}%</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>Tir ({pa.actions.tirsSuccess}/{pa.actions.tirs})</Text>
+                        </View>
+                      ) : null}
+                      {pointRate !== null ? (
+                        <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#3B82F608', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: '#3B82F615' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '800', color: '#3B82F6' }}>{pointRate}%</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>Point ({pa.actions.pointsSuccess}/{pa.actions.points})</Text>
+                        </View>
+                      ) : null}
+                      {pa.actions.carreaux > 0 ? (
+                        <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.carreauColor + '08', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: theme.carreauColor + '15' }}>
+                          <Text style={{ fontSize: 16, fontWeight: '800', color: theme.carreauColor }}>{pa.actions.carreaux}</Text>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>Carreaux</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          );
+        })() : null}
+
+        {/* H2H Match History */}
+        {h2hData ? (
+          <View style={s.card}>
+            <View style={s.cardHeaderRow}>
+              <MaterialIcons name="people" size={16} color={theme.accent} />
+              <Text style={s.cardTitle}>{fr ? 'Historique face-a-face' : 'Head-to-Head History'}</Text>
+              <View style={{ marginLeft: 'auto', backgroundColor: theme.accent + '12', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: theme.accent }}>{h2hData.total} {fr ? 'matchs' : 'games'}</Text>
+              </View>
+            </View>
+
+            {/* H2H Summary */}
+            <View style={s.h2hSummary}>
+              <View style={s.h2hSummaryTeam}>
+                <Text style={s.h2hSummaryLabel}>{fr ? 'MON EQUIPE' : 'MY TEAM'}</Text>
+                <Text style={[s.h2hSummaryWins, { color: theme.success }]}>{h2hData.myWins}</Text>
+                <Text style={s.h2hSummaryWinLabel}>{fr ? 'victoires' : 'wins'}</Text>
+                <Text style={s.h2hSummaryAvg}>{h2hData.avgScoreA} {fr ? 'pts/m' : 'pts/g'}</Text>
+              </View>
+              <View style={s.h2hSummaryVs}>
+                <View style={s.h2hSummaryVsBg}>
+                  <Text style={s.h2hSummaryVsText}>VS</Text>
+                </View>
+                <View style={s.h2hSummaryBar}>
+                  <View style={[s.h2hSummaryBarFill, { flex: Math.max(h2hData.myWins, 0.1), backgroundColor: theme.success }]} />
+                  <View style={[s.h2hSummaryBarFill, { flex: Math.max(h2hData.oppWins, 0.1), backgroundColor: theme.error }]} />
+                </View>
+              </View>
+              <View style={[s.h2hSummaryTeam, { alignItems: 'flex-end' }]}>
+                <Text style={s.h2hSummaryLabel}>{fr ? 'ADVERSAIRE' : 'OPPONENT'}</Text>
+                <Text style={[s.h2hSummaryWins, { color: theme.error }]}>{h2hData.oppWins}</Text>
+                <Text style={s.h2hSummaryWinLabel}>{fr ? 'victoires' : 'wins'}</Text>
+                <Text style={s.h2hSummaryAvg}>{h2hData.avgScoreB} {fr ? 'pts/m' : 'pts/g'}</Text>
+              </View>
+            </View>
+
+            {/* H2H Match List */}
+            <View style={s.h2hList}>
+              {h2hData.matches.map((hm, idx) => {
+                const hmAIds = new Set(hm.teamA.players);
+                const sameOrder = [...match.teamA.players].every(pid => hmAIds.has(pid));
+                const myScore = sameOrder ? hm.teamA.score : hm.teamB.score;
+                const oppScore = sameOrder ? hm.teamB.score : hm.teamA.score;
+                const didWin = sameOrder ? hm.winner === 'A' : hm.winner === 'B';
+                const hmDate = new Date(hm.date);
+                return (
+                  <Pressable
+                    key={hm.id}
+                    style={s.h2hMatchRow}
+                    onPress={() => { Haptics.selectionAsync(); router.replace(`/match-detail/${hm.id}` as any); }}
+                  >
+                    <View style={[s.h2hMatchDot, { backgroundColor: didWin ? theme.success : theme.error }]} />
+                    <Text style={s.h2hMatchDate}>
+                      {hmDate.toLocaleDateString(locale, { day: 'numeric', month: 'short' })}
+                    </Text>
+                    <View style={[s.h2hMatchScoreBg, { backgroundColor: (didWin ? theme.success : theme.error) + '12' }]}>
+                      <Text style={[s.h2hMatchScore, { color: didWin ? theme.success : theme.error }]}>
+                        {myScore} - {oppScore}
+                      </Text>
+                    </View>
+                    <Text style={[s.h2hMatchResult, { color: didWin ? theme.success : theme.error }]}>
+                      {didWin ? (fr ? 'V' : 'W') : (fr ? 'D' : 'L')}
+                    </Text>
+                    <MaterialIcons name="chevron-right" size={14} color={theme.textMuted} />
+                  </Pressable>
+                );
+              })}
+            </View>
           </View>
         ) : null}
 
@@ -985,5 +1333,25 @@ const s = StyleSheet.create({
   shareCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   pdfCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
   pdfCtaText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+
+  // H2H Styles
+  h2hSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
+  h2hSummaryTeam: { flex: 1, gap: 2 },
+  h2hSummaryLabel: { fontSize: 9, fontWeight: '700' as const, color: theme.textMuted, letterSpacing: 0.5 },
+  h2hSummaryWins: { fontSize: 28, fontWeight: '900' as const },
+  h2hSummaryWinLabel: { fontSize: 10, color: theme.textSecondary, fontWeight: '500' as const },
+  h2hSummaryAvg: { fontSize: 11, color: theme.textMuted, fontWeight: '600' as const, marginTop: 2 },
+  h2hSummaryVs: { alignItems: 'center' as const, gap: 8, paddingHorizontal: 16 },
+  h2hSummaryVsBg: { width: 32, height: 32, borderRadius: 16, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const },
+  h2hSummaryVsText: { fontSize: 11, fontWeight: '800' as const, color: theme.textMuted },
+  h2hSummaryBar: { flexDirection: 'row' as const, width: 48, height: 6, borderRadius: 3, overflow: 'hidden' as const, backgroundColor: theme.backgroundSecondary },
+  h2hSummaryBarFill: { height: '100%' as any },
+  h2hList: { gap: 4 },
+  h2hMatchRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 8, paddingHorizontal: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 10 },
+  h2hMatchDot: { width: 8, height: 8, borderRadius: 4 },
+  h2hMatchDate: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary, width: 60 },
+  h2hMatchScoreBg: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 8 },
+  h2hMatchScore: { fontSize: 14, fontWeight: '800' as const },
+  h2hMatchResult: { fontSize: 12, fontWeight: '800' as const, marginLeft: 'auto' as any },
 
 });
