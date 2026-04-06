@@ -43,6 +43,7 @@ import {
   FeedWeeklyRecord,
   FeedEventCreated,
   FeedMeetupCreated,
+  FeedClubInvitation,
   fetchWeeklyDigest,
   WeeklyDigest,
 } from '@/services/activityFeedService';
@@ -76,6 +77,12 @@ const feedStrings = {
   eventCreated: { fr: 'Nouveau defi cree', en: 'New challenge created' },
   eventCompleted: { fr: 'Defi termine', en: 'Challenge completed' },
   meetupCreated: { fr: 'Nouveau meetup', en: 'New meetup' },
+  invitationSent: { fr: 'Invitation envoyee', en: 'Invitation sent' },
+  invitationAccepted: { fr: 'a rejoint le club', en: 'joined the club' },
+  invitationDeclined: { fr: 'a decline l\'invitation', en: 'declined the invitation' },
+  invitationExpired: { fr: 'Invitation expiree', en: 'Invitation expired' },
+  invitedBy: { fr: 'Invite par', en: 'Invited by' },
+  declineReason: { fr: 'Raison', en: 'Reason' },
   participants: { fr: 'participants', en: 'participants' },
   join: { fr: 'Rejoindre', en: 'Join' },
   seeAll: { fr: 'Voir tout', en: 'See all' },
@@ -399,6 +406,97 @@ const FeedMeetupCard = React.memo(({ data, lang, index }: { data: FeedMeetupCrea
 });
 
 // ============================================
+// CLUB INVITATION CARD
+// ============================================
+const FeedClubInvitationCard = React.memo(({ data, type, lang, index, userId }: {
+  data: FeedClubInvitation;
+  type: string;
+  lang: string;
+  index: number;
+  userId?: string;
+}) => {
+  const isMyInvitation = userId && (data.inviterUserId === userId || data.invitedUserId === userId);
+  const statusConfig: Record<string, { color: string; icon: string; labelFr: string; labelEn: string }> = {
+    club_invitation_sent: { color: '#7C3AED', icon: 'mail', labelFr: 'Invitation envoyee', labelEn: 'Invitation sent' },
+    club_invitation_accepted: { color: '#10B981', icon: 'check-circle', labelFr: 'Invitation acceptee', labelEn: 'Invitation accepted' },
+    club_invitation_declined: { color: '#EF4444', icon: 'cancel', labelFr: 'Invitation refusee', labelEn: 'Invitation declined' },
+    club_invitation_expired: { color: '#94A3B8', icon: 'timer-off', labelFr: 'Invitation expiree', labelEn: 'Invitation expired' },
+  };
+  const cfg = statusConfig[type] || statusConfig.club_invitation_sent;
+
+  return (
+    <Animated.View entering={index < 15 ? FadeInDown.duration(200).delay(Math.min(index * 30, 200)) : undefined}>
+      <Pressable
+        style={[fs.card, { borderLeftWidth: 3, borderLeftColor: cfg.color }, isMyInvitation ? { backgroundColor: cfg.color + '06' } : undefined]}
+        onPress={() => { Haptics.selectionAsync(); router.push(`/club/${data.clubId}` as any); }}
+      >
+        {/* Inline notification badge for user's own invitations */}
+        {isMyInvitation ? (
+          <View style={{ position: 'absolute', top: 8, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: cfg.color + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+            <MaterialIcons name="person" size={9} color={cfg.color} />
+            <Text style={{ fontSize: 8, fontWeight: '800', color: cfg.color }}>{lang === 'fr' ? 'Vous' : 'You'}</Text>
+          </View>
+        ) : null}
+        <View style={fs.cardHeader}>
+          {data.clubLogo ? (
+            <Image source={{ uri: data.clubLogo }} style={fs.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+          ) : (
+            <View style={[fs.avatarFallback, { backgroundColor: cfg.color + '15' }]}>
+              <MaterialIcons name="home" size={18} color={cfg.color} />
+            </View>
+          )}
+          <View style={{ flex: 1, paddingRight: isMyInvitation ? 50 : 0 }}>
+            {type === 'club_invitation_accepted' ? (
+              <Text style={fs.cardTitle} numberOfLines={2}>
+                <Text style={fs.cardTitleBold}>{data.invitedPlayerName}</Text>
+                {' '}{ft('invitationAccepted', lang)}{' '}
+                <Text style={fs.cardTitleBold}>{data.clubName}</Text>
+              </Text>
+            ) : type === 'club_invitation_declined' ? (
+              <Text style={fs.cardTitle} numberOfLines={2}>
+                <Text style={fs.cardTitleBold}>{data.invitedPlayerName}</Text>
+                {' '}{ft('invitationDeclined', lang)}{' '}
+                <Text style={fs.cardTitleBold}>{data.clubName}</Text>
+              </Text>
+            ) : type === 'club_invitation_expired' ? (
+              <Text style={fs.cardTitle} numberOfLines={2}>
+                <Text style={[fs.cardTitleBold, { color: '#94A3B8' }]}>{ft('invitationExpired', lang)}</Text>
+                {' — '}{data.invitedPlayerName} → {data.clubName}
+              </Text>
+            ) : (
+              <Text style={fs.cardTitle} numberOfLines={2}>
+                <Text style={fs.cardTitleBold}>{data.inviterName}</Text>
+                {' '}{lang === 'fr' ? 'a invite' : 'invited'}{' '}
+                <Text style={fs.cardTitleBold}>{data.invitedPlayerName}</Text>
+                {' '}{lang === 'fr' ? 'a rejoindre' : 'to join'}{' '}
+                <Text style={fs.cardTitleBold}>{data.clubName}</Text>
+              </Text>
+            )}
+            {/* Invitation message */}
+            {data.message && type === 'club_invitation_sent' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4, backgroundColor: '#7C3AED08', borderRadius: 8, padding: 6 }}>
+                <MaterialIcons name="format-quote" size={10} color="#7C3AED" style={{ marginTop: 1 }} />
+                <Text style={{ fontSize: 11, color: '#4C1D95', fontStyle: 'italic', flex: 1 }} numberOfLines={2}>{data.message}</Text>
+              </View>
+            ) : null}
+            {/* Decline reason */}
+            {data.declineReason && type === 'club_invitation_declined' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 4, marginTop: 4, backgroundColor: '#FEF2F2', borderRadius: 8, padding: 6 }}>
+                <MaterialIcons name="info-outline" size={10} color="#EF4444" style={{ marginTop: 1 }} />
+                <Text style={{ fontSize: 11, color: '#991B1B', flex: 1 }} numberOfLines={2}>{ft('declineReason', lang)}: {data.declineReason}</Text>
+              </View>
+            ) : null}
+          </View>
+          <View style={[{ paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: cfg.color + '12' }]}>
+            <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
+          </View>
+        </View>
+      </Pressable>
+    </Animated.View>
+  );
+});
+
+// ============================================
 // REACTION BAR
 // ============================================
 const REACTION_ICONS: { type: ReactionType; emoji: string }[] = [
@@ -443,12 +541,13 @@ const ReactionBar = React.memo(({ feedItemId, reactions, onReact }: {
 // ============================================
 // FILTER CHIPS
 // ============================================
-type FeedFilter = 'all' | 'matches' | 'badges' | 'events' | 'records';
+type FeedFilter = 'all' | 'matches' | 'badges' | 'events' | 'records' | 'invitations';
 
 const FEED_FILTERS: { id: FeedFilter; icon: keyof typeof MaterialIcons.glyphMap; labelFr: string; labelEn: string }[] = [
   { id: 'all', icon: 'layers', labelFr: 'Tout', labelEn: 'All' },
   { id: 'matches', icon: 'sports', labelFr: 'Matchs', labelEn: 'Matches' },
   { id: 'badges', icon: 'emoji-events', labelFr: 'Badges', labelEn: 'Badges' },
+  { id: 'invitations', icon: 'mail', labelFr: 'Invitations', labelEn: 'Invitations' },
   { id: 'events', icon: 'campaign', labelFr: 'Evenements', labelEn: 'Events' },
   { id: 'records', icon: 'leaderboard', labelFr: 'Records', labelEn: 'Records' },
 ];
@@ -457,6 +556,7 @@ const FILTER_TYPES: Record<FeedFilter, string[]> = {
   all: [],
   matches: ['match_result', 'elo_milestone'],
   badges: ['badge_unlock'],
+  invitations: ['club_invitation_sent', 'club_invitation_accepted', 'club_invitation_declined', 'club_invitation_expired'],
   events: ['event_created', 'event_completed', 'meetup_created'],
   records: ['weekly_record'],
 };
@@ -566,10 +666,11 @@ export default function ActivityFeedScreen() {
 
   // Filter counts
   const filterCounts = useMemo(() => {
-    const counts: Record<FeedFilter, number> = { all: feedItems.length, matches: 0, badges: 0, events: 0, records: 0 };
+    const counts: Record<FeedFilter, number> = { all: feedItems.length, matches: 0, badges: 0, invitations: 0, events: 0, records: 0 };
     feedItems.forEach(item => {
       if (FILTER_TYPES.matches.includes(item.type)) counts.matches++;
       if (FILTER_TYPES.badges.includes(item.type)) counts.badges++;
+      if (FILTER_TYPES.invitations.includes(item.type)) counts.invitations++;
       if (FILTER_TYPES.events.includes(item.type)) counts.events++;
       if (FILTER_TYPES.records.includes(item.type)) counts.records++;
     });
@@ -638,6 +739,11 @@ export default function ActivityFeedScreen() {
         return wrapper(<FeedEventCard data={item.data as FeedEventCreated} type={item.type} lang={lang} index={index} />);
       case 'meetup_created':
         return wrapper(<FeedMeetupCard data={item.data as FeedMeetupCreated} lang={lang} index={index} />);
+      case 'club_invitation_sent':
+      case 'club_invitation_accepted':
+      case 'club_invitation_declined':
+      case 'club_invitation_expired':
+        return wrapper(<FeedClubInvitationCard data={item.data as FeedClubInvitation} type={item.type} lang={lang} index={index} userId={user?.id} />);
       default:
         return null;
     }
