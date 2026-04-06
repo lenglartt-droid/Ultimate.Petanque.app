@@ -623,6 +623,7 @@ export default function OnboardingScreen() {
   if (step === 7) {
     const mapFeatures = [
       { icon: 'place', color: '#10B981', label: fr ? 'Terrains pres de toi' : 'Courts near you' },
+      { icon: 'local-fire-department', color: '#EF4444', label: fr ? 'Terrains actifs maintenant' : 'Active courts right now' },
       { icon: 'people', color: '#3B82F6', label: fr ? 'Joueurs a proximite' : 'Nearby players' },
       { icon: 'location-city', color: '#F59E0B', label: fr ? 'Clubs de ta region' : 'Local clubs' },
       { icon: 'event', color: '#EC4899', label: fr ? 'Rencontres & meetups' : 'Meetups & events' },
