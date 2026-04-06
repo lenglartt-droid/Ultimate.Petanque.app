@@ -20,6 +20,7 @@ import { useAuth } from '@/template';
 import {
   NotificationPreferences,
   DEFAULT_NOTIFICATION_PREFERENCES,
+  PROXIMITY_RADIUS_OPTIONS,
   loadNotificationPreferences,
   saveNotificationPreferences,
 } from '@/services/notificationPreferencesService';
@@ -36,6 +37,7 @@ interface NotifCategory {
     descFr: string;
     descEn: string;
   }[];
+  hasRadiusSetting?: boolean;
 }
 
 const NOTIF_CATEGORIES: NotifCategory[] = [
@@ -159,6 +161,7 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
   {
     titleFr: 'Carte & Proximite',
     titleEn: 'Map & Proximity',
+    hasRadiusSetting: true,
     items: [
       {
         key: 'terrain_proximity',
@@ -229,8 +232,12 @@ export default function NotificationPreferencesScreen() {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const updated: NotificationPreferences = { ...DEFAULT_NOTIFICATION_PREFERENCES };
     for (const key of Object.keys(DEFAULT_NOTIFICATION_PREFERENCES) as (keyof NotificationPreferences)[]) {
-      updated[key] = enabled;
+      if (typeof DEFAULT_NOTIFICATION_PREFERENCES[key] === 'boolean') {
+        (updated as any)[key] = enabled;
+      }
     }
+    // Preserve non-boolean settings
+    updated.terrain_proximity_radius = prefs.terrain_proximity_radius;
     setPrefs(updated);
     saveNotificationPreferences(updated).catch(() => {});
   };
@@ -318,7 +325,7 @@ export default function NotificationPreferencesScreen() {
                         <Text style={s.cardLabel}>{fr ? item.labelFr : item.labelEn}</Text>
                       </View>
                       <Switch
-                        value={prefs[item.key]}
+                        value={prefs[item.key] as boolean}
                         onValueChange={() => handleToggle(item.key)}
                         trackColor={{ false: theme.border, true: item.color + '60' }}
                         thumbColor={prefs[item.key] ? item.color : theme.textMuted}
@@ -327,6 +334,41 @@ export default function NotificationPreferencesScreen() {
                     <Text style={s.cardDesc}>{fr ? item.descFr : item.descEn}</Text>
                   </View>
                 ))}
+                {/* Radius setting for Map & Proximity */}
+                {cat.hasRadiusSetting && prefs.terrain_proximity ? (
+                  <View style={[s.card, { borderColor: '#22C55E30' }]}>
+                    <View style={s.cardTop}>
+                      <View style={[s.cardIcon, { backgroundColor: '#22C55E15' }]}>
+                        <MaterialIcons name="radar" size={20} color="#22C55E" />
+                      </View>
+                      <View style={s.cardInfo}>
+                        <Text style={s.cardLabel}>{fr ? 'Rayon de detection' : 'Detection radius'}</Text>
+                      </View>
+                    </View>
+                    <Text style={s.cardDesc}>{fr ? 'Distance maximale pour detecter les terrains actifs a proximite.' : 'Maximum distance to detect nearby active terrains.'}</Text>
+                    <View style={s.radiusRow}>
+                      {PROXIMITY_RADIUS_OPTIONS.map(opt => {
+                        const isActive = prefs.terrain_proximity_radius === opt.value;
+                        return (
+                          <Pressable
+                            key={opt.value}
+                            style={[s.radiusChip, isActive && s.radiusChipActive]}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              const updated = { ...prefs, terrain_proximity_radius: opt.value };
+                              setPrefs(updated);
+                              saveNotificationPreferences(updated).catch(() => {});
+                            }}
+                          >
+                            <Text style={[s.radiusChipText, isActive && s.radiusChipTextActive]}>
+                              {fr ? opt.labelFr : opt.labelEn}
+                            </Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                ) : null}
               </View>
             </Animated.View>
           ))
@@ -461,6 +503,36 @@ const s = StyleSheet.create({
   cardInfo: { flex: 1 },
   cardLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
   cardDesc: { fontSize: 12, color: theme.textSecondary, lineHeight: 18, marginLeft: 52 },
+
+  // Radius setting
+  radiusRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+    marginLeft: 52,
+  },
+  radiusChip: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: theme.backgroundSecondary,
+    borderWidth: 1.5,
+    borderColor: theme.border,
+  },
+  radiusChipActive: {
+    backgroundColor: '#22C55E',
+    borderColor: '#22C55E',
+  },
+  radiusChipText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: theme.textSecondary,
+  },
+  radiusChipTextActive: {
+    color: '#FFF',
+  },
 
   // Info
   infoBox: {
