@@ -24,6 +24,7 @@ import { useAuth } from '@/template';
 import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import QRCode from 'react-native-qrcode-svg';
+import MeetupChat from '@/components/feature/MeetupChat';
 import { config } from '@/constants/config';
 import {
   Meetup,
@@ -532,8 +533,22 @@ export default function MeetupDetailScreen() {
           </View>
         ) : null}
 
+        {/* Mini-Chat */}
+        {!isPast && meetup.status === 'active' ? (
+          <Animated.View entering={FadeInDown.duration(400).delay(150)}>
+            <MeetupChat
+              meetupId={meetup.id}
+              userId={user?.id || ''}
+              userName={user?.username || user?.email?.split('@')[0] || 'Joueur'}
+              userAvatar={null}
+              isParticipant={isCreator || myStatus === 'accepted'}
+              language={language}
+            />
+          </Animated.View>
+        ) : null}
+
         {/* Participants Summary */}
-        <Animated.View entering={FadeInDown.duration(400).delay(150)} style={styles.participantsCard}>
+        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.participantsCard}>
           <Text style={styles.sectionTitle}>{t('meetup', 'participants')} ({acceptedCount}/{meetup.max_participants})</Text>
           <View style={styles.participantsGrid}>
             <View style={styles.pStatItem}>

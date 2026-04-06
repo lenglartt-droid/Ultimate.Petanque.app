@@ -938,6 +938,13 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="terrain-activity/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             {__DEV__ ? <DevPerformanceOverlay /> : null}
             </View>

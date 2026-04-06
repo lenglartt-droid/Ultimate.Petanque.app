@@ -1,6 +1,6 @@
 /**
  * MeetupChat — Mini-chat component for meetup detail page.
- * Displays messages, auto-polls for new ones, and allows sending.
+ * Displays messages, auto-polls for new ones, typing indicator, and allows sending.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -16,13 +16,17 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import {
   MeetupMessage,
+  TypingUser,
   fetchMeetupMessages,
   sendMeetupMessage,
   deleteMeetupMessage,
+  setTypingStatus,
+  clearTypingStatus,
+  fetchTypingUsers,
 } from '@/services/meetupChatService';
 
 interface MeetupChatProps {
@@ -35,6 +39,8 @@ interface MeetupChatProps {
 }
 
 const POLL_INTERVAL = 8000; // 8 seconds
+const TYPING_POLL_INTERVAL = 3000; // 3 seconds for typing indicator
+const TYPING_DEBOUNCE_MS = 1000; // Debounce typing status updates
 
 const QUICK_MESSAGES_FR = [
   "J'arrive dans 10 min",
@@ -82,6 +88,36 @@ function formatDateSeparator(dateStr: string, lang: string): string {
   return d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
 }
 
+// Animated typing dots component
+const TypingDots = React.memo(() => {
+  const dot1 = useSharedValue(0);
+  const dot2 = useSharedValue(0);
+  const dot3 = useSharedValue(0);
+
+  React.useEffect(() => {
+    dot1.value = withRepeat(withSequence(withTiming(-3, { duration: 300 }), withTiming(0, { duration: 300 })), -1, true);
+    const t2 = setTimeout(() => {
+      dot2.value = withRepeat(withSequence(withTiming(-3, { duration: 300 }), withTiming(0, { duration: 300 })), -1, true);
+    }, 150);
+    const t3 = setTimeout(() => {
+      dot3.value = withRepeat(withSequence(withTiming(-3, { duration: 300 }), withTiming(0, { duration: 300 })), -1, true);
+    }, 300);
+    return () => { clearTimeout(t2); clearTimeout(t3); };
+  }, []);
+
+  const s1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
+  const s2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
+  const s3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }));
+
+  return (
+    <View style={s.typingDotsRow}>
+      <Animated.View style={[s.typingDot, s1]} />
+      <Animated.View style={[s.typingDot, s2]} />
+      <Animated.View style={[s.typingDot, s3]} />
+    </View>
+  );
+});
+
 const MessageBubble = React.memo(({ msg, isOwn, onDelete, language }: {
   msg: MeetupMessage;
   isOwn: boolean;
@@ -124,9 +160,14 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
   const flatListRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCountRef = useRef(0);
+  const isTypingRef = useRef(false);
   const quickMessages = language === 'fr' ? QUICK_MESSAGES_FR : QUICK_MESSAGES_EN;
 
   const loadMessages = useCallback(async () => {
@@ -140,21 +181,83 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
     setLoading(false);
   }, [meetupId, expanded]);
 
+  const loadTypingUsers = useCallback(async () => {
+    if (!expanded || !isParticipant) return;
+    const users = await fetchTypingUsers(meetupId, userId);
+    setTypingUsers(users);
+  }, [meetupId, userId, expanded, isParticipant]);
+
   // Initial load
   useEffect(() => {
     loadMessages();
   }, [loadMessages]);
 
-  // Polling
+  // Message polling
   useEffect(() => {
     if (!expanded) return;
     pollRef.current = setInterval(loadMessages, POLL_INTERVAL);
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [expanded, loadMessages]);
 
+  // Typing indicator polling (faster interval)
+  useEffect(() => {
+    if (!expanded || !isParticipant) return;
+    loadTypingUsers(); // Initial load
+    typingPollRef.current = setInterval(loadTypingUsers, TYPING_POLL_INTERVAL);
+    return () => { if (typingPollRef.current) clearInterval(typingPollRef.current); };
+  }, [expanded, isParticipant, loadTypingUsers]);
+
+  // Clean up typing status on unmount or collapse
+  useEffect(() => {
+    return () => {
+      if (isTypingRef.current) {
+        clearTypingStatus(meetupId, userId);
+        isTypingRef.current = false;
+      }
+      if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+      if (typingClearRef.current) clearTimeout(typingClearRef.current);
+    };
+  }, [meetupId, userId]);
+
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
+
+    if (!isParticipant) return;
+
+    // Debounce typing status to avoid flooding the server
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+    if (typingClearRef.current) clearTimeout(typingClearRef.current);
+
+    if (newText.trim().length > 0) {
+      typingDebounceRef.current = setTimeout(() => {
+        setTypingStatus(meetupId, userId, userName);
+        isTypingRef.current = true;
+      }, TYPING_DEBOUNCE_MS);
+
+      // Auto-clear typing after 5s of no changes
+      typingClearRef.current = setTimeout(() => {
+        clearTypingStatus(meetupId, userId);
+        isTypingRef.current = false;
+      }, 5000);
+    } else {
+      // Text cleared — immediately remove typing status
+      clearTypingStatus(meetupId, userId);
+      isTypingRef.current = false;
+    }
+  }, [meetupId, userId, userName, isParticipant]);
+
   const handleSend = useCallback(async (msgText?: string) => {
     const finalText = (msgText || text).trim();
     if (!finalText || sending) return;
+
+    // Clear typing status immediately on send
+    if (isTypingRef.current) {
+      clearTypingStatus(meetupId, userId);
+      isTypingRef.current = false;
+    }
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+    if (typingClearRef.current) clearTimeout(typingClearRef.current);
+
     setSending(true);
     const { message: newMsg, error } = await sendMeetupMessage(meetupId, userId, userName, userAvatar, finalText);
     setSending(false);
@@ -176,8 +279,15 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
 
   const handleToggle = useCallback(() => {
     Haptics.selectionAsync();
-    setExpanded(prev => !prev);
-  }, []);
+    setExpanded(prev => {
+      if (prev && isTypingRef.current) {
+        // Collapsing — clear typing
+        clearTypingStatus(meetupId, userId);
+        isTypingRef.current = false;
+      }
+      return !prev;
+    });
+  }, [meetupId, userId]);
 
   // Group messages by date for separators
   const messagesWithSeparators = React.useMemo(() => {
@@ -193,6 +303,19 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
     });
     return result;
   }, [messages]);
+
+  // Build typing indicator text
+  const typingText = React.useMemo(() => {
+    if (typingUsers.length === 0) return null;
+    const names = typingUsers.map(u => u.user_name.split(' ')[0]);
+    if (names.length === 1) {
+      return language === 'fr' ? `${names[0]} ecrit...` : `${names[0]} is typing...`;
+    }
+    if (names.length === 2) {
+      return language === 'fr' ? `${names[0]} et ${names[1]} ecrivent...` : `${names[0]} and ${names[1]} are typing...`;
+    }
+    return language === 'fr' ? `${names[0]} et ${names.length - 1} autres ecrivent...` : `${names[0]} and ${names.length - 1} others are typing...`;
+  }, [typingUsers, language]);
 
   const unreadCount = messages.length;
 
@@ -211,7 +334,13 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
             </View>
           ) : null}
         </View>
-        <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+        <View style={s.headerRight}>
+          {/* Show small typing dot in collapsed header */}
+          {!expanded && typingUsers.length > 0 ? (
+            <View style={s.headerTypingDot} />
+          ) : null}
+          <MaterialIcons name={expanded ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+        </View>
       </Pressable>
 
       {/* Expanded chat body */}
@@ -260,6 +389,14 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
             />
           )}
 
+          {/* Typing indicator */}
+          {typingText ? (
+            <View style={s.typingBar}>
+              <TypingDots />
+              <Text style={s.typingText}>{typingText}</Text>
+            </View>
+          ) : null}
+
           {/* Quick message chips */}
           {isParticipant ? (
             <View style={s.quickRow}>
@@ -278,7 +415,7 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
                 <TextInput
                   style={s.input}
                   value={text}
-                  onChangeText={setText}
+                  onChangeText={handleTextChange}
                   placeholder={language === 'fr' ? 'Votre message...' : 'Your message...'}
                   placeholderTextColor={theme.textMuted}
                   multiline
@@ -333,6 +470,11 @@ const s = StyleSheet.create({
     alignItems: 'center' as const,
     gap: 10,
   },
+  headerRight: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+  },
   headerIcon: {
     width: 34,
     height: 34,
@@ -345,6 +487,12 @@ const s = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700' as const,
     color: theme.textPrimary,
+  },
+  headerTypingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.success,
   },
   badge: {
     minWidth: 22,
@@ -468,6 +616,33 @@ const s = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginLeft: 4,
+  },
+  // Typing indicator
+  typingBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: theme.backgroundSecondary + '80',
+  },
+  typingText: {
+    fontSize: 12,
+    fontWeight: '500' as const,
+    color: theme.textSecondary,
+    fontStyle: 'italic' as const,
+  },
+  typingDotsRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    height: 16,
+  },
+  typingDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: theme.textMuted,
   },
   quickRow: {
     flexDirection: 'row' as const,

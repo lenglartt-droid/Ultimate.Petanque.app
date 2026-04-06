@@ -1347,6 +1347,7 @@ export default function MapScreen() {
   const [heatmapAnimStep, setHeatmapAnimStep] = useState(0);
   const HEATMAP_ANIM_STEPS = 4;
   const heatmapAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const [heatmapCumulative, setHeatmapCumulative] = useState(false);
 
   // Heatmap animation timer
   useEffect(() => {
@@ -1422,16 +1423,28 @@ export default function MapScreen() {
     const totalPeriod = periodMs[heatmapPeriod] || 0;
     if (totalPeriod > 0) {
       if (heatmapAnimating) {
-        // Animation: show only players active in current time slice
         const sliceDuration = totalPeriod / HEATMAP_ANIM_STEPS;
-        const sliceStart = now - totalPeriod + heatmapAnimStep * sliceDuration;
-        const sliceEnd = sliceStart + sliceDuration;
-        uniquePlayers = uniquePlayers.filter(p => {
-          const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
-          if (!lmd) return false;
-          const t = new Date(lmd).getTime();
-          return t >= sliceStart && t < sliceEnd;
-        });
+        if (heatmapCumulative) {
+          // Cumulative: show all players from period start up to end of current slice
+          const periodStart = now - totalPeriod;
+          const cumulativeEnd = periodStart + (heatmapAnimStep + 1) * sliceDuration;
+          uniquePlayers = uniquePlayers.filter(p => {
+            const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
+            if (!lmd) return false;
+            const t = new Date(lmd).getTime();
+            return t >= periodStart && t < cumulativeEnd;
+          });
+        } else {
+          // Isolated: show only players active in current time slice
+          const sliceStart = now - totalPeriod + heatmapAnimStep * sliceDuration;
+          const sliceEnd = sliceStart + sliceDuration;
+          uniquePlayers = uniquePlayers.filter(p => {
+            const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
+            if (!lmd) return false;
+            const t = new Date(lmd).getTime();
+            return t >= sliceStart && t < sliceEnd;
+          });
+        }
       } else {
         // Static: show all players within period
         const cutoff = now - totalPeriod;
@@ -1469,7 +1482,7 @@ export default function MapScreen() {
       const strokeColor = ratio >= 0.7 ? 'rgba(239,68,68,0.50)' : ratio >= 0.4 ? 'rgba(245,158,11,0.40)' : ratio >= 0.15 ? 'rgba(59,130,246,0.35)' : 'rgba(147,197,253,0.30)';
       return { ...c, radius: baseRadius * (0.6 + ratio * 0.6), fillColor, strokeColor };
     });
-  }, [showHeatmap, ownData.players, pubData.players, currentRegion, heatmapPeriod, heatmapAnimating, heatmapAnimStep]);
+  }, [showHeatmap, ownData.players, pubData.players, currentRegion, heatmapPeriod, heatmapAnimating, heatmapAnimStep, heatmapCumulative]);
 
   const heatmapPlayerCount = useMemo(() => {
     if (!showHeatmap) return 0;
@@ -1803,35 +1816,52 @@ export default function MapScreen() {
           </View>
           {/* Animation controls */}
           {heatmapPeriod !== 'all' ? (
-            <View style={styles.heatmapAnimRow}>
-              <Pressable
-                style={[styles.heatmapAnimBtn, heatmapAnimating && styles.heatmapAnimBtnActive]}
-                onPress={() => { Haptics.selectionAsync(); setHeatmapAnimating(prev => !prev); }}
-              >
-                <MaterialIcons name={heatmapAnimating ? 'pause' : 'play-arrow'} size={16} color={heatmapAnimating ? '#FFF' : theme.primary} />
-              </Pressable>
-              {heatmapAnimating ? (
-                <View style={styles.heatmapAnimInfo}>
-                  <View style={styles.heatmapAnimDots}>
-                    {Array.from({ length: HEATMAP_ANIM_STEPS }).map((_, i) => (
-                      <View key={i} style={[styles.heatmapAnimDot, i === heatmapAnimStep && styles.heatmapAnimDotActive]} />
-                    ))}
+            <View style={{ gap: 6 }}>
+              <View style={styles.heatmapAnimRow}>
+                <Pressable
+                  style={[styles.heatmapAnimBtn, heatmapAnimating && styles.heatmapAnimBtnActive]}
+                  onPress={() => { Haptics.selectionAsync(); setHeatmapAnimating(prev => !prev); }}
+                >
+                  <MaterialIcons name={heatmapAnimating ? 'pause' : 'play-arrow'} size={16} color={heatmapAnimating ? '#FFF' : theme.primary} />
+                </Pressable>
+                {heatmapAnimating ? (
+                  <View style={styles.heatmapAnimInfo}>
+                    <View style={styles.heatmapAnimDots}>
+                      {Array.from({ length: HEATMAP_ANIM_STEPS }).map((_, i) => (
+                        <View key={i} style={[styles.heatmapAnimDot, i <= (heatmapCumulative ? heatmapAnimStep : -1) && styles.heatmapAnimDotFilled, i === heatmapAnimStep && styles.heatmapAnimDotActive]} />
+                      ))}
+                    </View>
+                    <Text style={styles.heatmapAnimLabel}>
+                      {(() => {
+                        const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
+                        const total = periodMs[heatmapPeriod] || 0;
+                        const sliceDur = total / HEATMAP_ANIM_STEPS;
+                        const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
+                        if (heatmapCumulative) {
+                          const periodStart = new Date(Date.now() - total);
+                          const cumulativeEnd = new Date(periodStart.getTime() + (heatmapAnimStep + 1) * sliceDur);
+                          return `${fmt(periodStart)} \u2192 ${fmt(cumulativeEnd)}`;
+                        }
+                        const sliceStart = new Date(Date.now() - total + heatmapAnimStep * sliceDur);
+                        const sliceEnd = new Date(sliceStart.getTime() + sliceDur);
+                        return `${fmt(sliceStart)} - ${fmt(sliceEnd)}`;
+                      })()}
+                    </Text>
                   </View>
-                  <Text style={styles.heatmapAnimLabel}>
-                    {(() => {
-                      const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
-                      const total = periodMs[heatmapPeriod] || 0;
-                      const sliceDur = total / HEATMAP_ANIM_STEPS;
-                      const sliceStart = new Date(Date.now() - total + heatmapAnimStep * sliceDur);
-                      const sliceEnd = new Date(sliceStart.getTime() + sliceDur);
-                      const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
-                      return `${fmt(sliceStart)} - ${fmt(sliceEnd)}`;
-                    })()}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.heatmapAnimHint}>{language === 'fr' ? 'Evolution' : 'Evolution'}</Text>
-              )}
+                ) : (
+                  <Text style={styles.heatmapAnimHint}>{language === 'fr' ? 'Evolution' : 'Evolution'}</Text>
+                )}
+              </View>
+              {/* Cumulative toggle */}
+              <Pressable
+                style={[styles.heatmapCumulativeToggle, heatmapCumulative && styles.heatmapCumulativeToggleActive]}
+                onPress={() => { Haptics.selectionAsync(); setHeatmapCumulative(prev => !prev); }}
+              >
+                <MaterialIcons name={heatmapCumulative ? 'stacked-bar-chart' : 'bar-chart'} size={13} color={heatmapCumulative ? '#FFF' : theme.textSecondary} />
+                <Text style={[styles.heatmapCumulativeText, heatmapCumulative && styles.heatmapCumulativeTextActive]}>
+                  {language === 'fr' ? 'Cumulatif' : 'Cumulative'}
+                </Text>
+              </Pressable>
             </View>
           ) : null}
         </View>
@@ -2210,6 +2240,18 @@ export default function MapScreen() {
               {selected._isPublic && selected.itemType === 'players' && selected.userId && selected.userId !== user?.id ? (
                 <Pressable style={styles.selectedInviteBtn} onPress={() => handleInviteToMeetupMap(selected.userId, selected.name)}>
                   <MaterialIcons name="event" size={14} color={theme.primary} />
+                </Pressable>
+              ) : null}
+              {selected.itemType === 'terrains' ? (
+                <Pressable
+                  style={styles.selectedMeetupBtn}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelected(null);
+                    router.push({ pathname: '/meetup/new', params: { terrainId: selected.id } } as any);
+                  }}
+                >
+                  <MaterialIcons name="group-add" size={14} color={theme.success} />
                 </Pressable>
               ) : null}
             </View>
@@ -2666,6 +2708,7 @@ const styles = StyleSheet.create({
   importBtnSmall: { padding: 4 },
   premiumBadgeListMap: { width: 14, height: 14, borderRadius: 7, backgroundColor: '#A8B4C0' + '20', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#A8B4C0' + '40' },
   selectedInviteBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '10', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: theme.primary + '25' },
+  selectedMeetupBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: theme.success + '10', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: theme.success + '25' },
   // Meetup Picker (Map)
   meetupOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
   meetupPickerContent: { backgroundColor: theme.surface, borderRadius: 24, padding: 24 },
@@ -2888,4 +2931,9 @@ const styles = StyleSheet.create({
   heatmapAnimDotActive: { backgroundColor: theme.primary, transform: [{ scale: 1.2 }] },
   heatmapAnimLabel: { fontSize: 9, fontWeight: '600' as const, color: theme.textMuted },
   heatmapAnimHint: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted },
+  heatmapAnimDotFilled: { backgroundColor: theme.primary + '50' },
+  heatmapCumulativeToggle: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, alignSelf: 'flex-start' as const, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  heatmapCumulativeToggleActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  heatmapCumulativeText: { fontSize: 10, fontWeight: '700' as const, color: theme.textSecondary },
+  heatmapCumulativeTextActive: { color: '#FFF' },
 });
