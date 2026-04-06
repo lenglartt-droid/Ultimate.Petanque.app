@@ -98,7 +98,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -376,6 +376,7 @@ export default function HomeScreen() {
     if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
     if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
     s.push({ key: 'sponsor', data: ['sponsor'] });
+    // Season summary moved to History page
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
     s.push({ key: 'timeline', data: ['timeline'] });
     // Ad banner after timeline — first natural break point
@@ -589,6 +590,10 @@ export default function HomeScreen() {
             <SponsorBanner style={{}} page="home" />
           </View>
         );
+
+      // Season summary moved to History page
+      case 'seasonSummary':
+        return null;
 
       // ===== LEADERBOARD PROGRESS =====
       case 'progress':
@@ -901,6 +906,23 @@ const st = StyleSheet.create({
   meetupCreatorText: { fontSize: 10, fontWeight: '700', color: theme.primary },
   meetupInvitedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.accent + '12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   meetupInvitedText: { fontSize: 10, fontWeight: '700', color: theme.accent },
+
+  // SEASON SUMMARY
+  seasonCard: { borderRadius: 18, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 14 }, android: { elevation: 4 }, default: {} }) },
+  seasonCardGradient: { padding: 18, borderRadius: 18 },
+  seasonCardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 16 },
+  seasonCardIconBg: { width: 38, height: 38, borderRadius: 12, backgroundColor: 'rgba(96,165,250,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
+  seasonCardTitle: { fontSize: 16, fontWeight: '700' as const, color: '#FFFFFF' },
+  seasonCardSub: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
+  seasonEloBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  seasonEloText: { fontSize: 14, fontWeight: '800' as const },
+  seasonStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 14, paddingVertical: 14, paddingHorizontal: 8, marginBottom: 12 },
+  seasonStatItem: { flex: 1, alignItems: 'center' as const },
+  seasonStatValue: { fontSize: 20, fontWeight: '800' as const },
+  seasonStatLabel: { fontSize: 9, fontWeight: '600' as const, color: 'rgba(255,255,255,0.45)', marginTop: 2, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+  seasonStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.1)' },
+  seasonBarWrap: { flexDirection: 'row' as const, height: 6, borderRadius: 3, overflow: 'hidden' as const, backgroundColor: 'rgba(255,255,255,0.08)' },
+  seasonBarFill: { height: '100%' as any, borderRadius: 3 },
 
   // DIVIDERS
   divider: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 32, marginBottom: 20 },
