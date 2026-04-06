@@ -254,10 +254,11 @@ const pMarkerStyles = StyleSheet.create({
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean }) => (
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean }) => (
   <View style={styles.markerWrapper}>
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback]}>
-      <MaterialIcons name={icon as any} size={14} color="#FFF" />
+    {isActiveNow ? <View style={styles.activeNowPulse} /> : null}
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, isActiveNow && { borderColor: '#22C55E', borderWidth: 3, width: 36, height: 36, borderRadius: 18 }]}>
+      <MaterialIcons name={icon as any} size={isActiveNow ? 16 : 14} color="#FFF" />
     </View>
     {isVerified ? (
       <View style={styles.verifiedBadge}>
@@ -554,7 +555,7 @@ export default function MapScreen() {
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const { t, language } = useLanguage();
-  const { lat: paramLat, lng: paramLng, name: paramName } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string }>();
+  const { lat: paramLat, lng: paramLng, name: paramName, filter: paramFilter, activeNow: paramActiveNow } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string; filter?: string; activeNow?: string }>();
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -1253,6 +1254,46 @@ export default function MapScreen() {
     };
   }, []);
 
+  // Active now mode from directory
+  const [activeNowMode, setActiveNowMode] = useState(false);
+  const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
+
+  // Handle filter param from directory
+  useEffect(() => {
+    if (paramFilter === 'terrains') {
+      setFilter('terrains');
+    }
+    if (paramActiveNow === 'true') {
+      setActiveNowMode(true);
+      setFilter('terrains');
+      // Compute active terrain IDs from match history
+      const now = new Date();
+      const currentDow = now.getDay();
+      const currentHour = now.getHours();
+      const todayStr = now.toISOString().slice(0, 10);
+      const activeIds = new Set<string>();
+      terrains.forEach(tr => {
+        const terrainMatches = (allMatches || []).filter((m: any) => m.terrainId === tr.id);
+        let score = 0;
+        terrainMatches.forEach((m: any) => {
+          const d = new Date(m.date);
+          if (d.getDay() === currentDow) {
+            score += 3;
+            if (Math.abs(d.getHours() - currentHour) <= 2) score += 10;
+          }
+        });
+        // Tournaments today bonus
+        const todayTournaments = tournaments.filter(t => t.terrainId === tr.id && (t.status === 'En cours' || (t.status === '\u00c0 venir' && t.date && t.date.slice(0, 10) === todayStr)));
+        score += todayTournaments.length * 25;
+        if (score > 0) activeIds.add(tr.id);
+      });
+      setActiveNowTerrainIds(activeIds);
+    }
+  }, [paramFilter, paramActiveNow]);
+
+  // Access matches for active-now computation
+  const { matches: allMatches } = useAppData();
+
   // Handle navigation params: zoom to specific location from directory
   const handledParamRef = useRef<string | null>(null);
   useEffect(() => {
@@ -1399,7 +1440,7 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={false}
               >
-                <SingleMarkerView color={cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} />
+                <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)} />
               </MarkerComponent>
             );
           }
@@ -2210,6 +2251,7 @@ const styles = StyleSheet.create({
   // Fallback badge for players with terrain/club location
   fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
+  activeNowPulse: { position: 'absolute' as const, width: 48, height: 48, borderRadius: 24, backgroundColor: '#22C55E30', borderWidth: 2, borderColor: '#22C55E40' },
   // Cluster markers
   clusterOuter: {
     alignItems: 'center', justifyContent: 'center',
