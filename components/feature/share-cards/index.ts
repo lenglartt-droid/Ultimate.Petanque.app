@@ -12,3 +12,5 @@ export { default as ShareCardWeeklyDigest } from './ShareCardWeeklyDigest';
 export { default as ShareCardMilestone } from './ShareCardMilestone';
 export { default as ShareCardClub } from './ShareCardClub';
 export { default as ShareCardWatermark } from './ShareCardWatermark';
+export { default as ShareCardSeason } from './ShareCardSeason';
+export { default as ShareCardSeasonComparison } from './ShareCardSeasonComparison';

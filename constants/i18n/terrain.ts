@@ -17,6 +17,8 @@ export const terrainTranslations = {
     descriptionLabel: { fr: 'Description', en: 'Description' },
     facilities: { fr: 'Équipements', en: 'Facilities' },
     facilitiesSection: { fr: 'Équipements', en: 'Facilities' },
+    parking: { fr: 'Parking', en: 'Parking' },
+    parkingDesc: { fr: 'Places de stationnement disponibles', en: 'Parking spaces available' },
     photos: { fr: 'Photos', en: 'Photos' },
     courtsCount: { fr: 'Nombre de terrains', en: 'Number of courts' },
     courtsLabel: { fr: 'terrain', en: 'court' },

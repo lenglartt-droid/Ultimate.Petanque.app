@@ -414,8 +414,8 @@ export default function DirectoryScreen() {
       const matchesEloRank = filters.playerEloRank === 'all' || (() => {
         const elo = p.eloRating || ELO_INITIAL;
         switch (filters.playerEloRank) {
-          case 'bronze': return elo < 1000;
-          case 'silver': return elo >= 1000 && elo < 1200;
+          case 'bronze': return elo < 1100;
+          case 'silver': return elo >= 1100 && elo < 1200;
           case 'gold': return elo >= 1200 && elo < 1500;
           case 'diamond': return elo >= 1500 && elo < 1800;
           case 'master': return elo >= 1800;
@@ -617,7 +617,7 @@ export default function DirectoryScreen() {
             <FilterSection
               title={language === 'fr' ? 'Rang ELO' : 'ELO Rank'}
               options={['all', 'bronze', 'silver', 'gold', 'diamond', 'master']}
-              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1000)', silver: language === 'fr' ? 'Argent (1000+)' : 'Silver (1000+)', gold: language === 'fr' ? 'Or (1200+)' : 'Gold (1200+)', diamond: language === 'fr' ? 'Diamant (1500+)' : 'Diamond (1500+)', master: language === 'fr' ? 'Maitre (1800+)' : 'Master (1800+)' }}
+              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1100)', silver: language === 'fr' ? 'Argent (1100-1199)' : 'Silver (1100-1199)', gold: language === 'fr' ? 'Or (1200-1499)' : 'Gold (1200-1499)', diamond: language === 'fr' ? 'Diamant (1500-1799)' : 'Diamond (1500-1799)', master: language === 'fr' ? 'Maitre (1800+)' : 'Master (1800+)' }}
               value={filters.playerEloRank}
               onChange={(v) => setFilters(f => ({ ...f, playerEloRank: v }))}
               icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'auto-awesome' }}

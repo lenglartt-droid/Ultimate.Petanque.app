@@ -1,18 +1,30 @@
 /**
  * ShareCardSeason — Season summary card for social sharing.
- * Shows current ELO, wins/losses, win rate, best month, streak, sparkline.
+ * Shows current ELO, wins/losses, win rate, best month, streak, sparkline,
+ * monthly detail table, and all season info without truncation.
+ * Story format uses extended vertical space to fit everything.
  */
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Polyline as SvgPolyline, Line } from 'react-native-svg';
+import Svg, { Circle, Polyline as SvgPolyline, Line, Text as SvgText, G } from 'react-native-svg';
 import ShareCardWatermark from './ShareCardWatermark';
 import { CARD_COLOR_THEMES, type CardColorTheme, type ShareCardFormat } from '@/services/shareCardService';
 
 interface MonthlyElo {
   month: string;
   elo: number;
+}
+
+interface MonthlyDetail {
+  month: string;
+  matches: number;
+  wins: number;
+  losses: number;
+  winRate: number;
+  eloEnd: number;
+  eloDelta: number;
 }
 
 interface Props {
@@ -31,6 +43,7 @@ interface Props {
   bestMonth?: { name: string; delta: number; wins: number; matches: number } | null;
   streak?: { type: 'win' | 'loss'; count: number } | null;
   monthlyElo?: MonthlyElo[];
+  monthlyDetails?: MonthlyDetail[];
   clubName?: string;
   language?: 'fr' | 'en';
   colorTheme?: CardColorTheme;
@@ -40,7 +53,7 @@ interface Props {
 export default function ShareCardSeason({
   playerName, year, matchesPlayed, wins, losses, winRate, carreaux,
   eloRating, eloColor, eloRankLabel, eloIcon,
-  seasonPeak, bestMonth, streak, monthlyElo,
+  seasonPeak, bestMonth, streak, monthlyElo, monthlyDetails,
   clubName, language = 'fr', colorTheme = 'dark', format = 'square',
 }: Props) {
   const fr = language === 'fr';
@@ -49,16 +62,16 @@ export default function ShareCardSeason({
   const isLandscape = format === 'landscape';
   const ec = eloColor || '#94A3B8';
 
-  const renderSparkline = (w: number, h: number) => {
+  const renderSparkline = (w: number, h: number, showLabels?: boolean) => {
     if (!monthlyElo || monthlyElo.length < 2) return null;
     const vals = monthlyElo.map(m => m.elo);
     const minE = Math.min(...vals) - 5;
     const maxE = Math.max(...vals) + 5;
     const range = Math.max(maxE - minE, 1);
-    const padL = 2;
-    const padR = 2;
+    const padL = showLabels ? 4 : 2;
+    const padR = showLabels ? 4 : 2;
     const padT = 4;
-    const padB = 4;
+    const padB = showLabels ? 14 : 4;
     const iW = w - padL - padR;
     const iH = h - padT - padB;
     const stepX = iW / (monthlyElo.length - 1);
@@ -74,7 +87,42 @@ export default function ShareCardSeason({
         {pts.map((p, i) => (
           <Circle key={i} cx={p.x} cy={p.y} r={2.5} fill={ec} stroke="rgba(0,0,0,0.3)" strokeWidth={1} />
         ))}
+        {showLabels ? monthlyElo.map((m, i) => (
+          <SvgText key={`l${i}`} x={pts[i].x} y={h - 1} fontSize="7" fill="rgba(255,255,255,0.4)" textAnchor="middle" fontWeight="600">{m.month}</SvgText>
+        )) : null}
       </Svg>
+    );
+  };
+
+  // Helper: render monthly detail table rows
+  const renderMonthlyTable = (compact?: boolean) => {
+    if (!monthlyDetails || monthlyDetails.length === 0) return null;
+    const fs = compact ? 7 : 8;
+    const hfs = compact ? 6 : 7;
+    return (
+      <View style={{ marginTop: compact ? 4 : 6 }}>
+        {/* Header */}
+        <View style={{ flexDirection: 'row', paddingBottom: 3, borderBottomWidth: 0.5, borderBottomColor: 'rgba(255,255,255,0.1)', marginBottom: 2 }}>
+          <Text style={{ flex: 2, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textTransform: 'uppercase' }}>{fr ? 'Mois' : 'Month'}</Text>
+          <Text style={{ flex: 1, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>{fr ? 'M' : 'G'}</Text>
+          <Text style={{ flex: 1, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>{fr ? 'V/D' : 'W/L'}</Text>
+          <Text style={{ flex: 1, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>%</Text>
+          <Text style={{ flex: 1, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>ELO</Text>
+          <Text style={{ flex: 1, fontSize: hfs, fontWeight: '700', color: 'rgba(255,255,255,0.35)', textAlign: 'center' }}>{'\u0394'}</Text>
+        </View>
+        {monthlyDetails.map((m, idx) => (
+          <View key={idx} style={{ flexDirection: 'row', paddingVertical: compact ? 2 : 2.5, borderBottomWidth: idx < monthlyDetails.length - 1 ? 0.5 : 0, borderBottomColor: 'rgba(255,255,255,0.05)' }}>
+            <Text style={{ flex: 2, fontSize: fs, fontWeight: '600', color: 'rgba(255,255,255,0.7)' }}>{m.month}</Text>
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '600', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>{m.matches}</Text>
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '600', color: 'rgba(255,255,255,0.5)', textAlign: 'center' }}>{m.wins}/{m.losses}</Text>
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '700', color: m.winRate >= 50 ? '#22C55E' : m.matches > 0 ? '#EF4444' : 'rgba(255,255,255,0.3)', textAlign: 'center' }}>{m.matches > 0 ? `${m.winRate}%` : '-'}</Text>
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '700', color: 'rgba(255,255,255,0.7)', textAlign: 'center' }}>{m.eloEnd}</Text>
+            <Text style={{ flex: 1, fontSize: fs, fontWeight: '700', color: m.eloDelta > 0 ? '#22C55E' : m.eloDelta < 0 ? '#EF4444' : 'rgba(255,255,255,0.3)', textAlign: 'center' }}>
+              {m.eloDelta !== 0 ? `${m.eloDelta > 0 ? '+' : ''}${m.eloDelta}` : '-'}
+            </Text>
+          </View>
+        ))}
+      </View>
     );
   };
 
@@ -103,6 +151,21 @@ export default function ShareCardSeason({
                 </View>
               ) : null}
               {renderSparkline(120, 32)}
+              {/* Compact best month + streak in landscape */}
+              <View style={{ flexDirection: 'row', gap: 4, marginTop: 3 }}>
+                {bestMonth && bestMonth.delta > 0 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                    <MaterialIcons name="emoji-events" size={7} color="#F59E0B" />
+                    <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B' }}>{bestMonth.name.slice(0, 3)} +{bestMonth.delta}</Text>
+                  </View>
+                ) : null}
+                {streak && streak.count >= 2 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 4, paddingVertical: 2, borderRadius: 4 }}>
+                    <MaterialIcons name="local-fire-department" size={7} color={streak.type === 'win' ? '#22C55E' : '#EF4444'} />
+                    <Text style={{ fontSize: 7, fontWeight: '700', color: streak.type === 'win' ? '#22C55E' : '#EF4444' }}>{streak.count} {streak.type === 'win' ? 'W' : 'L'}</Text>
+                  </View>
+                ) : null}
+              </View>
             </View>
             <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -116,6 +179,8 @@ export default function ShareCardSeason({
                 <View style={st.statBoxSm}><Text style={{ fontSize: 14, fontWeight: '900', color: '#F8FAFC' }}>{matchesPlayed}</Text><Text style={{ fontSize: 6, fontWeight: '600', color: '#64748B' }}>{fr ? 'Matchs' : 'Games'}</Text></View>
                 {seasonPeak ? <View style={st.statBoxSm}><Text style={{ fontSize: 14, fontWeight: '900', color: '#F59E0B' }}>{seasonPeak}</Text><Text style={{ fontSize: 6, fontWeight: '600', color: '#64748B' }}>Peak</Text></View> : null}
               </View>
+              {/* Compact monthly table in landscape */}
+              {renderMonthlyTable(true)}
             </View>
           </View>
           <ShareCardWatermark variant="light" size="sm" />
@@ -125,43 +190,43 @@ export default function ShareCardSeason({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 16;
-  const titleSize = isStory ? 22 : 17;
-  const statFs = isStory ? 20 : 15;
+  const pad = isStory ? 22 : 14;
+  const titleSize = isStory ? 20 : 16;
+  const statFs = isStory ? 18 : 14;
 
   return (
     <View style={st.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: 'flex-start' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 12 : 8 }}>
-          <MaterialIcons name="calendar-today" size={isStory ? 14 : 12} color={ct.accent} />
-          <Text style={{ fontSize: isStory ? 11 : 9, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 10 : 6 }}>
+          <MaterialIcons name="calendar-today" size={isStory ? 14 : 11} color={ct.accent} />
+          <Text style={{ fontSize: isStory ? 10 : 8, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>
             {fr ? `BILAN SAISON ${year}` : `SEASON ${year} SUMMARY`}
           </Text>
         </View>
 
         {/* Player + ELO */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: isStory ? 16 : 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: isStory ? 12 : 8 }}>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: titleSize, fontWeight: '800', color: ct.textPrimary }}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
+            <Text style={{ fontSize: titleSize, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
             {clubName ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 3 }}>
-                <MaterialIcons name="home" size={10} color={ct.textSecondary} />
-                <Text style={{ fontSize: 10, fontWeight: '600', color: ct.textSecondary }}>{clubName}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 2 }}>
+                <MaterialIcons name="home" size={9} color={ct.textSecondary} />
+                <Text style={{ fontSize: 9, fontWeight: '600', color: ct.textSecondary }} numberOfLines={1}>{clubName}</Text>
               </View>
             ) : null}
           </View>
           <View style={{ alignItems: 'center' }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: ec + '20', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
-              <MaterialIcons name={(eloIcon as any) || 'diamond'} size={12} color={ec} />
-              <Text style={{ fontSize: 16, fontWeight: '900', color: ec }}>{eloRating}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: ec + '20', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10 }}>
+              <MaterialIcons name={(eloIcon as any) || 'diamond'} size={11} color={ec} />
+              <Text style={{ fontSize: 15, fontWeight: '900', color: ec }}>{eloRating}</Text>
             </View>
-            {eloRankLabel ? <Text style={{ fontSize: 8, fontWeight: '700', color: ec, marginTop: 2 }}>{eloRankLabel}</Text> : null}
+            {eloRankLabel ? <Text style={{ fontSize: 7, fontWeight: '700', color: ec, marginTop: 2 }}>{eloRankLabel}</Text> : null}
           </View>
         </View>
 
         {/* Stats grid */}
-        <View style={{ flexDirection: 'row', gap: 6, marginBottom: isStory ? 14 : 10 }}>
+        <View style={{ flexDirection: 'row', gap: 5, marginBottom: isStory ? 10 : 7 }}>
           {[
             { value: wins, label: fr ? 'Victoires' : 'Wins', color: '#22C55E' },
             { value: losses, label: fr ? 'Defaites' : 'Losses', color: '#EF4444' },
@@ -170,67 +235,70 @@ export default function ShareCardSeason({
           ].map((s, i) => (
             <View key={i} style={st.statBox}>
               <Text style={{ fontSize: statFs, fontWeight: '900', color: s.color }}>{s.value}</Text>
-              <Text style={{ fontSize: 7, fontWeight: '600', color: '#64748B', letterSpacing: 0.3, textTransform: 'uppercase' }}>{s.label}</Text>
+              <Text style={{ fontSize: 6, fontWeight: '600', color: '#64748B', letterSpacing: 0.3, textTransform: 'uppercase' }}>{s.label}</Text>
             </View>
           ))}
         </View>
 
-        {/* Sparkline */}
+        {/* ELO Sparkline with month labels */}
         {monthlyElo && monthlyElo.length >= 2 ? (
-          <View style={{ alignItems: 'center', marginBottom: isStory ? 14 : 10 }}>
-            {renderSparkline(isStory ? 260 : 200, isStory ? 44 : 36)}
-            <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textSecondary, marginTop: 3 }}>
-              {fr ? 'Evolution ELO' : 'ELO Evolution'}
+          <View style={{ alignItems: 'center', marginBottom: isStory ? 10 : 7 }}>
+            {renderSparkline(isStory ? 260 : 200, isStory ? 48 : 40, true)}
+            <Text style={{ fontSize: 7, fontWeight: '600', color: ct.textSecondary, marginTop: 2 }}>
+              {fr ? 'Progression ELO mensuelle' : 'Monthly ELO Progression'}
             </Text>
           </View>
         ) : null}
 
-        {/* Best month + Streak + Peak */}
-        <View style={{ flexDirection: 'row', gap: 6, marginBottom: isStory ? 10 : 6 }}>
+        {/* Best month + Streak + Peak row */}
+        <View style={{ flexDirection: 'row', gap: 5, marginBottom: isStory ? 10 : 6 }}>
           {bestMonth && bestMonth.delta > 0 ? (
-            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#F59E0B20' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
-                <MaterialIcons name="emoji-events" size={10} color="#F59E0B" />
-                <Text style={{ fontSize: 8, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'MEILLEUR MOIS' : 'BEST MONTH'}</Text>
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: isStory ? 8 : 6, borderWidth: 1, borderColor: '#F59E0B20' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                <MaterialIcons name="emoji-events" size={9} color="#F59E0B" />
+                <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'MEILLEUR MOIS' : 'BEST MONTH'}</Text>
               </View>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary, textTransform: 'capitalize' }}>{bestMonth.name}</Text>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: '#22C55E' }}>+{bestMonth.delta} ELO</Text>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: ct.textPrimary, textTransform: 'capitalize' }} numberOfLines={1}>{bestMonth.name}</Text>
+              <Text style={{ fontSize: 8, fontWeight: '600', color: '#22C55E' }}>+{bestMonth.delta} ELO \u2022 {bestMonth.wins}V/{bestMonth.matches}M</Text>
             </View>
           ) : null}
           {streak && streak.count >= 2 ? (
-            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: (streak.type === 'win' ? '#22C55E' : '#EF4444') + '20' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
-                <MaterialIcons name="local-fire-department" size={10} color={streak.type === 'win' ? '#22C55E' : '#EF4444'} />
-                <Text style={{ fontSize: 8, fontWeight: '700', color: streak.type === 'win' ? '#22C55E' : '#EF4444' }}>{fr ? 'SERIE' : 'STREAK'}</Text>
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: isStory ? 8 : 6, borderWidth: 1, borderColor: (streak.type === 'win' ? '#22C55E' : '#EF4444') + '20' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                <MaterialIcons name="local-fire-department" size={9} color={streak.type === 'win' ? '#22C55E' : '#EF4444'} />
+                <Text style={{ fontSize: 7, fontWeight: '700', color: streak.type === 'win' ? '#22C55E' : '#EF4444' }}>{fr ? 'SERIE' : 'STREAK'}</Text>
               </View>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary }}>{streak.count}</Text>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: streak.type === 'win' ? '#22C55E' : '#EF4444' }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: ct.textPrimary }}>{streak.count}</Text>
+              <Text style={{ fontSize: 8, fontWeight: '600', color: streak.type === 'win' ? '#22C55E' : '#EF4444' }}>
                 {streak.type === 'win' ? (fr ? 'victoires' : 'wins') : (fr ? 'defaites' : 'losses')}
               </Text>
             </View>
           ) : null}
           {seasonPeak ? (
-            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, padding: 8, borderWidth: 1, borderColor: '#F59E0B20' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
-                <MaterialIcons name="arrow-upward" size={10} color="#F59E0B" />
-                <Text style={{ fontSize: 8, fontWeight: '700', color: '#F59E0B' }}>PEAK</Text>
+            <View style={{ flex: 1, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, padding: isStory ? 8 : 6, borderWidth: 1, borderColor: '#F59E0B20' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                <MaterialIcons name="arrow-upward" size={9} color="#F59E0B" />
+                <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B' }}>PEAK</Text>
               </View>
-              <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary }}>{seasonPeak}</Text>
-              <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>ELO</Text>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: ct.textPrimary }}>{seasonPeak}</Text>
+              <Text style={{ fontSize: 8, fontWeight: '600', color: '#64748B' }}>ELO</Text>
             </View>
           ) : null}
         </View>
 
+        {/* Monthly Detail Table */}
+        {renderMonthlyTable(false)}
+
         {/* Win/Loss bar */}
-        <View style={{ flexDirection: 'row', height: 6, borderRadius: 3, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)', marginBottom: isStory ? 8 : 4 }}>
-          <View style={{ flex: Math.max(wins, 0.1), backgroundColor: '#22C55E', borderRadius: 3 }} />
-          <View style={{ flex: Math.max(losses, 0.1), backgroundColor: '#EF4444', borderRadius: 3 }} />
+        <View style={{ flexDirection: 'row', height: 5, borderRadius: 2.5, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)', marginTop: isStory ? 10 : 6, marginBottom: isStory ? 6 : 3 }}>
+          <View style={{ flex: Math.max(wins, 0.1), backgroundColor: '#22C55E', borderRadius: 2.5 }} />
+          <View style={{ flex: Math.max(losses, 0.1), backgroundColor: '#EF4444', borderRadius: 2.5 }} />
         </View>
 
         {/* Matches count */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 4 }}>
-          <MaterialIcons name="sports" size={10} color={ct.textSecondary} />
-          <Text style={{ fontSize: 9, fontWeight: '600', color: ct.textSecondary }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 3 }}>
+          <MaterialIcons name="sports" size={9} color={ct.textSecondary} />
+          <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textSecondary }}>
             {matchesPlayed} {fr ? 'matchs joues' : 'matches played'}
           </Text>
         </View>
@@ -243,6 +311,6 @@ export default function ShareCardSeason({
 
 const st = StyleSheet.create({
   card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
-  statBox: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  statBox: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statBoxSm: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
 });
