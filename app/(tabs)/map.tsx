@@ -641,6 +641,34 @@ export default function MapScreen() {
   const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState<(typeof partnerMarkers)[0] | null>(null);
 
+  // Compute top 3 most frequent cities from user data for quick search chips
+  const topCities = useMemo(() => {
+    const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
+    const addCity = (item: any) => {
+      const city = item.city || item.location?.city;
+      if (!city || typeof city !== 'string') return;
+      const existing = cityMap.get(city) || { count: 0 };
+      existing.count++;
+      if (!existing.lat && item.location?.latitude) {
+        existing.lat = item.location.latitude;
+        existing.lng = item.location.longitude;
+      }
+      cityMap.set(city, existing);
+    };
+    terrains.forEach(addCity);
+    clubs.forEach(addCity);
+    players.forEach(addCity);
+    tournaments.forEach(addCity);
+    publicTerrains.forEach(addCity);
+    publicClubs.forEach(addCity);
+    publicPlayers.forEach(addCity);
+    const sorted = Array.from(cityMap.entries())
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 3)
+      .map(([name, data]) => ({ name, lat: data.lat, lng: data.lng }));
+    return sorted;
+  }, [terrains, clubs, players, tournaments, publicTerrains, publicClubs, publicPlayers]);
+
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
     clubs: { label: t('map', 'clubs'), singular: t('map', 'clubSingular'), icon: 'home', color: theme.accent },
@@ -1585,9 +1613,10 @@ export default function MapScreen() {
                     mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
                   }
                 }},
-                { label: 'Paris', icon: 'location-city', onPress: () => { setSearch('Paris'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 48.8566, longitude: 2.3522, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
-                { label: 'Marseille', icon: 'location-city', onPress: () => { setSearch('Marseille'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 43.2965, longitude: 5.3698, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
-                { label: 'Lyon', icon: 'location-city', onPress: () => { setSearch('Lyon'); if (mapRef.current) mapRef.current.animateToRegion({ latitude: 45.7640, longitude: 4.8357, latitudeDelta: 0.15, longitudeDelta: 0.15 }, 500); }},
+                ...topCities.map(tc => ({
+                  label: tc.name, icon: 'location-city' as const,
+                  onPress: () => { setSearch(tc.name); if (tc.lat && tc.lng && mapRef.current) mapRef.current.animateToRegion({ latitude: tc.lat, longitude: tc.lng, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 500); },
+                })),
                 ].map((chip, i) => (
                   <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
                     <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />

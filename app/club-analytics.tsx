@@ -17,7 +17,7 @@ import Svg, { Rect, Line, Circle as SvgCircle, Polyline, Text as SvgText, G } fr
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
-import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics } from '@/services/clubAnalyticsService';
+import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics, TeamSuggestion } from '@/services/clubAnalyticsService';
 import { getEloRank } from '@/services/eloService';
 import { Platform } from 'react-native';
 
@@ -358,6 +358,149 @@ export default function ClubAnalyticsScreen() {
 
 
 
+          {/* Matchmaking Section */}
+          {analytics.matchmaking && (analytics.matchmaking.doublettes.length > 0 || analytics.matchmaking.triplettes.length > 0) ? (
+            <View style={s.sectionCard}>
+              <View style={s.sectionHeader}>
+                <View style={[s.sectionIconBox, { backgroundColor: '#10B981' + '15' }]}>
+                  <MaterialIcons name="groups" size={18} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.sectionTitle}>{fr ? 'Compositions optimales' : 'Optimal Lineups'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{fr ? 'Basees sur les stats et la complementarite' : 'Based on stats and complementarity'}</Text>
+                </View>
+              </View>
+
+              {/* Doublettes */}
+              {analytics.matchmaking.doublettes.length > 0 ? (
+                <View style={{ marginBottom: 16 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <MaterialIcons name="people" size={14} color={theme.accent} />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: theme.accent }}>{fr ? 'Doublettes' : 'Doubles'}</Text>
+                  </View>
+                  {analytics.matchmaking.doublettes.map((team, idx) => (
+                    <View key={`d-${idx}`} style={s.mmCard}>
+                      <View style={s.mmRankBadge}>
+                        <Text style={s.mmRankText}>#{idx + 1}</Text>
+                      </View>
+                      <View style={s.mmPlayersRow}>
+                        {team.players.map((p, pi) => {
+                          const rc = roleColors[p.role] || theme.textMuted;
+                          return (
+                            <View key={p.id} style={s.mmPlayer}>
+                              <View style={s.mmPlayerAvatar}>
+                                {p.avatar ? (
+                                  <Image source={{ uri: p.avatar }} style={{ width: 32, height: 32, borderRadius: 10 }} contentFit="cover" />
+                                ) : (
+                                  <Text style={s.mmPlayerAvatarText}>{p.name.charAt(0)}</Text>
+                                )}
+                              </View>
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={s.mmPlayerName} numberOfLines={1}>{p.name}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                  <View style={[s.mmRoleBadge, { backgroundColor: rc + '12' }]}>
+                                    <MaterialIcons name={p.role === 'Tireur' ? 'gps-fixed' : p.role === 'Pointeur' ? 'adjust' : 'swap-horiz'} size={8} color={rc} />
+                                    <Text style={[s.mmRoleBadgeText, { color: rc }]}>{p.role}</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary }}>{p.elo}</Text>
+                                </View>
+                              </View>
+                              {pi < team.players.length - 1 ? <MaterialIcons name="add" size={14} color={theme.textMuted} /> : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      <View style={s.mmBottomRow}>
+                        <View style={s.mmScoreCircle}>
+                          <Text style={[s.mmScoreText, { color: team.score >= 70 ? '#22C55E' : team.score >= 50 ? '#F59E0B' : theme.textSecondary }]}>{team.score}</Text>
+                          <Text style={s.mmScoreLabel}>Score</Text>
+                        </View>
+                        <View style={s.mmStatsCol}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialIcons name="diamond" size={10} color="#8B5CF6" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>{fr ? 'ELO moy.' : 'Avg ELO'}: <Text style={{ fontWeight: '800', color: '#8B5CF6' }}>{team.avgElo}</Text></Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                            {team.strengths.map((str, si) => (
+                              <View key={si} style={s.mmStrengthBadge}>
+                                <MaterialIcons name="check-circle" size={8} color="#22C55E" />
+                                <Text style={s.mmStrengthText}>{str}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {/* Triplettes */}
+              {analytics.matchmaking.triplettes.length > 0 ? (
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                    <MaterialIcons name="groups" size={14} color="#7C3AED" />
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'Triplettes' : 'Triples'}</Text>
+                  </View>
+                  {analytics.matchmaking.triplettes.map((team, idx) => (
+                    <View key={`t-${idx}`} style={s.mmCard}>
+                      <View style={[s.mmRankBadge, { backgroundColor: '#7C3AED15' }]}>
+                        <Text style={[s.mmRankText, { color: '#7C3AED' }]}>#{idx + 1}</Text>
+                      </View>
+                      <View style={s.mmPlayersRow}>
+                        {team.players.map((p, pi) => {
+                          const rc = roleColors[p.role] || theme.textMuted;
+                          return (
+                            <View key={p.id} style={s.mmPlayer}>
+                              <View style={s.mmPlayerAvatar}>
+                                {p.avatar ? (
+                                  <Image source={{ uri: p.avatar }} style={{ width: 32, height: 32, borderRadius: 10 }} contentFit="cover" />
+                                ) : (
+                                  <Text style={s.mmPlayerAvatarText}>{p.name.charAt(0)}</Text>
+                                )}
+                              </View>
+                              <View style={{ flex: 1, minWidth: 0 }}>
+                                <Text style={s.mmPlayerName} numberOfLines={1}>{p.name}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                                  <View style={[s.mmRoleBadge, { backgroundColor: rc + '12' }]}>
+                                    <MaterialIcons name={p.role === 'Tireur' ? 'gps-fixed' : p.role === 'Pointeur' ? 'adjust' : 'swap-horiz'} size={8} color={rc} />
+                                    <Text style={[s.mmRoleBadgeText, { color: rc }]}>{p.role}</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textSecondary }}>{p.elo}</Text>
+                                </View>
+                              </View>
+                              {pi < team.players.length - 1 ? <MaterialIcons name="add" size={14} color={theme.textMuted} /> : null}
+                            </View>
+                          );
+                        })}
+                      </View>
+                      <View style={s.mmBottomRow}>
+                        <View style={s.mmScoreCircle}>
+                          <Text style={[s.mmScoreText, { color: team.score >= 70 ? '#22C55E' : team.score >= 50 ? '#F59E0B' : theme.textSecondary }]}>{team.score}</Text>
+                          <Text style={s.mmScoreLabel}>Score</Text>
+                        </View>
+                        <View style={s.mmStatsCol}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <MaterialIcons name="diamond" size={10} color="#8B5CF6" />
+                            <Text style={{ fontSize: 11, fontWeight: '600', color: theme.textSecondary }}>{fr ? 'ELO moy.' : 'Avg ELO'}: <Text style={{ fontWeight: '800', color: '#8B5CF6' }}>{team.avgElo}</Text></Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginTop: 4 }}>
+                            {team.strengths.map((str, si) => (
+                              <View key={si} style={s.mmStrengthBadge}>
+                                <MaterialIcons name="check-circle" size={8} color="#22C55E" />
+                                <Text style={s.mmStrengthText}>{str}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          ) : null}
+
           {/* Member Analytics */}
           {analytics.memberAnalytics && analytics.memberAnalytics.length > 0 ? (
             <View style={s.sectionCard}>
@@ -620,4 +763,23 @@ const s = StyleSheet.create({
   maStatLabel: { fontSize: 8, fontWeight: '600', color: theme.textMuted, marginTop: 1 },
   maActivityRow: { flexDirection: 'row', alignItems: 'flex-end', paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.border + '60' },
   maRoleTrendRow: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, paddingTop: 6, borderTopWidth: 1, borderTopColor: theme.border + '60', marginTop: 4 },
+
+  // Matchmaking
+  mmCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: theme.border },
+  mmRankBadge: { position: 'absolute' as const, top: 8, right: 8, backgroundColor: '#10B98115', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  mmRankText: { fontSize: 11, fontWeight: '800' as const, color: '#10B981' },
+  mmPlayersRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 10, paddingRight: 40 },
+  mmPlayer: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8 },
+  mmPlayerAvatar: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
+  mmPlayerAvatarText: { fontSize: 13, fontWeight: '700' as const, color: theme.primary },
+  mmPlayerName: { fontSize: 12, fontWeight: '600' as const, color: theme.textPrimary },
+  mmRoleBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 6 },
+  mmRoleBadgeText: { fontSize: 9, fontWeight: '700' as const },
+  mmBottomRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '60' },
+  mmScoreCircle: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, borderColor: theme.border, alignItems: 'center' as const, justifyContent: 'center' as const },
+  mmScoreText: { fontSize: 16, fontWeight: '900' as const },
+  mmScoreLabel: { fontSize: 7, fontWeight: '600' as const, color: theme.textMuted, textTransform: 'uppercase' as const },
+  mmStatsCol: { flex: 1 },
+  mmStrengthBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#22C55E08', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, borderWidth: 1, borderColor: '#22C55E15' },
+  mmStrengthText: { fontSize: 9, fontWeight: '600' as const, color: '#22C55E' },
 });

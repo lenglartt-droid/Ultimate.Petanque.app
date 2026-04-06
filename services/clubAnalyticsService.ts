@@ -52,6 +52,8 @@ export interface ClubAnalytics {
   nationalAvgMatchesPerMember: number;
   // Individual member analytics
   memberAnalytics: MemberAnalytics[];
+  // Matchmaking
+  matchmaking: { doublettes: TeamSuggestion[]; triplettes: TeamSuggestion[] };
 }
 
 export async function fetchClubAnalytics(
@@ -278,6 +280,9 @@ export async function fetchClubAnalytics(
     };
   }).sort((a, b) => b.contributionScore - a.contributionScore);
 
+  // Matchmaking: compute optimal doublettes and triplettes
+  const matchmaking = computeMatchmaking(memberAnalytics);
+
   return {
     totalMembers: members.length,
     activeMembersThisMonth: activeMemberIds.size,
@@ -297,5 +302,123 @@ export async function fetchClubAnalytics(
     nationalAvgWinRate,
     nationalAvgMatchesPerMember,
     memberAnalytics,
+    matchmaking,
+  };
+}
+
+// ============================================
+// MATCHMAKING ENGINE
+// ============================================
+
+export interface TeamSuggestion {
+  players: Array<{ id: string; name: string; role: string; elo: number; winRate: number; tirRate: number; pointRate: number; avatar?: string }>;
+  format: 'doublette' | 'triplette';
+  score: number; // 0-100 composite
+  strengths: string[];
+  avgElo: number;
+  roleBalance: string; // e.g. "Tireur + Pointeur"
+}
+
+function computeMatchmaking(members: MemberAnalytics[]): { doublettes: TeamSuggestion[]; triplettes: TeamSuggestion[] } {
+  // Only consider active members with at least some match data
+  const eligible = members.filter(m => m.matchesPlayed >= 2).sort((a, b) => b.contributionScore - a.contributionScore);
+  if (eligible.length < 2) return { doublettes: [], triplettes: [] };
+
+  const toPlayer = (m: MemberAnalytics) => ({
+    id: m.id, name: m.name, role: m.role, elo: m.elo,
+    winRate: m.winRate, tirRate: m.tirRate, pointRate: m.pointRate, avatar: m.avatar,
+  });
+
+  // Score a team based on role complementarity, ELO, and skill balance
+  const scoreTeam = (team: MemberAnalytics[]): { score: number; strengths: string[]; roleBalance: string } => {
+    const roles = team.map(p => p.role);
+    const avgElo = Math.round(team.reduce((s, p) => s + p.elo, 0) / team.length);
+    const avgWin = Math.round(team.reduce((s, p) => s + p.winRate, 0) / team.length);
+    const avgTir = Math.round(team.reduce((s, p) => s + p.tirRate, 0) / team.length);
+    const avgPt = Math.round(team.reduce((s, p) => s + p.pointRate, 0) / team.length);
+    const strengths: string[] = [];
+
+    // 1. Role complementarity (0-30 pts)
+    let roleScore = 0;
+    const uniqueRoles = new Set(roles);
+    if (team.length === 2) {
+      // Doublette: ideal = Tireur + Pointeur or Tireur + Milieu or Pointeur + Milieu
+      if (uniqueRoles.size === 2) { roleScore = 30; strengths.push('Roles complementaires'); }
+      else if (roles.every(r => r === 'Milieu')) { roleScore = 18; strengths.push('Polyvalence'); }
+      else { roleScore = 10; }
+    } else {
+      // Triplette: ideal = 1 Tireur + 1 Pointeur + 1 Milieu
+      if (uniqueRoles.size === 3) { roleScore = 30; strengths.push('Trio ideal'); }
+      else if (uniqueRoles.size === 2) { roleScore = 20; }
+      else { roleScore = 8; }
+    }
+
+    // 2. Combined ELO strength (0-25 pts)
+    const eloScore = Math.min(25, Math.round(((avgElo - 900) / 400) * 25));
+    if (avgElo >= 1300) strengths.push('ELO eleve');
+
+    // 3. Win rate (0-25 pts)
+    const winScore = Math.min(25, Math.round((avgWin / 100) * 25));
+    if (avgWin >= 60) strengths.push('Taux victoire fort');
+
+    // 4. Skill coverage — has both good tir AND good point (0-20 pts)
+    const hasTireur = team.some(p => p.tirRate >= 50);
+    const hasPointeur = team.some(p => p.pointRate >= 50);
+    let skillScore = 0;
+    if (hasTireur && hasPointeur) { skillScore = 20; strengths.push('Tir + Point couverts'); }
+    else if (hasTireur || hasPointeur) { skillScore = 10; }
+    else { skillScore = 5; }
+
+    const total = Math.min(100, roleScore + eloScore + winScore + skillScore);
+    const roleBalance = roles.join(' + ');
+
+    return { score: total, strengths: strengths.slice(0, 3), roleBalance };
+  };
+
+  // Generate doublettes (top combinations, max 5)
+  const doublettes: TeamSuggestion[] = [];
+  const maxDoub = Math.min(eligible.length, 8); // limit pairs to check
+  for (let i = 0; i < maxDoub; i++) {
+    for (let j = i + 1; j < maxDoub; j++) {
+      const team = [eligible[i], eligible[j]];
+      const { score, strengths, roleBalance } = scoreTeam(team);
+      doublettes.push({
+        players: team.map(toPlayer),
+        format: 'doublette',
+        score,
+        strengths,
+        avgElo: Math.round(team.reduce((s, p) => s + p.elo, 0) / 2),
+        roleBalance,
+      });
+    }
+  }
+  doublettes.sort((a, b) => b.score - a.score);
+
+  // Generate triplettes (top combinations, max 5)
+  const triplettes: TeamSuggestion[] = [];
+  if (eligible.length >= 3) {
+    const maxTrip = Math.min(eligible.length, 7);
+    for (let i = 0; i < maxTrip; i++) {
+      for (let j = i + 1; j < maxTrip; j++) {
+        for (let k = j + 1; k < maxTrip; k++) {
+          const team = [eligible[i], eligible[j], eligible[k]];
+          const { score, strengths, roleBalance } = scoreTeam(team);
+          triplettes.push({
+            players: team.map(toPlayer),
+            format: 'triplette',
+            score,
+            strengths,
+            avgElo: Math.round(team.reduce((s, p) => s + p.elo, 0) / 3),
+            roleBalance,
+          });
+        }
+      }
+    }
+    triplettes.sort((a, b) => b.score - a.score);
+  }
+
+  return {
+    doublettes: doublettes.slice(0, 5),
+    triplettes: triplettes.slice(0, 5),
   };
 }
