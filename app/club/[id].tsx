@@ -41,7 +41,7 @@ import { fetchGeoLeaderboard, GeoEntry } from '@/services/geoLeaderboardService'
 import { getCountryFlag, getContinentFlag, getContinentLabel, getContinent } from '@/constants/geoData';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
-import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest } from '@/services/clubClaimService';
+import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest, submitVerificationRequest } from '@/services/clubClaimService';
 import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
 import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
 import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
@@ -533,13 +533,20 @@ export default function ClubDetailScreen() {
               <MaterialIcons name="edit" size={22} color={theme.primary} />
             </Pressable>
           )}
-          {/* Analytics button for owner/co-admin */}
-          {canEdit && !isSharedItem ? (
+          {/* Analytics button for owner/co-admin — only if club is verified */}
+          {canEdit && !isSharedItem && club?.isVerified ? (
             <Pressable
               style={[styles.editButton, { backgroundColor: '#8B5CF610' }]}
               onPress={() => router.push({ pathname: '/club-analytics', params: { id: id! } } as any)}
             >
               <MaterialIcons name="analytics" size={22} color="#8B5CF6" />
+            </Pressable>
+          ) : canEdit && !isSharedItem && !club?.isVerified ? (
+            <Pressable
+              style={[styles.editButton, { backgroundColor: '#F59E0B10' }]}
+              onPress={() => showAlert(t('club', 'analyticsVerifiedOnly'), t('club', 'analyticsVerifiedDesc'))}
+            >
+              <MaterialIcons name="analytics" size={22} color="#F59E0B" />
             </Pressable>
           ) : null}
           {canEdit && (
@@ -613,7 +620,7 @@ export default function ClubDetailScreen() {
             ) : null}
           </View>
           {/* Owner / Co-admin badge */}
-          {user?.id && club.userId === user.id ? (
+          {user?.id && club.userId === user.id && club.isVerified ? (
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#7C3AED12', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 14, marginBottom: 6, borderWidth: 1, borderColor: '#7C3AED25' }}>
               <MaterialIcons name="admin-panel-settings" size={14} color="#7C3AED" />
               <Text style={{ fontSize: 12, fontWeight: '700', color: '#7C3AED' }}>{language === 'fr' ? 'Proprietaire' : 'Owner'}</Text>
@@ -1192,7 +1199,97 @@ export default function ClubDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* Claim Club Button - for non-owners */}
+        {/* Verification Checklist — for owner of unverified club */}
+        {canEdit && !isSharedItem && !club.isVerified && user?.id && club.userId === user.id ? (() => {
+          const matchCount = 0; // Will be computed from context if needed
+          const criteria = [
+            { key: 'address', met: !!club.address, label: t('club', 'checklistAddress'), icon: 'place' },
+            { key: 'members', met: club.membersCount >= 2, label: t('club', 'checklistMembers'), icon: 'people' },
+            { key: 'desc', met: !!club.description, label: t('club', 'checklistDescription'), icon: 'description' },
+            { key: 'contact', met: !!(club.contactEmail || club.contactPhone), label: t('club', 'checklistContact'), icon: 'contact-phone' },
+            { key: 'logo', met: !!club.logo, label: t('club', 'checklistLogo'), icon: 'image' },
+            { key: 'proof', met: claimStatus === 'pending' || claimStatus === 'accepted', label: t('club', 'checklistProof'), icon: 'verified-user' },
+          ];
+          const metCount = criteria.filter(c => c.met).length;
+          const progress = Math.round((metCount / criteria.length) * 100);
+          const allInfoMet = criteria.filter(c => c.key !== 'proof').every(c => c.met);
+          const proofSent = claimStatus === 'pending' || claimStatus === 'accepted';
+          return (
+            <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
+              <View style={{ backgroundColor: theme.surface, borderRadius: 20, padding: 18, borderWidth: 1.5, borderColor: '#F59E0B30', ...theme.shadows.card }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+                  <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="checklist" size={22} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{t('club', 'verificationChecklist')}</Text>
+                    <Text style={{ fontSize: 11, color: theme.textSecondary, marginTop: 1 }}>{t('club', 'verificationChecklistDesc')}</Text>
+                  </View>
+                  <View style={{ backgroundColor: progress === 100 ? '#10B98115' : '#F59E0B15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '800', color: progress === 100 ? '#10B981' : '#F59E0B' }}>{progress}%</Text>
+                  </View>
+                </View>
+                {/* Progress bar */}
+                <View style={{ height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden', marginBottom: 14 }}>
+                  <View style={{ height: '100%', width: `${Math.max(3, progress)}%`, backgroundColor: progress === 100 ? '#10B981' : '#F59E0B', borderRadius: 3 }} />
+                </View>
+                {/* Criteria items */}
+                <View style={{ gap: 8 }}>
+                  {criteria.map(c => (
+                    <View key={c.key} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c.met ? '#10B98115' : theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={c.met ? 'check-circle' : (c.icon as any)} size={16} color={c.met ? '#10B981' : theme.textMuted} />
+                      </View>
+                      <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: c.met ? '#10B981' : theme.textPrimary, textDecorationLine: c.met ? 'line-through' : 'none' }}>{c.label}</Text>
+                      {!c.met && c.key !== 'proof' ? (
+                        <Pressable style={{ paddingHorizontal: 10, paddingVertical: 4, backgroundColor: theme.primary + '12', borderRadius: 8 }} onPress={() => router.push(`/club/edit/${id}` as any)}>
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: theme.primary }}>{language === 'fr' ? 'Completer' : 'Complete'}</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+                {/* Proof upload — final step */}
+                {allInfoMet && !proofSent ? (
+                  <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border }}>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: '#F59E0B', marginBottom: 8 }}>{t('club', 'checklistProofDesc')}</Text>
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 14, borderRadius: 14 }}
+                      onPress={() => setShowClaimModal(true)}
+                    >
+                      <MaterialIcons name="upload-file" size={18} color="#FFF" />
+                      <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{t('club', 'checklistSubmitProof')}</Text>
+                    </Pressable>
+                  </View>
+                ) : proofSent && claimStatus === 'pending' ? (
+                  <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="schedule" size={18} color="#F59E0B" />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#F59E0B' }}>{t('club', 'checklistProofPending')}</Text>
+                  </View>
+                ) : null}
+                {/* Analytics advantage teaser */}
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 8 }}>{t('club', 'analyticsAdvantages')}</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {[
+                      { icon: 'bar-chart', label: language === 'fr' ? 'Stats detaillees' : 'Detailed stats' },
+                      { icon: 'groups', label: 'Matchmaking' },
+                      { icon: 'compare-arrows', label: language === 'fr' ? 'Comparaison nationale' : 'National comparison' },
+                      { icon: 'file-download', label: language === 'fr' ? 'Export CSV/PDF' : 'CSV/PDF export' },
+                    ].map((a, i) => (
+                      <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#8B5CF608', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1, borderColor: '#8B5CF615' }}>
+                        <MaterialIcons name={a.icon as any} size={11} color="#8B5CF6" />
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#8B5CF6' }}>{a.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              </View>
+            </Animated.View>
+          );
+        })() : null}
+
+        {/* Claim Club Button - for non-owners (sends to admin) */}
         {user?.id && club.userId && club.userId !== user.id && !isSharedItem ? (
           <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
             {claimStatus === 'pending' ? (

@@ -55,7 +55,7 @@ export interface MatchPrediction {
   estimatedDeltaIfBWins: number;
 }
 
-export type EloRankTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'master';
+export type EloRankTier = 'bronze' | 'silver' | 'gold' | 'diamond' | 'master' | 'grand_master';
 
 export interface EloRankInfo {
   tier: EloRankTier;
@@ -76,7 +76,8 @@ export const ELO_SEASON_COMPRESSION = 0.75;
 export const ELO_PLACEMENT_MATCHES = 10;
 
 export const ELO_RANKS: EloRankInfo[] = [
-  { tier: 'master', label: { fr: 'Maitre', en: 'Master' }, color: '#9333EA', icon: 'auto-awesome', minElo: 1800 },
+  { tier: 'grand_master', label: { fr: 'Grand Maitre', en: 'Grand Master' }, color: '#FFD700', icon: 'auto-awesome', minElo: 2000 },
+  { tier: 'master', label: { fr: 'Maitre', en: 'Master' }, color: '#9333EA', icon: 'military-tech', minElo: 1800 },
   { tier: 'diamond', label: { fr: 'Diamant', en: 'Diamond' }, color: '#06B6D4', icon: 'diamond', minElo: 1500 },
   { tier: 'gold', label: { fr: 'Or', en: 'Gold' }, color: '#F59E0B', icon: 'emoji-events', minElo: 1200 },
   { tier: 'silver', label: { fr: 'Argent', en: 'Silver' }, color: '#94A3B8', icon: 'workspace-premium', minElo: 1100 },

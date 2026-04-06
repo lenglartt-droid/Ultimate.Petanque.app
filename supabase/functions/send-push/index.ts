@@ -1514,6 +1514,75 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // MERGE_UNDO: Notify owner when admin undoes a merge (item re-created)
+    // ============================================================
+    else if (type === 'merge_undo') {
+      const { targetUserId, itemName, itemType, targetName } = payload || {};
+      if (!targetUserId || !itemName) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/itemName' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const typeLabels: Record<string, { fr: string }> = {
+          player: { fr: 'joueur' },
+          club: { fr: 'club' },
+          terrain: { fr: 'terrain' },
+          tournament: { fr: 'tournoi' },
+        };
+        const typeLabel = typeLabels[itemType]?.fr || itemType;
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F504} Fusion annulee : ${itemName}`,
+          `La fusion de votre ${typeLabel} "${itemName}" dans "${targetName}" a ete annulee par un administrateur. Votre fiche est de nouveau disponible.`,
+          { type: 'merge_undo', itemType, itemName },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // CLUB_INVITATION: Notify player when invited to join a club
+    // ============================================================
+    else if (type === 'club_invitation') {
+      const { targetUserId, title: invTitle, body: invBody, data: invData } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          invTitle || '\u{1F3E2} Invitation club',
+          invBody || 'Vous avez recu une invitation a rejoindre un club.',
+          invData || { type: 'club_invitation' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
