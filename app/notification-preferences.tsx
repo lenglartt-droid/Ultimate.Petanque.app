@@ -160,7 +160,12 @@ export default function NotificationPreferencesScreen() {
   useEffect(() => {
     if (!user?.id) return;
     loadNotificationPreferences().then((p) => {
-      setPrefs(p);
+      // Strip any unknown keys from loaded prefs to prevent stale DB data
+      const cleaned: NotificationPreferences = { ...DEFAULT_NOTIFICATION_PREFERENCES };
+      for (const key of Object.keys(DEFAULT_NOTIFICATION_PREFERENCES) as (keyof NotificationPreferences)[]) {
+        cleaned[key] = p[key] ?? DEFAULT_NOTIFICATION_PREFERENCES[key];
+      }
+      setPrefs(cleaned);
       setLoaded(true);
     });
   }, [user?.id]);
@@ -174,16 +179,18 @@ export default function NotificationPreferencesScreen() {
 
   const handleToggleAll = (enabled: boolean) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const updated = { ...prefs };
-    for (const key of Object.keys(updated) as (keyof NotificationPreferences)[]) {
+    const updated: NotificationPreferences = { ...DEFAULT_NOTIFICATION_PREFERENCES };
+    for (const key of Object.keys(DEFAULT_NOTIFICATION_PREFERENCES) as (keyof NotificationPreferences)[]) {
       updated[key] = enabled;
     }
     setPrefs(updated);
     saveNotificationPreferences(updated).catch(() => {});
   };
 
-  const totalItems = Object.keys(prefs).length;
-  const enabledCount = Object.values(prefs).filter(Boolean).length;
+  // Derive counts strictly from NOTIF_CATEGORIES UI items to avoid stale DB keys
+  const allCategoryKeys = NOTIF_CATEGORIES.flatMap(cat => cat.items.map(i => i.key));
+  const totalItems = allCategoryKeys.length;
+  const enabledCount = allCategoryKeys.filter(k => prefs[k]).length;
 
   return (
     <SafeAreaView edges={['top']} style={s.container}>

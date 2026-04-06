@@ -33,7 +33,8 @@ import { useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { logAdminAction } from '@/services/adminActivityLogService';
 import { detectDuplicateClubs, pickBestClub, getClubMergePreview, mergeClubs, getClubMergeHistory, getClubHealthTrends, ClubDuplicateGroup } from '@/services/adminClubService';
-import { getAllPendingClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest, getClaimProcessingStats, sendVerificationDecisionNotification } from '@/services/clubClaimService';
+import { getAllPendingClaims, acceptClubClaim, declineClubClaim, ClubClaimRequest, getClaimProcessingStats, sendVerificationDecisionNotification, getClaimHistory } from '@/services/clubClaimService';
+import { getAllMergeLogsAdmin, adminUndoMerge, MergeLog } from '@/services/mergeHistoryService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { ClubsSkeleton } from '@/components/ui/AdminSkeleton';
@@ -143,6 +144,19 @@ export default function AdminClubsScreen() {
   const [healthTrends, setHealthTrends] = useState<{ month: string; score: number; matches: number; members: number; color: string }[]>([]);
   const [healthDirection, setHealthDirection] = useState<'improving' | 'declining' | 'stable'>('stable');
   const [loadingTrends2, setLoadingTrends2] = useState(false);
+
+  // Claim history (processed)
+  const [claimHistory, setClaimHistory] = useState<(ClubClaimRequest & { clubName?: string })[]>([]);
+  const [showClaimHistory, setShowClaimHistory] = useState(false);
+  const [claimHistoryTab, setClaimHistoryTab] = useState<'pending' | 'history'>('pending');
+
+  // Admin merge logs (all users)
+  const [adminMergeLogs, setAdminMergeLogs] = useState<MergeLog[]>([]);
+  const [showAdminMergeLogs, setShowAdminMergeLogs] = useState(false);
+  const [undoingMergeId, setUndoingMergeId] = useState<string | null>(null);
+
+  // Deleting club state
+  const [deletingClubId, setDeletingClubId] = useState<string | null>(null);
 
   // Load match counts for enhanced verification
   const loadClubMatchCounts = useCallback(async () => {
@@ -345,7 +359,6 @@ export default function AdminClubsScreen() {
   // Load pending claims
   const loadPendingClaims = useCallback(async () => {
     const { claims } = await getAllPendingClaims();
-    // Enrich with club names
     const enriched = claims.map(c => {
       const club = clubs.find(cl => cl.id === c.clubId);
       return { ...c, clubName: club?.name || c.clubId.substring(0, 8) };
@@ -353,14 +366,52 @@ export default function AdminClubsScreen() {
     setPendingClaims(enriched);
   }, [clubs]);
 
+  // Load claim history (processed)
+  const loadClaimHistory = useCallback(async () => {
+    const { claims } = await getClaimHistory();
+    const enriched = claims.map(c => {
+      const club = clubs.find(cl => cl.id === c.clubId);
+      return { ...c, clubName: club?.name || c.clubId.substring(0, 8) };
+    });
+    setClaimHistory(enriched);
+  }, [clubs]);
+
+  // Load all merge logs for admin
+  const loadAdminMergeLogs = useCallback(async () => {
+    const { logs } = await getAllMergeLogsAdmin();
+    setAdminMergeLogs(logs);
+  }, []);
+
+  // Delete club handler
+  const handleAdminDeleteClub = useCallback(async (club: AdminClub) => {
+    Alert.alert(
+      fr ? 'Supprimer le club' : 'Delete Club',
+      fr ? `Supprimer definitivement "${club.name}" ? Cette action est irreversible.` : `Permanently delete "${club.name}"? This action is irreversible.`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: fr ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+          setDeletingClubId(club.id);
+          const supabase = getSupabaseClient();
+          const { error } = await supabase.from('clubs').delete().eq('id', club.id);
+          setDeletingClubId(null);
+          if (error) { showAlert(fr ? 'Erreur' : 'Error', error.message); return; }
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          setClubs(prev => prev.filter(c => c.id !== club.id));
+          if (detailClub?.id === club.id) setDetailClub(null);
+          logAdminAction({ actionType: 'club_unverify', targetType: 'club', targetId: club.id, targetName: club.name, actionDetail: `Deleted club: ${club.name} (${club.city})` });
+        }},
+      ]
+    );
+  }, [fr, showAlert, detailClub]);
+
   // Load claim stats
   const loadClaimStats = useCallback(async () => {
     const stats = await getClaimProcessingStats();
     setClaimStats(stats);
   }, []);
 
-  useEffect(() => { loadClubs(); loadClubMatchCounts(); loadMergeHistory(); loadClaimStats(); }, [loadClubs, loadClubMatchCounts, loadMergeHistory, loadClaimStats]);
-  useEffect(() => { if (clubs.length > 0) loadPendingClaims(); }, [clubs.length, loadPendingClaims]);
+  useEffect(() => { loadClubs(); loadClubMatchCounts(); loadMergeHistory(); loadClaimStats(); loadAdminMergeLogs(); }, [loadClubs, loadClubMatchCounts, loadMergeHistory, loadClaimStats, loadAdminMergeLogs]);
+  useEffect(() => { if (clubs.length > 0) { loadPendingClaims(); loadClaimHistory(); } }, [clubs.length, loadPendingClaims, loadClaimHistory]);
   useEffect(() => { if (clubs.length > 0) computeHealthScores(); }, [clubs, computeHealthScores]);
 
   // Detect club duplicates when clubs load
@@ -780,7 +831,7 @@ export default function AdminClubsScreen() {
         ) : null}
 
         {/* Pending Claims / Verification Requests — Enhanced Dashboard */}
-        {pendingClaims.length > 0 || (claimStats && claimStats.processedThisMonth > 0) ? (
+        {pendingClaims.length > 0 || claimHistory.length > 0 || (claimStats && claimStats.processedThisMonth > 0) ? (
           <Animated.View entering={FadeInDown.duration(300).delay(10)}>
             <Pressable
               style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#EFF6FF', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#BFDBFE' }}
@@ -794,7 +845,7 @@ export default function AdminClubsScreen() {
                   {pendingClaims.length > 0 ? (fr ? `${pendingClaims.length} demande(s) en attente` : `${pendingClaims.length} pending request(s)`) : (fr ? 'Demandes de verification' : 'Verification Requests')}
                 </Text>
                 <Text style={{ fontSize: 11, color: '#3B82F6', marginTop: 2 }}>
-                  {fr ? 'Verifications et reclamations de clubs' : 'Club verifications and claims'}
+                  {fr ? 'Verifications, reclamations et historique' : 'Verifications, claims and history'}
                 </Text>
               </View>
               <MaterialIcons name={showPendingClaims ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
@@ -802,6 +853,64 @@ export default function AdminClubsScreen() {
 
             {showPendingClaims ? (
               <View style={{ gap: 8, marginBottom: 14 }}>
+                {/* Tabs: Pending / History */}
+                <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+                  <Pressable
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 12, backgroundColor: claimHistoryTab === 'pending' ? '#2563EB' : '#F8FAFC', borderWidth: 1.5, borderColor: claimHistoryTab === 'pending' ? '#2563EB' : '#E2E8F0' }}
+                    onPress={() => { Haptics.selectionAsync(); setClaimHistoryTab('pending'); }}
+                  >
+                    <MaterialIcons name="pending" size={14} color={claimHistoryTab === 'pending' ? '#FFF' : '#64748B'} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: claimHistoryTab === 'pending' ? '#FFF' : '#64748B' }}>{fr ? 'En attente' : 'Pending'}</Text>
+                    {pendingClaims.length > 0 ? <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: claimHistoryTab === 'pending' ? 'rgba(255,255,255,0.3)' : '#EF444420', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}><Text style={{ fontSize: 9, fontWeight: '800', color: claimHistoryTab === 'pending' ? '#FFF' : '#EF4444' }}>{pendingClaims.length}</Text></View> : null}
+                  </Pressable>
+                  <Pressable
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 12, backgroundColor: claimHistoryTab === 'history' ? '#7C3AED' : '#F8FAFC', borderWidth: 1.5, borderColor: claimHistoryTab === 'history' ? '#7C3AED' : '#E2E8F0' }}
+                    onPress={() => { Haptics.selectionAsync(); setClaimHistoryTab('history'); }}
+                  >
+                    <MaterialIcons name="history" size={14} color={claimHistoryTab === 'history' ? '#FFF' : '#64748B'} />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: claimHistoryTab === 'history' ? '#FFF' : '#64748B' }}>{fr ? 'Historique' : 'History'}</Text>
+                    {claimHistory.length > 0 ? <View style={{ minWidth: 18, height: 18, borderRadius: 9, backgroundColor: claimHistoryTab === 'history' ? 'rgba(255,255,255,0.3)' : '#7C3AED20', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }}><Text style={{ fontSize: 9, fontWeight: '800', color: claimHistoryTab === 'history' ? '#FFF' : '#7C3AED' }}>{claimHistory.length}</Text></View> : null}
+                  </Pressable>
+                </View>
+
+                {/* Claim History Tab Content */}
+                {claimHistoryTab === 'history' ? (
+                  <View style={{ gap: 8 }}>
+                    {claimHistory.length === 0 ? (
+                      <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 24, alignItems: 'center', borderWidth: 1, borderColor: '#F1F5F9', gap: 6 }}>
+                        <MaterialIcons name="history" size={28} color="#CBD5E1" />
+                        <Text style={{ fontSize: 12, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Aucune demande traitee' : 'No processed requests'}</Text>
+                      </View>
+                    ) : claimHistory.map(claim => {
+                      const isAccepted = claim.status === 'accepted';
+                      const isOwnerVerification = claim.requesterUserId === claim.currentOwnerId;
+                      const respondedDate = claim.respondedAt ? new Date(claim.respondedAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
+                      return (
+                        <View key={claim.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: isAccepted ? '#10B98130' : '#EF444430', borderLeftWidth: 3, borderLeftColor: isAccepted ? '#10B981' : '#EF4444' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                            <MaterialIcons name={isAccepted ? 'check-circle' : 'cancel'} size={16} color={isAccepted ? '#10B981' : '#EF4444'} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                                {isOwnerVerification ? (fr ? 'Verification' : 'Verification') : (fr ? 'Reclamation' : 'Claim')}: {claim.clubName}
+                              </Text>
+                              <Text style={{ fontSize: 11, color: '#64748B', marginTop: 1 }}>
+                                {fr ? 'Par' : 'By'} {claim.requesterName || claim.requesterEmail || claim.requesterUserId.substring(0, 8)}
+                              </Text>
+                            </View>
+                            <View style={{ backgroundColor: isAccepted ? '#DCFCE7' : '#FEF2F2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                              <Text style={{ fontSize: 10, fontWeight: '800', color: isAccepted ? '#10B981' : '#EF4444' }}>{isAccepted ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Refuse' : 'Declined')}</Text>
+                            </View>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Text style={{ fontSize: 10, color: '#94A3B8' }}>{fr ? 'Soumis le' : 'Submitted'} {new Date(claim.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                            {respondedDate ? <Text style={{ fontSize: 10, color: '#94A3B8' }}>\u2022 {fr ? 'Traite le' : 'Processed'} {respondedDate}</Text> : null}
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                ) : (
+                <View style={{ gap: 8 }}>
                 {/* Stats Banner */}
                 {claimStats ? (
                   <View style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#E2E8F0', marginBottom: 6 }}>
@@ -861,11 +970,11 @@ export default function AdminClubsScreen() {
 
                 {/* Filtered Claims List */}
                 {pendingClaims
-                  .filter(claim => {
+                  .filter(claim2 => {
                     if (claimFilter === 'all') return true;
-                    const isOwnerVerification = claim.requesterUserId === claim.currentOwnerId;
-                    if (claimFilter === 'verification') return isOwnerVerification;
-                    return !isOwnerVerification;
+                    const isOwnerVerification2 = claim2.requesterUserId === claim2.currentOwnerId;
+                    if (claimFilter === 'verification') return isOwnerVerification2;
+                    return !isOwnerVerification2;
                   })
                   .map(claim => {
                   const isOwnerVerification = claim.requesterUserId === claim.currentOwnerId;
@@ -1002,6 +1111,99 @@ export default function AdminClubsScreen() {
                           )}
                         </Pressable>
                       </View>
+                    </View>
+                  );
+                })}
+              </View>
+              )}
+              </View>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
+        {/* Admin Merge Logs (all users) */}
+        {adminMergeLogs.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(15)}>
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FEF3C7', borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: '#FDE68A' }}
+              onPress={() => { setShowAdminMergeLogs(!showAdminMergeLogs); Haptics.selectionAsync(); }}
+            >
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#D9770615', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="manage-history" size={18} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#92400E' }}>
+                  {fr ? `${adminMergeLogs.length} fusion(s) globale(s)` : `${adminMergeLogs.length} global merge(s)`}
+                </Text>
+                <Text style={{ fontSize: 11, color: '#D97706', marginTop: 2 }}>
+                  {fr ? 'Historique de toutes les fusions (tous utilisateurs)' : 'All users merge history (admin undo)'}
+                </Text>
+              </View>
+              <MaterialIcons name={showAdminMergeLogs ? 'expand-less' : 'expand-more'} size={22} color="#94A3B8" />
+            </Pressable>
+
+            {showAdminMergeLogs ? (
+              <View style={{ gap: 8, marginBottom: 14 }}>
+                {adminMergeLogs.map(log => {
+                  const dateStr = new Date(log.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  return (
+                    <View key={log.id} style={{ backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#FDE68A', borderLeftWidth: 3, borderLeftColor: '#D97706' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <MaterialIcons name="merge-type" size={16} color="#D97706" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>
+                            <Text style={{ color: '#EF4444', textDecorationLine: 'line-through' }}>{log.sourceName}</Text>
+                            {' \u2192 '}
+                            <Text style={{ color: '#10B981' }}>{log.targetName}</Text>
+                          </Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{dateStr}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <MaterialIcons name="person" size={9} color="#64748B" />
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.userId.substring(0, 8)}</Text>
+                        </View>
+                      </View>
+                      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: 8 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.mergeType}</Text>
+                        </View>
+                        {log.sourceSnapshot?.city ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                            <MaterialIcons name="place" size={9} color="#64748B" />
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B' }}>{log.sourceSnapshot.city}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                      <Pressable
+                        style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#DC2626' }, undoingMergeId === log.id && { opacity: 0.5 }]}
+                        onPress={() => {
+                          Alert.alert(
+                            fr ? 'Annuler la fusion' : 'Undo Merge',
+                            fr ? `Recree "${log.sourceName}" et inverse les transferts ? Cette action est admin uniquement.` : `Re-create "${log.sourceName}" and reverse transfers? Admin only action.`,
+                            [
+                              { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                              { text: fr ? 'Confirmer' : 'Confirm', style: 'destructive', onPress: async () => {
+                                setUndoingMergeId(log.id);
+                                const { error } = await adminUndoMerge(log);
+                                setUndoingMergeId(null);
+                                if (error) {
+                                  showAlert(fr ? 'Erreur' : 'Error', error);
+                                } else {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  showAlert(fr ? 'Fusion annulee' : 'Merge undone', fr ? `"${log.sourceName}" a ete recree.` : `"${log.sourceName}" has been re-created.`);
+                                  setAdminMergeLogs(prev => prev.filter(l => l.id !== log.id));
+                                  logAdminAction({ actionType: 'club_verify', actionDetail: `Admin undo merge: re-created ${log.sourceName}`, targetType: log.mergeType as any, targetId: log.sourceId, targetName: log.sourceName });
+                                  loadClubs();
+                                }
+                              }},
+                            ]
+                          );
+                        }}
+                        disabled={undoingMergeId === log.id}
+                      >
+                        {undoingMergeId === log.id ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="undo" size={14} color="#FFF" />}
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Annuler la fusion' : 'Undo Merge'}</Text>
+                      </Pressable>
                     </View>
                   );
                 })}
@@ -2073,6 +2275,25 @@ export default function AdminClubsScreen() {
                   >
                     <MaterialIcons name="open-in-new" size={18} color="#FFF" />
                     <Text style={s.detailActionText}>{fr ? 'Voir' : 'View'}</Text>
+                  </Pressable>
+                </View>
+                {/* Edit & Delete buttons */}
+                <View style={[s.detailActionsRow, { marginTop: 8 }]}>
+                  <Pressable
+                    style={[s.detailActionBtn, { backgroundColor: '#F59E0B' }]}
+                    onPress={() => { setDetailClub(null); router.push(`/club/edit/${detailClub.id}` as any); }}
+                  >
+                    <MaterialIcons name="edit" size={18} color="#FFF" />
+                    <Text style={s.detailActionText}>{fr ? 'Modifier' : 'Edit'}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={[s.detailActionBtn, { backgroundColor: '#EF4444' }]}
+                    onPress={() => handleAdminDeleteClub(detailClub)}
+                    disabled={deletingClubId === detailClub.id}
+                  >
+                    {deletingClubId === detailClub.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                      <><MaterialIcons name="delete" size={18} color="#FFF" /><Text style={s.detailActionText}>{fr ? 'Supprimer' : 'Delete'}</Text></>
+                    )}
                   </Pressable>
                 </View>
               </View>
