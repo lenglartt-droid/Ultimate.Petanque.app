@@ -15,7 +15,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -353,7 +353,7 @@ export default function AdminChangelogScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Summary */}
-        <Animated.View entering={FadeInDown.duration(300)}>
+        <View>
           <View style={s.summaryCard}>
             <View style={s.summaryRow}>
               <View style={[s.summaryItem, { borderColor: '#0F172A20' }]}>
@@ -370,7 +370,7 @@ export default function AdminChangelogScreen() {
               </View>
             </View>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Changelog entries */}
         {CHANGELOG.map((entry, idx) => {
@@ -378,7 +378,7 @@ export default function AdminChangelogScreen() {
           const typeCfg = TYPE_CONFIG[entry.type];
           const isLatest = idx === 0;
           return (
-            <Animated.View key={entry.version} entering={FadeInDown.duration(250).delay(idx * 30)}>
+            <View key={entry.version}>
               <Pressable
                 style={[s.entryCard, isLatest && s.entryCardLatest]}
                 onPress={() => {
@@ -444,7 +444,7 @@ export default function AdminChangelogScreen() {
                   </View>
                 </View>
               </Pressable>
-            </Animated.View>
+            </View>
           );
         })}
       </ScrollView>
