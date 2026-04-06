@@ -49,11 +49,13 @@ type MapMode = 'all' | 'public';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
+let CircleComponent: React.ComponentType<any> | null = null;
 
 if (Platform.OS !== 'web') {
   const Maps = require('react-native-maps');
   MapViewComponent = Maps.default;
   MarkerComponent = Maps.Marker;
+  CircleComponent = Maps.Circle;
 }
 
 // ============================================
@@ -1330,12 +1332,42 @@ export default function MapScreen() {
     return () => {
       if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
       if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
+      if (heatmapAnimRef.current) clearInterval(heatmapAnimRef.current);
     };
   }, []);
 
   // Active now mode from directory
   const [activeNowMode, setActiveNowMode] = useState(false);
   const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
+
+  // Player density heatmap
+  const [showHeatmap, setShowHeatmap] = useState(false);
+  const [heatmapPeriod, setHeatmapPeriod] = useState<'all' | 'week' | 'month' | '3months'>('all');
+  const [heatmapAnimating, setHeatmapAnimating] = useState(false);
+  const [heatmapAnimStep, setHeatmapAnimStep] = useState(0);
+  const HEATMAP_ANIM_STEPS = 4;
+  const heatmapAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Heatmap animation timer
+  useEffect(() => {
+    if (!heatmapAnimating) {
+      if (heatmapAnimRef.current) { clearInterval(heatmapAnimRef.current); heatmapAnimRef.current = null; }
+      return;
+    }
+    setHeatmapAnimStep(0);
+    heatmapAnimRef.current = setInterval(() => {
+      setHeatmapAnimStep(prev => (prev + 1) % HEATMAP_ANIM_STEPS);
+    }, 1500);
+    return () => { if (heatmapAnimRef.current) { clearInterval(heatmapAnimRef.current); heatmapAnimRef.current = null; } };
+  }, [heatmapAnimating]);
+
+  // Stop animation when heatmap is hidden or period is 'all'
+  useEffect(() => {
+    if (!showHeatmap || heatmapPeriod === 'all') {
+      setHeatmapAnimating(false);
+      setHeatmapAnimStep(0);
+    }
+  }, [showHeatmap, heatmapPeriod]);
 
   // Cluster burst animation
   const [burstVisible, setBurstVisible] = useState(false);
@@ -1368,6 +1400,81 @@ export default function MapScreen() {
     burstRing3.value = withSequence(withTiming(0, { duration: 160 }), withTiming(1, { duration: 340 }));
     setTimeout(() => setBurstVisible(false), 550);
   }, []);
+
+  // Player density heatmap data
+  const heatmapData = useMemo(() => {
+    if (!showHeatmap) return [];
+    const allPlayersWithLoc = [...ownData.players, ...pubData.players].filter(p => {
+      const lat = p.location?.latitude;
+      const lng = p.location?.longitude;
+      return lat && lng && lat !== 0 && lng !== 0;
+    });
+    const seen = new Set<string>();
+    let uniquePlayers = allPlayersWithLoc.filter(p => {
+      if (seen.has(p.id)) return false;
+      seen.add(p.id);
+      return true;
+    });
+
+    // Time period filtering
+    const now = Date.now();
+    const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
+    const totalPeriod = periodMs[heatmapPeriod] || 0;
+    if (totalPeriod > 0) {
+      if (heatmapAnimating) {
+        // Animation: show only players active in current time slice
+        const sliceDuration = totalPeriod / HEATMAP_ANIM_STEPS;
+        const sliceStart = now - totalPeriod + heatmapAnimStep * sliceDuration;
+        const sliceEnd = sliceStart + sliceDuration;
+        uniquePlayers = uniquePlayers.filter(p => {
+          const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
+          if (!lmd) return false;
+          const t = new Date(lmd).getTime();
+          return t >= sliceStart && t < sliceEnd;
+        });
+      } else {
+        // Static: show all players within period
+        const cutoff = now - totalPeriod;
+        uniquePlayers = uniquePlayers.filter(p => {
+          const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
+          if (!lmd) return false;
+          return new Date(lmd).getTime() >= cutoff;
+        });
+      }
+    }
+
+    if (uniquePlayers.length === 0) return [];
+    const gridSize = 10;
+    const latStep = currentRegion.latitudeDelta / gridSize;
+    const lngStep = currentRegion.longitudeDelta / gridSize;
+    const minLat = currentRegion.latitude - currentRegion.latitudeDelta / 2;
+    const minLng = currentRegion.longitude - currentRegion.longitudeDelta / 2;
+    const grid = new Map<string, { lat: number; lng: number; count: number }>();
+    uniquePlayers.forEach(p => {
+      const lat = p.location.latitude;
+      const lng = p.location.longitude;
+      const r = Math.floor((lat - minLat) / latStep);
+      const c = Math.floor((lng - minLng) / lngStep);
+      if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return;
+      const key = `${r}-${c}`;
+      if (!grid.has(key)) grid.set(key, { lat: minLat + (r + 0.5) * latStep, lng: minLng + (c + 0.5) * lngStep, count: 0 });
+      grid.get(key)!.count++;
+    });
+    const cells = Array.from(grid.values()).filter(c => c.count > 0);
+    const maxCount = Math.max(...cells.map(c => c.count), 1);
+    const baseRadius = Math.max(currentRegion.latitudeDelta * 111000 / gridSize * 0.55, 300);
+    return cells.map(c => {
+      const ratio = c.count / maxCount;
+      const fillColor = ratio >= 0.7 ? 'rgba(239,68,68,0.35)' : ratio >= 0.4 ? 'rgba(245,158,11,0.30)' : ratio >= 0.15 ? 'rgba(59,130,246,0.25)' : 'rgba(147,197,253,0.20)';
+      const strokeColor = ratio >= 0.7 ? 'rgba(239,68,68,0.50)' : ratio >= 0.4 ? 'rgba(245,158,11,0.40)' : ratio >= 0.15 ? 'rgba(59,130,246,0.35)' : 'rgba(147,197,253,0.30)';
+      return { ...c, radius: baseRadius * (0.6 + ratio * 0.6), fillColor, strokeColor };
+    });
+  }, [showHeatmap, ownData.players, pubData.players, currentRegion, heatmapPeriod, heatmapAnimating, heatmapAnimStep]);
+
+  const heatmapPlayerCount = useMemo(() => {
+    if (!showHeatmap) return 0;
+    return heatmapData.reduce((s, c) => s + c.count, 0);
+  }, [showHeatmap, heatmapData]);
 
   // Handle filter param from directory
   useEffect(() => {
@@ -1556,6 +1663,18 @@ export default function MapScreen() {
             );
           }
         }) : null}
+        {/* Player density heatmap circles */}
+        {showHeatmap && CircleComponent ? heatmapData.map((cell, idx) => (
+          <CircleComponent
+            key={`heat-${idx}`}
+            center={{ latitude: cell.lat, longitude: cell.lng }}
+            radius={cell.radius}
+            fillColor={cell.fillColor}
+            strokeColor={cell.strokeColor}
+            strokeWidth={1}
+            zIndex={-1}
+          />
+        )) : null}
       </MapViewComponent>
     );
   };
@@ -1634,6 +1753,87 @@ export default function MapScreen() {
           <Animated.View style={[styles.burstRing, { borderColor: burstColor }, burstRing1Style]} />
           <Animated.View style={[styles.burstRing, { borderColor: burstColor, width: 48, height: 48, borderRadius: 24 }, burstRing2Style]} />
           <Animated.View style={[styles.burstRing, { borderColor: burstColor, width: 36, height: 36, borderRadius: 18, borderWidth: 3 }, burstRing3Style]} />
+        </View>
+      ) : null}
+
+      {/* Heatmap toggle button */}
+      {Platform.OS !== 'web' ? (
+        <Pressable
+          style={[styles.heatmapToggle, { top: insets.top + 138 }, showHeatmap && styles.heatmapToggleActive]}
+          onPress={() => { Haptics.selectionAsync(); setShowHeatmap(prev => !prev); }}
+        >
+          <MaterialIcons name="blur-on" size={20} color={showHeatmap ? '#FFF' : theme.textSecondary} />
+        </Pressable>
+      ) : null}
+
+      {/* Heatmap legend + controls */}
+      {showHeatmap && Platform.OS !== 'web' ? (
+        <View style={[styles.heatmapLegend, { top: insets.top + 138 }]}>
+          <View style={styles.heatmapLegendHeader}>
+            <MaterialIcons name="blur-on" size={14} color={theme.primary} />
+            <Text style={styles.heatmapLegendTitle}>{language === 'fr' ? 'Densite joueurs' : 'Player density'}</Text>
+          </View>
+          <Text style={styles.heatmapLegendCount}>{heatmapPlayerCount} {language === 'fr' ? 'joueurs publics' : 'public players'}</Text>
+          <View style={styles.heatmapLegendScale}>
+            {[
+              { color: 'rgba(147,197,253,0.6)', label: language === 'fr' ? 'Faible' : 'Low' },
+              { color: 'rgba(59,130,246,0.7)', label: language === 'fr' ? 'Moyen' : 'Medium' },
+              { color: 'rgba(245,158,11,0.8)', label: language === 'fr' ? 'Eleve' : 'High' },
+              { color: 'rgba(239,68,68,0.85)', label: language === 'fr' ? 'Tres eleve' : 'Very high' },
+            ].map((item, i) => (
+              <View key={i} style={styles.heatmapLegendItem}>
+                <View style={[styles.heatmapLegendDot, { backgroundColor: item.color }]} />
+                <Text style={styles.heatmapLegendLabel}>{item.label}</Text>
+              </View>
+            ))}
+          </View>
+          {/* Period filter chips */}
+          <View style={styles.heatmapDivider} />
+          <Text style={styles.heatmapPeriodLabel}>{language === 'fr' ? 'Periode' : 'Period'}</Text>
+          <View style={styles.heatmapPeriodRow}>
+            {([{ key: 'all' as const, label: language === 'fr' ? 'Tout' : 'All' }, { key: 'week' as const, label: '7j' }, { key: 'month' as const, label: '30j' }, { key: '3months' as const, label: '3m' }]).map(p => (
+              <Pressable
+                key={p.key}
+                style={[styles.heatmapPeriodChip, heatmapPeriod === p.key && styles.heatmapPeriodChipActive]}
+                onPress={() => { Haptics.selectionAsync(); setHeatmapPeriod(p.key); }}
+              >
+                <Text style={[styles.heatmapPeriodChipText, heatmapPeriod === p.key && styles.heatmapPeriodChipTextActive]}>{p.label}</Text>
+              </Pressable>
+            ))}
+          </View>
+          {/* Animation controls */}
+          {heatmapPeriod !== 'all' ? (
+            <View style={styles.heatmapAnimRow}>
+              <Pressable
+                style={[styles.heatmapAnimBtn, heatmapAnimating && styles.heatmapAnimBtnActive]}
+                onPress={() => { Haptics.selectionAsync(); setHeatmapAnimating(prev => !prev); }}
+              >
+                <MaterialIcons name={heatmapAnimating ? 'pause' : 'play-arrow'} size={16} color={heatmapAnimating ? '#FFF' : theme.primary} />
+              </Pressable>
+              {heatmapAnimating ? (
+                <View style={styles.heatmapAnimInfo}>
+                  <View style={styles.heatmapAnimDots}>
+                    {Array.from({ length: HEATMAP_ANIM_STEPS }).map((_, i) => (
+                      <View key={i} style={[styles.heatmapAnimDot, i === heatmapAnimStep && styles.heatmapAnimDotActive]} />
+                    ))}
+                  </View>
+                  <Text style={styles.heatmapAnimLabel}>
+                    {(() => {
+                      const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
+                      const total = periodMs[heatmapPeriod] || 0;
+                      const sliceDur = total / HEATMAP_ANIM_STEPS;
+                      const sliceStart = new Date(Date.now() - total + heatmapAnimStep * sliceDur);
+                      const sliceEnd = new Date(sliceStart.getTime() + sliceDur);
+                      const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
+                      return `${fmt(sliceStart)} - ${fmt(sliceEnd)}`;
+                    })()}
+                  </Text>
+                </View>
+              ) : (
+                <Text style={styles.heatmapAnimHint}>{language === 'fr' ? 'Evolution' : 'Evolution'}</Text>
+              )}
+            </View>
+          ) : null}
         </View>
       ) : null}
 
@@ -2649,4 +2849,43 @@ const styles = StyleSheet.create({
     backgroundColor: theme.primary + '12', alignItems: 'center' as const, justifyContent: 'center' as const,
     borderWidth: 1, borderColor: theme.primary + '20',
   },
+  // Heatmap
+  heatmapToggle: {
+    position: 'absolute' as const, right: 16, width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.95)', alignItems: 'center' as const, justifyContent: 'center' as const,
+    borderWidth: 1, borderColor: '#E2E8F0', zIndex: 25,
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 }, android: { elevation: 3 }, default: {} }),
+  },
+  heatmapToggleActive: {
+    backgroundColor: theme.primary, borderColor: theme.primary,
+  },
+  heatmapLegend: {
+    position: 'absolute' as const, left: 16, backgroundColor: 'rgba(255,255,255,0.95)',
+    borderRadius: 14, padding: 12, zIndex: 25, minWidth: 140,
+    borderWidth: 1, borderColor: '#E2E8F0',
+    ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6 }, android: { elevation: 3 }, default: {} }),
+  },
+  heatmapLegendHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 4 },
+  heatmapLegendTitle: { fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary },
+  heatmapLegendCount: { fontSize: 10, fontWeight: '600' as const, color: theme.textSecondary, marginBottom: 8 },
+  heatmapLegendScale: { gap: 4 },
+  heatmapLegendItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  heatmapLegendDot: { width: 12, height: 12, borderRadius: 6 },
+  heatmapLegendLabel: { fontSize: 10, fontWeight: '600' as const, color: theme.textSecondary },
+  heatmapDivider: { height: 1, backgroundColor: '#E2E8F0', marginVertical: 8 },
+  heatmapPeriodLabel: { fontSize: 9, fontWeight: '700' as const, color: theme.textMuted, textTransform: 'uppercase' as const, letterSpacing: 0.5, marginBottom: 5 },
+  heatmapPeriodRow: { flexDirection: 'row' as const, gap: 4 },
+  heatmapPeriodChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, backgroundColor: '#F1F5F9', borderWidth: 1, borderColor: '#E2E8F0' },
+  heatmapPeriodChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  heatmapPeriodChipText: { fontSize: 10, fontWeight: '700' as const, color: theme.textSecondary },
+  heatmapPeriodChipTextActive: { color: '#FFF' },
+  heatmapAnimRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 8 },
+  heatmapAnimBtn: { width: 30, height: 30, borderRadius: 15, backgroundColor: theme.primary + '15', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: theme.primary + '30' },
+  heatmapAnimBtnActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  heatmapAnimInfo: { flex: 1, gap: 3 },
+  heatmapAnimDots: { flexDirection: 'row' as const, gap: 4 },
+  heatmapAnimDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#E2E8F0' },
+  heatmapAnimDotActive: { backgroundColor: theme.primary, transform: [{ scale: 1.2 }] },
+  heatmapAnimLabel: { fontSize: 9, fontWeight: '600' as const, color: theme.textMuted },
+  heatmapAnimHint: { fontSize: 10, fontWeight: '600' as const, color: theme.textMuted },
 });
