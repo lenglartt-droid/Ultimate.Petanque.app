@@ -24,7 +24,8 @@ import { getEloRank, EloHistoryEntry } from '@/services/eloService';
 import { Match } from '@/types/petanque';
 import * as Haptics from '@/services/haptics';
 import ShareModal from '@/components/ui/ShareModal';
-import { ShareCardSeason } from '@/components/feature/share-cards';
+import { ShareCardSeason, ShareCardSeasonComparison } from '@/components/feature/share-cards';
+import * as Haptics2 from '@/services/haptics';
 
 interface MonthlyDetail {
   month: string;
@@ -59,6 +60,7 @@ export default function SeasonDetailScreen() {
   }, []);
 
   const [showShareModal, setShowShareModal] = useState(false);
+  const [shareCardType, setShareCardType] = useState<'season' | 'comparison'>('season');
 
   // Load ELO history
   useEffect(() => {
@@ -260,7 +262,7 @@ export default function SeasonDetailScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={st.headerTitle}>{fr ? `Saison ${currentYear}` : `Season ${currentYear}`}</Text>
-        <Pressable style={st.shareBtn} onPress={() => { Haptics.selectionAsync(); setShowShareModal(true); }}>
+        <Pressable style={st.shareBtn} onPress={() => { Haptics.selectionAsync(); setShareCardType('season'); setShowShareModal(true); }}>
           <MaterialIcons name="share" size={20} color={theme.success} />
         </Pressable>
       </View>
@@ -558,6 +560,69 @@ export default function SeasonDetailScreen() {
             </Text>
           </View>
         )}
+
+        {/* Share type buttons + PDF Export */}
+        {prevSeason.matches > 0 ? (
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+            <Pressable
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.success + '12', paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: theme.success + '25' }}
+              onPress={() => { Haptics.selectionAsync(); setShareCardType('season'); setShowShareModal(true); }}
+            >
+              <MaterialIcons name="share" size={16} color={theme.success} />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: theme.success }}>{fr ? 'Bilan saison' : 'Season summary'}</Text>
+            </Pressable>
+            <Pressable
+              style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#8B5CF6' + '12', paddingVertical: 12, borderRadius: 14, borderWidth: 1, borderColor: '#8B5CF6' + '25' }}
+              onPress={() => { Haptics.selectionAsync(); setShareCardType('comparison'); setShowShareModal(true); }}
+            >
+              <MaterialIcons name="compare-arrows" size={16} color="#8B5CF6" />
+              <Text style={{ fontSize: 13, fontWeight: '700', color: '#8B5CF6' }}>{fr ? `vs ${prevYear}` : `vs ${prevYear}`}</Text>
+            </Pressable>
+          </View>
+        ) : null}
+
+        {/* PDF Export Button */}
+        <Pressable
+          style={st.exportBtn}
+          onPress={async () => {
+            Haptics.selectionAsync();
+            try {
+              const rows = monthlyDetails.map(m =>
+                `<tr><td>${m.month}</td><td>${m.matches}</td><td>${m.wins}/${m.losses}</td><td>${m.matches > 0 ? m.winRate + '%' : '-'}</td><td>${m.eloEnd}</td><td style="color:${m.eloDelta > 0 ? '#22C55E' : m.eloDelta < 0 ? '#EF4444' : '#666'}">${m.eloDelta > 0 ? '+' : ''}${m.eloDelta}</td></tr>`
+              ).join('');
+              const html = `<html><head><meta charset="utf-8"/><style>body{font-family:system-ui;padding:24px;color:#1E293B}h1{font-size:22px;margin-bottom:4px}h2{font-size:16px;color:#64748B;margin-top:4px}.hero{background:#0F172A;color:#FFF;padding:20px;border-radius:16px;margin-bottom:20px}.hero .elo{font-size:42px;font-weight:900;color:${eloR.color}}.hero .rank{color:${eloR.color};font-size:13px;font-weight:700}.stats{display:flex;gap:12px;margin:16px 0}.stat{flex:1;text-align:center;background:#F8FAFC;padding:12px;border-radius:12px}.stat .val{font-size:22px;font-weight:800}.stat .lbl{font-size:10px;color:#64748B;text-transform:uppercase}table{width:100%;border-collapse:collapse;margin-top:16px}th{background:#F1F5F9;padding:8px;text-align:center;font-size:11px;color:#64748B;text-transform:uppercase}td{padding:8px;text-align:center;border-bottom:1px solid #E2E8F0;font-size:13px}.comp{margin-top:20px;border:1px solid #E2E8F0;border-radius:12px;padding:16px}.comp h3{margin:0 0 12px;font-size:14px;color:#7C3AED}.comp-row{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #F1F5F9}.best{background:#FFFBEB;border:1px solid #FDE68A;border-radius:12px;padding:16px;margin-top:16px}.best h3{color:#B45309;margin:0 0 8px}</style></head><body>`
+              + `<div class="hero"><h1>${fr ? 'Saison' : 'Season'} ${currentYear}</h1><div class="elo">${currentElo}</div><div class="rank">${eloR.label[fr ? 'fr' : 'en']} ${fr ? '| Pic' : '| Peak'}: ${seasonPeak}</div></div>`
+              + `<div class="stats"><div class="stat"><div class="val" style="color:#22C55E">${currentSeason.wins}</div><div class="lbl">${fr ? 'Victoires' : 'Wins'}</div></div><div class="stat"><div class="val" style="color:#EF4444">${currentSeason.losses}</div><div class="lbl">${fr ? 'Defaites' : 'Losses'}</div></div><div class="stat"><div class="val" style="color:#3B82F6">${currentSeason.winRate}%</div><div class="lbl">${fr ? 'Taux' : 'Rate'}</div></div><div class="stat"><div class="val" style="color:#A78BFA">${currentSeason.carreaux}</div><div class="lbl">Carreaux</div></div></div>`
+              + (bestMonth && bestMonth.matches > 0 ? `<div class="best"><h3>${fr ? 'Meilleur mois' : 'Best Month'}: ${bestMonth.month}</h3><p>+${bestMonth.eloDelta} ELO | ${bestMonth.wins} ${fr ? 'victoires' : 'wins'} / ${bestMonth.matches} ${fr ? 'matchs' : 'matches'} (${bestMonth.winRate}%)</p></div>` : '')
+              + `<table><thead><tr><th>${fr ? 'Mois' : 'Month'}</th><th>${fr ? 'Matchs' : 'Games'}</th><th>${fr ? 'V/D' : 'W/L'}</th><th>${fr ? 'Taux' : 'Rate'}</th><th>ELO</th><th>\u0394</th></tr></thead><tbody>${rows}</tbody></table>`
+              + (prevSeason.matches > 0 ? `<div class="comp"><h3>${fr ? 'Comparaison avec' : 'Compared to'} ${prevYear}</h3>${[
+                { l: fr ? 'Matchs' : 'Matches', c: currentSeason.matches, p: prevSeason.matches },
+                { l: fr ? 'Victoires' : 'Wins', c: currentSeason.wins, p: prevSeason.wins },
+                { l: fr ? 'Taux V.' : 'Win %', c: currentSeason.winRate + '%', p: prevSeason.winRate + '%' },
+                { l: 'ELO', c: currentElo, p: prevSeasonElo.end },
+                { l: fr ? 'Pic ELO' : 'Peak', c: seasonPeak, p: prevSeasonElo.peak },
+              ].map(r => `<div class="comp-row"><span>${r.l}</span><span><b>${r.c}</b> vs ${r.p}</span></div>`).join('')}</div>` : '')
+              + `</body></html>`;
+              if (Platform.OS === 'web') {
+                const w = window.open('', '_blank');
+                if (w) { w.document.write(html); w.document.close(); w.print(); }
+              } else {
+                const PrintModule = require('expo-print');
+                const SharingModule = require('expo-sharing');
+                const { uri } = await PrintModule.printToFileAsync({ html });
+                if (await SharingModule.isAvailableAsync()) {
+                  await SharingModule.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${fr ? 'Saison' : 'Season'} ${currentYear}.pdf` });
+                }
+              }
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            } catch (e) {
+              console.log('PDF export error:', e);
+            }
+          }}
+        >
+          <MaterialIcons name="picture-as-pdf" size={16} color="#EF4444" />
+          <Text style={st.exportBtnText}>{fr ? 'Exporter en PDF' : 'Export PDF'}</Text>
+        </Pressable>
       </ScrollView>
 
       {/* Share Modal for season summary */}
@@ -568,7 +633,18 @@ export default function SeasonDetailScreen() {
         itemId={user?.id || ''}
         itemName={fr ? `Bilan Saison ${currentYear}` : `Season ${currentYear} Summary`}
         customCardComponent={
-          <ShareCardSeason
+          shareCardType === 'comparison' && prevSeason.matches > 0 ? (
+            <ShareCardSeasonComparison
+              playerName={user?.username || user?.email?.split('@')[0] || (fr ? 'Joueur' : 'Player')}
+              eloColor={eloR.color}
+              eloRankLabel={eloR.label[fr ? 'fr' : 'en']}
+              eloIcon={eloR.icon}
+              current={{ year: currentYear, matches: currentSeason.matches, wins: currentSeason.wins, losses: currentSeason.losses, winRate: currentSeason.winRate, carreaux: currentSeason.carreaux, elo: currentElo, peak: seasonPeak }}
+              previous={{ year: prevYear, matches: prevSeason.matches, wins: prevSeason.wins, losses: prevSeason.losses, winRate: prevSeason.winRate, carreaux: prevSeason.carreaux, elo: prevSeasonElo.end, peak: prevSeasonElo.peak }}
+              language={fr ? 'fr' : 'en'}
+            />
+          ) : (
+            <ShareCardSeason
             playerName={user?.username || user?.email?.split('@')[0] || (fr ? 'Joueur' : 'Player')}
             year={currentYear}
             matchesPlayed={currentSeason.matches}
@@ -583,9 +659,11 @@ export default function SeasonDetailScreen() {
             seasonPeak={seasonPeak}
             bestMonth={bestMonth ? { name: bestMonth.month, delta: bestMonth.eloDelta, wins: bestMonth.wins, matches: bestMonth.matches } : null}
             streak={streak.count >= 2 ? { type: streak.type as 'win' | 'loss', count: streak.count } : null}
-            monthlyElo={seasonData?.monthlyElo}
+            monthlyElo={monthlyDetails.map(m => ({ month: m.month.slice(0, 3), elo: m.eloEnd }))}
+            monthlyDetails={monthlyDetails.map(m => ({ month: m.month.slice(0, 3), matches: m.matches, wins: m.wins, losses: m.losses, winRate: m.winRate, eloEnd: m.eloEnd, eloDelta: m.eloDelta }))}
             language={fr ? 'fr' : 'en'}
           />
+          )
         }
       />
     </SafeAreaView>
@@ -650,4 +728,8 @@ const st = StyleSheet.create({
   compPrev: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
   compDeltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
   compDeltaText: { fontSize: 12, fontWeight: '700' },
+
+  // Export button
+  exportBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#EF444410', paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: '#EF444420', marginTop: 4, marginBottom: 16 },
+  exportBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#EF4444' },
 });
