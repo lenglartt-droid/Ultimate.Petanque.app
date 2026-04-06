@@ -187,8 +187,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'sr6_feed',
           q: fr ? 'Comment fonctionne le fil d activite communautaire ?' : 'How does the community activity feed work?',
           a: fr
-            ? 'Le fil d activite (icone flux dynamique en haut de l accueil) agrege automatiquement les evenements de la communaute sans posts manuels : resultats de matchs publics, badges debloques, mouvements ELO significatifs, records de la semaine, meetups et evenements sponsorises. Le fil inclut un digest hebdomadaire (top 3 joueurs, plus gros mouvement ELO, badge le plus debloque), des filtres par categorie (tous, matchs, badges, evenements, records), des reactions rapides, et un systeme de polling avec banniere de nouveaux elements. Il n y a aucune moderation necessaire car tout le contenu est genere automatiquement.'
-            : 'The activity feed (dynamic feed icon at top of home) automatically aggregates community events without manual posts: public match results, unlocked badges, significant ELO movements, weekly records, meetups and sponsored events. The feed includes a weekly digest (top 3 players, biggest ELO move, most unlocked badge), category filters (all, matches, badges, events, records), quick reactions, and a polling system with new items banner. No moderation needed as all content is auto-generated.',
+            ? 'Le fil d activite (icone flux dynamique en haut de l accueil) agrege automatiquement les evenements de la communaute sans posts manuels : resultats de matchs publics, badges debloques, mouvements ELO significatifs, records de la semaine, meetups, evenements sponsorises et invitations de club (envoyees, acceptees, refusees, expirees). Le fil inclut un digest hebdomadaire personnalise (top 3 joueurs, votre progression ELO, vos badges de la semaine, performances de votre club, plus gros mouvement ELO, badge le plus debloque), des filtres par categorie (tous, matchs, badges, invitations, evenements, records), des reactions rapides (applaudissement, feu, medaille), et un compteur de nouveaux elements non lus sur la page d accueil. Tout le contenu est genere automatiquement, sans moderation necessaire.'
+            : 'The activity feed (dynamic feed icon at top of home) automatically aggregates community events without manual posts: public match results, unlocked badges, significant ELO movements, weekly records, meetups, sponsored events and club invitations (sent, accepted, declined, expired). The feed includes a personalized weekly digest (top 3 players, your ELO progression, your weekly badges, your club performance, biggest ELO move, most unlocked badge), category filters (all, matches, badges, invitations, events, records), quick reactions (applause, fire, medal), and an unread counter on the home page. All content is auto-generated with no moderation needed.',
         },
         {
           id: 'sr6b',
@@ -444,8 +444,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'ac4',
           q: fr ? 'Comment gerer mes notifications ?' : 'How do I manage notifications?',
           a: fr
-            ? 'Profil > Preferences de notifications. Activez/desactivez individuellement : invitations RDV, demandes de partage, evenements sponsorises, changements de classement, rappels.'
-            : 'Profile > Notification preferences. Toggle individually: meetup invitations, share requests, sponsored events, ranking changes, reminders.',
+            ? 'Profil > Preferences de notifications. 10 categories individuelles regroupees en 3 sections : Tournois (evenements, classement, rappels, attestations), Social (invitations RDV, invitations club, demandes de partage), Systeme (reponses invitations, maintenance, rapport admin). Un compteur affiche le nombre de categories actives sur le total. 24 types de push differents sont geres par l\'app pour vous informer de maniere ciblee.'
+            : 'Profile > Notification preferences. 10 individual categories grouped in 3 sections: Tournaments (events, ranking, reminders, attestations), Social (meetup invitations, club invitations, share requests), System (invitation responses, maintenance, admin report). A counter shows active categories out of total. 24 different push types are managed by the app to keep you informed.',
         },
         {
           id: 'ac5',
@@ -471,6 +471,57 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
       ],
     },
     {
+      id: 'club_invitations',
+      category: fr ? 'Invitations Club' : 'Club Invitations',
+      icon: 'mail',
+      color: '#7C3AED',
+      description: fr ? 'Recevoir, envoyer et gerer les invitations de club' : 'Receive, send and manage club invitations',
+      questions: [
+        {
+          id: 'ci1',
+          q: fr ? 'Comment inviter un joueur a rejoindre mon club ?' : 'How do I invite a player to join my club?',
+          a: fr
+            ? 'Depuis la page de votre club, appuyez sur "Inviter un joueur". Recherchez un joueur dans l\'annuaire et envoyez l\'invitation avec un message optionnel expliquant pourquoi vous souhaitez qu\'il rejoigne votre club. Le joueur recoit une notification push et retrouve l\'invitation dans sa page "Invitations Club" (accessible depuis Profil > Notifications > Invitations).'
+            : 'From your club page, tap "Invite a player". Search for a player in the directory and send the invitation with an optional message explaining why you want them to join. The player receives a push notification and finds the invitation in their "Club Invitations" page (accessible from Profile > Notifications > Invitations).',
+        },
+        {
+          id: 'ci2',
+          q: fr ? 'Comment voir les invitations recues et les accepter/refuser ?' : 'How do I view received invitations and accept/decline?',
+          a: fr
+            ? 'Profil > Notifications > Invitations, ou directement via la notification push. La page "Invitations Club" affiche 3 onglets : En attente, Toutes et Envoyees. Pour chaque invitation en attente, vous voyez le club, le nom de l\'inviteur et son message. Acceptez pour rejoindre automatiquement le club, ou refusez avec une raison optionnelle que le proprietaire du club verra.'
+            : 'Profile > Notifications > Invitations, or directly via push notification. The "Club Invitations" page shows 3 tabs: Pending, All and Sent. For each pending invitation, you see the club, inviter name and their message. Accept to automatically join the club, or decline with an optional reason that the club owner will see.',
+        },
+        {
+          id: 'ci3',
+          q: fr ? 'Que se passe-t-il apres l\'acceptation ou le refus ?' : 'What happens after acceptance or decline?',
+          a: fr
+            ? 'Si vous acceptez : votre fiche joueur est automatiquement associee au club, le compteur de membres augmente, et le proprietaire recoit une notification push. Si vous refusez : le proprietaire recoit une notification avec votre raison (si fournie). Dans l\'onglet "Envoyees", le proprietaire voit le statut de chaque invitation (acceptee, refusee, en attente) et la raison du refus le cas echeant.'
+            : 'If you accept: your player card is automatically linked to the club, the member count increases, and the owner receives a push notification. If you decline: the owner receives a notification with your reason (if provided). In the "Sent" tab, the owner sees each invitation status (accepted, declined, pending) and the decline reason if applicable.',
+        },
+        {
+          id: 'ci4',
+          q: fr ? 'Les invitations expirent-elles ?' : 'Do invitations expire?',
+          a: fr
+            ? 'Oui. Les invitations sans reponse apres 30 jours sont automatiquement expirees par le systeme. Le proprietaire du club recoit une notification push l\'informant des invitations expirees. Les invitations expirees apparaissent aussi dans le fil d\'activite communautaire.'
+            : 'Yes. Invitations without a response after 30 days are automatically expired by the system. The club owner receives a push notification informing them of expired invitations. Expired invitations also appear in the community activity feed.',
+        },
+        {
+          id: 'ci5',
+          q: fr ? 'Les invitations apparaissent-elles dans le fil d\'activite ?' : 'Do invitations appear in the activity feed?',
+          a: fr
+            ? 'Oui. Quatre types d\'evenements d\'invitation sont visibles dans le fil d\'activite communautaire : envoyee, acceptee, refusee et expiree. Un filtre "Invitations" dedie permet de les isoler. Vos propres invitations sont marquees avec un badge "Vous" pour les distinguer.'
+            : 'Yes. Four types of invitation events are visible in the community activity feed: sent, accepted, declined and expired. A dedicated "Invitations" filter lets you isolate them. Your own invitations are marked with a "You" badge to distinguish them.',
+        },
+        {
+          id: 'ci6',
+          q: fr ? 'Comment voir les statistiques des invitations de mon club ?' : 'How do I view my club invitation statistics?',
+          a: fr
+            ? 'Si votre club est verifie, la page Analytique (Analytique > Statistiques Invitations) affiche : le nombre d\'invitations envoyees, acceptees, refusees et en attente, le taux d\'acceptation global, le temps de reponse moyen, un graphique d\'evolution du taux d\'acceptation par mois, et un classement des joueurs les plus reactifs. Ces donnees vous aident a optimiser votre strategie de recrutement.'
+            : 'If your club is verified, the Analytics page (Analytics > Invitation Statistics) shows: invitations sent, accepted, declined and pending, overall acceptance rate, average response time, a monthly acceptance rate evolution chart, and a ranking of most responsive players. This data helps optimize your recruitment strategy.',
+        },
+      ],
+    },
+    {
       id: 'roadmap',
       category: fr ? 'Roadmap V2' : 'V2 Roadmap',
       icon: 'rocket-launch',
@@ -481,15 +532,15 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'rm1',
           q: fr ? 'Quelles fonctionnalites arrivent dans la V2 ?' : 'What features are coming in V2?',
           a: fr
-            ? '8 fonctionnalites majeures : Coach IA, Mode Match Live, Feed Social, Gestion Tournois avancee, Messagerie integree, Programmes d\'entrainement, Ligues saisonnieres et Analyse video. Votez depuis la page Roadmap (Profil > A propos) pour orienter les priorites.'
-            : '8 major features: AI Coach, Live Match Mode, Social Feed, Advanced Tournament Management, Messaging, Training Programs, Seasonal Leagues and Video Analysis. Vote from the Roadmap page (Profile > About) to influence priorities.',
+            ? '7 fonctionnalites majeures : Coach IA (conseils personnalises base sur vos stats), Mode Match Live (suivi en temps reel avec spectateurs), Gestion Tournois avancee (arbitrage integre, bracket automatique, inscriptions en ligne), Messagerie integree (chat entre joueurs et clubs), Programmes d\'entrainement (plans structures selon votre role et niveau), Ligues saisonnieres (championnats mensuels avec lots), Analyse video (enregistrement et annotation des gestes). Le Feed Social communautaire est deja operationnel (fil d\'activite avec digest personnalise, reactions et filtres). Votez depuis la page Roadmap (Profil > A propos) pour orienter les priorites.'
+            : '7 major features: AI Coach (personalized tips based on your stats), Live Match Mode (real-time tracking with spectators), Advanced Tournament Management (integrated refereeing, auto brackets, online registration), Integrated Messaging (chat between players and clubs), Training Programs (structured plans by role and level), Seasonal Leagues (monthly championships with prizes), Video Analysis (recording and annotating techniques). The community Social Feed is already operational (activity feed with personalized digest, reactions and filters). Vote from the Roadmap page (Profile > About) to influence priorities.',
         },
         {
           id: 'rm2',
           q: fr ? 'Quand la V2 sera-t-elle lancee ?' : 'When will V2 launch?',
           a: fr
-            ? 'Le developpement debutera a partir de 1000 joueurs actifs. La jauge de progression est visible sur la page Roadmap. Plus la communaute grandit, plus vite la V2 arrivera.'
-            : 'Development begins at 1000 active players. The progress gauge is visible on the Roadmap page. The faster the community grows, the sooner V2 arrives.',
+            ? 'Le developpement debutera a partir de 1000 joueurs actifs. La jauge de progression est visible sur la page Roadmap. Plus la communaute grandit, plus vite la V2 arrivera. En attendant, les fonctionnalites V1 continuent d\'etre enrichies chaque semaine (analytics club, invitations, fil d\'activite, classement geographique, 92+ badges, etc.).'
+            : 'Development begins at 1000 active players. The progress gauge is visible on the Roadmap page. The faster the community grows, the sooner V2 arrives. In the meantime, V1 features continue to be enriched weekly (club analytics, invitations, activity feed, geographic ranking, 92+ badges, etc.).',
         },
       ],
     },
@@ -515,6 +566,13 @@ function getClubFaq(fr: boolean): FAQCategory[] {
           a: fr
             ? 'Depuis l\'annuaire > onglet Clubs > "+ Club". Renseignez nom, ville, adresse, description, equipements, contact et logo. Vous devenez automatiquement proprietaire de la fiche. Une checklist de verification apparait sur la page du club pour vous guider vers le badge verifie.'
             : 'From directory > Clubs tab > "+ Club". Enter name, city, address, description, facilities, contact and logo. You automatically become the card owner. A verification checklist appears on the club page to guide you toward the verified badge.',
+        },
+        {
+          id: 'cb4',
+          q: fr ? 'Comment inviter des joueurs et suivre les reponses ?' : 'How do I invite players and track responses?',
+          a: fr
+            ? 'Depuis la page de votre club > "Inviter un joueur". Recherchez dans l\'annuaire, ajoutez un message personnalise. Le joueur recoit une notification push et retrouve l\'invitation dans sa page Invitations Club. Vous voyez les reponses dans l\'onglet "Envoyees" : statut (accepte/refuse/en attente), raison du refus si fournie. Si un joueur ne repond pas apres 30 jours, l\'invitation expire automatiquement et vous etes notifie. Les statistiques detaillees (taux d\'acceptation, temps de reponse, joueurs les plus reactifs) sont disponibles dans la page Analytique si votre club est verifie.'
+            : 'From your club page > "Invite a player". Search in the directory, add a personalized message. The player receives a push notification and finds the invitation in their Club Invitations page. You see responses in the "Sent" tab: status (accepted/declined/pending), decline reason if provided. If a player does not respond within 30 days, the invitation expires automatically and you are notified. Detailed statistics (acceptance rate, response time, most responsive players) are available in the Analytics page if your club is verified.',
         },
         {
           id: 'cb2',
@@ -550,8 +608,8 @@ function getClubFaq(fr: boolean): FAQCategory[] {
           id: 'cv1b',
           q: fr ? 'Quels avantages apporte le badge verifie ?' : 'What advantages does the verified badge bring?',
           a: fr
-            ? 'Le badge verifie debloque : (1) La page Analytique du club avec statistiques detaillees de tous les membres, matchmaking automatique des doublettes/triplettes optimales, comparaison nationale avec la moyenne des autres clubs, evolution mensuelle, et export CSV/PDF. (2) Priorite sur la carte avec marqueur distinctif bleu. (3) Badge "Proprietaire" affiche sur la fiche du club. (4) Confiance accrue des joueurs car les informations sont validees par un representant officiel.'
-            : 'The verified badge unlocks: (1) Club Analytics page with detailed member stats, automatic matchmaking for optimal doubles/triples, national comparison with other clubs average, monthly evolution, and CSV/PDF export. (2) Priority on the map with distinctive blue marker. (3) "Owner" badge displayed on the club card. (4) Increased player trust as information is validated by an official representative.',
+            ? 'Le badge verifie debloque : (1) La page Analytique du club avec statistiques detaillees de tous les membres, matchmaking automatique des doublettes/triplettes optimales avec score de synergie H2H, comparaison nationale avec la moyenne des autres clubs, evolution mensuelle, statistiques d\'invitations (taux d\'acceptation, temps de reponse, joueurs les plus reactifs) et export CSV/PDF. (2) Priorite sur la carte avec marqueur distinctif bleu. (3) Badge "Proprietaire" affiche sur la fiche du club. (4) Confiance accrue des joueurs car les informations sont validees par un representant officiel.'
+            : 'The verified badge unlocks: (1) Club Analytics page with detailed member stats, automatic matchmaking for optimal doubles/triples with H2H synergy scoring, national comparison with other clubs average, monthly evolution, invitation statistics (acceptance rate, response time, most responsive players) and CSV/PDF export. (2) Priority on the map with distinctive blue marker. (3) "Owner" badge displayed on the club card. (4) Increased player trust as information is validated by an official representative.',
         },
         {
           id: 'cv2',

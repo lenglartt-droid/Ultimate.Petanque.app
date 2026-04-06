@@ -25,6 +25,19 @@ export interface MemberAnalytics {
   roleTrend: Array<{ month: string; roles: Record<string, number>; dominant: string }>;
 }
 
+export interface InvitationStats {
+  totalSent: number;
+  accepted: number;
+  declined: number;
+  pending: number;
+  expired: number;
+  acceptanceRate: number;
+  avgResponseTimeHours: number;
+  byMonth: Array<{ month: string; sent: number; accepted: number; declined: number }>;
+  monthlyAcceptanceRate: Array<{ month: string; rate: number; sent: number }>;
+  mostResponsivePlayers: Array<{ name: string; playerId: string; avgResponseHours: number; invitationsReceived: number; accepted: number }>;
+}
+
 export interface ClubAnalytics {
   // Members
   totalMembers: number;
@@ -54,6 +67,8 @@ export interface ClubAnalytics {
   memberAnalytics: MemberAnalytics[];
   // Matchmaking
   matchmaking: { doublettes: TeamSuggestion[]; triplettes: TeamSuggestion[] };
+  // Invitation statistics
+  invitationStats: InvitationStats;
 }
 
 export async function fetchClubAnalytics(
@@ -283,6 +298,9 @@ export async function fetchClubAnalytics(
   // Matchmaking: compute optimal doublettes and triplettes (with H2H synergy)
   const matchmaking = computeMatchmaking(memberAnalytics, allMatches);
 
+  // Invitation statistics
+  const invitationStats = await fetchInvitationStats(clubId);
+
   return {
     totalMembers: members.length,
     activeMembersThisMonth: activeMemberIds.size,
@@ -303,7 +321,138 @@ export async function fetchClubAnalytics(
     nationalAvgMatchesPerMember,
     memberAnalytics,
     matchmaking,
+    invitationStats,
   };
+}
+
+// ============================================
+// INVITATION STATISTICS
+// ============================================
+
+async function fetchInvitationStats(clubId: string): Promise<InvitationStats> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: invitations } = await supabase
+      .from('club_invitations')
+      .select('id, status, decline_reason, created_at, updated_at')
+      .eq('club_id', clubId);
+
+    if (!invitations || invitations.length === 0) {
+      return { totalSent: 0, accepted: 0, declined: 0, pending: 0, expired: 0, acceptanceRate: 0, avgResponseTimeHours: 0, byMonth: [] };
+    }
+
+    let accepted = 0, declined = 0, pending = 0, expired = 0;
+    let totalResponseTimeMs = 0;
+    let respondedCount = 0;
+
+    invitations.forEach((inv: any) => {
+      if (inv.status === 'accepted') {
+        accepted++;
+        if (inv.updated_at && inv.created_at) {
+          totalResponseTimeMs += new Date(inv.updated_at).getTime() - new Date(inv.created_at).getTime();
+          respondedCount++;
+        }
+      } else if (inv.status === 'declined') {
+        const isExpired = inv.decline_reason && inv.decline_reason.includes('Expired');
+        if (isExpired) { expired++; } else { declined++; }
+        if (inv.updated_at && inv.created_at && !isExpired) {
+          totalResponseTimeMs += new Date(inv.updated_at).getTime() - new Date(inv.created_at).getTime();
+          respondedCount++;
+        }
+      } else {
+        pending++;
+      }
+    });
+
+    const totalSent = invitations.length;
+    const acceptanceRate = (accepted + declined) > 0 ? Math.round((accepted / (accepted + declined)) * 100) : 0;
+    const avgResponseTimeHours = respondedCount > 0 ? Math.round((totalResponseTimeMs / respondedCount) / (1000 * 60 * 60) * 10) / 10 : 0;
+
+    // By month (last 6 months)
+    const now = new Date();
+    const byMonth: InvitationStats['byMonth'] = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const monthLabel = d.toLocaleDateString('fr-FR', { month: 'short' });
+      let mSent = 0, mAccepted = 0, mDeclined = 0;
+      invitations.forEach((inv: any) => {
+        const invDate = new Date(inv.created_at);
+        const invKey = `${invDate.getFullYear()}-${String(invDate.getMonth() + 1).padStart(2, '0')}`;
+        if (invKey === monthKey) {
+          mSent++;
+          if (inv.status === 'accepted') mAccepted++;
+          else if (inv.status === 'declined') mDeclined++;
+        }
+      });
+      byMonth.push({ month: monthLabel, sent: mSent, accepted: mAccepted, declined: mDeclined });
+    }
+
+    // Monthly acceptance rate evolution
+    const monthlyAcceptanceRate = byMonth.map(m => ({
+      month: m.month,
+      rate: (m.accepted + m.declined) > 0 ? Math.round((m.accepted / (m.accepted + m.declined)) * 100) : 0,
+      sent: m.sent,
+    }));
+
+    // Most responsive players — group by invited player, compute avg response time
+    const playerResponseMap = new Map<string, { name: string; playerId: string; totalMs: number; count: number; accepted: number; total: number }>();
+    invitations.forEach((inv: any) => {
+      const pid = inv.invited_player_id || inv.id;
+      const pName = inv.invited_player_name || 'Unknown';
+      if (!playerResponseMap.has(pid)) {
+        playerResponseMap.set(pid, { name: pName, playerId: pid, totalMs: 0, count: 0, accepted: 0, total: 0 });
+      }
+      const entry = playerResponseMap.get(pid)!;
+      entry.total++;
+      if (inv.status === 'accepted') entry.accepted++;
+      if ((inv.status === 'accepted' || inv.status === 'declined') && inv.updated_at && inv.created_at) {
+        const responseMs = new Date(inv.updated_at).getTime() - new Date(inv.created_at).getTime();
+        if (responseMs > 0) { entry.totalMs += responseMs; entry.count++; }
+      }
+    });
+
+    // Need player names — re-fetch with player names
+    let mostResponsivePlayers: InvitationStats['mostResponsivePlayers'] = [];
+    try {
+      const { data: detailedInv } = await supabase
+        .from('club_invitations')
+        .select('invited_player_id, invited_player_name, status, created_at, updated_at')
+        .eq('club_id', clubId)
+        .in('status', ['accepted', 'declined']);
+
+      const detailMap = new Map<string, { name: string; playerId: string; totalMs: number; count: number; accepted: number; total: number }>();
+      (detailedInv || []).forEach((inv: any) => {
+        const pid = inv.invited_player_id;
+        if (!detailMap.has(pid)) {
+          detailMap.set(pid, { name: inv.invited_player_name || '?', playerId: pid, totalMs: 0, count: 0, accepted: 0, total: 0 });
+        }
+        const e = detailMap.get(pid)!;
+        e.total++;
+        if (inv.status === 'accepted') e.accepted++;
+        if (inv.updated_at && inv.created_at) {
+          const ms = new Date(inv.updated_at).getTime() - new Date(inv.created_at).getTime();
+          if (ms > 0) { e.totalMs += ms; e.count++; }
+        }
+      });
+
+      mostResponsivePlayers = Array.from(detailMap.values())
+        .filter(p => p.count > 0)
+        .map(p => ({
+          name: p.name,
+          playerId: p.playerId,
+          avgResponseHours: Math.round((p.totalMs / p.count) / (1000 * 60 * 60) * 10) / 10,
+          invitationsReceived: p.total,
+          accepted: p.accepted,
+        }))
+        .sort((a, b) => a.avgResponseHours - b.avgResponseHours)
+        .slice(0, 5);
+    } catch { /* silent */ }
+
+    return { totalSent, accepted, declined, pending, expired, acceptanceRate, avgResponseTimeHours, byMonth, monthlyAcceptanceRate, mostResponsivePlayers };
+  } catch {
+    return { totalSent: 0, accepted: 0, declined: 0, pending: 0, expired: 0, acceptanceRate: 0, avgResponseTimeHours: 0, byMonth: [], monthlyAcceptanceRate: [], mostResponsivePlayers: [] };
+  }
 }
 
 // ============================================

@@ -186,6 +186,9 @@ export default function ClubDetailScreen() {
       .map(p => ({ ...p, _isInvited: pendingInviteIds.has(p.id) }));
   }, [inviteSearch, showInviteModal, players, clubPlayers, clubInvitations]);
 
+  // Invite message state
+  const [inviteMessage, setInviteMessage] = React.useState('');
+
   const handleInvitePlayer = React.useCallback(async (player: any) => {
     if (!club || !user || invitingPlayerId) return;
     setInvitingPlayerId(player.id);
@@ -204,6 +207,7 @@ export default function ClubDetailScreen() {
       playerUserId: player.userId,
       inviterUserId: user.id,
       inviterName: user.username || user.email,
+      message: inviteMessage.trim() || undefined,
     });
     setInvitingPlayerId(null);
     if (err) {
@@ -1017,79 +1021,6 @@ export default function ClubDetailScreen() {
           </Animated.View>
         ) : null}
 
-        {/* ===== SIMPLIFIED VISIBILITY SECTION ===== */}
-        {canEdit && !isSharedItem && (
-          <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'VISIBILITE' : 'VISIBILITY'}</Text>
-
-            {/* Toggle 1: Community Visibility */}
-            <Pressable
-              style={styles.visibilityCard}
-              onPress={async () => {
-                if (togglingPublic) return;
-                Haptics.selectionAsync();
-                setTogglingPublic(true);
-                const newVal = !isPublicState;
-                const { error } = await toggleItemPublic('clubs', club.id, newVal);
-                if (error) { showAlert(t('common', 'error'), error); }
-                else { setIsPublicState(newVal); setItemPublic('clubs', club.id, newVal); }
-                setTogglingPublic(false);
-              }}
-              disabled={togglingPublic}
-            >
-              <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
-                <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
-              </View>
-              <View style={styles.visibilityInfo}>
-                <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite communaute' : 'Community Visibility'}</Text>
-                <Text style={styles.visibilityDesc}>
-                  {isPublicState ? (language === 'fr' ? 'Visible dans l\'annuaire et sur la carte' : 'Visible in directory and on map') : (language === 'fr' ? 'Masque de l\'annuaire et de la carte' : 'Hidden from directory and map')}
-                </Text>
-              </View>
-              {togglingPublic ? (
-                <ActivityIndicator size="small" color={theme.primary} />
-              ) : (
-                <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
-                  <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
-                    {isPublicState ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-
-            {/* Toggle 2: Contact Info Visibility (only when public and has contacts) */}
-            {isPublicState && (club.contactEmail || club.contactPhone) ? (
-              <Pressable
-                style={[styles.visibilityCard, { marginTop: 8 }]}
-                onPress={async () => {
-                  Haptics.selectionAsync();
-                  const newVal = !(club.showContactPublic ?? false);
-                  try {
-                    await updateClub(club.id, { showContactPublic: newVal } as any);
-                  } catch (e: any) {
-                    showAlert(t('common', 'error'), e.message);
-                  }
-                }}
-              >
-                <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
-                  <MaterialIcons name={club.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={club.showContactPublic ? theme.success : theme.textMuted} />
-                </View>
-                <View style={styles.visibilityInfo}>
-                  <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
-                  <Text style={styles.visibilityDesc}>
-                    {club.showContactPublic ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire et sur la carte' : 'Email and phone visible in directory and on map') : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire et sur la carte' : 'Email and phone hidden in directory and on map')}
-                  </Text>
-                </View>
-                <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
-                  <Text style={[styles.visibilityBadgeText, { color: club.showContactPublic ? theme.success : theme.textMuted }]}>
-                    {club.showContactPublic ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
-                  </Text>
-                </View>
-              </Pressable>
-            ) : null}
-          </Animated.View>
-        )}
-
         {/* Pending Claims - only for owner */}
         {canEdit && !isSharedItem && pendingClaims.length > 0 ? (
           <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
@@ -1289,6 +1220,71 @@ export default function ClubDetailScreen() {
           );
         })() : null}
 
+        {/* ===== SIMPLIFIED VISIBILITY SECTION (bottom of page) ===== */}
+        {canEdit && !isSharedItem ? (
+          <Animated.View entering={FadeIn.duration(400).delay(700)} style={styles.section}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'VISIBILITE' : 'VISIBILITY'}</Text>
+            <Pressable
+              style={styles.visibilityCard}
+              onPress={async () => {
+                if (togglingPublic) return;
+                Haptics.selectionAsync();
+                setTogglingPublic(true);
+                const newVal = !isPublicState;
+                const { error } = await toggleItemPublic('clubs', club.id, newVal);
+                if (error) { showAlert(t('common', 'error'), error); }
+                else { setIsPublicState(newVal); setItemPublic('clubs', club.id, newVal); }
+                setTogglingPublic(false);
+              }}
+              disabled={togglingPublic}
+            >
+              <View style={[styles.visibilityIcon, { backgroundColor: isPublicState ? theme.success + '15' : theme.textMuted + '15' }]}>
+                <MaterialIcons name={isPublicState ? 'public' : 'lock'} size={22} color={isPublicState ? theme.success : theme.textMuted} />
+              </View>
+              <View style={styles.visibilityInfo}>
+                <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite communaute' : 'Community Visibility'}</Text>
+                <Text style={styles.visibilityDesc}>
+                  {isPublicState ? (language === 'fr' ? 'Visible dans l\'annuaire et sur la carte' : 'Visible in directory and on map') : (language === 'fr' ? 'Masque de l\'annuaire et de la carte' : 'Hidden from directory and map')}
+                </Text>
+              </View>
+              {togglingPublic ? (
+                <ActivityIndicator size="small" color={theme.primary} />
+              ) : (
+                <View style={[styles.visibilityBadge, { backgroundColor: isPublicState ? theme.success + '20' : theme.textMuted + '15' }]}>
+                  <Text style={[styles.visibilityBadgeText, { color: isPublicState ? theme.success : theme.textMuted }]}>
+                    {isPublicState ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
+            {isPublicState && (club.contactEmail || club.contactPhone) ? (
+              <Pressable
+                style={[styles.visibilityCard, { marginTop: 8 }]}
+                onPress={async () => {
+                  Haptics.selectionAsync();
+                  const newVal = !(club.showContactPublic ?? false);
+                  try { await updateClub(club.id, { showContactPublic: newVal } as any); } catch (e: any) { showAlert(t('common', 'error'), e.message); }
+                }}
+              >
+                <View style={[styles.visibilityIcon, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                  <MaterialIcons name={club.showContactPublic ? 'contact-phone' : 'phone-disabled'} size={22} color={club.showContactPublic ? theme.success : theme.textMuted} />
+                </View>
+                <View style={styles.visibilityInfo}>
+                  <Text style={styles.visibilityTitle}>{language === 'fr' ? 'Visibilite infos contact' : 'Contact Info Visibility'}</Text>
+                  <Text style={styles.visibilityDesc}>
+                    {club.showContactPublic ? (language === 'fr' ? 'Email et telephone visibles dans l\'annuaire et sur la carte' : 'Email and phone visible in directory and on map') : (language === 'fr' ? 'Email et telephone masques dans l\'annuaire et sur la carte' : 'Email and phone hidden in directory and on map')}
+                  </Text>
+                </View>
+                <View style={[styles.visibilityBadge, { backgroundColor: (club.showContactPublic ? theme.success : theme.textMuted) + '15' }]}>
+                  <Text style={[styles.visibilityBadgeText, { color: club.showContactPublic ? theme.success : theme.textMuted }]}>
+                    {club.showContactPublic ? (language === 'fr' ? 'Actif' : 'On') : (language === 'fr' ? 'Inactif' : 'Off')}
+                  </Text>
+                </View>
+              </Pressable>
+            ) : null}
+          </Animated.View>
+        ) : null}
+
         {/* Claim Club Button - for non-owners (sends to admin) */}
         {user?.id && club.userId && club.userId !== user.id && !isSharedItem ? (
           <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
@@ -1417,11 +1413,27 @@ export default function ClubDetailScreen() {
           <View style={{ backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, maxHeight: '80%', paddingBottom: 20 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: theme.border }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: theme.textPrimary }}>{language === 'fr' ? 'Inviter des joueurs' : 'Invite Players'}</Text>
-              <Pressable onPress={() => setShowInviteModal(false)} hitSlop={8}>
+              <Pressable onPress={() => { setShowInviteModal(false); setInviteMessage(''); }} hitSlop={8}>
                 <MaterialIcons name="close" size={24} color={theme.textSecondary} />
               </Pressable>
             </View>
-            <View style={{ paddingHorizontal: 20, paddingVertical: 12 }}>
+            {/* Invitation message field */}
+            <View style={{ paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4 }}>
+              <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 6 }}>{language === 'fr' ? 'Message joint (optionnel)' : 'Attached message (optional)'}</Text>
+              <TextInput
+                style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 12, fontSize: 14, color: theme.textPrimary, minHeight: 50, textAlignVertical: 'top', borderWidth: 1, borderColor: '#7C3AED20' }}
+                placeholder={language === 'fr' ? 'Ex: Rejoignez-nous pour la saison 2026 !' : 'Ex: Join us for the 2026 season!'}
+                placeholderTextColor={theme.textMuted}
+                value={inviteMessage}
+                onChangeText={setInviteMessage}
+                multiline
+                maxLength={200}
+              />
+              {inviteMessage.trim().length > 0 ? (
+                <Text style={{ fontSize: 10, color: theme.textMuted, textAlign: 'right', marginTop: 4 }}>{inviteMessage.length}/200</Text>
+              ) : null}
+            </View>
+            <View style={{ paddingHorizontal: 20, paddingVertical: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 14, gap: 10, borderWidth: 1, borderColor: theme.border }}>
                 <MaterialIcons name="search" size={20} color={theme.textMuted} />
                 <TextInput

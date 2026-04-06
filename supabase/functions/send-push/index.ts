@@ -1583,6 +1583,48 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // CLUB_INVITATION_RESPONSE: Notify club owner when player accepts/declines
+    // ============================================================
+    else if (type === 'club_invitation_response') {
+      const { targetUserId, playerName, clubName, clubId: respClubId, response: invResponse, declineReason } = payload || {};
+      if (!targetUserId || !invResponse) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/response' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAccepted = invResponse === 'accepted';
+        const title = isAccepted
+          ? `\u2705 ${playerName || 'Un joueur'} a rejoint ${clubName || 'votre club'} !`
+          : `\u274C ${playerName || 'Un joueur'} a refuse l'invitation`;
+        let body = isAccepted
+          ? `${playerName || 'Un joueur'} a accepte votre invitation et est desormais membre de ${clubName || 'votre club'}.`
+          : `${playerName || 'Un joueur'} a decline l'invitation a rejoindre ${clubName || 'votre club'}.`;
+        if (!isAccepted && declineReason) {
+          body += ` Raison : "${declineReason.substring(0, 100)}"`;
+        }
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'club_invitation_response', clubId: respClubId, response: invResponse },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

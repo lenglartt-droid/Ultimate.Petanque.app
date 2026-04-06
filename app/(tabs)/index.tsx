@@ -100,7 +100,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -416,8 +416,9 @@ export default function HomeScreen() {
     s.push({ key: 'history', data: ['history'] });
     // Ad banner at bottom — second placement after all content
     if (matches.length > 0 || challenges.length > 0) s.push({ key: 'adBanner2', data: ['adBanner2'] });
+    if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     return s;
-  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length]);
+  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -700,6 +701,19 @@ export default function HomeScreen() {
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <AmbassadorBanner ambassadors={featuredAmbassadors} language={language} t={t} screenWidth={screenWidth} userId={user?.id} />
+          </View>
+        );
+
+      // ===== FR PROMO BANNER =====
+      case 'frBanner':
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <Image
+              source={require('@/assets/images/banner-fr-promo.png')}
+              style={{ width: '100%', height: undefined, aspectRatio: 1200 / 628, borderRadius: 16 }}
+              contentFit="cover"
+              transition={300}
+            />
           </View>
         );
 
