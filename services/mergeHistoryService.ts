@@ -250,6 +250,22 @@ export async function adminUndoMerge(log: MergeLog): Promise<{ error: string | n
     // Delete the merge log
     await supabase.from('merge_logs').delete().eq('id', log.id);
 
+    // Send push notification to the original owner about the undo
+    try {
+      const ownerUserId = snapshot.user_id || log.userId;
+      await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'merge_undo',
+          payload: {
+            targetUserId: ownerUserId,
+            itemName: log.sourceName,
+            itemType: log.mergeType,
+            targetName: log.targetName,
+          },
+        },
+      });
+    } catch { /* non-blocking */ }
+
     return { error: null };
   } catch (e: any) {
     return { error: e?.message || 'Unknown error' };

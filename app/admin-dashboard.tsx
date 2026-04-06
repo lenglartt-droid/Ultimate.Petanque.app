@@ -132,7 +132,7 @@ export default function AdminDashboardScreen() {
   const [adminNotifCount, setAdminNotifCount] = useState(0);
 
   // Push analytics
-  const [pushStats, setPushStats] = useState({ sent: 0, types: {} as Record<string, number> });
+  const [pushStats, setPushStats] = useState({ sent: 0, errors: 0, types: {} as Record<string, number>, daily: [] as { date: string; sent: number; errors: number }[] });
 
   // Onboarding analytics
   const [onboardingStats, setOnboardingStats] = useState<{ total: number; withProfile: number; withConsent: number; withRole: number; conversionRate: number; avgDaysToProfile: number }>({ total: 0, withProfile: 0, withConsent: 0, withRole: 0, conversionRate: 0, avgDaysToProfile: 0 });
@@ -287,7 +287,7 @@ export default function AdminDashboardScreen() {
       })));
 
       // Push analytics
-      setPushStats(res.pushAnalytics || { sent: 0, types: {} });
+      setPushStats(res.pushAnalytics || { sent: 0, errors: 0, types: {}, daily: [] });
 
       // Activity logs
       setActivityLogs((res.activityLogs || []).map((l: any) => ({
@@ -1095,15 +1095,61 @@ export default function AdminDashboardScreen() {
           <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <Text style={s.sectionTitle}>PUSH ANALYTICS</Text>
             <View style={s.chartCard}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-                <View style={[s.metricIcon, { backgroundColor: '#DBEAFE' }]}>
-                  <MaterialIcons name="send" size={18} color="#3B82F6" />
-                </View>
-                <View style={{ flex: 1 }}>
+              {/* KPI row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
                   <Text style={{ fontSize: 22, fontWeight: '800', color: '#3B82F6' }}>{pushStats.sent}</Text>
-                  <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase', letterSpacing: 0.3 }}>{fr ? 'Notifications envoyees' : 'Notifications sent'}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Envoyees' : 'Sent'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#FEF2F2', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>{pushStats.errors || 0}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Erreurs' : 'Errors'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#10B981' }}>
+                    {pushStats.sent > 0 ? `${Math.round(((pushStats.sent - (pushStats.errors || 0)) / pushStats.sent) * 100)}%` : '-'}
+                  </Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Livraison' : 'Delivery'}</Text>
                 </View>
               </View>
+
+              {/* Daily chart (last 7 days) */}
+              {pushStats.daily && pushStats.daily.length > 0 ? (
+                <View style={{ marginBottom: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? '7 derniers jours' : 'Last 7 days'}</Text>
+                  {(() => {
+                    const maxDaily = Math.max(...pushStats.daily.map(d => d.sent), 1);
+                    return pushStats.daily.map((d, idx) => {
+                      const dateLabel = new Date(d.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'short' });
+                      const isToday = idx === pushStats.daily.length - 1;
+                      return (
+                        <View key={d.date} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ width: 32, fontSize: 9, fontWeight: isToday ? '800' : '600', color: isToday ? '#3B82F6' : '#94A3B8' }}>{dateLabel}</Text>
+                          <View style={{ flex: 1, height: 16, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden', flexDirection: 'row' }}>
+                            <View style={{ height: '100%' as any, width: `${Math.max(2, (d.sent / maxDaily) * 100)}%`, backgroundColor: '#3B82F6', borderRadius: 4 }} />
+                            {d.errors > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, (d.errors / maxDaily) * 100)}%`, backgroundColor: '#EF4444', borderTopRightRadius: 4, borderBottomRightRadius: 4 }} /> : null}
+                          </View>
+                          <Text style={{ width: 24, fontSize: 10, fontWeight: '800', color: '#0F172A', textAlign: 'right' }}>{d.sent}</Text>
+                          {d.errors > 0 ? <Text style={{ width: 20, fontSize: 9, fontWeight: '600', color: '#EF4444', textAlign: 'right' }}>-{d.errors}</Text> : null}
+                        </View>
+                      );
+                    });
+                  })()}
+                  {/* Legend */}
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 6, justifyContent: 'flex-end' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#3B82F6' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Envoye' : 'Sent'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#EF4444' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Erreur' : 'Error'}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* By target type */}
               {Object.keys(pushStats.types).length > 0 ? (
                 <View style={{ gap: 6 }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 4 }}>{fr ? 'Par type de cible' : 'By target type'}</Text>
