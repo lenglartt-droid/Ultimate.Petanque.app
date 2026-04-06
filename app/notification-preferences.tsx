@@ -156,6 +156,30 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
       },
     ],
   },
+  {
+    titleFr: 'Club',
+    titleEn: 'Club',
+    items: [
+      {
+        key: 'club_invitation',
+        icon: 'mail',
+        color: '#7C3AED',
+        labelFr: 'Invitations club',
+        labelEn: 'Club invitations',
+        descFr: 'Notification quand un club vous invite a le rejoindre.',
+        descEn: 'Notification when a club invites you to join.',
+      },
+      {
+        key: 'club_invitation_reminder',
+        icon: 'notifications',
+        color: '#F59E0B',
+        labelFr: 'Rappels d\'invitation',
+        labelEn: 'Invitation reminders',
+        descFr: 'Rappels automatiques a 7 et 21 jours pour les invitations club en attente.',
+        descEn: 'Automatic reminders at 7 and 21 days for pending club invitations.',
+      },
+    ],
+  },
 ];
 
 export default function NotificationPreferencesScreen() {

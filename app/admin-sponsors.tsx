@@ -18,7 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -433,7 +433,7 @@ export default function AdminSponsorsScreen() {
           const stats = analytics.get(item.id);
           const lvlCfg = AMBASSADOR_LEVELS[(item.ambassador_level as AmbassadorLevel) || 'decouverte'] || AMBASSADOR_LEVELS.decouverte;
           return (
-            <Animated.View key={item.id} entering={FadeInDown.duration(300).delay(idx * 40)} style={[s.itemCard, !item.is_active && { opacity: 0.5 }]}>
+            <View key={item.id} style={[s.itemCard, !item.is_active && { opacity: 0.5 }]}>
               <View style={s.itemTopRow}>
                 <View style={[s.itemAvatar, { backgroundColor: cfg.color + '15' }]}>
                   {item.photo ? (
@@ -498,7 +498,7 @@ export default function AdminSponsorsScreen() {
                   <Text style={s.refCodeText}>{item.referral_code}</Text>
                 </View>
               ) : null}
-            </Animated.View>
+            </View>
           );
         })}
       </ScrollView>

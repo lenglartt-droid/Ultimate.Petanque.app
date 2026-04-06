@@ -18,6 +18,8 @@ export interface NotificationPreferences {
   witness_request: boolean;
   badge_unlock: boolean;
   new_follower: boolean;
+  club_invitation: boolean;
+  club_invitation_reminder: boolean;
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -32,6 +34,8 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   witness_request: true,
   badge_unlock: true,
   new_follower: true,
+  club_invitation: true,
+  club_invitation_reminder: true,
 };
 
 /**
