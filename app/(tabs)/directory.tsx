@@ -100,6 +100,7 @@ export default function DirectoryScreen() {
   const [showFilters, setShowFilters] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
+  const [showActiveNow, setShowActiveNow] = useState(false);
   // Pagination state
   const PAGE_SIZE = 30;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -250,7 +251,7 @@ export default function DirectoryScreen() {
   // Reset pagination when tab or filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly]);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow]);
 
   // Levenshtein-based duplicate detection — debounced for performance
   // Stable fingerprint to avoid recalculating when data hasn't changed
@@ -449,8 +450,55 @@ export default function DirectoryScreen() {
     });
   }, [clubs, searchQuery, filters]);
 
+  // Compute terrain activity scores from match patterns + meetups + tournaments
+  const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
+  const terrainActivityMap = useMemo(() => {
+    const scoreMap = new Map<string, { score: number; matchCount: number; peakLabel: string }>();
+    if (!showActiveNow) return scoreMap;
+    const now = new Date();
+    const currentDow = now.getDay();
+    const currentHour = now.getHours();
+    const todayStr = now.toISOString().slice(0, 10);
+    terrains.forEach(tr => {
+      const terrainMatches = allAppMatches.filter(m => m.terrainId === tr.id);
+      let sameDayHourCount = 0;
+      let sameDayCount = 0;
+      terrainMatches.forEach(m => {
+        const d = new Date(m.date);
+        if (d.getDay() === currentDow) {
+          sameDayCount++;
+          const h = d.getHours();
+          if (Math.abs(h - currentHour) <= 2) sameDayHourCount++;
+        }
+      });
+      // Bonus: tournaments happening today at this terrain
+      const todayTournaments = allAppTournaments.filter(t => t.terrainId === tr.id && (t.status === 'En cours' || (t.status === 'À venir' && t.date && t.date.slice(0, 10) === todayStr)));
+      const tournamentBonus = todayTournaments.length * 25;
+      // Score: weighted combination
+      const hourScore = sameDayHourCount * 10;
+      const dayScore = sameDayCount * 3;
+      const totalScore = Math.min(terrainMatches.length, 10);
+      const rawScore = hourScore + dayScore + totalScore + tournamentBonus;
+      if (rawScore > 0) {
+        const dayNames = language === 'fr' ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        let peakLabel = '';
+        if (todayTournaments.length > 0) {
+          peakLabel = todayTournaments.length === 1
+            ? `${language === 'fr' ? 'Tournoi aujourd\'hui' : 'Tournament today'}`
+            : `${todayTournaments.length} ${language === 'fr' ? 'tournois aujourd\'hui' : 'tournaments today'}`;
+        } else if (sameDayHourCount > 0) {
+          peakLabel = `${sameDayHourCount} ${language === 'fr' ? 'partie(s)' : 'game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
+        } else {
+          peakLabel = `${sameDayCount} ${language === 'fr' ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
+        }
+        scoreMap.set(tr.id, { score: rawScore, matchCount: terrainMatches.length + todayTournaments.length, peakLabel });
+      }
+    });
+    return scoreMap;
+  }, [showActiveNow, terrains, allAppMatches, allAppTournaments, language]);
+
   const filteredTerrains = useMemo(() => {
-    return terrains.filter(tr => {
+    let result = terrains.filter(tr => {
       const matchesSearch = tr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tr.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = filters.terrainType === 'all' || tr.type === filters.terrainType;
@@ -465,7 +513,14 @@ export default function DirectoryScreen() {
         (filters.terrainAccess === 'public' ? (tr.publicAccess !== false) : (tr.publicAccess === false));
       return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess;
     });
-  }, [terrains, searchQuery, filters]);
+    // When "Active now" is on, filter to only terrains with activity and sort by score
+    if (showActiveNow) {
+      result = result
+        .filter(tr => terrainActivityMap.has(tr.id))
+        .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
+    }
+    return result;
+  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -571,8 +626,9 @@ export default function DirectoryScreen() {
   }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
 
   const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
-    return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} />;
-  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language]);
+    const activityInfo = showActiveNow ? terrainActivityMap.get(item.id) : undefined;
+    return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} />;
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, showActiveNow, terrainActivityMap]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
     return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
@@ -883,6 +939,22 @@ export default function DirectoryScreen() {
                 <MaterialIcons name="verified" size={16} color={showRealUsersOnly ? '#FFF' : 'rgba(255,255,255,0.7)'} />
               </Pressable>
             ) : null}
+            {activeTab === 'terrains' ? (
+              <Pressable
+                style={[styles.headerRealUserBtn, showActiveNow && { backgroundColor: '#22C55E', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }]}
+                onPress={() => { Haptics.selectionAsync(); setShowActiveNow(!showActiveNow); }}
+              >
+                <MaterialIcons name="local-fire-department" size={16} color={showActiveNow ? '#FFF' : 'rgba(255,255,255,0.7)'} />
+              </Pressable>
+            ) : null}
+            {activeTab === 'terrains' && showActiveNow && terrainActivityMap.size > 0 ? (
+              <Pressable
+                style={[styles.headerRealUserBtn, { backgroundColor: '#3B82F6', borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }]}
+                onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any); }}
+              >
+                <MaterialIcons name="map" size={16} color="#FFF" />
+              </Pressable>
+            ) : null}
             <Pressable
               style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
               onPress={() => {
@@ -1054,6 +1126,22 @@ export default function DirectoryScreen() {
               </>
             )}
           </ScrollView>
+        </View>
+      ) : null}
+
+      {/* Active Now Banner */}
+      {showActiveNow && activeTab === 'terrains' ? (
+        <View style={styles.activeNowBanner}>
+          <View style={styles.activeNowBannerIcon}>
+            <MaterialIcons name="local-fire-department" size={18} color="#22C55E" />
+          </View>
+          <View style={styles.activeNowBannerContent}>
+            <Text style={styles.activeNowBannerTitle}>{t('directory', 'activeNowLabel')}</Text>
+            <Text style={styles.activeNowBannerDesc}>{t('directory', 'activeNowDesc')}</Text>
+          </View>
+          <Pressable style={styles.activeNowBannerClose} onPress={() => setShowActiveNow(false)} hitSlop={8}>
+            <MaterialIcons name="close" size={16} color="#22C55E" />
+          </Pressable>
         </View>
       ) : null}
 
@@ -1818,10 +1906,11 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
   );
 });
 
-const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig }: {
+const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig, activityInfo }: {
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
+  activityInfo?: { score: number; matchCount: number; peakLabel: string };
 }) => {
   const typeConfig = getTerrainTypeConfig(item.type);
   const isFavorite = favoriteTerrainIds.includes(item.id);
@@ -1860,6 +1949,12 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
           {(item as any).parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
         </View>
+        {activityInfo ? (
+          <View style={styles.activityScoreBadge}>
+            <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
+            <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+          </View>
+        ) : null}
       </View>
       {item.location?.latitude && item.location?.longitude ? <MapLinkButton lat={item.location.latitude} lng={item.location.longitude} name={item.name} /> : null}
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
@@ -2864,6 +2959,56 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.success + '25',
     marginRight: 4,
+  },
+  // Active Now
+  activeNowBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    marginHorizontal: 16,
+    marginTop: 10,
+    backgroundColor: '#F0FDF4',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1.5,
+    borderColor: '#BBF7D0',
+    gap: 10,
+  },
+  activeNowBannerIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: '#22C55E15',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  activeNowBannerContent: { flex: 1 },
+  activeNowBannerTitle: { fontSize: 13, fontWeight: '700' as const, color: '#166534' },
+  activeNowBannerDesc: { fontSize: 11, color: '#16A34A', marginTop: 2 },
+  activeNowBannerClose: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#22C55E12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  activityScoreBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    backgroundColor: '#F0FDF4',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#BBF7D0',
+    marginTop: 6,
+    alignSelf: 'flex-start' as const,
+  },
+  activityScoreText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#16A34A',
   },
   // Meetup Invitation Picker
   meetupOverlay: {
