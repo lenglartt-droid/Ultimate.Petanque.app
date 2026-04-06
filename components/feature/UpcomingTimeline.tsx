@@ -1,5 +1,5 @@
 import React, { memo, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import * as Haptics from '@/services/haptics';
@@ -35,6 +35,7 @@ function UpcomingTimeline({
   const [joinCode, setJoinCode] = useState('');
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState('');
+  const [showJoinModal, setShowJoinModal] = useState(false);
 
   const handleJoinByCode = useCallback(async () => {
     const code = joinCode.trim().toUpperCase();
@@ -87,26 +88,33 @@ function UpcomingTimeline({
               <View style={s.actionBadge}><Text style={s.actionBadgeText}>{pendingInviteCount > 9 ? '9+' : pendingInviteCount}</Text></View>
             </Pressable>
           ) : null}
-
+          <Pressable
+            style={s.joinHeaderBtn}
+            onPress={() => {
+              Haptics.selectionAsync();
+              setShowJoinModal(true);
+            }}
+          >
+            <MaterialIcons name="qr-code-2" size={14} color="#0369A1" />
+            <Text style={s.joinHeaderBtnText}>{language === 'fr' ? 'Rejoindre' : 'Join'}</Text>
+          </Pressable>
         </View>
       </View>
 
-      {(meetupsLoading || eventsLoading) ? (
-        <TimelineSkeleton items={3} />
-      ) : visibleItems.length === 0 ? (
-        <View style={s.emptyWrap}>
-          {/* Prominent Join Meetup Card */}
-          <View style={s.joinCard}>
-            <View style={s.joinCardHeader}>
+      {/* Join Meetup Modal */}
+      <Modal visible={showJoinModal} animationType="fade" transparent onRequestClose={() => setShowJoinModal(false)}>
+        <Pressable style={s.joinModalOverlay} onPress={() => setShowJoinModal(false)}>
+          <Pressable style={s.joinModalContent} onPress={(e) => e.stopPropagation?.()}>
+            <View style={s.joinModalHeader}>
               <View style={s.joinCardIconBg}>
-                <MaterialIcons name="qr-code-2" size={32} color="#0369A1" />
+                <MaterialIcons name="qr-code-2" size={28} color="#0369A1" />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.joinCardTitle}>{language === 'fr' ? 'Rejoindre un RDV' : 'Join a Meetup'}</Text>
                 <Text style={s.joinCardDesc}>{language === 'fr' ? 'Entrez le code ou scannez le QR' : 'Enter the code or scan the QR'}</Text>
               </View>
-              <Pressable style={s.joinScanBtn} onPress={() => router.push('/scanner' as any)}>
-                <MaterialIcons name="qr-code-scanner" size={20} color="#0369A1" />
+              <Pressable style={s.joinModalClose} onPress={() => setShowJoinModal(false)}>
+                <MaterialIcons name="close" size={20} color="#64748B" />
               </Pressable>
             </View>
             <View style={s.joinInputRow}>
@@ -122,12 +130,13 @@ function UpcomingTimeline({
                   maxLength={10}
                   editable={!joining}
                   returnKeyType="go"
-                  onSubmitEditing={handleJoinByCode}
+                  onSubmitEditing={() => { handleJoinByCode(); setShowJoinModal(false); }}
+                  autoFocus
                 />
               </View>
               <Pressable
                 style={[s.joinSubmitBtn, !joinCode.trim() && s.joinSubmitBtnDisabled]}
-                onPress={handleJoinByCode}
+                onPress={() => { handleJoinByCode(); setShowJoinModal(false); }}
                 disabled={!joinCode.trim() || joining}
               >
                 {joining ? (
@@ -140,14 +149,24 @@ function UpcomingTimeline({
                 )}
               </Pressable>
             </View>
+            <Pressable style={s.joinScanRow} onPress={() => { setShowJoinModal(false); router.push('/scanner' as any); }}>
+              <MaterialIcons name="qr-code-scanner" size={18} color="#0369A1" />
+              <Text style={s.joinScanRowText}>{language === 'fr' ? 'Scanner un QR code' : 'Scan a QR code'}</Text>
+            </Pressable>
             {joinError ? (
               <View style={s.joinErrorRow}>
                 <MaterialIcons name="error-outline" size={13} color="#DC2626" />
                 <Text style={s.joinErrorText}>{joinError}</Text>
               </View>
             ) : null}
-          </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
 
+      {(meetupsLoading || eventsLoading) ? (
+        <TimelineSkeleton items={3} />
+      ) : visibleItems.length === 0 ? (
+        <View style={s.emptyWrap}>
           {/* Empty state */}
           <View style={s.empty}>
             <View style={s.emptyIcon}><MaterialIcons name="event-available" size={36} color={theme.textMuted} /></View>
@@ -303,8 +322,14 @@ const s = StyleSheet.create({
   actionBtn: { width: 34, height: 34, borderRadius: 11, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   actionBadge: { position: 'absolute' as const, top: -4, right: -4, backgroundColor: theme.error, minWidth: 16, height: 16, borderRadius: 8, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3, borderWidth: 2, borderColor: '#F8FAFC' },
   actionBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
-  joinBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#0369A1', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 12, borderWidth: 1.5, borderColor: '#0284C7', shadowColor: '#0369A1', shadowOffset: { width: 0, height: 2 } as const, shadowOpacity: 0.2, shadowRadius: 4, elevation: 3 },
-  joinBtnText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF', letterSpacing: 0.3 },
+  joinHeaderBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 5, backgroundColor: '#E0F2FE', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#BAE6FD' },
+  joinHeaderBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#0369A1' },
+  joinModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', paddingHorizontal: 24 },
+  joinModalContent: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, maxWidth: 420, alignSelf: 'center' as const, width: '100%' },
+  joinModalHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
+  joinModalClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },
+  joinScanRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 12, marginTop: 10, backgroundColor: '#F0F9FF', borderRadius: 12, borderWidth: 1, borderColor: '#BAE6FD' },
+  joinScanRowText: { fontSize: 13, fontWeight: '600' as const, color: '#0369A1' },
   timeline: { gap: 8 },
   card: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 12, gap: 12, borderLeftWidth: 4, borderWidth: 1, borderColor: 'transparent', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.04, shadowRadius: 4 }, android: { elevation: 1 }, default: {} }) },
   dateCol: { width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
