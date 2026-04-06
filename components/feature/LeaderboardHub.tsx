@@ -376,7 +376,7 @@ function LeaderboardHub() {
                       <Pressable key={p.id} style={[s.podiumItem, { marginTop: idx === 0 ? 0 : idx === 1 ? 0 : 14 }]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
                         <View style={[s.podiumAvatarWrap, { width: sz, height: sz, borderColor: col }]}>
                           {p.avatar ? (
-                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                           ) : (
                             <View style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2, backgroundColor: isMe ? theme.primary : '#334155', alignItems: 'center', justifyContent: 'center' }}>
                               <Text style={{ fontSize: sz * 0.3, fontWeight: '700', color: '#FFF' }}>{p.name.charAt(0)}</Text>
@@ -499,7 +499,7 @@ function LeaderboardHub() {
                       <Text style={[s.playerRank, { color: theme.primary }]}>{myPlayerRank}</Text>
                       <View style={s.playerAvatarBox}>
                         {myP.avatar ? (
-                          <Image source={{ uri: myP.avatar }} style={s.playerAvatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                          <Image source={{ uri: myP.avatar }} style={s.playerAvatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                         ) : (
                           <View style={[s.playerAvatar, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
                             <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{myP.name.charAt(0)}</Text>

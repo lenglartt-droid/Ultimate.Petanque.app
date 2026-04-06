@@ -221,6 +221,13 @@ function LayoutInner() {
           case 'club_claim':
             router.push({ pathname: '/notifications-hub', params: { tab: 'claims' } } as any);
             break;
+          case 'club_invitation':
+          case 'club_invitation_reminder':
+            router.push('/club-invitations' as any);
+            break;
+          case 'club_invitation_response':
+            router.push('/club-invitations' as any);
+            break;
           case 'maintenance':
             // No navigation, banner auto-shows via polling
             break;

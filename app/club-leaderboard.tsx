@@ -343,7 +343,7 @@ const s = StyleSheet.create({
   medalText: { fontSize: 14, fontWeight: '900', color: '#FFF' },
   rankText: { fontSize: 14, fontWeight: '700', color: theme.textMuted },
   clubLogoCol: {},
-  clubLogo: { width: 44, height: 44, borderRadius: 12 },
+  clubLogo: { width: 44, height: 44, borderRadius: 12, overflow: 'hidden' as const },
   clubLogoPlaceholder: { width: 44, height: 44, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
   clubInfoCol: { flex: 1 },
   clubName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },

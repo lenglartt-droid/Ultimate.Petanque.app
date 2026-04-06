@@ -143,26 +143,66 @@ export default function ClubAnalyticsScreen() {
           </View>
           <View style={{ width: 40 }} />
         </View>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
-          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
-            <MaterialIcons name="verified" size={40} color="#F59E0B" />
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 24, paddingTop: 32, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false}>
+          <View style={{ alignItems: 'center', marginBottom: 28 }}>
+            <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+              <MaterialIcons name="verified" size={40} color="#F59E0B" />
+            </View>
+            <Text style={{ fontSize: 20, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 8 }}>
+              {fr ? 'Club non verifie' : 'Unverified Club'}
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21 }}>
+              {t('club', 'analyticsVerifiedDesc')}
+            </Text>
           </View>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 8 }}>
-            {fr ? 'Club non verifie' : 'Unverified Club'}
-          </Text>
-          <Text style={{ fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
-            {fr
-              ? 'La page Analytique est reservee aux clubs verifies. Completez la checklist de verification sur la page de votre club, envoyez une preuve de votre role administratif, et attendez la validation de l\'equipe admin.'
-              : 'The Analytics page is reserved for verified clubs. Complete the verification checklist on your club page, send proof of your administrative role, and await admin team validation.'}
-          </Text>
+
+          {/* Advantages list */}
+          <View style={{ backgroundColor: theme.surface, borderRadius: 18, padding: 18, marginBottom: 24, borderWidth: 1.5, borderColor: '#8B5CF620', ...theme.shadows.card }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 16 }}>
+              <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: '#8B5CF615', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="auto-awesome" size={20} color="#8B5CF6" />
+              </View>
+              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{t('club', 'analyticsAdvantages')}</Text>
+            </View>
+            {([
+              { icon: 'timeline', color: '#3B82F6', key: 'analyticsAdvMemberEvolution' },
+              { icon: 'bar-chart', color: theme.primary, key: 'analyticsAdvMatchStats' },
+              { icon: 'compare-arrows', color: '#0EA5E9', key: 'analyticsAdvNationalComparison' },
+              { icon: 'emoji-events', color: '#F59E0B', key: 'analyticsAdvTopPlayers' },
+              { icon: 'pie-chart', color: '#8B5CF6', key: 'analyticsAdvRoleDistribution' },
+              { icon: 'groups', color: '#10B981', key: 'analyticsAdvMatchmaking' },
+              { icon: 'handshake', color: '#7C3AED', key: 'analyticsAdvH2HSynergy' },
+              { icon: 'mail', color: '#EC4899', key: 'analyticsAdvInvitationStats' },
+              { icon: 'person-search', color: '#F97316', key: 'analyticsAdvMemberAnalytics' },
+              { icon: 'sports', color: theme.carreauColor, key: 'analyticsAdvTournamentStats' },
+              { icon: 'file-download', color: '#059669', key: 'analyticsAdvExportCsvPdf' },
+            ] as const).map((adv, i) => (
+              <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, borderBottomWidth: i < 10 ? 1 : 0, borderBottomColor: theme.border + '50' }}>
+                <View style={{ width: 32, height: 32, borderRadius: 8, backgroundColor: adv.color + '12', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name={adv.icon as any} size={16} color={adv.color} />
+                </View>
+                <Text style={{ flex: 1, fontSize: 13, fontWeight: '600', color: theme.textPrimary, lineHeight: 18 }}>{t('club', adv.key)}</Text>
+                <MaterialIcons name="lock" size={14} color={theme.textMuted} />
+              </View>
+            ))}
+          </View>
+
+          {/* CTA */}
           <Pressable
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 }}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 16, borderRadius: 14, marginBottom: 12 }}
             onPress={() => { router.back(); }}
           >
-            <MaterialIcons name="arrow-back" size={18} color="#FFF" />
-            <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Retour au club' : 'Back to club'}</Text>
+            <MaterialIcons name="checklist" size={18} color="#FFF" />
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Completer la verification' : 'Complete verification'}</Text>
           </Pressable>
-        </View>
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.backgroundSecondary, paddingVertical: 14, borderRadius: 14, borderWidth: 1, borderColor: theme.border }}
+            onPress={() => { router.back(); }}
+          >
+            <MaterialIcons name="arrow-back" size={18} color={theme.textSecondary} />
+            <Text style={{ fontSize: 15, fontWeight: '600', color: theme.textSecondary }}>{fr ? 'Retour au club' : 'Back to club'}</Text>
+          </Pressable>
+        </ScrollView>
       </SafeAreaView>
     );
   }

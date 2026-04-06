@@ -251,7 +251,7 @@ export default function SponsoredEventListScreen() {
           {ev.ambassadorName ? (
             <View style={s.eventSponsor}>
               {ev.ambassadorPhoto ? (
-                <Image source={{ uri: ev.ambassadorPhoto }} style={s.eventSponsorPhoto} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                <Image source={{ uri: ev.ambassadorPhoto }} style={s.eventSponsorPhoto} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
               ) : null}
               <Text style={s.eventSponsorName}>{fr ? 'Par' : 'By'} {ev.ambassadorName}</Text>
               <MaterialIcons name="verified" size={12} color="#7C3AED" />

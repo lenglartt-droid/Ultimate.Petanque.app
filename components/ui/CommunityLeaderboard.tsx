@@ -361,7 +361,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                       <Pressable key={p.id} style={[s.podiumItem, { marginTop: idx === 0 ? 0 : idx === 1 ? 0 : 16 }]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
                         <View style={[s.podiumAvatarWrap, { width: sz, height: sz, borderColor: col }]}>
                           {p.avatar ? (
-                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                           ) : (
                             <View style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2, backgroundColor: isMe ? theme.primary : '#334155', alignItems: 'center', justifyContent: 'center' }}>
                               <Text style={{ fontSize: sz * 0.3, fontWeight: '700', color: '#FFF' }}>{p.name.charAt(0)}</Text>
@@ -430,7 +430,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                       <Text style={[s.rankText, { color: theme.primary }]}>{myRank}</Text>
                       <View style={s.avatarWrap}>
                         {myP.avatar ? (
-                          <Image source={{ uri: myP.avatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                          <Image source={{ uri: myP.avatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                         ) : (
                           <View style={[s.avatar, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
                             <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{myP.name.charAt(0)}</Text>
@@ -481,7 +481,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                     </View>
                     <View style={s.avatarWrap}>
                       {club.logo ? (
-                        <Image source={{ uri: club.logo }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                        <Image source={{ uri: club.logo }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                       ) : (
                         <View style={[s.avatar, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="home" size={16} color="#F59E0B" /></View>
                       )}
@@ -516,7 +516,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                     </View>
                     <View style={s.avatarWrap}>
                       {entry.userAvatar ? (
-                        <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                        <Image source={{ uri: entry.userAvatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                       ) : (
                         <View style={[s.avatar, { backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' }]}><Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>{entry.userName.charAt(0)}</Text></View>
                       )}

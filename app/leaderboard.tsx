@@ -86,7 +86,7 @@ const WeeklyPlayerRow = React.memo(function WeeklyPlayerRow({
       <View style={[s.playerCol, { marginBottom: 6 }]}>
         <View style={s.avatarWrap}>
           {player.avatar ? (
-            <Image source={{ uri: player.avatar }} style={s.avatar} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+            <Image source={{ uri: player.avatar }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
           ) : (
             <View style={[s.avatar, { backgroundColor: isMe ? theme.primary : theme.textMuted + '30', alignItems: 'center', justifyContent: 'center' }]}>
               <Text style={{ fontSize: 14, fontWeight: '700', color: isMe ? '#FFF' : theme.textSecondary }}>{player.name.charAt(0)}</Text>
@@ -1110,7 +1110,7 @@ export default function LeaderboardScreen() {
                     <Pressable key={sg.id + idx} style={s.autocompleteItem} onPress={() => handleSuggestionPress(sg)}>
                       <View style={s.autocompleteAvatar}>
                         {sg.avatar ? (
-                          <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
+                          <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                         ) : (
                           <MaterialIcons name={sg.type === 'player' ? 'person' : sg.type === 'club' ? 'home' : 'sports-baseball'} size={16} color={theme.primary} />
                         )}
@@ -1135,7 +1135,7 @@ export default function LeaderboardScreen() {
                       <Pressable key={`recent-${sg.id}-${idx}`} style={s.autocompleteItem} onPress={() => handleSuggestionPress(sg)}>
                         <View style={s.autocompleteAvatar}>
                           {sg.avatar ? (
-                            <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" cachePolicy="memory-disk" />
+                            <Image source={{ uri: sg.avatar }} style={{ width: 32, height: 32, borderRadius: 8 }} contentFit="cover" placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                           ) : (
                             <MaterialIcons name={sg.type === 'player' ? 'person' : sg.type === 'club' ? 'home' : 'sports-baseball'} size={16} color={theme.primary} />
                           )}
@@ -1521,7 +1521,7 @@ export default function LeaderboardScreen() {
                       </View>
                       <View style={s.clubLogoWrap}>
                         {club.logo ? (
-                          <Image source={{ uri: club.logo }} style={s.clubLogo} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                          <Image source={{ uri: club.logo }} style={s.clubLogo} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                         ) : (
                           <View style={[s.clubLogo, { backgroundColor: '#D97706' + '15', alignItems: 'center', justifyContent: 'center' }]}>
                             <MaterialIcons name="home" size={18} color="#D97706" />
@@ -1572,7 +1572,7 @@ export default function LeaderboardScreen() {
                           {club.topPlayers.map((tp, i) => (
                             <View key={i} style={s.clubTopPlayer}>
                               {tp.avatar ? (
-                                <Image source={{ uri: tp.avatar }} style={s.clubTopAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                                <Image source={{ uri: tp.avatar }} style={s.clubTopAvatar} contentFit="cover" placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                               ) : (
                                 <View style={[s.clubTopAvatar, { backgroundColor: theme.primary + '20', alignItems: 'center', justifyContent: 'center' }]}>
                                   <Text style={{ fontSize: 9, fontWeight: '700', color: theme.primary }}>{tp.name.charAt(0)}</Text>
@@ -1952,7 +1952,7 @@ export default function LeaderboardScreen() {
               </View>
               <View style={s.myRankAvatarWrap}>
                 {myP.avatar ? (
-                  <Image source={{ uri: myP.avatar }} style={s.myRankAvatar} contentFit="cover" cachePolicy="memory-disk" />
+                  <Image source={{ uri: myP.avatar }} style={s.myRankAvatar} contentFit="cover" placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                 ) : (
                   <View style={[s.myRankAvatar, { backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' }]}>
                     <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{myP.name.charAt(0)}</Text>
