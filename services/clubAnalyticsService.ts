@@ -280,8 +280,8 @@ export async function fetchClubAnalytics(
     };
   }).sort((a, b) => b.contributionScore - a.contributionScore);
 
-  // Matchmaking: compute optimal doublettes and triplettes
-  const matchmaking = computeMatchmaking(memberAnalytics);
+  // Matchmaking: compute optimal doublettes and triplettes (with H2H synergy)
+  const matchmaking = computeMatchmaking(memberAnalytics, allMatches);
 
   return {
     totalMembers: members.length,
@@ -310,6 +310,14 @@ export async function fetchClubAnalytics(
 // MATCHMAKING ENGINE
 // ============================================
 
+export interface H2HPair {
+  playerA: string;
+  playerB: string;
+  matchesTogether: number;
+  winsTogether: number;
+  winRate: number;
+}
+
 export interface TeamSuggestion {
   players: Array<{ id: string; name: string; role: string; elo: number; winRate: number; tirRate: number; pointRate: number; avatar?: string }>;
   format: 'doublette' | 'triplette';
@@ -317,12 +325,73 @@ export interface TeamSuggestion {
   strengths: string[];
   avgElo: number;
   roleBalance: string; // e.g. "Tireur + Pointeur"
+  h2h: H2HPair[];
+  synergyScore: number; // 0-100 based on real match data together
 }
 
-function computeMatchmaking(members: MemberAnalytics[]): { doublettes: TeamSuggestion[]; triplettes: TeamSuggestion[] } {
+function computeMatchmaking(members: MemberAnalytics[], allMatches?: Match[]): { doublettes: TeamSuggestion[]; triplettes: TeamSuggestion[] } {
   // Only consider active members with at least some match data
   const eligible = members.filter(m => m.matchesPlayed >= 2).sort((a, b) => b.contributionScore - a.contributionScore);
   if (eligible.length < 2) return { doublettes: [], triplettes: [] };
+
+  // Build H2H pair cache: how often two members played on the same team and won
+  const pairCache = new Map<string, { together: number; wins: number }>();
+  const memberIdSet = new Set(eligible.map(m => m.id));
+  if (allMatches) {
+    allMatches.forEach(match => {
+      const teamAMembers = match.teamA.players.filter(pid => memberIdSet.has(pid));
+      const teamBMembers = match.teamB.players.filter(pid => memberIdSet.has(pid));
+      const isWinA = match.winner === 'A';
+      // Pairs within team A
+      for (let i = 0; i < teamAMembers.length; i++) {
+        for (let j = i + 1; j < teamAMembers.length; j++) {
+          const key = [teamAMembers[i], teamAMembers[j]].sort().join('|');
+          const entry = pairCache.get(key) || { together: 0, wins: 0 };
+          entry.together++;
+          if (isWinA) entry.wins++;
+          pairCache.set(key, entry);
+        }
+      }
+      // Pairs within team B
+      for (let i = 0; i < teamBMembers.length; i++) {
+        for (let j = i + 1; j < teamBMembers.length; j++) {
+          const key = [teamBMembers[i], teamBMembers[j]].sort().join('|');
+          const entry = pairCache.get(key) || { together: 0, wins: 0 };
+          entry.together++;
+          if (!isWinA) entry.wins++;
+          pairCache.set(key, entry);
+        }
+      }
+    });
+  }
+
+  const getPairH2H = (idA: string, idB: string): H2HPair => {
+    const key = [idA, idB].sort().join('|');
+    const data = pairCache.get(key);
+    return {
+      playerA: idA,
+      playerB: idB,
+      matchesTogether: data?.together || 0,
+      winsTogether: data?.wins || 0,
+      winRate: data && data.together > 0 ? Math.round((data.wins / data.together) * 100) : 0,
+    };
+  };
+
+  const getTeamH2H = (team: MemberAnalytics[]): { h2h: H2HPair[]; synergyScore: number } => {
+    const pairs: H2HPair[] = [];
+    for (let i = 0; i < team.length; i++) {
+      for (let j = i + 1; j < team.length; j++) {
+        pairs.push(getPairH2H(team[i].id, team[j].id));
+      }
+    }
+    const totalTogether = pairs.reduce((s, p) => s + p.matchesTogether, 0);
+    const totalWins = pairs.reduce((s, p) => s + p.winsTogether, 0);
+    const avgWinRate = totalTogether > 0 ? Math.round((totalWins / totalTogether) * 100) : 0;
+    // Synergy: blend of having played together (familiarity) + win rate together
+    const familiarityScore = Math.min(100, totalTogether * 10); // 10 matches together = 100%
+    const synergyScore = totalTogether > 0 ? Math.round(familiarityScore * 0.4 + avgWinRate * 0.6) : 0;
+    return { h2h: pairs, synergyScore };
+  };
 
   const toPlayer = (m: MemberAnalytics) => ({
     id: m.id, name: m.name, role: m.role, elo: m.elo,
@@ -382,13 +451,18 @@ function computeMatchmaking(members: MemberAnalytics[]): { doublettes: TeamSugge
     for (let j = i + 1; j < maxDoub; j++) {
       const team = [eligible[i], eligible[j]];
       const { score, strengths, roleBalance } = scoreTeam(team);
+      const { h2h, synergyScore } = getTeamH2H(team);
+      const finalScore = synergyScore > 0 ? Math.min(100, Math.round(score * 0.7 + synergyScore * 0.3)) : score;
+      if (synergyScore >= 50) strengths.push(h2h[0].matchesTogether >= 3 ? 'Duo eprouve' : 'Bonne synergie');
       doublettes.push({
         players: team.map(toPlayer),
         format: 'doublette',
-        score,
-        strengths,
+        score: finalScore,
+        strengths: strengths.slice(0, 3),
         avgElo: Math.round(team.reduce((s, p) => s + p.elo, 0) / 2),
         roleBalance,
+        h2h,
+        synergyScore,
       });
     }
   }
@@ -403,13 +477,18 @@ function computeMatchmaking(members: MemberAnalytics[]): { doublettes: TeamSugge
         for (let k = j + 1; k < maxTrip; k++) {
           const team = [eligible[i], eligible[j], eligible[k]];
           const { score, strengths, roleBalance } = scoreTeam(team);
+          const { h2h: tH2h, synergyScore: tSyn } = getTeamH2H(team);
+          const tFinalScore = tSyn > 0 ? Math.min(100, Math.round(score * 0.7 + tSyn * 0.3)) : score;
+          if (tSyn >= 50) strengths.push(tH2h.some(p => p.matchesTogether >= 3) ? 'Trio soude' : 'Bonne synergie');
           triplettes.push({
             players: team.map(toPlayer),
             format: 'triplette',
-            score,
-            strengths,
+            score: tFinalScore,
+            strengths: strengths.slice(0, 3),
             avgElo: Math.round(team.reduce((s, p) => s + p.elo, 0) / 3),
             roleBalance,
+            h2h: tH2h,
+            synergyScore: tSyn,
           });
         }
       }

@@ -43,14 +43,28 @@ export default function NotificationsScreen() {
     return tournaments.filter(t => isTournamentNotificationEnabled(t.id));
   }, [tournaments, tournamentNotifications, isTournamentNotificationEnabled]);
 
-  // Get upcoming tournaments (can enable notifications)
+  // Get upcoming tournaments (can enable notifications) — exclude En cours / Terminé
   const upcomingTournaments = useMemo(() => {
     const now = new Date();
     return tournaments.filter(t => {
       const tournamentDate = new Date(t.date);
+      if (t.status === 'Terminé' || t.status === 'En cours') return false;
       return tournamentDate > now && !isTournamentNotificationEnabled(t.id);
     }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tournaments, tournamentNotifications, isTournamentNotificationEnabled]);
+
+  // Auto-disable notifications for tournaments that are finished or in progress
+  useEffect(() => {
+    const finishedWithNotifs = tournamentsWithNotifications.filter(
+      t => t.status === 'Terminé' || t.status === 'En cours'
+    );
+    if (finishedWithNotifs.length > 0) {
+      finishedWithNotifs.forEach(async (t) => {
+        await cancelTournamentNotifications(t.id);
+        toggleTournamentNotification(t.id);
+      });
+    }
+  }, [tournamentsWithNotifications]);
 
   // Check permission and scheduled notifications on mount
   useEffect(() => {
