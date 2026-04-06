@@ -28,6 +28,7 @@ import {
   type CardHistoryEntry,
 } from '@/services/cardHistoryService';
 import { CARD_COLOR_THEMES } from '@/services/shareCardService';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function CardGalleryScreen() {
   const insets = useSafeAreaInsets();
@@ -169,6 +170,37 @@ export default function CardGalleryScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {/* Quick Create Grid */}
+        <Animated.View entering={FadeInDown.duration(300)}>
+          <View style={s.quickCreateSection}>
+            <View style={s.quickCreateHeader}>
+              <MaterialIcons name="add-photo-alternate" size={16} color={theme.primary} />
+              <Text style={s.quickCreateTitle}>{fr ? 'Creer une carte' : 'Create a card'}</Text>
+            </View>
+            <View style={s.quickCreateGrid}>
+              {CARD_TYPES.map((ct) => (
+                <Pressable
+                  key={ct.type}
+                  style={({ pressed }) => [s.quickCreateCard, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]}
+                  onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/share-card', params: { type: ct.type } } as any); }}
+                >
+                  <LinearGradient colors={[ct.color + '20', ct.color + '08']} style={s.quickCreateCardInner}>
+                    <View style={[s.quickCreateIconBg, { backgroundColor: ct.color + '25' }]}>
+                      <MaterialIcons name={ct.icon as any} size={22} color={ct.color} />
+                    </View>
+                    <Text style={s.quickCreateCardLabel} numberOfLines={1}>{fr ? ct.labelFr : ct.label}</Text>
+                    <View style={s.quickCreateFormats}>
+                      <MaterialIcons name="crop-square" size={9} color={theme.textMuted} />
+                      <MaterialIcons name="crop-portrait" size={9} color={theme.textMuted} />
+                      <MaterialIcons name="crop-landscape" size={9} color={theme.textMuted} />
+                    </View>
+                  </LinearGradient>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        </Animated.View>
+
         {/* Filter Bar */}
         {stats.total > 0 ? (
           <View style={s.filterSection}>
@@ -385,6 +417,18 @@ export default function CardGalleryScreen() {
   );
 }
 
+const CARD_TYPES: { type: string; icon: string; color: string; label: string; labelFr: string }[] = [
+  { type: 'match', icon: 'sports', color: '#F59E0B', label: 'Match', labelFr: 'Match' },
+  { type: 'badge', icon: 'military-tech', color: '#8B5CF6', label: 'Badge', labelFr: 'Badge' },
+  { type: 'stats', icon: 'bar-chart', color: '#3B82F6', label: 'Stats', labelFr: 'Stats' },
+  { type: 'challenge', icon: 'track-changes', color: '#EF4444', label: 'Challenge', labelFr: 'Defi' },
+  { type: 'tournament', icon: 'emoji-events', color: '#D97706', label: 'Tournament', labelFr: 'Tournoi' },
+  { type: 'h2h', icon: 'compare-arrows', color: '#EC4899', label: 'Head-to-Head', labelFr: 'Face-a-face' },
+  { type: 'palmares', icon: 'workspace-premium', color: '#FFD700', label: 'Career', labelFr: 'Palmares' },
+  { type: 'season', icon: 'calendar-today', color: '#059669', label: 'Season', labelFr: 'Saison' },
+  { type: 'weekly-digest', icon: 'summarize', color: '#0EA5E9', label: 'Digest', labelFr: 'Digest' },
+];
+
 const TYPE_ICONS: Record<string, { icon: string; color: string; label: string; labelFr: string }> = {
   match: { icon: 'sports', color: '#F59E0B', label: 'Match', labelFr: 'Match' },
   badge: { icon: 'military-tech', color: '#8B5CF6', label: 'Badge', labelFr: 'Badge' },
@@ -473,4 +517,15 @@ const s = StyleSheet.create({
   bottomCta: { marginTop: 8 },
   createBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: 16 },
   createBtnText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+
+  // Quick Create Grid
+  quickCreateSection: { backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 20, ...theme.shadows.card },
+  quickCreateHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 },
+  quickCreateTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary, letterSpacing: 0.3 },
+  quickCreateGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  quickCreateCard: { width: '31%' as any, borderRadius: 14, overflow: 'hidden' },
+  quickCreateCardInner: { alignItems: 'center', paddingVertical: 14, paddingHorizontal: 6, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(0,0,0,0.04)' },
+  quickCreateIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 8 },
+  quickCreateCardLabel: { fontSize: 11, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 4 },
+  quickCreateFormats: { flexDirection: 'row', alignItems: 'center', gap: 3 },
 });

@@ -38,6 +38,96 @@ interface Props {
   format?: ShareCardFormat;
 }
 
+/** Momentum chart: cumulative score progression across menes */
+function MomentumChart({ menes, ct, compact }: { menes: Mene[]; ct: any; compact?: boolean }) {
+  if (!menes || menes.length < 2) return null;
+  const w = compact ? 140 : 200;
+  const h = compact ? 28 : 40;
+  let cumA = 0, cumB = 0;
+  const pointsA: number[] = [0];
+  const pointsB: number[] = [0];
+  menes.forEach(m => {
+    cumA += m.teamAPoints || 0;
+    cumB += m.teamBPoints || 0;
+    pointsA.push(cumA);
+    pointsB.push(cumB);
+  });
+  const maxS = Math.max(cumA, cumB, 1);
+  const stepX = w / (pointsA.length - 1);
+  const toY = (v: number) => h - 2 - ((v / maxS) * (h - 4));
+  const lineA = pointsA.map((v, i) => `${i * stepX},${toY(v)}`).join(' ');
+  const lineB = pointsB.map((v, i) => `${i * stepX},${toY(v)}`).join(' ');
+  const fs = compact ? 6 : 7;
+  return (
+    <View style={{ marginTop: compact ? 2 : 4, marginBottom: compact ? 2 : 4 }}>
+      <Text style={{ fontSize: compact ? 5 : 7, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5, marginBottom: 2 }}>MOMENTUM</Text>
+      <View style={{ width: w, height: h }}>
+        {/* Use View-based lines since SVG is already imported */}
+        <View style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: 1, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+        {pointsA.map((v, i) => {
+          if (i === 0) return null;
+          const x1 = (i - 1) * stepX;
+          const y1 = toY(pointsA[i - 1]);
+          const x2 = i * stepX;
+          const y2 = toY(v);
+          return (
+            <View key={`a${i}`} style={{ position: 'absolute', left: x2 - 2, top: y2 - 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#22C55E' }} />
+          );
+        })}
+        {pointsB.map((v, i) => {
+          if (i === 0) return null;
+          const x2 = i * stepX;
+          const y2 = toY(v);
+          return (
+            <View key={`b${i}`} style={{ position: 'absolute', left: x2 - 2, top: y2 - 2, width: 4, height: 4, borderRadius: 2, backgroundColor: '#EF4444' }} />
+          );
+        })}
+        {/* Score labels */}
+        <View style={{ position: 'absolute', right: 0, top: toY(cumA) - (compact ? 4 : 5) }}>
+          <Text style={{ fontSize: fs, fontWeight: '800', color: '#22C55E' }}>{cumA}</Text>
+        </View>
+        <View style={{ position: 'absolute', right: 0, top: toY(cumB) - (compact ? 4 : 5) }}>
+          <Text style={{ fontSize: fs, fontWeight: '800', color: '#EF4444' }}>{cumB}</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** Action heatmap: visual distribution of player actions */
+function ActionHeatmap({ actions, ct, compact }: { actions: PlayerAction[]; ct: any; compact?: boolean }) {
+  if (!actions || actions.length === 0) return null;
+  const fs = compact ? 6 : 8;
+  const barH = compact ? 6 : 8;
+  return (
+    <View style={{ marginTop: compact ? 2 : 4 }}>
+      <Text style={{ fontSize: compact ? 5 : 7, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5, marginBottom: compact ? 2 : 3 }}>HEATMAP</Text>
+      {actions.slice(0, compact ? 3 : 4).map((pa, i) => {
+        const a = pa.actions;
+        const total = Math.max(a.tirs + a.points + (a.carreaux || 0), 1);
+        const tirPct = (a.tirs / total) * 100;
+        const ptPct = (a.points / total) * 100;
+        const cPct = ((a.carreaux || 0) / total) * 100;
+        return (
+          <View key={i} style={{ marginBottom: compact ? 1.5 : 2.5 }}>
+            <Text style={{ fontSize: fs, fontWeight: '600', color: ct.textPrimary, marginBottom: 1 }} numberOfLines={1}>{pa.playerName}</Text>
+            <View style={{ flexDirection: 'row', height: barH, borderRadius: barH / 2, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.04)' }}>
+              {tirPct > 0 ? <View style={{ width: `${tirPct}%`, backgroundColor: '#3B82F680', height: barH }} /> : null}
+              {ptPct > 0 ? <View style={{ width: `${ptPct}%`, backgroundColor: '#10B98180', height: barH }} /> : null}
+              {cPct > 0 ? <View style={{ width: `${cPct}%`, backgroundColor: '#F59E0B80', height: barH }} /> : null}
+            </View>
+          </View>
+        );
+      })}
+      <View style={{ flexDirection: 'row', gap: compact ? 4 : 6, marginTop: compact ? 1 : 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#3B82F680' }} /><Text style={{ fontSize: compact ? 5 : 6, color: ct.textSecondary }}>Tir</Text></View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B98180' }} /><Text style={{ fontSize: compact ? 5 : 6, color: ct.textSecondary }}>Point</Text></View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#F59E0B80' }} /><Text style={{ fontSize: compact ? 5 : 6, color: ct.textSecondary }}>Carr.</Text></View>
+      </View>
+    </View>
+  );
+}
+
 function MeneBar({ menes, compact }: { menes: Mene[]; compact?: boolean }) {
   if (!menes || menes.length === 0) return null;
   const h = compact ? 3 : 5;
@@ -173,7 +263,12 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
                   ))}
                 </View>
               </View>
-              {hasMenes ? <View style={{ alignItems: 'center' }}><MeneBar menes={match.menes} compact /></View> : null}
+              {hasMenes ? (
+                <View style={{ alignItems: 'center' }}>
+                  <MeneBar menes={match.menes} compact />
+                  <MomentumChart menes={match.menes} ct={ct} compact />
+                </View>
+              ) : null}
             </View>
 
             <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 8 }} />
@@ -185,6 +280,7 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
                 <View style={{ gap: 0.5 }}>
                   <Text style={{ fontSize: 6, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5 }}>ACTIONS</Text>
                   {match.playerActions!.slice(0, 3).map((pa, i) => <PlayerActionRow key={i} pa={pa} ct={ct} compact />)}
+                  <ActionHeatmap actions={match.playerActions!} ct={ct} compact />
                 </View>
               ) : null}
               {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }}>{playerName}</Text> : null}
@@ -286,14 +382,17 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
                 ))}
                 {match.menes.length > 10 ? <Text style={{ fontSize: 7, color: ct.textSecondary, alignSelf: 'center' }}>+{match.menes.length - 10}</Text> : null}
               </View>
+              {/* Momentum Chart */}
+              <MomentumChart menes={match.menes} ct={ct} />
             </View>
           ) : null}
 
-          {/* Actions */}
+          {/* Actions + Heatmap */}
           {hasActions ? (
             <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 8, marginBottom: 14 }}>
               <Text style={{ fontSize: 8, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.8, marginBottom: 4 }}>{fr ? 'ACTIONS JOUEURS' : 'PLAYER ACTIONS'}</Text>
               {match.playerActions!.slice(0, 5).map((pa, i) => <PlayerActionRow key={i} pa={pa} ct={ct} />)}
+              <ActionHeatmap actions={match.playerActions!} ct={ct} />
             </View>
           ) : null}
 
@@ -385,7 +484,7 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
           </View>
         </View>
 
-        {/* Mene bar */}
+        {/* Mene bar + Momentum */}
         {hasMenes ? (
           <View style={{ alignItems: 'center', marginBottom: 8 }}>
             <MeneBar menes={match.menes} />
@@ -400,14 +499,16 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
               ))}
               {match.menes.length > 8 ? <Text style={{ fontSize: 7, color: ct.textSecondary, alignSelf: 'center' }}>+{match.menes.length - 8}</Text> : null}
             </View>
+            <MomentumChart menes={match.menes} ct={ct} compact />
           </View>
         ) : null}
 
-        {/* Actions (compact) */}
+        {/* Actions + Heatmap (compact) */}
         {hasActions ? (
           <View style={{ backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: 6, marginBottom: 8 }}>
             <Text style={{ fontSize: 7, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.8, marginBottom: 3 }}>ACTIONS</Text>
             {match.playerActions!.slice(0, 4).map((pa, i) => <PlayerActionRow key={i} pa={pa} ct={ct} compact />)}
+            <ActionHeatmap actions={match.playerActions!} ct={ct} compact />
           </View>
         ) : null}
 
