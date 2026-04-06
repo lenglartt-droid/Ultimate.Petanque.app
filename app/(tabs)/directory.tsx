@@ -418,7 +418,8 @@ export default function DirectoryScreen() {
           case 'silver': return elo >= 1100 && elo < 1200;
           case 'gold': return elo >= 1200 && elo < 1500;
           case 'diamond': return elo >= 1500 && elo < 1800;
-          case 'master': return elo >= 1800;
+          case 'master': return elo >= 1800 && elo < 2000;
+          case 'grand_master': return elo >= 2000;
           default: return true;
         }
       })();
@@ -616,11 +617,11 @@ export default function DirectoryScreen() {
             />
             <FilterSection
               title={language === 'fr' ? 'Rang ELO' : 'ELO Rank'}
-              options={['all', 'bronze', 'silver', 'gold', 'diamond', 'master']}
-              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1100)', silver: language === 'fr' ? 'Argent (1100-1199)' : 'Silver (1100-1199)', gold: language === 'fr' ? 'Or (1200-1499)' : 'Gold (1200-1499)', diamond: language === 'fr' ? 'Diamant (1500-1799)' : 'Diamond (1500-1799)', master: language === 'fr' ? 'Maitre (1800+)' : 'Master (1800+)' }}
+              options={['all', 'bronze', 'silver', 'gold', 'diamond', 'master', 'grand_master']}
+              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1100)', silver: language === 'fr' ? 'Argent (1100-1199)' : 'Silver (1100-1199)', gold: language === 'fr' ? 'Or (1200-1499)' : 'Gold (1200-1499)', diamond: language === 'fr' ? 'Diamant (1500-1799)' : 'Diamond (1500-1799)', master: language === 'fr' ? 'Maitre (1800-1999)' : 'Master (1800-1999)', grand_master: language === 'fr' ? 'Grand Maitre (2000+)' : 'Grand Master (2000+)' }}
               value={filters.playerEloRank}
               onChange={(v) => setFilters(f => ({ ...f, playerEloRank: v }))}
-              icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'auto-awesome' }}
+              icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'military-tech', grand_master: 'auto-awesome' }}
               allLabel={t('directory', 'allLabel')}
             />
 
@@ -1010,7 +1011,7 @@ export default function DirectoryScreen() {
             {activeTab === 'players' && (
               <>
                 {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
-                {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
+                {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master', grand_master: language === 'fr' ? 'Grand Maitre' : 'Grand Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
                 {filters.playerExperience !== 'all' && <ActiveFilterChip label={t('player', filters.playerExperience === 'less_than_1' ? 'experienceLessThan1' : filters.playerExperience === '1_to_3' ? 'experience1to3' : filters.playerExperience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')} onRemove={() => setFilters(f => ({ ...f, playerExperience: 'all' }))} icon="timeline" />}
 
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}

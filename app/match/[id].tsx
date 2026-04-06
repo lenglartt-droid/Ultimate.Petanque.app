@@ -1413,7 +1413,7 @@ export default function EditMatchScreen() {
                 <Text style={styles.scoreLabel}>{t('match', 'myTeam')}</Text>
                 <View style={styles.scoreControls}>
                   <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('A', -1)} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
-                  <Text style={[styles.scoreValue, teamAScore > teamBScore && styles.scoreValueWin]}>{teamAScore}</Text>
+                  <Text style={[styles.scoreValue, teamAScore > teamBScore && styles.scoreValueWin]} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.7}>{teamAScore}</Text>
                   <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('A', 1)} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
@@ -1422,7 +1422,7 @@ export default function EditMatchScreen() {
                 <Text style={styles.scoreLabel}>{t('match', 'opponent')}</Text>
                 <View style={styles.scoreControls}>
                   <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('B', -1)} disabled={isReadOnly}><MaterialIcons name="remove" size={24} color={theme.textSecondary} /></Pressable>
-                  <Text style={[styles.scoreValue, teamBScore > teamAScore && styles.scoreValueWin]}>{teamBScore}</Text>
+                  <Text style={[styles.scoreValue, teamBScore > teamAScore && styles.scoreValueWin]} adjustsFontSizeToFit numberOfLines={1} minimumFontScale={0.7}>{teamBScore}</Text>
                   <Pressable style={[styles.scoreButton, isReadOnly && { opacity: 0.4 }]} onPress={() => handleScoreChange('B', 1)} disabled={isReadOnly}><MaterialIcons name="add" size={24} color={theme.primary} /></Pressable>
                 </View>
               </View>
@@ -1880,7 +1880,7 @@ const styles = StyleSheet.create({
   scoreLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginBottom: 12 },
   scoreControls: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   scoreButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 20 },
-  scoreValue: { fontSize: 36, fontWeight: '700', color: theme.textPrimary, width: 60, textAlign: 'center' },
+  scoreValue: { fontSize: 28, fontWeight: '700', color: theme.textPrimary, width: 60, height: 48, textAlign: 'center', textAlignVertical: 'center', lineHeight: 48, includeFontPadding: false } as any,
   scoreValueWin: { color: theme.success },
   vsContainer: { paddingHorizontal: 8 },
   vsText: { fontSize: 20, fontWeight: '600', color: theme.textMuted },

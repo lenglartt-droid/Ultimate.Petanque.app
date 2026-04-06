@@ -53,7 +53,7 @@ function MiniGeoRankingWidget() {
 
   if (topCity) {
     items.push({
-      label: fr ? 'Meilleure Ville' : 'Top City',
+      label: fr ? 'Top Ville' : 'Top City',
       entry: topCity,
       icon: 'location-city',
       color: '#3B82F6',
@@ -62,7 +62,7 @@ function MiniGeoRankingWidget() {
   }
   if (topCountry) {
     items.push({
-      label: fr ? 'Meilleur Pays' : 'Top Country',
+      label: fr ? 'Top Pays' : 'Top Country',
       entry: topCountry,
       icon: 'flag',
       color: '#10B981',
@@ -72,7 +72,7 @@ function MiniGeoRankingWidget() {
   }
   if (topContinent) {
     items.push({
-      label: fr ? 'Meilleur Continent' : 'Top Continent',
+      label: fr ? 'Top Continent' : 'Top Continent',
       entry: topContinent,
       icon: 'public',
       color: '#F59E0B',

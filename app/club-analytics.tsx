@@ -17,7 +17,7 @@ import Svg, { Rect, Line, Circle as SvgCircle, Polyline, Text as SvgText, G } fr
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
-import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics, TeamSuggestion } from '@/services/clubAnalyticsService';
+import { fetchClubAnalytics, ClubAnalytics, MemberAnalytics, TeamSuggestion, H2HPair } from '@/services/clubAnalyticsService';
 import { getEloRank } from '@/services/eloService';
 import { Platform } from 'react-native';
 
@@ -124,6 +124,44 @@ export default function ClubAnalyticsScreen() {
         </View>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ color: theme.textMuted }}>{fr ? 'Club introuvable' : 'Club not found'}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // Restrict analytics to verified clubs only
+  if (!club.isVerified) {
+    return (
+      <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <Pressable style={s.headerBtn} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <View style={{ flex: 1, alignItems: 'center' }}>
+            <Text style={s.headerTitle}>{fr ? 'Analytique' : 'Analytics'}</Text>
+            <Text style={s.headerSubtitle}>{club.name}</Text>
+          </View>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}>
+          <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+            <MaterialIcons name="verified" size={40} color="#F59E0B" />
+          </View>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: theme.textPrimary, textAlign: 'center', marginBottom: 8 }}>
+            {fr ? 'Club non verifie' : 'Unverified Club'}
+          </Text>
+          <Text style={{ fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 24 }}>
+            {fr
+              ? 'La page Analytique est reservee aux clubs verifies. Completez les informations de votre club (adresse, 2+ membres, description, contact, logo) pour obtenir le badge verifie.'
+              : 'The Analytics page is reserved for verified clubs. Complete your club information (address, 2+ members, description, contact, logo) to get the verified badge.'}
+          </Text>
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#2563EB', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14 }}
+            onPress={() => { router.back(); }}
+          >
+            <MaterialIcons name="arrow-back" size={18} color="#FFF" />
+            <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{fr ? 'Retour au club' : 'Back to club'}</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );
@@ -430,6 +468,30 @@ export default function ClubAnalyticsScreen() {
                           </View>
                         </View>
                       </View>
+                      {/* H2H Synergy - Doublettes */}
+                      {team.synergyScore > 0 && team.h2h && team.h2h.length > 0 ? (
+                        <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                            <MaterialIcons name="handshake" size={10} color="#7C3AED" />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'Synergie reelle' : 'Real synergy'}: {team.synergyScore}%</Text>
+                          </View>
+                          {team.h2h.filter((h: H2HPair) => h.matchesTogether > 0).map((h: H2HPair, hi: number) => {
+                            const nameA = team.players.find(p => p.id === h.playerA)?.name?.split(' ')[0] || '?';
+                            const nameB = team.players.find(p => p.id === h.playerB)?.name?.split(' ')[0] || '?';
+                            return (
+                              <View key={hi} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textSecondary, flex: 1 }}>{nameA} + {nameB}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED10', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>{h.matchesTogether} {fr ? 'matchs' : 'games'}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: h.winRate >= 50 ? '#22C55E10' : '#EF444410', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: h.winRate >= 50 ? '#22C55E' : '#EF4444' }}>{h.winRate}% {fr ? 'vict.' : 'win'}</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>
@@ -494,6 +556,30 @@ export default function ClubAnalyticsScreen() {
                           </View>
                         </View>
                       </View>
+                      {/* H2H Synergy - Triplettes */}
+                      {team.synergyScore > 0 && team.h2h && team.h2h.length > 0 ? (
+                        <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
+                            <MaterialIcons name="handshake" size={10} color="#7C3AED" />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{fr ? 'Synergie reelle' : 'Real synergy'}: {team.synergyScore}%</Text>
+                          </View>
+                          {team.h2h.filter((h: H2HPair) => h.matchesTogether > 0).map((h: H2HPair, hi: number) => {
+                            const nameA = team.players.find(p => p.id === h.playerA)?.name?.split(' ')[0] || '?';
+                            const nameB = team.players.find(p => p.id === h.playerB)?.name?.split(' ')[0] || '?';
+                            return (
+                              <View key={hi} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 3 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: theme.textSecondary, flex: 1 }}>{nameA} + {nameB}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED10', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: '#7C3AED' }}>{h.matchesTogether} {fr ? 'matchs' : 'games'}</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: h.winRate >= 50 ? '#22C55E10' : '#EF444410', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                                  <Text style={{ fontSize: 9, fontWeight: '700', color: h.winRate >= 50 ? '#22C55E' : '#EF4444' }}>{h.winRate}% {fr ? 'vict.' : 'win'}</Text>
+                                </View>
+                              </View>
+                            );
+                          })}
+                        </View>
+                      ) : null}
                     </View>
                   ))}
                 </View>

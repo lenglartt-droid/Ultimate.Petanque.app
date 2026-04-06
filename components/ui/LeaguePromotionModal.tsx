@@ -25,6 +25,7 @@ interface Props {
 function LeaguePromotionModal({ visible, onClose, type, newTier, previousTier, elo, language }: Props) {
   const fr = language === 'fr';
   const isPromotion = type === 'promotion';
+  const isGrandMaster = (newTier as any).id === 'grand_master' || newTier.minElo >= 2000;
   const eloDelta = elo - (isPromotion ? newTier.minElo : previousTier.minElo);
 
   useEffect(() => {
@@ -62,16 +63,18 @@ function LeaguePromotionModal({ visible, onClose, type, newTier, previousTier, e
             {/* Confetti particles for promotion */}
             {isPromotion ? (
               <>
-                {[...Array(12)].map((_, i) => (
+                {[...Array(isGrandMaster ? 20 : 12)].map((_, i) => (
                   <Animated.View
                     key={i}
-                    entering={FadeIn.duration(300).delay(200 + i * 60)}
+                    entering={FadeIn.duration(300).delay(200 + i * 50)}
                     style={[s.confettiDot, {
-                      top: 8 + (i % 4) * 18,
-                      left: 10 + (i * 30) % 300,
-                      backgroundColor: ['#FCD34D', '#FFF', '#A78BFA', '#34D399', '#F87171', '#60A5FA', '#FBBF24', '#FFF', '#E879F9', '#FCD34D', '#34D399', '#A78BFA'][i],
-                      width: 3 + (i % 3) * 2,
-                      height: 3 + (i % 3) * 2,
+                      top: 8 + (i % 5) * 14,
+                      left: 10 + (i * 26) % 300,
+                      backgroundColor: isGrandMaster
+                        ? ['#FFD700', '#FFF', '#FFD700', '#FCD34D', '#FFF', '#FBBF24', '#FFD700', '#FFF', '#FCD34D', '#FFD700', '#FFF', '#FBBF24', '#FFD700', '#FFF', '#FCD34D', '#FFD700', '#FBBF24', '#FFF', '#FFD700', '#FCD34D'][i]
+                        : ['#FCD34D', '#FFF', '#A78BFA', '#34D399', '#F87171', '#60A5FA', '#FBBF24', '#FFF', '#E879F9', '#FCD34D', '#34D399', '#A78BFA'][i % 12],
+                      width: isGrandMaster ? 4 + (i % 3) * 2 : 3 + (i % 3) * 2,
+                      height: isGrandMaster ? 4 + (i % 3) * 2 : 3 + (i % 3) * 2,
                       borderRadius: 6,
                       opacity: 0.7 + (i % 3) * 0.1,
                     }]}
@@ -80,13 +83,13 @@ function LeaguePromotionModal({ visible, onClose, type, newTier, previousTier, e
               </>
             ) : null}
 
-            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={s.emblemContainer}>
-              <Text style={s.emblem}>{newTier.emblem}</Text>
+            <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[s.emblemContainer, isGrandMaster && s.emblemContainerGM]}>
+              <Text style={[s.emblem, isGrandMaster && { fontSize: 42 }]}>{newTier.emblem}</Text>
             </Animated.View>
 
             <Animated.Text entering={FadeInDown.duration(400).delay(200)} style={s.typeLabel}>
               {isPromotion
-                ? (fr ? 'PROMOTION !' : 'PROMOTION!')
+                ? (isGrandMaster ? (fr ? 'ASCENSION SUPREME !' : 'SUPREME ASCENSION!') : (fr ? 'PROMOTION !' : 'PROMOTION!'))
                 : (fr ? 'RELEGATION' : 'RELEGATION')}
             </Animated.Text>
 
@@ -138,9 +141,13 @@ function LeaguePromotionModal({ visible, onClose, type, newTier, previousTier, e
             {/* Message */}
             <Animated.Text entering={FadeIn.duration(300).delay(600)} style={s.message}>
               {isPromotion
-                ? (fr
-                  ? `Felicitations ! Vous avez atteint la ligue ${newTier.name.fr}. Continuez a jouer pour monter encore plus haut !`
-                  : `Congratulations! You have reached the ${newTier.name.en} league. Keep playing to climb even higher!`)
+                ? (isGrandMaster
+                  ? (fr
+                    ? `Legende ! Vous avez atteint le sommet : Grand Maitre (${elo} ELO). Vous faites partie de l'elite absolue de la petanque !`
+                    : `Legend! You reached the summit: Grand Master (${elo} ELO). You are among the absolute elite of petanque!`)
+                  : (fr
+                    ? `Felicitations ! Vous avez atteint la ligue ${newTier.name.fr}. Continuez a jouer pour monter encore plus haut !`
+                    : `Congratulations! You have reached the ${newTier.name.en} league. Keep playing to climb even higher!`))
                 : (fr
                   ? `Vous etes descendu en ligue ${newTier.name.fr}. Jouez des matchs pour remonter !`
                   : `You have been relegated to the ${newTier.name.en} league. Play matches to climb back up!`)}
@@ -219,6 +226,19 @@ const s = StyleSheet.create({
     marginBottom: 10,
     borderWidth: 3,
     borderColor: 'rgba(255,255,255,0.35)',
+  },
+  emblemContainerGM: {
+    width: 88,
+    height: 88,
+    borderRadius: 28,
+    borderWidth: 4,
+    borderColor: '#FFD700',
+    backgroundColor: 'rgba(255,215,0,0.3)',
+    ...Platform.select({
+      ios: { shadowColor: '#FFD700', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.6, shadowRadius: 16 },
+      android: { elevation: 8 },
+      default: {},
+    }),
   },
   emblem: { fontSize: 36 },
   typeLabel: {
