@@ -42,7 +42,7 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
       <View style={[s.inner, { backgroundColor: bgColor }, isSm && s.innerSm, isXs && s.innerXs]}>
         {/* App Logo */}
         <View style={[s.logoBg, { backgroundColor: isDark ? 'rgba(0,0,0,0.1)' : 'rgba(255,255,255,0.14)', width: logoSize, height: logoSize, borderRadius: logoSize * 0.25 }, isSm && s.logoBgSm]}>
-          <Image source={APP_LOGO} style={{ width: logoSize - 4, height: logoSize - 4, borderRadius: (logoSize - 4) * 0.22 }} contentFit="contain" />
+          <Image source={APP_LOGO} style={{ width: logoSize, height: logoSize, borderRadius: logoSize * 0.25 }} contentFit="contain" />
         </View>
         <View style={{ flex: 1, flexShrink: 1 }}>
           <Text style={[s.appName, { color: textColor }, isSm && s.appNameSm, isXs && s.appNameXs]} numberOfLines={1}>Ultimate Petanque</Text>
