@@ -910,6 +910,13 @@ function LayoutInner() {
                   animation: 'slide_from_right',
                 }} 
               />
+              <Stack.Screen 
+                name="season-detail" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
             </Stack>
             {__DEV__ ? <DevPerformanceOverlay /> : null}
             </View>
