@@ -32,6 +32,28 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.45.0',
+    date: '2026-04-07',
+    type: 'minor',
+    highlights: [
+      { icon: 'file-download', text: 'CSV export for transfer archives with all columns', color: '#7C3AED' },
+      { icon: 'timeline', text: 'Monthly transfer statistics history (6 months) with trend deltas', color: '#3B82F6' },
+    ],
+    details: [
+      'New CSV export button (purple download icon) in transfer archives modal header',
+      'Exports all archived transfers with player name, sender, recipient, status, match/challenge counts, creation date, and archive date',
+      'Export uses expo-file-system + expo-sharing on mobile, Blob download on web',
+      'Button disabled when no archive data is loaded',
+      'New monthly transfer history chart in transfers widget showing last 6 months',
+      'Stacked bars per month: accepted (green), declined (red), expired (gray), pending (yellow)',
+      'Acceptance rate badge per month with color-coded health (green 60+%, orange 30-60%, red <30%)',
+      'Month-over-month delta indicators: volume change %, acceptance rate delta (pts), response time delta %',
+      'Computed via useMemo from raw transfer data for real-time filter responsiveness',
+      'Legend row with all 4 status colors for readability',
+      'Changelog updated with v1.45.0',
+    ],
+  },
+  {
     version: '1.44.0',
     date: '2026-04-07',
     type: 'minor',

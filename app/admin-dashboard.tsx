@@ -172,6 +172,7 @@ export default function AdminDashboardScreen() {
   const [archiveData, setArchiveData] = useState<any[]>([]);
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [archiveCount, setArchiveCount] = useState(0);
+  const [exportingArchiveCsv, setExportingArchiveCsv] = useState(false);
 
   // Transfer filters
   const [rawTransferData, setRawTransferData] = useState<any[]>([]);
@@ -532,6 +533,35 @@ export default function AdminDashboardScreen() {
     });
   }, [rawTransferData]);
 
+  // Monthly transfer history (last 6 months)
+  const monthlyTransferHistory = useMemo(() => {
+    if (rawTransferData.length === 0) return [];
+    const now = Date.now();
+    const months: { month: string; total: number; accepted: number; declined: number; expired: number; acceptanceRate: number; avgResponseH: number }[] = [];
+    for (let i = 5; i >= 0; i--) {
+      const start = new Date(now);
+      start.setMonth(start.getMonth() - i, 1);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(start);
+      end.setMonth(end.getMonth() + 1);
+      const label = start.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short', year: '2-digit' });
+      const inMonth = rawTransferData.filter((t: any) => {
+        const d = new Date(t.created_at).getTime();
+        return d >= start.getTime() && d < end.getTime();
+      });
+      const acc = inMonth.filter((t: any) => t.status === 'accepted').length;
+      const dec = inMonth.filter((t: any) => t.status === 'declined').length;
+      const exp = inMonth.filter((t: any) => t.status === 'expired').length;
+      const resolved = acc + dec;
+      const rate = resolved > 0 ? Math.round((acc / resolved) * 100) : 0;
+      let totalMs = 0; let cnt = 0;
+      inMonth.forEach((t: any) => { if (t.status !== 'pending' && t.updated_at && t.created_at) { const d2 = new Date(t.updated_at).getTime() - new Date(t.created_at).getTime(); if (d2 > 0) { totalMs += d2; cnt++; } } });
+      const avgH = cnt > 0 ? Math.round((totalMs / cnt / 3600000) * 10) / 10 : 0;
+      months.push({ month: label, total: inMonth.length, accepted: acc, declined: dec, expired: exp, acceptanceRate: rate, avgResponseH: avgH });
+    }
+    return months;
+  }, [rawTransferData, fr]);
+
   const sendTransferReminders = useCallback(async () => {
     if (sendingTransferReminder || unremindedOverdue.length === 0) return;
     setSendingTransferReminder(true);
@@ -828,7 +858,39 @@ export default function AdminDashboardScreen() {
               <MaterialIcons name="close" size={24} color="#0F172A" />
             </Pressable>
             <Text style={s.modalTitle}>{fr ? 'Archives transferts' : 'Transfer Archives'}</Text>
-            <View style={{ width: 40 }} />
+            <Pressable
+              style={[s.backBtn, exportingArchiveCsv && { opacity: 0.5 }]}
+              onPress={async () => {
+                if (exportingArchiveCsv || archiveData.length === 0) return;
+                setExportingArchiveCsv(true);
+                try {
+                  const headers = 'Player,Sender,Recipient,Status,Matches,Challenges,Created,Archived';
+                  const rows = archiveData.map((ar: any) => `"${ar.player_name}","${ar.senderName}","${ar.recipientName}",${ar.status},${ar.match_count || 0},${ar.challenge_count || 0},${ar.created_at ? ar.created_at.slice(0, 10) : ''},${ar.archived_at ? ar.archived_at.slice(0, 10) : ''}`);
+                  const csv = [headers, ...rows].join('\n');
+                  if (typeof document !== 'undefined') {
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `transfer-archives-${new Date().toISOString().slice(0, 10)}.csv`;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  } else {
+                    const FS = require('expo-file-system');
+                    const SharingMod = require('expo-sharing');
+                    const path = `${FS.cacheDirectory}transfer-archives-${new Date().toISOString().slice(0, 10)}.csv`;
+                    await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+                    const canShare = await SharingMod.isAvailableAsync();
+                    if (canShare) await SharingMod.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter les archives' : 'Export archives' });
+                  }
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                } catch (e) { console.log('[Dashboard] Archive CSV export error:', e); }
+                setExportingArchiveCsv(false);
+              }}
+              disabled={exportingArchiveCsv || archiveData.length === 0}
+            >
+              {exportingArchiveCsv ? <ActivityIndicator size="small" color="#7C3AED" /> : <MaterialIcons name="file-download" size={20} color={archiveData.length > 0 ? '#7C3AED' : '#CBD5E1'} />}
+            </Pressable>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, backgroundColor: '#EDE9FE', borderRadius: 12, padding: 12 }}>
@@ -1354,6 +1416,80 @@ export default function AdminDashboardScreen() {
                       </Pressable>
                     );
                   })}
+                </View>
+              ) : null}
+
+              {/* Monthly Transfer History (6 months) */}
+              {monthlyTransferHistory.length > 0 && monthlyTransferHistory.some(m => m.total > 0) ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Historique mensuel (6 mois)' : 'Monthly history (6 months)'}</Text>
+                  {(() => {
+                    const maxM = Math.max(...monthlyTransferHistory.map(m => m.total), 1);
+                    return monthlyTransferHistory.map((m, idx) => {
+                      const isLast = idx === monthlyTransferHistory.length - 1;
+                      const rateColor = m.acceptanceRate >= 60 ? '#10B981' : m.acceptanceRate >= 30 ? '#D97706' : m.total > 0 ? '#EF4444' : '#CBD5E1';
+                      return (
+                        <View key={m.month} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 5 }}>
+                          <Text style={{ width: 44, fontSize: 9, fontWeight: isLast ? '800' : '600', color: isLast ? '#3B82F6' : '#94A3B8' }}>{m.month}</Text>
+                          <View style={{ flex: 1, height: 16, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden', flexDirection: 'row' }}>
+                            {m.accepted > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(2, (m.accepted / maxM) * 100)}%`, backgroundColor: '#10B981' }} /> : null}
+                            {m.declined > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, (m.declined / maxM) * 100)}%`, backgroundColor: '#EF4444' }} /> : null}
+                            {m.expired > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, (m.expired / maxM) * 100)}%`, backgroundColor: '#94A3B8' }} /> : null}
+                            {(m.total - m.accepted - m.declined - m.expired) > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, ((m.total - m.accepted - m.declined - m.expired) / maxM) * 100)}%`, backgroundColor: '#F59E0B' }} /> : null}
+                          </View>
+                          <Text style={{ width: 20, fontSize: 10, fontWeight: '800', color: '#0F172A', textAlign: 'right' }}>{m.total}</Text>
+                          <View style={{ backgroundColor: rateColor + '15', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5, minWidth: 30, alignItems: 'center' }}>
+                            <Text style={{ fontSize: 8, fontWeight: '700', color: rateColor }}>{m.total > 0 ? `${m.acceptanceRate}%` : '-'}</Text>
+                          </View>
+                        </View>
+                      );
+                    });
+                  })()}
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 6, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: '#10B981' }} />
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Accepte' : 'Accepted'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: '#EF4444' }} />
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Refuse' : 'Declined'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: '#94A3B8' }} />
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Expire' : 'Expired'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 2, backgroundColor: '#F59E0B' }} />
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Attente' : 'Pending'}</Text>
+                    </View>
+                  </View>
+                  {/* Month-over-month delta */}
+                  {monthlyTransferHistory.filter(m => m.total > 0).length >= 2 ? (() => {
+                    const recent = monthlyTransferHistory[monthlyTransferHistory.length - 1];
+                    const prev = monthlyTransferHistory[monthlyTransferHistory.length - 2];
+                    const volumeDelta = prev.total > 0 ? Math.round(((recent.total - prev.total) / prev.total) * 100) : 0;
+                    const rateDelta = recent.acceptanceRate - prev.acceptanceRate;
+                    const respDelta = prev.avgResponseH > 0 ? Math.round(((recent.avgResponseH - prev.avgResponseH) / prev.avgResponseH) * 100) : 0;
+                    return (
+                      <View style={{ flexDirection: 'row', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8 }}>
+                          <MaterialIcons name={volumeDelta >= 0 ? 'trending-up' : 'trending-down'} size={12} color={volumeDelta >= 0 ? '#10B981' : '#EF4444'} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: volumeDelta >= 0 ? '#10B981' : '#EF4444' }}>{volumeDelta >= 0 ? '+' : ''}{volumeDelta}%</Text>
+                          <Text style={{ fontSize: 8, color: '#94A3B8' }}>{fr ? 'volume' : 'volume'}</Text>
+                        </View>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8 }}>
+                          <MaterialIcons name={rateDelta >= 0 ? 'thumb-up' : 'thumb-down'} size={12} color={rateDelta >= 0 ? '#10B981' : '#EF4444'} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: rateDelta >= 0 ? '#10B981' : '#EF4444' }}>{rateDelta >= 0 ? '+' : ''}{rateDelta}pts</Text>
+                          <Text style={{ fontSize: 8, color: '#94A3B8' }}>{fr ? 'taux' : 'rate'}</Text>
+                        </View>
+                        <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F8FAFC', borderRadius: 8, padding: 8 }}>
+                          <MaterialIcons name="timer" size={12} color={respDelta <= 0 ? '#10B981' : '#EF4444'} />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: respDelta <= 0 ? '#10B981' : '#EF4444' }}>{respDelta <= 0 ? '' : '+'}{respDelta}%</Text>
+                          <Text style={{ fontSize: 8, color: '#94A3B8' }}>{fr ? 'delai' : 'resp.'}</Text>
+                        </View>
+                      </View>
+                    );
+                  })() : null}
                 </View>
               ) : null}
 

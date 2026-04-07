@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
 
     const results: Record<string, any> = {};
 
@@ -1818,7 +1818,96 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 17: Clean up old analytics (older than 365 days)
+    // TASK 17: Transfer Archive - Move resolved transfers older than 90 days to archive table
+    // ============================================================
+    if (tasks.includes('transfer_archive')) {
+      console.log('[weekly-cron] Archiving resolved transfers older than 90 days...');
+      try {
+        const threshold90d = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Dedup: only run once per week
+        const arcWeekStart = new Date();
+        arcWeekStart.setDate(arcWeekStart.getDate() - arcWeekStart.getDay() + 1);
+        arcWeekStart.setHours(0, 0, 0, 0);
+        const { data: existingArc } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'transfer_archive_cron')
+          .gte('created_at', arcWeekStart.toISOString())
+          .limit(1);
+
+        if (existingArc && existingArc.length > 0) {
+          console.log('[weekly-cron] Transfer archive already processed this week');
+          results.transfer_archive = { archived: 0, reason: 'already_processed_this_week' };
+        } else {
+          // Find resolved transfers older than 90 days
+          const { data: archivableTransfers } = await supabaseAdmin
+            .from('player_transfer_requests')
+            .select('id, player_name, sender_user_id, recipient_user_id, status, match_count, challenge_count, message, created_at, updated_at')
+            .in('status', ['accepted', 'declined', 'expired'])
+            .lt('updated_at', threshold90d);
+
+          if (!archivableTransfers || archivableTransfers.length === 0) {
+            results.transfer_archive = { archived: 0 };
+          } else {
+            // Insert into archive table in batches
+            const archiveRows = archivableTransfers.map(t => ({
+              original_id: t.id,
+              player_name: t.player_name,
+              sender_user_id: t.sender_user_id,
+              recipient_user_id: t.recipient_user_id,
+              status: t.status,
+              match_count: t.match_count || 0,
+              challenge_count: t.challenge_count || 0,
+              message: t.message || null,
+              created_at: t.created_at,
+              updated_at: t.updated_at,
+              archived_at: new Date().toISOString(),
+            }));
+
+            let insertedCount = 0;
+            for (let i = 0; i < archiveRows.length; i += 50) {
+              const batch = archiveRows.slice(i, i + 50);
+              const { error: insertErr } = await supabaseAdmin.from('player_transfer_archives').insert(batch);
+              if (!insertErr) insertedCount += batch.length;
+              else console.error('[weekly-cron] Archive insert error:', insertErr.message);
+            }
+
+            // Delete archived records from original table
+            if (insertedCount > 0) {
+              const archivedIds = archivableTransfers.slice(0, insertedCount).map(t => t.id);
+              for (let i = 0; i < archivedIds.length; i += 50) {
+                const batch = archivedIds.slice(i, i + 50);
+                await supabaseAdmin.from('player_transfer_requests').delete().in('id', batch);
+              }
+            }
+
+            // Track dedup
+            const statusCounts = { accepted: 0, declined: 0, expired: 0 };
+            archivableTransfers.forEach(t => { if (statusCounts[t.status as keyof typeof statusCounts] !== undefined) statusCounts[t.status as keyof typeof statusCounts]++; });
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'transfer_archive_cron',
+              source_page: `archived:${insertedCount}|accepted:${statusCounts.accepted}|declined:${statusCounts.declined}|expired:${statusCounts.expired}`,
+            }).catch(() => {});
+
+            console.log(`[weekly-cron] Transfer archive: ${insertedCount} archived (${statusCounts.accepted} accepted, ${statusCounts.declined} declined, ${statusCounts.expired} expired)`);
+            results.transfer_archive = {
+              archived: insertedCount,
+              accepted: statusCounts.accepted,
+              declined: statusCounts.declined,
+              expired: statusCounts.expired,
+            };
+          }
+        }
+      } catch (arcErr: any) {
+        console.error('[weekly-cron] Transfer archive error:', arcErr.message);
+        results.transfer_archive = { error: arcErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 18: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');
