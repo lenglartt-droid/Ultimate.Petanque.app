@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation'];
 
     const results: Record<string, any> = {};
 
@@ -1254,7 +1254,255 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 13: Clean up old analytics (older than 365 days)
+    // TASK 13: Transfer Reminders - Auto-remind recipients with pending transfers >7 days
+    // ============================================================
+    if (tasks.includes('transfer_reminders')) {
+      console.log('[weekly-cron] Sending transfer reminders for pending >7 days...');
+      try {
+        const threshold7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Check dedup: only send once per week
+        const weekStart = new Date();
+        weekStart.setDate(weekStart.getDate() - weekStart.getDay() + 1);
+        weekStart.setHours(0, 0, 0, 0);
+        const { data: existingReminder } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'transfer_reminder_cron')
+          .gte('created_at', weekStart.toISOString())
+          .limit(1);
+
+        if (existingReminder && existingReminder.length > 0) {
+          console.log('[weekly-cron] Transfer reminders already sent this week');
+          results.transfer_reminders = { sent: 0, reason: 'already_sent_this_week' };
+        } else {
+          // Fetch pending transfers older than 7 days
+          const { data: overdueTransfers } = await supabaseAdmin
+            .from('player_transfer_requests')
+            .select('id, player_name, sender_user_id, recipient_user_id, created_at')
+            .eq('status', 'pending')
+            .lt('created_at', threshold7d);
+
+          if (!overdueTransfers || overdueTransfers.length === 0) {
+            results.transfer_reminders = { sent: 0, overdue: 0 };
+          } else {
+            // Group by recipient to send one push per recipient
+            const recipientMap = new Map<string, { transfers: typeof overdueTransfers; senderIds: Set<string> }>();
+            for (const t of overdueTransfers) {
+              if (!recipientMap.has(t.recipient_user_id)) {
+                recipientMap.set(t.recipient_user_id, { transfers: [], senderIds: new Set() });
+              }
+              const entry = recipientMap.get(t.recipient_user_id)!;
+              entry.transfers.push(t);
+              entry.senderIds.add(t.sender_user_id);
+            }
+
+            // Fetch sender names for readable messages
+            const allSenderIds = [...new Set(overdueTransfers.map(t => t.sender_user_id))];
+            const { data: senderProfiles } = await supabaseAdmin
+              .from('user_profiles')
+              .select('id, username, email')
+              .in('id', allSenderIds);
+            const senderNameMap = new Map<string, string>();
+            (senderProfiles || []).forEach((p: any) => senderNameMap.set(p.id, p.username || p.email || '?'));
+
+            let totalSent = 0;
+            let totalErrors = 0;
+
+            for (const [recipientId, info] of recipientMap) {
+              try {
+                // Check notification preference
+                const { data: prefData } = await supabaseAdmin
+                  .from('user_preferences')
+                  .select('notification_preferences')
+                  .eq('user_id', recipientId)
+                  .maybeSingle();
+                const prefs = prefData?.notification_preferences || {};
+                if (prefs.share_request === false) continue;
+
+                const { data: tokens } = await supabaseAdmin
+                  .from('push_tokens')
+                  .select('token')
+                  .eq('user_id', recipientId)
+                  .eq('active', true);
+
+                if (!tokens || tokens.length === 0) continue;
+
+                const count = info.transfers.length;
+                const firstTransfer = info.transfers[0];
+                const senderName = senderNameMap.get(firstTransfer.sender_user_id) || '?';
+
+                let title: string;
+                let body: string;
+                if (count === 1) {
+                  title = '\u{1F514} Transfert en attente';
+                  body = `${senderName} attend votre reponse pour le transfert de "${firstTransfer.player_name}". Consultez vos notifications.`;
+                } else {
+                  title = `\u{1F514} ${count} transferts en attente`;
+                  const playerNames = info.transfers.slice(0, 2).map(t => t.player_name).join(', ');
+                  const extra = count > 2 ? ` +${count - 2}` : '';
+                  body = `Vous avez ${count} demandes de transfert sans reponse (${playerNames}${extra}). Repondez pour debloquer les joueurs.`;
+                }
+
+                const messages = tokens.map((t: any) => buildPushMessage(
+                  t.token,
+                  title,
+                  body,
+                  { type: 'player_transfer_request' },
+                  { channelId: 'share-requests', priority: 'high' }
+                ));
+
+                const tickets = await sendPushNotifications(messages);
+                totalSent += tickets.filter((t: any) => t.status === 'ok').length;
+                totalErrors += tickets.filter((t: any) => t.status === 'error').length;
+
+                // Deactivate invalid tokens
+                for (let i = 0; i < tickets.length; i++) {
+                  if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                    const invalidToken = messages[i]?.to;
+                    if (invalidToken) {
+                      await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              } catch { /* silent per-recipient */ }
+            }
+
+            // Track dedup
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'transfer_reminder_cron',
+              source_page: `sent:${totalSent}|errors:${totalErrors}|overdue:${overdueTransfers.length}|recipients:${recipientMap.size}`,
+            }).catch(() => {});
+
+            console.log(`[weekly-cron] Transfer reminders: ${totalSent} sent, ${totalErrors} errors, ${overdueTransfers.length} overdue, ${recipientMap.size} recipients`);
+            results.transfer_reminders = { sent: totalSent, errors: totalErrors, overdue: overdueTransfers.length, recipients: recipientMap.size };
+          }
+        }
+      } catch (trErr: any) {
+        console.error('[weekly-cron] Transfer reminders error:', trErr.message);
+        results.transfer_reminders = { error: trErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 14: Transfer Escalation - Flag transfers pending 21+ days, notify admins
+    // ============================================================
+    if (tasks.includes('transfer_escalation')) {
+      console.log('[weekly-cron] Checking for escalated transfers (pending 21+ days)...');
+      try {
+        const threshold21d = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Dedup: only escalate once per week
+        const escWeekStart = new Date();
+        escWeekStart.setDate(escWeekStart.getDate() - escWeekStart.getDay() + 1);
+        escWeekStart.setHours(0, 0, 0, 0);
+        const { data: existingEsc } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'transfer_escalation_cron')
+          .gte('created_at', escWeekStart.toISOString())
+          .limit(1);
+
+        if (existingEsc && existingEsc.length > 0) {
+          console.log('[weekly-cron] Transfer escalation already sent this week');
+          results.transfer_escalation = { sent: 0, reason: 'already_sent_this_week' };
+        } else {
+          // Find pending transfers older than 21 days
+          const { data: escalatedTransfers } = await supabaseAdmin
+            .from('player_transfer_requests')
+            .select('id, player_name, sender_user_id, recipient_user_id, created_at')
+            .eq('status', 'pending')
+            .lt('created_at', threshold21d);
+
+          if (!escalatedTransfers || escalatedTransfers.length === 0) {
+            results.transfer_escalation = { escalated: 0 };
+          } else {
+            // Get admin users
+            const { data: adminUsers } = await supabaseAdmin
+              .from('user_profiles')
+              .select('id')
+              .eq('is_admin', true);
+
+            if (!adminUsers || adminUsers.length === 0) {
+              results.transfer_escalation = { escalated: escalatedTransfers.length, reason: 'no_admins' };
+            } else {
+              const adminIds = adminUsers.map((a: any) => a.id);
+              const { data: adminTokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('user_id, token')
+                .in('user_id', adminIds)
+                .eq('active', true);
+
+              // Fetch sender/recipient names for context
+              const escUserIds = [...new Set(escalatedTransfers.flatMap(t => [t.sender_user_id, t.recipient_user_id]))];
+              const { data: escProfiles } = await supabaseAdmin
+                .from('user_profiles')
+                .select('id, username, email')
+                .in('id', escUserIds);
+              const escNameMap = new Map<string, string>();
+              (escProfiles || []).forEach((p: any) => escNameMap.set(p.id, p.username || p.email || '?'));
+
+              // Build summary for admin notification
+              const playerNames = escalatedTransfers.slice(0, 3).map(t => t.player_name).join(', ');
+              const extra = escalatedTransfers.length > 3 ? ` +${escalatedTransfers.length - 3}` : '';
+              const oldestDays = Math.floor((Date.now() - new Date(escalatedTransfers[escalatedTransfers.length - 1].created_at).getTime()) / 86400000);
+
+              let escSent = 0;
+              let escErrors = 0;
+
+              if (adminTokens && adminTokens.length > 0) {
+                const messages = adminTokens.map((t: any) => buildPushMessage(
+                  t.token,
+                  `\u{1F6A8} ${escalatedTransfers.length} transfert(s) escalade(s)`,
+                  `${escalatedTransfers.length} transfert(s) en attente depuis +21 jours (${playerNames}${extra}). Plus ancien : ${oldestDays}j. Action requise.`,
+                  { type: 'moderation_action', action: 'transfer_escalation' },
+                  { channelId: 'tournament-reminders', priority: 'high' }
+                ));
+
+                const tickets = await sendPushNotifications(messages);
+                escSent = tickets.filter((t: any) => t.status === 'ok').length;
+                escErrors = tickets.filter((t: any) => t.status === 'error').length;
+
+                // Deactivate invalid tokens
+                for (let i = 0; i < tickets.length; i++) {
+                  if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                    const invalidToken = messages[i]?.to;
+                    if (invalidToken) {
+                      await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              }
+
+              // Track dedup + store escalated transfer IDs for dashboard
+              const escalatedIds = escalatedTransfers.map(t => t.id);
+              await supabaseAdmin.from('ambassador_analytics').insert({
+                ambassador_id: '00000000-0000-0000-0000-000000000000',
+                event_type: 'transfer_escalation_cron',
+                source_page: `escalated:${escalatedTransfers.length}|oldest:${oldestDays}d|ids:${escalatedIds.slice(0, 10).join(',')}`,
+                viewer_id: adminIds[0],
+              }).catch(() => {});
+
+              console.log(`[weekly-cron] Transfer escalation: ${escSent} push sent, ${escalatedTransfers.length} escalated transfers, oldest ${oldestDays}d`);
+              results.transfer_escalation = {
+                escalated: escalatedTransfers.length,
+                oldestDays,
+                pushSent: escSent,
+                pushErrors: escErrors,
+                transferIds: escalatedIds,
+              };
+            }
+          }
+        }
+      } catch (escErr: any) {
+        console.error('[weekly-cron] Transfer escalation error:', escErr.message);
+        results.transfer_escalation = { error: escErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 15: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');
