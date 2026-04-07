@@ -32,6 +32,66 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.35.0',
+    date: '2026-04-07',
+    type: 'minor',
+    highlights: [
+      { icon: 'swap-horiz', text: 'Admin: Player transfers dashboard widget with KPIs and recent list', color: '#0EA5E9' },
+      { icon: 'archive', text: 'Meetup archival indicator with end time display and disabled chat/invitations', color: '#64748B' },
+      { icon: 'rocket-launch', text: 'FAQ V2 Roadmap cleaned: removed "Already in V1" section', color: '#7C3AED' },
+    ],
+    details: [
+      'Admin dashboard: new "Player Transfers" widget with pending/accepted/declined KPI cards and recent transfers list (player name, sender, recipient, match/challenge counts, date)',
+      'Admin dashboard: transfers widget added to widget settings modal with toggle and reorder support',
+      'Meetup detail page: archived meetups show "Archive" badge with end time in status banner',
+      'Meetup detail page: end time displayed in hero card time row (e.g. "14:00 → 16:00")',
+      'Meetup detail page: chat, invitations, reminders, and response buttons disabled for archived/expired meetups',
+      'FAQ V2 Roadmap: updated to show 7 planned features only, removed redundant "Already in V1" list',
+      'FAQ V2 launch timeline answer simplified',
+      'Admin changelog updated with v1.35.0 entry',
+    ],
+  },
+  {
+    version: '1.34.0',
+    date: '2026-04-07',
+    type: 'minor',
+    highlights: [
+      { icon: 'fact-check', text: 'FAQ full audit: V2 roadmap updated, transfer/follow/notification descriptions corrected', color: '#10B981' },
+      { icon: 'person-add', text: 'Profile: "Joueurs suivis" renamed and moved to top of Community section', color: '#EC4899' },
+      { icon: 'tune', text: 'Notification hub: Settings tab redirects to full preferences page', color: '#64748B' },
+    ],
+    details: [
+      'FAQ V2 Roadmap section updated: added player transfer, QR claim, mini-chat, meetup end time, heatmap, geographic ranking, club invitations to "Already in V1" list',
+      'FAQ Player Transfer answer corrected: "Link to user" button is now via header icon (swap), not "..." menu',
+      'FAQ Follow player answer clarified: Follow button only appears on registered public players, not local directory players',
+      'FAQ Notifications answer updated: reflects 13 categories in 5 sections with full preferences page redirect',
+      'FAQ Delete account answer corrected: actual flow is bottom of Profile page with OTP confirmation',
+      'FAQ Language change answer corrected: uses Account section toggle, not flag at top-right',
+      'Profile: "Mes abonnements" renamed to "Joueurs suivis" and moved above "Nos Ambassadeurs" in Community section',
+      'Notification hub: Settings tab now navigates directly to full notification-preferences page (removes redundant inline toggles)',
+      'Tournament notifications: auto-cleanup of past tournaments on hub load, count excludes meetup reminders',
+    ],
+  },
+  {
+    version: '1.33.0',
+    date: '2026-04-07',
+    type: 'minor',
+    highlights: [
+      { icon: 'schedule', text: 'Meetup end time: automatic archival when end time passes', color: '#EF4444' },
+      { icon: 'design-services', text: 'Notification hub tabs redesigned with scrollable colored pills', color: '#3B82F6' },
+      { icon: 'notifications', text: 'Meetup reminders use dedicated channel (no longer counted as tournaments)', color: '#10B981' },
+    ],
+    details: [
+      'Meetup creation form: new end time picker with default +2h from start, auto-adjusts if start changes',
+      'Database: end_time column added to terrain_meetups table',
+      'Meetup service: createMeetup accepts endTime param, auto-archive past meetups by end_time',
+      'Notification hub tabs: redesigned from cramped segmented control to horizontal scrollable pill buttons with icons, colors, and badges',
+      'Meetup reminders now use dedicated Android channel meetup-reminders (separated from tournament-reminders)',
+      'Transfer button (swap icon) moved from advanced actions menu to visible header button on player detail page',
+      'Meetup notifications category moved back into "Communaute et Evenements" in notification preferences',
+    ],
+  },
+  {
     version: '1.32.0',
     date: '2026-04-07',
     type: 'minor',
