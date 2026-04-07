@@ -640,6 +640,54 @@ export default function TerrainDetailScreen() {
           </View>
         )}
 
+        {/* Terrain Type Tips — moved above environment */}
+        <View style={[styles.section, isTablet && styles.tabletHalf]}>
+          <Text style={styles.sectionTitle}>{t('terrain', 'playingTips')}</Text>
+          <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
+            <View style={styles.tipsHeader}>
+              <MaterialIcons name="tips-and-updates" size={24} color={colors.bg} />
+              <Text style={[styles.tipsTitle, { color: colors.bg }]}>{t('terrain', 'terrainType')} {t('terrainTypes', terrain.type)}</Text>
+            </View>
+            <View style={styles.tipsList}>
+              {terrain.type === 'Stabilisé' && (
+                <>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise1')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise2')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise3')}</Text>
+                </>
+              )}
+              {terrain.type === 'Graviers' && (
+                <>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers1')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers2')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers3')}</Text>
+                </>
+              )}
+              {terrain.type === 'Sable' && (
+                <>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable1')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable2')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable3')}</Text>
+                </>
+              )}
+              {terrain.type === 'Cailloux' && (
+                <>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux1')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux2')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux3')}</Text>
+                </>
+              )}
+              {terrain.type === 'Terre battue' && (
+                <>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue1')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue2')}</Text>
+                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue3')}</Text>
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+
         {/* Environment badge */}
         {(terrain as any).environment ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
@@ -651,45 +699,6 @@ export default function TerrainDetailScreen() {
             </View>
           </View>
         ) : null}
-
-        {/* Quick Info */}
-        <View style={styles.quickInfoGrid}>
-          <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: theme.primary + '15' }]}>
-              <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
-            </View>
-            <Text style={styles.quickInfoValue}>{terrain.courtsCount}</Text>
-            <Text style={styles.quickInfoLabel}>{terrain.courtsCount > 1 ? t('terrain', 'courtsLabelPlural') : t('terrain', 'courtsLabel')}</Text>
-          </View>
-          <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.lighting ? theme.warning + '15' : theme.textMuted + '15' }]}>
-              <MaterialIcons name="lightbulb" size={20} color={terrain.lighting ? theme.warning : theme.textMuted} />
-            </View>
-            <Text style={styles.quickInfoValue}>{terrain.lighting ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
-            <Text style={styles.quickInfoLabel}>{t('terrain', 'lighting')}</Text>
-          </View>
-          <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.covered ? theme.accent + '15' : theme.textMuted + '15' }]}>
-              <MaterialIcons name="roofing" size={20} color={terrain.covered ? theme.accent : theme.textMuted} />
-            </View>
-            <Text style={styles.quickInfoValue}>{terrain.covered ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
-            <Text style={styles.quickInfoLabel}>{t('terrain', 'covered')}</Text>
-          </View>
-          <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.parking ? '#6366F1' + '15' : theme.textMuted + '15' }]}>
-              <MaterialIcons name="local-parking" size={20} color={terrain.parking ? '#6366F1' : theme.textMuted} />
-            </View>
-            <Text style={styles.quickInfoValue}>{terrain.parking ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
-            <Text style={styles.quickInfoLabel}>{t('terrain', 'parking')}</Text>
-          </View>
-          <View style={styles.quickInfoItem}>
-            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.publicAccess ? theme.success + '15' : theme.error + '15' }]}>
-              <MaterialIcons name={terrain.publicAccess ? 'public' : 'lock'} size={20} color={terrain.publicAccess ? theme.success : theme.error} />
-            </View>
-            <Text style={styles.quickInfoValue}>{terrain.publicAccess ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
-            <Text style={styles.quickInfoLabel}>{t('terrain', 'accessLabel')}</Text>
-          </View>
-        </View>
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
@@ -762,6 +771,52 @@ export default function TerrainDetailScreen() {
 
         </View>
 
+        {/* Quick Info — 3 per row, below address */}
+        <View style={styles.quickInfoGrid}>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: theme.primary + '15' }]}>
+              <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.courtsCount}</Text>
+            <Text style={styles.quickInfoLabel}>{terrain.courtsCount > 1 ? t('terrain', 'courtsLabelPlural') : t('terrain', 'courtsLabel')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.lighting ? theme.warning + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name="lightbulb" size={20} color={terrain.lighting ? theme.warning : theme.textMuted} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.lighting ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'lighting')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.covered ? theme.accent + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name="roofing" size={20} color={terrain.covered ? theme.accent : theme.textMuted} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.covered ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'covered')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.parking ? '#6366F1' + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name="local-parking" size={20} color={terrain.parking ? '#6366F1' : theme.textMuted} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.parking ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'parking')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.toilets ? '#EC4899' + '15' : theme.textMuted + '15' }]}>
+              <MaterialIcons name="wc" size={20} color={terrain.toilets ? '#EC4899' : theme.textMuted} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.toilets ? t('terrain', 'yesLabel') : t('terrain', 'noLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'toilets')}</Text>
+          </View>
+          <View style={styles.quickInfoItem}>
+            <View style={[styles.quickInfoIcon, { backgroundColor: terrain.publicAccess ? theme.success + '15' : theme.error + '15' }]}>
+              <MaterialIcons name={terrain.publicAccess ? 'public' : 'lock'} size={20} color={terrain.publicAccess ? theme.success : theme.error} />
+            </View>
+            <Text style={styles.quickInfoValue}>{terrain.publicAccess ? t('terrain', 'publicLabel') : t('terrain', 'privateLabel')}</Text>
+            <Text style={styles.quickInfoLabel}>{t('terrain', 'accessLabel')}</Text>
+          </View>
+        </View>
+
         {/* Description */}
         {terrain.description && (
           <View style={styles.section}>
@@ -788,251 +843,6 @@ export default function TerrainDetailScreen() {
           </View>
         )}
 
-        {/* Terrain Type Tips */}
-        <View style={[styles.section, isTablet && styles.tabletHalf]}>
-          <Text style={styles.sectionTitle}>{t('terrain', 'playingTips')}</Text>
-          <View style={[styles.tipsCard, { backgroundColor: colors.light, borderColor: colors.bg + '30' }]}>
-            <View style={styles.tipsHeader}>
-              <MaterialIcons name="tips-and-updates" size={24} color={colors.bg} />
-              <Text style={[styles.tipsTitle, { color: colors.bg }]}>{t('terrain', 'terrainType')} {t('terrainTypes', terrain.type)}</Text>
-            </View>
-            <View style={styles.tipsList}>
-              {terrain.type === 'Stabilisé' && (
-                <>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise1')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise2')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipStabilise3')}</Text>
-                </>
-              )}
-              {terrain.type === 'Graviers' && (
-                <>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers1')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers2')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipGraviers3')}</Text>
-                </>
-              )}
-              {terrain.type === 'Sable' && (
-                <>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable1')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable2')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipSable3')}</Text>
-                </>
-              )}
-              {terrain.type === 'Cailloux' && (
-                <>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux1')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux2')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipCailloux3')}</Text>
-                </>
-              )}
-              {terrain.type === 'Terre battue' && (
-                <>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue1')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue2')}</Text>
-                  <Text style={styles.tipItem}>• {t('terrain', 'tipTerreBattue3')}</Text>
-                </>
-              )}
-            </View>
-          </View>
-        </View>
-
-        </View>
-
-        {/* Reviews & Ratings Section */}
-        <View style={styles.section}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <Text style={styles.sectionTitle}>{language === 'fr' ? 'AVIS ET NOTES' : 'REVIEWS & RATINGS'}</Text>
-            {user ? (
-              <Pressable
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  if (myReview) { setReviewRating(myReview.rating); setReviewComment(myReview.comment || ''); setReviewPhotoUrl(myReview.photoUrl || null); }
-                  setShowReviewModal(true);
-                }}
-              >
-                <MaterialIcons name={myReview ? 'edit' : 'rate-review'} size={14} color="#F59E0B" />
-                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{myReview ? (language === 'fr' ? 'Modifier' : 'Edit') : (language === 'fr' ? 'Donner un avis' : 'Write Review')}</Text>
-              </Pressable>
-            ) : null}
-          </View>
-          {/* Rating display */}
-          {terrainRating.count > 0 ? (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <View style={{ alignItems: 'center' }}>
-                  <Text style={{ fontSize: 32, fontWeight: '900', color: '#F59E0B' }}>{terrainRating.avg}</Text>
-                  <View style={{ flexDirection: 'row', gap: 2, marginTop: 4 }}>
-                    {[1, 2, 3, 4, 5].map(star => (
-                      <MaterialIcons key={star} name={star <= Math.round(terrainRating.avg) ? 'star' : 'star-border'} size={14} color="#F59E0B" />
-                    ))}
-                  </View>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{terrainRating.count} {language === 'fr' ? 'avis' : 'reviews'}</Text>
-                </View>
-                <View style={{ flex: 1, gap: 3 }}>
-                  {[5, 4, 3, 2, 1].map(level => (
-                    <View key={level} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={{ fontSize: 10, color: theme.textMuted, width: 8 }}>{level}</Text>
-                      <View style={{ flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
-                        <View style={{ height: '100%', width: `${terrainRating.count > 0 ? (terrainRating.distribution[level - 1] / terrainRating.count) * 100 : 0}%`, backgroundColor: '#F59E0B', borderRadius: 3 }} />
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              </View>
-            </View>
-          ) : (
-            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 24, alignItems: 'center', ...theme.shadows.card, marginBottom: 12 }}>
-              <MaterialIcons name="star-border" size={36} color={theme.textMuted} />
-              <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun avis pour le moment' : 'No reviews yet'}</Text>
-            </View>
-          )}
-          {/* Review list (up to 5) */}
-          {terrainReviews.slice(0, 5).map(rev => {
-            const matchesOnTerrain = allMatches.filter(m => m.terrainId === terrain.id && [...m.teamA.players, ...m.teamB.players].some(pid => {
-              const p = allPlayers.find(pl => pl.id === pid);
-              return p && (p as any).userId === rev.userId;
-            }));
-            const hasPlayedHere = matchesOnTerrain.length > 0;
-            // Confidence score: based on matches on this terrain + account age + review content
-            const confidenceScore = (() => {
-              let score = 0;
-              // Matches played on this terrain (max 40 pts)
-              score += Math.min(matchesOnTerrain.length * 10, 40);
-              // Account age bonus (max 30 pts: 1pt per month, up to 30 months)
-              const accountAgeMonths = Math.floor((Date.now() - new Date(rev.createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000));
-              score += Math.min(accountAgeMonths, 30);
-              // Has comment (10 pts)
-              if (rev.comment && rev.comment.length > 10) score += 10;
-              // Has photo (10 pts)
-              if (rev.photoUrl) score += 10;
-              // Verified player (10 pts)
-              if (hasPlayedHere) score += 10;
-              return Math.min(score, 100);
-            })();
-            const confidenceColor = confidenceScore >= 70 ? '#10B981' : confidenceScore >= 40 ? '#F59E0B' : '#94A3B8';
-            const confidenceLabel = confidenceScore >= 70 ? (language === 'fr' ? 'Fiable' : 'Reliable') : confidenceScore >= 40 ? (language === 'fr' ? 'Moyen' : 'Medium') : (language === 'fr' ? 'Faible' : 'Low');
-            return (
-            <View key={rev.id} style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 8, ...theme.shadows.card }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
-                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.primary }}>{(rev.playerName || '?').charAt(0)}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{rev.playerName || (language === 'fr' ? 'Anonyme' : 'Anonymous')}</Text>
-                    {hasPlayedHere ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#10B98112', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
-                        <MaterialIcons name="verified" size={10} color="#10B981" />
-                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#10B981' }}>{language === 'fr' ? 'Verifie' : 'Verified'}</Text>
-                      </View>
-                    ) : null}
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: confidenceColor + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: confidenceColor + '25' }}>
-                      <MaterialIcons name="shield" size={9} color={confidenceColor} />
-                      <Text style={{ fontSize: 9, fontWeight: '700', color: confidenceColor }}>{confidenceScore} - {confidenceLabel}</Text>
-                    </View>
-                  </View>
-                  <Text style={{ fontSize: 11, color: theme.textMuted }}>{new Date(rev.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 1 }}>
-                  {[1, 2, 3, 4, 5].map(s => <MaterialIcons key={s} name={s <= rev.rating ? 'star' : 'star-border'} size={14} color="#F59E0B" />)}
-                </View>
-              </View>
-              {rev.comment ? <Text style={{ fontSize: 13, color: theme.textPrimary, lineHeight: 19 }}>{rev.comment}</Text> : null}
-              {rev.photoUrl ? (
-                <Pressable style={{ marginTop: 8, borderRadius: 12, overflow: 'hidden' }} onPress={() => { setGalleryIndex(0); /* could open photo fullscreen */ }}>
-                  <Image source={{ uri: rev.photoUrl }} style={{ width: '100%', height: 160, borderRadius: 12 }} contentFit="cover" transition={200} />
-                </Pressable>
-              ) : null}
-              {/* Voting + Report Row */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
-                {/* Helpful / Not Helpful Votes */}
-                {user ? (() => {
-                  const vc = reviewVotes.get(rev.id) || { helpful: 0, notHelpful: 0, userVote: null };
-                  const isVoting = votingReviewId === rev.id;
-                  return (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <Pressable
-                        onPress={() => handleVote(rev.id, 'helpful')}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'helpful' ? '#22C55E15' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'helpful' ? '#22C55E30' : 'transparent' }}
-                        disabled={isVoting}
-                        hitSlop={4}
-                      >
-                        <MaterialIcons name="thumb-up" size={13} color={vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted} />
-                        {vc.helpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted }}>{vc.helpful}</Text> : null}
-                      </Pressable>
-                      <Pressable
-                        onPress={() => handleVote(rev.id, 'not_helpful')}
-                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'not_helpful' ? '#EF444415' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'not_helpful' ? '#EF444430' : 'transparent' }}
-                        disabled={isVoting}
-                        hitSlop={4}
-                      >
-                        <MaterialIcons name="thumb-down" size={13} color={vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted} />
-                        {vc.notHelpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted }}>{vc.notHelpful}</Text> : null}
-                      </Pressable>
-                    </View>
-                  );
-                })() : <View />}
-                {/* Report button */}
-                {user && rev.userId !== user.id ? (
-                  <Pressable
-                    onPress={() => {
-                      Alert.alert(
-                        language === 'fr' ? 'Signaler cet avis' : 'Report this review',
-                        language === 'fr' ? 'Cet avis sera examine par notre equipe de moderation.' : 'This review will be examined by our moderation team.',
-                        [
-                          { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
-                          { text: language === 'fr' ? 'Signaler' : 'Report', style: 'destructive', onPress: async () => {
-                            const { error: flagErr } = await flagReview(rev.id);
-                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                            showAlert(
-                              language === 'fr' ? 'Signalement envoye' : 'Report sent',
-                              language === 'fr' ? 'Merci, notre equipe examinera cet avis.' : 'Thanks, our team will review this.'
-                            );
-                          }},
-                        ]
-                      );
-                    }}
-                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
-                    hitSlop={8}
-                  >
-                    <MaterialIcons name="flag" size={12} color={theme.textMuted} />
-                    <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Signaler' : 'Report'}</Text>
-                  </Pressable>
-                ) : <View />}
-              </View>
-              {/* Delete own review */}
-              {user && rev.userId === user.id ? (
-                <Pressable
-                  onPress={() => {
-                    Alert.alert(
-                      language === 'fr' ? 'Supprimer votre avis ?' : 'Delete your review?',
-                      '',
-                      [
-                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
-                        { text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
-                          await deleteTerrainReview(rev.id);
-                          setMyReview(null);
-                          setTerrainReviews(prev => {
-                            const updated = prev.filter(r => r.id !== rev.id);
-                            setTerrainRating(computeRatingStats(updated));
-                            return updated;
-                          });
-                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        }},
-                      ]
-                    );
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, alignSelf: 'flex-end' }}
-                  hitSlop={8}
-                >
-                  <MaterialIcons name="delete-outline" size={12} color={theme.error} />
-                  <Text style={{ fontSize: 10, color: theme.error }}>{language === 'fr' ? 'Supprimer' : 'Delete'}</Text>
-                </Pressable>
-              ) : null}
-            </View>
-            );
-          })}
         </View>
 
         {/* Peak Hours Section */}
@@ -1390,6 +1200,203 @@ export default function TerrainDetailScreen() {
             </View>
           )}
         </View>
+        {/* Reviews & Ratings Section */}
+        <View style={styles.section}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'AVIS ET NOTES' : 'REVIEWS & RATINGS'}</Text>
+            {user ? (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 }}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  if (myReview) { setReviewRating(myReview.rating); setReviewComment(myReview.comment || ''); setReviewPhotoUrl(myReview.photoUrl || null); }
+                  setShowReviewModal(true);
+                }}
+              >
+                <MaterialIcons name={myReview ? 'edit' : 'rate-review'} size={14} color="#F59E0B" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#F59E0B' }}>{myReview ? (language === 'fr' ? 'Modifier' : 'Edit') : (language === 'fr' ? 'Donner un avis' : 'Write Review')}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+          {/* Rating display */}
+          {terrainRating.count > 0 ? (
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 12, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                <View style={{ alignItems: 'center' }}>
+                  <Text style={{ fontSize: 32, fontWeight: '900', color: '#F59E0B' }}>{terrainRating.avg}</Text>
+                  <View style={{ flexDirection: 'row', gap: 2, marginTop: 4 }}>
+                    {[1, 2, 3, 4, 5].map(star => (
+                      <MaterialIcons key={star} name={star <= Math.round(terrainRating.avg) ? 'star' : 'star-border'} size={14} color="#F59E0B" />
+                    ))}
+                  </View>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{terrainRating.count} {language === 'fr' ? 'avis' : 'reviews'}</Text>
+                </View>
+                <View style={{ flex: 1, gap: 3 }}>
+                  {[5, 4, 3, 2, 1].map(level => (
+                    <View key={level} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, width: 8 }}>{level}</Text>
+                      <View style={{ flex: 1, height: 6, backgroundColor: theme.backgroundSecondary, borderRadius: 3, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${terrainRating.count > 0 ? (terrainRating.distribution[level - 1] / terrainRating.count) * 100 : 0}%`, backgroundColor: '#F59E0B', borderRadius: 3 }} />
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            </View>
+          ) : (
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 24, alignItems: 'center', ...theme.shadows.card, marginBottom: 12 }}>
+              <MaterialIcons name="star-border" size={36} color={theme.textMuted} />
+              <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun avis pour le moment' : 'No reviews yet'}</Text>
+            </View>
+          )}
+          {/* Review list (up to 5) */}
+          {terrainReviews.slice(0, 5).map(rev => {
+            const matchesOnTerrain = allMatches.filter(m => m.terrainId === terrain.id && [...m.teamA.players, ...m.teamB.players].some(pid => {
+              const p = allPlayers.find(pl => pl.id === pid);
+              return p && (p as any).userId === rev.userId;
+            }));
+            const hasPlayedHere = matchesOnTerrain.length > 0;
+            // Confidence score: based on matches on this terrain + account age + review content
+            const confidenceScore = (() => {
+              let score = 0;
+              // Matches played on this terrain (max 40 pts)
+              score += Math.min(matchesOnTerrain.length * 10, 40);
+              // Account age bonus (max 30 pts: 1pt per month, up to 30 months)
+              const accountAgeMonths = Math.floor((Date.now() - new Date(rev.createdAt).getTime()) / (30 * 24 * 60 * 60 * 1000));
+              score += Math.min(accountAgeMonths, 30);
+              // Has comment (10 pts)
+              if (rev.comment && rev.comment.length > 10) score += 10;
+              // Has photo (10 pts)
+              if (rev.photoUrl) score += 10;
+              // Verified player (10 pts)
+              if (hasPlayedHere) score += 10;
+              return Math.min(score, 100);
+            })();
+            const confidenceColor = confidenceScore >= 70 ? '#10B981' : confidenceScore >= 40 ? '#F59E0B' : '#94A3B8';
+            const confidenceLabel = confidenceScore >= 70 ? (language === 'fr' ? 'Fiable' : 'Reliable') : confidenceScore >= 40 ? (language === 'fr' ? 'Moyen' : 'Medium') : (language === 'fr' ? 'Faible' : 'Low');
+            return (
+            <View key={rev.id} style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 14, marginBottom: 8, ...theme.shadows.card }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+                <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.primary }}>{(rev.playerName || '?').charAt(0)}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{rev.playerName || (language === 'fr' ? 'Anonyme' : 'Anonymous')}</Text>
+                    {hasPlayedHere ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#10B98112', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 }}>
+                        <MaterialIcons name="verified" size={10} color="#10B981" />
+                        <Text style={{ fontSize: 9, fontWeight: '700', color: '#10B981' }}>{language === 'fr' ? 'Verifie' : 'Verified'}</Text>
+                      </View>
+                    ) : null}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: confidenceColor + '12', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: confidenceColor + '25' }}>
+                      <MaterialIcons name="shield" size={9} color={confidenceColor} />
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: confidenceColor }}>{confidenceScore} - {confidenceLabel}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 11, color: theme.textMuted }}>{new Date(rev.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 1 }}>
+                  {[1, 2, 3, 4, 5].map(s => <MaterialIcons key={s} name={s <= rev.rating ? 'star' : 'star-border'} size={14} color="#F59E0B" />)}
+                </View>
+              </View>
+              {rev.comment ? <Text style={{ fontSize: 13, color: theme.textPrimary, lineHeight: 19 }}>{rev.comment}</Text> : null}
+              {rev.photoUrl ? (
+                <Pressable style={{ marginTop: 8, borderRadius: 12, overflow: 'hidden' }} onPress={() => { setGalleryIndex(0); /* could open photo fullscreen */ }}>
+                  <Image source={{ uri: rev.photoUrl }} style={{ width: '100%', height: 160, borderRadius: 12 }} contentFit="cover" transition={200} />
+                </Pressable>
+              ) : null}
+              {/* Voting + Report Row */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10, paddingTop: 8, borderTopWidth: 1, borderTopColor: theme.border + '60' }}>
+                {/* Helpful / Not Helpful Votes */}
+                {user ? (() => {
+                  const vc = reviewVotes.get(rev.id) || { helpful: 0, notHelpful: 0, userVote: null };
+                  const isVoting = votingReviewId === rev.id;
+                  return (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                      <Pressable
+                        onPress={() => handleVote(rev.id, 'helpful')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'helpful' ? '#22C55E15' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'helpful' ? '#22C55E30' : 'transparent' }}
+                        disabled={isVoting}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="thumb-up" size={13} color={vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted} />
+                        {vc.helpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'helpful' ? '#22C55E' : theme.textMuted }}>{vc.helpful}</Text> : null}
+                      </Pressable>
+                      <Pressable
+                        onPress={() => handleVote(rev.id, 'not_helpful')}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: vc.userVote === 'not_helpful' ? '#EF444415' : theme.backgroundSecondary, borderWidth: 1, borderColor: vc.userVote === 'not_helpful' ? '#EF444430' : 'transparent' }}
+                        disabled={isVoting}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="thumb-down" size={13} color={vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted} />
+                        {vc.notHelpful > 0 ? <Text style={{ fontSize: 11, fontWeight: '700', color: vc.userVote === 'not_helpful' ? '#EF4444' : theme.textMuted }}>{vc.notHelpful}</Text> : null}
+                      </Pressable>
+                    </View>
+                  );
+                })() : <View />}
+                {/* Report button */}
+                {user && rev.userId !== user.id ? (
+                  <Pressable
+                    onPress={() => {
+                      Alert.alert(
+                        language === 'fr' ? 'Signaler cet avis' : 'Report this review',
+                        language === 'fr' ? 'Cet avis sera examine par notre equipe de moderation.' : 'This review will be examined by our moderation team.',
+                        [
+                          { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                          { text: language === 'fr' ? 'Signaler' : 'Report', style: 'destructive', onPress: async () => {
+                            const { error: flagErr } = await flagReview(rev.id);
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            showAlert(
+                              language === 'fr' ? 'Signalement envoye' : 'Report sent',
+                              language === 'fr' ? 'Merci, notre equipe examinera cet avis.' : 'Thanks, our team will review this.'
+                            );
+                          }},
+                        ]
+                      );
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}
+                    hitSlop={8}
+                  >
+                    <MaterialIcons name="flag" size={12} color={theme.textMuted} />
+                    <Text style={{ fontSize: 10, color: theme.textMuted }}>{language === 'fr' ? 'Signaler' : 'Report'}</Text>
+                  </Pressable>
+                ) : <View />}
+              </View>
+              {/* Delete own review */}
+              {user && rev.userId === user.id ? (
+                <Pressable
+                  onPress={() => {
+                    Alert.alert(
+                      language === 'fr' ? 'Supprimer votre avis ?' : 'Delete your review?',
+                      '',
+                      [
+                        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+                        { text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive', onPress: async () => {
+                          await deleteTerrainReview(rev.id);
+                          setMyReview(null);
+                          setTerrainReviews(prev => {
+                            const updated = prev.filter(r => r.id !== rev.id);
+                            setTerrainRating(computeRatingStats(updated));
+                            return updated;
+                          });
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                        }},
+                      ]
+                    );
+                  }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4, alignSelf: 'flex-end' }}
+                  hitSlop={8}
+                >
+                  <MaterialIcons name="delete-outline" size={12} color={theme.error} />
+                  <Text style={{ fontSize: 10, color: theme.error }}>{language === 'fr' ? 'Supprimer' : 'Delete'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            );
+          })}
+        </View>
+
         {/* ===== SIMPLIFIED VISIBILITY ===== */}
         {canEdit && !isSharedItem && (
           <View style={styles.section}>
@@ -1902,7 +1909,7 @@ const styles = StyleSheet.create({
     ...theme.shadows.card,
   },
   quickInfoItem: {
-    width: '20%',
+    width: '33.33%',
     alignItems: 'center',
     gap: 6,
   },
