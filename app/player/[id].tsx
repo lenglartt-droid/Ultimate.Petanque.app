@@ -1369,7 +1369,7 @@ export default function PlayerDetailScreen() {
         </View>
       </Modal>
 
-      {/* Meetup Invitation Picker */
+      {/* Meetup Invitation Picker */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
         <View style={s.mipOverlay}>
           <View style={s.mipContent}>

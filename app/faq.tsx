@@ -513,6 +513,43 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
       ],
     },
     {
+      id: 'player_transfer',
+      category: fr ? 'Transfert de joueur' : 'Player Transfer',
+      icon: 'swap-horiz',
+      color: '#0EA5E9',
+      description: fr ? 'Transferer les matchs d\'un joueur local vers un compte reel' : 'Transfer local player matches to a real account',
+      questions: [
+        {
+          id: 'pt1',
+          q: fr ? 'Comment transferer les matchs d\'un joueur local vers un utilisateur inscrit ?' : 'How do I transfer a local player\'s matches to a registered user?',
+          a: fr
+            ? 'Ouvrez la fiche du joueur local dans votre annuaire. Appuyez sur le menu "..." > "Lier a un utilisateur". Recherchez le joueur inscrit par nom ou email. L\'app affiche le nombre de matchs et defis qui seront transferes. Ajoutez un message optionnel et envoyez la demande. Le destinataire recoit une notification dans Notifications > Transferts et peut accepter ou refuser. En cas d\'acceptation, les matchs et defis sont reassignes a son profil et ses statistiques se mettent a jour automatiquement.'
+            : 'Open the local player card in your directory. Tap the "..." menu > "Link to user". Search for the registered player by name or email. The app shows how many matches and challenges will be transferred. Add an optional message and send the request. The recipient gets a notification in Notifications > Transfers and can accept or decline. On acceptance, matches and challenges are reassigned to their profile and stats auto-update.',
+        },
+        {
+          id: 'pt2',
+          q: fr ? 'Que se passe-t-il si le joueur a ete cree par plusieurs utilisateurs ?' : 'What happens if the player was created by multiple users?',
+          a: fr
+            ? 'Chaque utilisateur qui a enregistre des matchs avec ce joueur local doit envoyer independamment une demande de transfert. Le destinataire recevra une notification pour chaque demande et pourra accepter chacune individuellement. Les matchs de chaque proprietaire sont transferes separement, ce qui permet de consolider progressivement toutes les donnees.'
+            : 'Each user who recorded matches with this local player must independently send a transfer request. The recipient will get a notification for each request and can accept each one individually. Matches from each owner are transferred separately, allowing progressive data consolidation.',
+        },
+        {
+          id: 'pt3',
+          q: fr ? 'Comment reclamer un joueur via QR code ?' : 'How do I claim a player via QR code?',
+          a: fr
+            ? 'Quand vous etes sur le terrain avec un joueur inscrit, scannez son QR code de profil (icone QR en haut de l\'accueil). Si l\'app detecte dans votre annuaire des joueurs locaux au nom similaire, elle propose de les lier automatiquement au compte reel. Vous pouvez alors envoyer le transfert en un tap, sans avoir a chercher l\'utilisateur manuellement. Cette methode est ideale pour les situations en personne car le contact physique garantit la verification.'
+            : 'When you are at the court with a registered player, scan their profile QR code (QR icon at top of home). If the app detects local players with similar names in your directory, it proposes linking them to the real account automatically. You can then send the transfer in one tap without manually searching for the user. This method is ideal for in-person situations as physical contact ensures verification.',
+        },
+        {
+          id: 'pt4',
+          q: fr ? 'Ou voir les demandes de transfert recues ?' : 'Where do I see received transfer requests?',
+          a: fr
+            ? 'Profil > Notifications > onglet "Transferts". Les demandes en attente montrent le nom du joueur, l\'expediteur, le nombre de matchs et defis concernes, et le message de l\'expediteur. Vous pouvez accepter ou refuser chaque demande. L\'historique des transferts traites reste visible dans le meme onglet.'
+            : 'Profile > Notifications > "Transfers" tab. Pending requests show the player name, sender, number of matches and challenges involved, and the sender\'s message. You can accept or decline each request. The history of processed transfers stays visible in the same tab.',
+        },
+      ],
+    },
+    {
       id: 'club_invitations',
       category: fr ? 'Invitations Club' : 'Club Invitations',
       icon: 'mail',

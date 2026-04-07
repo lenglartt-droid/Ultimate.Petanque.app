@@ -1,6 +1,7 @@
 /**
  * MeetupChat — Mini-chat component for meetup detail page.
- * Displays messages, auto-polls for new ones, typing indicator, and allows sending.
+ * Displays messages, auto-polls for new ones, typing indicator,
+ * read receipts (blue double check), emoji reactions, and allows sending.
  */
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
@@ -16,17 +17,23 @@ import {
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
-import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming, withSpring } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import {
   MeetupMessage,
   TypingUser,
+  ReadReceipt,
+  ReactionGroup,
   fetchMeetupMessages,
   sendMeetupMessage,
   deleteMeetupMessage,
   setTypingStatus,
   clearTypingStatus,
   fetchTypingUsers,
+  markMessagesAsRead,
+  fetchReadReceipts,
+  fetchMessageReactions,
+  toggleReaction,
 } from '@/services/meetupChatService';
 
 interface MeetupChatProps {
@@ -38,9 +45,11 @@ interface MeetupChatProps {
   language: string;
 }
 
-const POLL_INTERVAL = 8000; // 8 seconds
-const TYPING_POLL_INTERVAL = 3000; // 3 seconds for typing indicator
-const TYPING_DEBOUNCE_MS = 1000; // Debounce typing status updates
+const POLL_INTERVAL = 8000;
+const TYPING_POLL_INTERVAL = 3000;
+const TYPING_DEBOUNCE_MS = 1000;
+const READ_RECEIPT_POLL_INTERVAL = 5000;
+const REACTION_POLL_INTERVAL = 8000;
 
 const QUICK_MESSAGES_FR = [
   "J'arrive dans 10 min",
@@ -56,7 +65,12 @@ const QUICK_MESSAGES_EN = [
   "I'll be late",
 ];
 
-// Color palette for user avatars
+const REACTION_EMOJIS: { type: string; emoji: string }[] = [
+  { type: 'thumbs_up', emoji: '\u{1F44D}' },
+  { type: 'laugh', emoji: '\u{1F602}' },
+  { type: 'fire', emoji: '\u{1F525}' },
+];
+
 const AVATAR_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
   '#EC4899', '#06B6D4', '#D97706', '#6366F1', '#14B8A6',
@@ -86,6 +100,10 @@ function formatDateSeparator(dateStr: string, lang: string): string {
   if (isToday) return lang === 'fr' ? "Aujourd'hui" : 'Today';
   if (isYesterday) return lang === 'fr' ? 'Hier' : 'Yesterday';
   return d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+}
+
+function getEmojiForType(type: string): string {
+  return REACTION_EMOJIS.find(r => r.type === type)?.emoji || type;
 }
 
 // Animated typing dots component
@@ -118,39 +136,123 @@ const TypingDots = React.memo(() => {
   );
 });
 
-const MessageBubble = React.memo(({ msg, isOwn, onDelete, language }: {
+// Read status icon component
+const ReadStatusIcon = React.memo(({ isRead }: { isRead: boolean }) => (
+  <View style={s.readStatusWrap}>
+    <MaterialIcons name="done-all" size={14} color={isRead ? '#3B82F6' : 'rgba(255,255,255,0.45)'} />
+  </View>
+));
+
+// Animated reaction pill
+const ReactionPill = React.memo(({ emoji, count, isOwn, onPress }: {
+  emoji: string; count: number; isOwn: boolean; onPress: () => void;
+}) => {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  const handlePress = useCallback(() => {
+    scale.value = withSequence(withSpring(1.35, { damping: 6, stiffness: 400 }), withSpring(1, { damping: 8, stiffness: 300 }));
+    onPress();
+  }, [onPress]);
+
+  return (
+    <Pressable onPress={handlePress}>
+      <Animated.View style={[s.reactionPill, isOwn && s.reactionPillOwn, animStyle]}>
+        <Text style={s.reactionEmoji}>{emoji}</Text>
+        <Text style={[s.reactionCount, isOwn && s.reactionCountOwn]}>{count}</Text>
+      </Animated.View>
+    </Pressable>
+  );
+});
+
+// Reaction picker (3 emojis)
+const ReactionPicker = React.memo(({ onSelect, onClose }: {
+  onSelect: (type: string) => void; onClose: () => void;
+}) => (
+  <Animated.View entering={FadeIn.duration(150)} style={s.reactionPicker}>
+    {REACTION_EMOJIS.map(r => (
+      <Pressable
+        key={r.type}
+        style={s.reactionPickerBtn}
+        onPress={() => { onSelect(r.type); onClose(); }}
+      >
+        <Text style={s.reactionPickerEmoji}>{r.emoji}</Text>
+      </Pressable>
+    ))}
+  </Animated.View>
+));
+
+const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reactions, userId, onReact }: {
   msg: MeetupMessage;
   isOwn: boolean;
   onDelete: (id: string) => void;
   language: string;
+  isRead: boolean;
+  reactions: ReactionGroup[];
+  userId: string;
+  onReact: (messageId: string, reactionType: string) => void;
 }) => {
   const [showDelete, setShowDelete] = useState(false);
+  const [showPicker, setShowPicker] = useState(false);
   const avatarColor = getAvatarColor(msg.user_id);
   const initials = msg.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+  const hasReactions = reactions.length > 0;
+
+  const handleReact = useCallback((type: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    onReact(msg.id, type);
+  }, [msg.id, onReact]);
 
   return (
-    <Pressable
-      style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}
-      onLongPress={() => { if (isOwn) { Haptics.selectionAsync(); setShowDelete(prev => !prev); } }}
-    >
-      {!isOwn ? (
-        <View style={[s.bubbleAvatar, { backgroundColor: avatarColor + '20' }]}>
-          <Text style={[s.bubbleAvatarText, { color: avatarColor }]}>{initials}</Text>
-        </View>
-      ) : null}
-      <View style={[s.bubble, isOwn ? s.bubbleOwn : s.bubbleOther]}>
+    <View style={s.bubbleWrapper}>
+      <Pressable
+        style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}
+        onLongPress={() => { if (isOwn) { Haptics.selectionAsync(); setShowDelete(prev => !prev); } }}
+      >
         {!isOwn ? (
-          <Text style={[s.bubbleName, { color: avatarColor }]}>{msg.user_name}</Text>
+          <View style={[s.bubbleAvatar, { backgroundColor: avatarColor + '20' }]}>
+            <Text style={[s.bubbleAvatarText, { color: avatarColor }]}>{initials}</Text>
+          </View>
         ) : null}
-        <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
-        <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
-      </View>
-      {showDelete && isOwn ? (
-        <Pressable style={s.deleteBtn} onPress={() => { onDelete(msg.id); setShowDelete(false); }}>
-          <MaterialIcons name="delete-outline" size={16} color={theme.error} />
+        <View style={[s.bubble, isOwn ? s.bubbleOwn : s.bubbleOther]}>
+          {!isOwn ? (
+            <Text style={[s.bubbleName, { color: avatarColor }]}>{msg.user_name}</Text>
+          ) : null}
+          <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
+          <View style={s.bubbleFooter}>
+            <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
+            {isOwn ? <ReadStatusIcon isRead={isRead} /> : null}
+          </View>
+        </View>
+        {showDelete && isOwn ? (
+          <Pressable style={s.deleteBtn} onPress={() => { onDelete(msg.id); setShowDelete(false); }}>
+            <MaterialIcons name="delete-outline" size={16} color={theme.error} />
+          </Pressable>
+        ) : null}
+      </Pressable>
+
+      {/* Reactions row */}
+      <View style={[s.reactionRow, isOwn && s.reactionRowOwn]}>
+        {!isOwn ? <View style={{ width: 34 }} /> : null}
+        {hasReactions ? reactions.map(r => (
+          <ReactionPill
+            key={r.type}
+            emoji={getEmojiForType(r.type)}
+            count={r.count}
+            isOwn={r.userIds.includes(userId)}
+            onPress={() => handleReact(r.type)}
+          />
+        )) : null}
+        <Pressable
+          style={[s.reactionAddBtn, showPicker && s.reactionAddBtnActive]}
+          onPress={() => { Haptics.selectionAsync(); setShowPicker(prev => !prev); }}
+          hitSlop={6}
+        >
+          <MaterialIcons name="add-reaction" size={14} color={showPicker ? theme.primary : theme.textMuted} />
         </Pressable>
-      ) : null}
-    </Pressable>
+        {showPicker ? <ReactionPicker onSelect={handleReact} onClose={() => setShowPicker(false)} /> : null}
+      </View>
+    </View>
   );
 });
 
@@ -161,31 +263,82 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
   const [loading, setLoading] = useState(true);
   const [expanded, setExpanded] = useState(false);
   const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
+  const [reactionsMap, setReactionsMap] = useState<Map<string, ReactionGroup[]>>(new Map());
   const flatListRef = useRef<FlatList>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const readReceiptPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const reactionPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const typingClearRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastCountRef = useRef(0);
   const isTypingRef = useRef(false);
+  const lastMarkedReadRef = useRef<string | null>(null);
   const quickMessages = language === 'fr' ? QUICK_MESSAGES_FR : QUICK_MESSAGES_EN;
+
+  // Compute which of my messages have been read by at least one other participant
+  const readMessageIds = React.useMemo(() => {
+    const otherReceipts = readReceipts.filter(r => r.user_id !== userId);
+    if (otherReceipts.length === 0) return new Set<string>();
+
+    const myMessages = messages.filter(m => m.user_id === userId);
+    if (myMessages.length === 0) return new Set<string>();
+
+    const msgIndexMap = new Map<string, number>();
+    messages.forEach((m, i) => msgIndexMap.set(m.id, i));
+
+    let maxReadIndex = -1;
+    otherReceipts.forEach(r => {
+      const idx = msgIndexMap.get(r.last_read_message_id);
+      if (idx !== undefined && idx > maxReadIndex) maxReadIndex = idx;
+    });
+
+    const readIds = new Set<string>();
+    if (maxReadIndex >= 0) {
+      myMessages.forEach(m => {
+        const idx = msgIndexMap.get(m.id);
+        if (idx !== undefined && idx <= maxReadIndex) readIds.add(m.id);
+      });
+    }
+    return readIds;
+  }, [readReceipts, messages, userId]);
 
   const loadMessages = useCallback(async () => {
     const { messages: msgs } = await fetchMeetupMessages(meetupId);
     setMessages(msgs);
-    // Auto-scroll if new messages arrived
     if (msgs.length > lastCountRef.current && expanded) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
     lastCountRef.current = msgs.length;
     setLoading(false);
-  }, [meetupId, expanded]);
+
+    if (expanded && isParticipant && msgs.length > 0) {
+      const lastMsg = msgs[msgs.length - 1];
+      if (lastMsg.id !== lastMarkedReadRef.current) {
+        lastMarkedReadRef.current = lastMsg.id;
+        markMessagesAsRead(meetupId, userId, lastMsg.id);
+      }
+    }
+  }, [meetupId, expanded, isParticipant, userId]);
 
   const loadTypingUsers = useCallback(async () => {
     if (!expanded || !isParticipant) return;
     const users = await fetchTypingUsers(meetupId, userId);
     setTypingUsers(users);
   }, [meetupId, userId, expanded, isParticipant]);
+
+  const loadReadReceipts = useCallback(async () => {
+    if (!expanded || !isParticipant) return;
+    const receipts = await fetchReadReceipts(meetupId);
+    setReadReceipts(receipts);
+  }, [meetupId, expanded, isParticipant]);
+
+  const loadReactions = useCallback(async () => {
+    if (!expanded) return;
+    const map = await fetchMessageReactions(meetupId);
+    setReactionsMap(map);
+  }, [meetupId, expanded]);
 
   // Initial load
   useEffect(() => {
@@ -199,13 +352,39 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [expanded, loadMessages]);
 
-  // Typing indicator polling (faster interval)
+  // Typing indicator polling
   useEffect(() => {
     if (!expanded || !isParticipant) return;
-    loadTypingUsers(); // Initial load
+    loadTypingUsers();
     typingPollRef.current = setInterval(loadTypingUsers, TYPING_POLL_INTERVAL);
     return () => { if (typingPollRef.current) clearInterval(typingPollRef.current); };
   }, [expanded, isParticipant, loadTypingUsers]);
+
+  // Read receipt polling
+  useEffect(() => {
+    if (!expanded || !isParticipant) return;
+    loadReadReceipts();
+    readReceiptPollRef.current = setInterval(loadReadReceipts, READ_RECEIPT_POLL_INTERVAL);
+    return () => { if (readReceiptPollRef.current) clearInterval(readReceiptPollRef.current); };
+  }, [expanded, isParticipant, loadReadReceipts]);
+
+  // Reaction polling
+  useEffect(() => {
+    if (!expanded) return;
+    loadReactions();
+    reactionPollRef.current = setInterval(loadReactions, REACTION_POLL_INTERVAL);
+    return () => { if (reactionPollRef.current) clearInterval(reactionPollRef.current); };
+  }, [expanded, loadReactions]);
+
+  // Mark messages as read when chat is expanded and messages change
+  useEffect(() => {
+    if (!expanded || !isParticipant || messages.length === 0) return;
+    const lastMsg = messages[messages.length - 1];
+    if (lastMsg.id !== lastMarkedReadRef.current) {
+      lastMarkedReadRef.current = lastMsg.id;
+      markMessagesAsRead(meetupId, userId, lastMsg.id);
+    }
+  }, [expanded, isParticipant, messages, meetupId, userId]);
 
   // Clean up typing status on unmount or collapse
   useEffect(() => {
@@ -221,10 +400,8 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
 
   const handleTextChange = useCallback((newText: string) => {
     setText(newText);
-
     if (!isParticipant) return;
 
-    // Debounce typing status to avoid flooding the server
     if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
     if (typingClearRef.current) clearTimeout(typingClearRef.current);
 
@@ -234,13 +411,11 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
         isTypingRef.current = true;
       }, TYPING_DEBOUNCE_MS);
 
-      // Auto-clear typing after 5s of no changes
       typingClearRef.current = setTimeout(() => {
         clearTypingStatus(meetupId, userId);
         isTypingRef.current = false;
       }, 5000);
     } else {
-      // Text cleared — immediately remove typing status
       clearTypingStatus(meetupId, userId);
       isTypingRef.current = false;
     }
@@ -250,7 +425,6 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
     const finalText = (msgText || text).trim();
     if (!finalText || sending) return;
 
-    // Clear typing status immediately on send
     if (isTypingRef.current) {
       clearTypingStatus(meetupId, userId);
       isTypingRef.current = false;
@@ -266,6 +440,8 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
       setText('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+      lastMarkedReadRef.current = newMsg.id;
+      markMessagesAsRead(meetupId, userId, newMsg.id);
     }
   }, [meetupId, userId, userName, userAvatar, text, sending]);
 
@@ -277,11 +453,43 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
     }
   }, []);
 
+  const handleToggleReaction = useCallback(async (messageId: string, reactionType: string) => {
+    if (!isParticipant) return;
+    // Optimistic update
+    setReactionsMap(prev => {
+      const newMap = new Map(prev);
+      const existing = newMap.get(messageId) || [];
+      const group = existing.find(r => r.type === reactionType);
+      if (group) {
+        if (group.userIds.includes(userId)) {
+          // Remove own reaction
+          group.count--;
+          group.userIds = group.userIds.filter(id => id !== userId);
+          if (group.count <= 0) {
+            newMap.set(messageId, existing.filter(r => r.type !== reactionType));
+          }
+        } else {
+          // Add own reaction
+          group.count++;
+          group.userIds.push(userId);
+        }
+      } else {
+        // New reaction type on this message
+        newMap.set(messageId, [...existing, { type: reactionType, count: 1, userIds: [userId] }]);
+      }
+      return newMap;
+    });
+
+    // Server call
+    await toggleReaction(meetupId, messageId, userId, reactionType);
+    // Refresh from server to ensure consistency
+    setTimeout(loadReactions, 500);
+  }, [meetupId, userId, isParticipant, loadReactions]);
+
   const handleToggle = useCallback(() => {
     Haptics.selectionAsync();
     setExpanded(prev => {
       if (prev && isTypingRef.current) {
-        // Collapsing — clear typing
         clearTypingStatus(meetupId, userId);
         isTypingRef.current = false;
       }
@@ -335,7 +543,6 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
           ) : null}
         </View>
         <View style={s.headerRight}>
-          {/* Show small typing dot in collapsed header */}
           {!expanded && typingUsers.length > 0 ? (
             <View style={s.headerTypingDot} />
           ) : null}
@@ -377,12 +584,18 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
                   );
                 }
                 const msg = item as MeetupMessage;
+                const isOwn = msg.user_id === userId;
+                const msgReactions = reactionsMap.get(msg.id) || [];
                 return (
                   <MessageBubble
                     msg={msg}
-                    isOwn={msg.user_id === userId}
+                    isOwn={isOwn}
                     onDelete={handleDelete}
                     language={language}
+                    isRead={isOwn ? readMessageIds.has(msg.id) : false}
+                    reactions={msgReactions}
+                    userId={userId}
+                    onReact={handleToggleReaction}
                   />
                 );
               }}
@@ -511,7 +724,7 @@ const s = StyleSheet.create({
   body: {
     borderTopWidth: 1,
     borderTopColor: theme.border,
-    maxHeight: 400,
+    maxHeight: 440,
   },
   loadingWrap: {
     paddingVertical: 32,
@@ -529,12 +742,12 @@ const s = StyleSheet.create({
     paddingHorizontal: 24,
   },
   messageList: {
-    maxHeight: 280,
+    maxHeight: 300,
   },
   messageListContent: {
     paddingHorizontal: 12,
     paddingVertical: 8,
-    gap: 4,
+    gap: 2,
   },
   dateSeparator: {
     flexDirection: 'row' as const,
@@ -552,11 +765,13 @@ const s = StyleSheet.create({
     fontWeight: '600' as const,
     color: theme.textMuted,
   },
+  bubbleWrapper: {
+    marginBottom: 2,
+  },
   bubbleRow: {
     flexDirection: 'row' as const,
     alignItems: 'flex-end' as const,
     gap: 6,
-    marginBottom: 4,
   },
   bubbleRowOwn: {
     justifyContent: 'flex-end' as const,
@@ -599,14 +814,22 @@ const s = StyleSheet.create({
   bubbleTextOwn: {
     color: '#FFF',
   },
+  bubbleFooter: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'flex-end' as const,
+    gap: 4,
+    marginTop: 4,
+  },
   bubbleTime: {
     fontSize: 10,
     color: theme.textMuted,
-    marginTop: 4,
-    alignSelf: 'flex-end' as const,
   },
   bubbleTimeOwn: {
     color: 'rgba(255,255,255,0.6)',
+  },
+  readStatusWrap: {
+    marginLeft: 2,
   },
   deleteBtn: {
     width: 28,
@@ -616,6 +839,87 @@ const s = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
     marginLeft: 4,
+  },
+  // Reaction row below bubble
+  reactionRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 4,
+    paddingLeft: 6,
+    paddingTop: 2,
+    paddingBottom: 2,
+    minHeight: 24,
+  },
+  reactionRowOwn: {
+    justifyContent: 'flex-end' as const,
+    paddingRight: 6,
+    paddingLeft: 0,
+  },
+  reactionPill: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: theme.backgroundSecondary,
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  reactionPillOwn: {
+    backgroundColor: theme.primary + '12',
+    borderColor: theme.primary + '30',
+  },
+  reactionEmoji: {
+    fontSize: 13,
+  },
+  reactionCount: {
+    fontSize: 11,
+    fontWeight: '700' as const,
+    color: theme.textSecondary,
+  },
+  reactionCountOwn: {
+    color: theme.primary,
+  },
+  reactionAddBtn: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  reactionAddBtnActive: {
+    backgroundColor: theme.primary + '12',
+    borderColor: theme.primary + '30',
+  },
+  reactionPicker: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: theme.border,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.12, shadowRadius: 6 },
+      android: { elevation: 4 },
+      default: {},
+    }),
+  },
+  reactionPickerBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  reactionPickerEmoji: {
+    fontSize: 18,
   },
   // Typing indicator
   typingBar: {

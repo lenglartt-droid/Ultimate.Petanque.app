@@ -32,6 +32,28 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.32.0',
+    date: '2026-04-07',
+    type: 'minor',
+    highlights: [
+      { icon: 'swap-horiz', text: 'Player transfer system: link local players to registered accounts', color: '#3B82F6' },
+      { icon: 'qr-code', text: 'QR claim: scan to detect and link local player copies', color: '#7C3AED' },
+      { icon: 'help-outline', text: 'FAQ and changelog updated with transfer feature', color: '#10B981' },
+    ],
+    details: [
+      'New player transfer system: owners of local players can send transfer requests to registered users',
+      'Transfer modal with user search by name/email, match/challenge count preview, and optional message',
+      'Recipient receives transfer request in Notifications Hub > new Transfers tab',
+      'On acceptance: matches and challenges are reassigned to recipient player profile with stats update',
+      'QR claim feature: when scanning a registered user QR, app detects local players with similar names and proposes linking',
+      'New database table: player_transfer_requests with RLS policies for sender/recipient',
+      'New service: playerTransferService.ts with send, accept, decline, cancel, search functions',
+      'Notifications Hub: new Transfers tab with pending/history sections and accept/decline actions',
+      'Player detail page: new "Link to registered user" button for local (non-public) players',
+      'FAQ updated with player transfer and QR claim documentation for all audience tabs',
+    ],
+  },
+  {
     version: '1.31.0',
     date: '2026-04-07',
     type: 'minor',
