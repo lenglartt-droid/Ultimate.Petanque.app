@@ -39,6 +39,12 @@ export default function NewMeetupScreen() {
     d.setHours(14, 0, 0, 0);
     return d;
   });
+  const [endDate, setEndDate] = useState(() => {
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    d.setHours(16, 0, 0, 0);
+    return d;
+  });
   const [maxParticipants, setMaxParticipants] = useState('8');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -46,6 +52,7 @@ export default function NewMeetupScreen() {
   const [terrainSearch, setTerrainSearch] = useState('');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
   const [createdCode, setCreatedCode] = useState<string | null>(null);
   const [createdMeetupId, setCreatedMeetupId] = useState<string | null>(null);
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -79,12 +86,17 @@ export default function NewMeetupScreen() {
       showAlert(t('common', 'error'), t('meetup', 'dateMustBeFuture'));
       return;
     }
+    if (endDate <= date) {
+      showAlert(t('common', 'error'), language === 'fr' ? 'L\'heure de fin doit etre apres l\'heure de debut' : 'End time must be after start time');
+      return;
+    }
 
     setSaving(true);
     const { meetup, error } = await createMeetup({
       terrainId: selectedTerrainId,
       title: title.trim(),
       date: date.toISOString(),
+      endTime: endDate.toISOString(),
       maxParticipants: parseInt(maxParticipants) || 8,
       notes: notes.trim() || undefined,
     });
@@ -353,6 +365,25 @@ export default function NewMeetupScreen() {
           </View>
         </View>
 
+        {/* End Time */}
+        <View style={styles.field}>
+          <Text style={styles.fieldLabel}>{language === 'fr' ? 'Heure de fin' : 'End time'} *</Text>
+          <Pressable style={styles.dateBtn} onPress={() => setShowEndTimePicker(true)}>
+            <MaterialIcons name="schedule" size={18} color="#EF4444" />
+            <Text style={styles.dateBtnText}>
+              {endDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+            <Text style={{ fontSize: 12, color: theme.textMuted, marginLeft: 'auto' }}>
+              {(() => {
+                const diffMs = endDate.getTime() - date.getTime();
+                const diffH = Math.floor(diffMs / 3600000);
+                const diffM = Math.round((diffMs % 3600000) / 60000);
+                return diffMs > 0 ? `${diffH}h${diffM > 0 ? `${diffM.toString().padStart(2, '0')}` : ''}` : (language === 'fr' ? 'invalide' : 'invalid');
+              })()}
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Max participants */}
         <View style={styles.field}>
           <Text style={styles.fieldLabel}>{t('meetup', 'maxParticipants')}</Text>
@@ -428,6 +459,27 @@ export default function NewMeetupScreen() {
               const newDate = new Date(date);
               newDate.setHours(selectedDate.getHours(), selectedDate.getMinutes());
               setDate(newDate);
+              // Auto-adjust end time if it's before new start
+              if (endDate <= newDate) {
+                const newEnd = new Date(newDate);
+                newEnd.setHours(newEnd.getHours() + 2);
+                setEndDate(newEnd);
+              }
+            }
+          }}
+        />
+      )}
+      {showEndTimePicker && (
+        <DateTimePicker
+          value={endDate}
+          mode="time"
+          is24Hour
+          onChange={(_, selectedDate) => {
+            setShowEndTimePicker(false);
+            if (selectedDate) {
+              const newEnd = new Date(date);
+              newEnd.setHours(selectedDate.getHours(), selectedDate.getMinutes());
+              setEndDate(newEnd);
             }
           }}
         />

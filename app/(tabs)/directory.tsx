@@ -826,7 +826,7 @@ export default function DirectoryScreen() {
             <FilterSection
               title={t('terrain', 'parking')}
               options={['all', 'yes', 'no']}
-              labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'withLighting').replace(t('terrain', 'lighting'), t('terrain', 'parking')), no: t('directory', 'withoutLighting').replace(t('terrain', 'lighting'), t('terrain', 'parking')) }}
+              labels={{ all: t('directory', 'allLabel'), yes: language === 'fr' ? 'Avec parking' : 'With parking', no: language === 'fr' ? 'Sans parking' : 'Without parking' }}
               value={filters.terrainParking}
               onChange={(v) => setFilters(f => ({ ...f, terrainParking: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'local-parking', no: 'block' }}
