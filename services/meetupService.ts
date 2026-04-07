@@ -51,6 +51,7 @@ export async function createMeetup(data: {
   terrainId: string;
   title: string;
   date: string;
+  endTime?: string;
   maxParticipants?: number;
   notes?: string;
 }): Promise<{ meetup: Meetup | null; error: string | null }> {
@@ -68,6 +69,7 @@ export async function createMeetup(data: {
         terrain_id: data.terrainId,
         title: data.title,
         date: data.date,
+        end_time: data.endTime || null,
         max_participants: data.maxParticipants || 8,
         share_code: shareCode,
         notes: data.notes || null,
@@ -123,12 +125,23 @@ export async function getMyMeetups(): Promise<{ meetups: Meetup[]; error: string
 export async function getMeetupsForTerrain(terrainId: string): Promise<{ meetups: Meetup[]; error: string | null }> {
   try {
     const supabase = getSupabaseClient();
+    const now = new Date().toISOString();
+
+    // Auto-archive past meetups (end_time passed or date + 3h if no end_time)
+    await supabase
+      .from('terrain_meetups')
+      .update({ status: 'completed', updated_at: now })
+      .eq('terrain_id', terrainId)
+      .eq('status', 'active')
+      .lt('end_time', now)
+      .not('end_time', 'is', null);
+
     const { data, error } = await supabase
       .from('terrain_meetups')
       .select('*')
       .eq('terrain_id', terrainId)
       .eq('status', 'active')
-      .gte('date', new Date().toISOString())
+      .gte('date', new Date(Date.now() - 3 * 3600000).toISOString())
       .order('date', { ascending: true });
 
     if (error) return { meetups: [], error: error.message };
@@ -329,7 +342,7 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
         body: `${meetup.title} a ${terrainName} - ${formattedTime}`,
         data: { meetupId: meetup.id, type: 'meetup_reminder' },
         sound: 'default',
-        ...(Platform.OS === 'android' && { channelId: 'tournament-reminders' }),
+        ...(Platform.OS === 'android' && { channelId: 'meetup-reminders' }),
       },
       trigger: {
         date: reminderDate,
@@ -384,7 +397,7 @@ export async function scheduleMeetupNotifications(
           data: { meetupId: meetup.id, type: 'meetup_reminder' },
           sound: 'default',
           badge: 1,
-          ...(Platform.OS === 'android' && { channelId: 'tournament-reminders' }),
+          ...(Platform.OS === 'android' && { channelId: 'meetup-reminders' }),
         },
         trigger: {
           date: triggerDate,
@@ -738,12 +751,23 @@ export async function getMyActiveMeetups(): Promise<{ meetups: Meetup[]; error: 
     const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user?.id) return { meetups: [], error: null };
 
+    const now = new Date().toISOString();
+
+    // Auto-archive past meetups owned by current user
+    await supabase
+      .from('terrain_meetups')
+      .update({ status: 'completed', updated_at: now })
+      .eq('creator_id', userData.user.id)
+      .eq('status', 'active')
+      .lt('end_time', now)
+      .not('end_time', 'is', null);
+
     const { data, error } = await supabase
       .from('terrain_meetups')
       .select('*')
       .eq('creator_id', userData.user.id)
       .eq('status', 'active')
-      .gte('date', new Date().toISOString())
+      .gte('date', new Date(Date.now() - 3 * 3600000).toISOString())
       .order('date', { ascending: true });
 
     if (error) return { meetups: [], error: error.message };
