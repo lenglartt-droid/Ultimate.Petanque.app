@@ -19,6 +19,8 @@ export const terrainTranslations = {
     facilitiesSection: { fr: 'Équipements', en: 'Facilities' },
     parking: { fr: 'Parking', en: 'Parking' },
     parkingDesc: { fr: 'Places de stationnement disponibles', en: 'Parking spaces available' },
+    toilets: { fr: 'Toilettes', en: 'Restrooms' },
+    toiletsDesc: { fr: 'Sanitaires disponibles sur place', en: 'Restroom facilities available on-site' },
     photos: { fr: 'Photos', en: 'Photos' },
     courtsCount: { fr: 'Nombre de terrains', en: 'Number of courts' },
     courtsLabel: { fr: 'terrain', en: 'court' },

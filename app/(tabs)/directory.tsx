@@ -212,7 +212,7 @@ export default function DirectoryScreen() {
   const [filters, setFilters] = useState<{
     playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string; playerExperience: string;
     clubCity: string; clubCountry: string;
-    terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string;
+    terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string; terrainParking: string; terrainToilets: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
     eventStatus: string; eventType: string; eventAmbassador: string;
   }>({
@@ -234,6 +234,8 @@ export default function DirectoryScreen() {
     terrainCovered: 'all' as 'all' | 'yes' | 'no',
     terrainEnvironment: 'all' as 'all' | 'indoor' | 'outdoor',
     terrainAccess: 'all' as 'all' | 'public' | 'private',
+    terrainParking: 'all' as 'all' | 'yes' | 'no',
+    terrainToilets: 'all' as 'all' | 'yes' | 'no',
     // Tournament filters
     tournamentStatus: 'all' as TournamentStatus,
     tournamentFormat: 'all',
@@ -359,7 +361,7 @@ export default function DirectoryScreen() {
   const activeFilterCounts = useMemo(() => ({
     players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience].filter(f => f !== 'all').length,
     clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
-    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess].filter(f => f !== 'all').length,
+    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length,
     tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
     events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
   }), [filters]);
@@ -550,7 +552,11 @@ export default function DirectoryScreen() {
         (tr.environment || 'outdoor') === filters.terrainEnvironment;
       const matchesAccess = filters.terrainAccess === 'all' ||
         (filters.terrainAccess === 'public' ? (tr.publicAccess !== false) : (tr.publicAccess === false));
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess;
+      const matchesParking = filters.terrainParking === 'all' ||
+        (filters.terrainParking === 'yes' ? (tr as any).parking : !(tr as any).parking);
+      const matchesToilets = filters.terrainToilets === 'all' ||
+        (filters.terrainToilets === 'yes' ? (tr as any).toilets : !(tr as any).toilets);
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets;
     });
     // When "Active now" is on, filter to only terrains with activity and sort by score
     if (showActiveNow) {
@@ -633,7 +639,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
     } else if (activeTab === 'terrains') {
-      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all' }));
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
     } else if (activeTab === 'events') {
@@ -815,6 +821,24 @@ export default function DirectoryScreen() {
               value={filters.terrainAccess}
               onChange={(v) => setFilters(f => ({ ...f, terrainAccess: v as 'all' | 'public' | 'private' }))}
               icons={{ public: 'public', private: 'lock' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
+              title={t('terrain', 'parking')}
+              options={['all', 'yes', 'no']}
+              labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'withLighting').replace(t('terrain', 'lighting'), t('terrain', 'parking')), no: t('directory', 'withoutLighting').replace(t('terrain', 'lighting'), t('terrain', 'parking')) }}
+              value={filters.terrainParking}
+              onChange={(v) => setFilters(f => ({ ...f, terrainParking: v as 'all' | 'yes' | 'no' }))}
+              icons={{ yes: 'local-parking', no: 'block' }}
+              allLabel={t('directory', 'allLabel')}
+            />
+            <FilterSection
+              title={t('terrain', 'toilets')}
+              options={['all', 'yes', 'no']}
+              labels={{ all: t('directory', 'allLabel'), yes: language === 'fr' ? 'Avec toilettes' : 'With restrooms', no: language === 'fr' ? 'Sans toilettes' : 'Without restrooms' }}
+              value={filters.terrainToilets}
+              onChange={(v) => setFilters(f => ({ ...f, terrainToilets: v as 'all' | 'yes' | 'no' }))}
+              icons={{ yes: 'wc', no: 'block' }}
               allLabel={t('directory', 'allLabel')}
             />
           </>
@@ -1144,6 +1168,8 @@ export default function DirectoryScreen() {
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
                 {filters.terrainAccess !== 'all' && <ActiveFilterChip label={filters.terrainAccess === 'public' ? t('directory', 'publicAccessShort') : t('directory', 'privateAccessShort')} onRemove={() => setFilters(f => ({ ...f, terrainAccess: 'all' }))} icon={filters.terrainAccess === 'public' ? 'public' : 'lock'} />}
+                {filters.terrainParking !== 'all' && <ActiveFilterChip label={filters.terrainParking === 'yes' ? 'Parking' : (language === 'fr' ? 'Sans parking' : 'No parking')} onRemove={() => setFilters(f => ({ ...f, terrainParking: 'all' }))} icon="local-parking" />}
+                {filters.terrainToilets !== 'all' && <ActiveFilterChip label={filters.terrainToilets === 'yes' ? (language === 'fr' ? 'Toilettes' : 'Restrooms') : (language === 'fr' ? 'Sans toilettes' : 'No restrooms')} onRemove={() => setFilters(f => ({ ...f, terrainToilets: 'all' }))} icon="wc" />}
               </>
             )}
             {activeTab === 'events' && (
@@ -1987,6 +2013,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.covered ? <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="roofing" size={10} color={theme.primary} /></View> : null}
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
           {(item as any).parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
+          {(item as any).toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
         </View>
         {activityInfo ? (
           <View style={styles.activityScoreBadge}>

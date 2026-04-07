@@ -146,6 +146,7 @@ export interface Terrain {
   lighting: boolean;
   covered: boolean;
   parking: boolean;
+  toilets: boolean;
   environment?: 'indoor' | 'outdoor';
   createdAt?: string;
 }
