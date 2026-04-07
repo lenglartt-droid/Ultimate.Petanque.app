@@ -166,6 +166,10 @@ export default function NotificationsHubScreen() {
 
   const handleTabChange = useCallback((key: TabKey) => {
     Haptics.selectionAsync();
+    if (key === 'preferences') {
+      router.push('/notification-preferences' as any);
+      return;
+    }
     setActiveTab(key);
     setInvFilter('all');
     setWitnessFilter('all');
@@ -257,8 +261,25 @@ export default function NotificationsHubScreen() {
 
       const enabled = await areNotificationsEnabled();
       setPermissionStatus(enabled ? 'granted' : 'denied');
+
+      // Auto-cancel notifications for past tournaments
+      const now = Date.now();
+      for (const t of tournaments) {
+        if (isTournamentNotificationEnabled(t.id)) {
+          const tDate = new Date(t.date);
+          if (tDate.getTime() < now) {
+            await cancelTournamentNotifications(t.id);
+            toggleTournamentNotification(t.id);
+          }
+        }
+      }
+
+      // Count only tournament-related scheduled notifications
       const scheduled = await getAllScheduledNotifications();
-      setScheduledCount(scheduled.length);
+      const tournamentScheduled = scheduled.filter((n: any) =>
+        (n.identifier || '').startsWith('tournament_')
+      );
+      setScheduledCount(tournamentScheduled.length);
 
       // Load transfer requests
       const { requests: transferData } = await getReceivedTransferRequests();
@@ -384,9 +405,22 @@ export default function NotificationsHubScreen() {
     const { error } = await acceptTransferRequest(id);
     setProcessingTransferId(null);
     if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+    const req = transferRequests.find(r => r.id === id);
     setTransferRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'accepted' as const } : r));
     showAlert(fr ? 'Transfert accepte' : 'Transfer accepted', fr ? 'Les matchs et defis ont ete reassignes a votre profil.' : 'Matches and challenges have been reassigned to your profile.');
-  }, [fr, showAlert]);
+    // Notify sender
+    if (req) {
+      try {
+        const _pushModule = await import('@/services/pushTokenService');
+        _pushModule.triggerServerPush('player_transfer_response', {
+          senderUserId: req.senderUserId,
+          recipientName: user?.username || user?.email || '',
+          playerName: req.playerName,
+          accepted: true,
+        }).catch(() => {});
+      } catch { /* silent */ }
+    }
+  }, [fr, showAlert, transferRequests, user]);
 
   const handleDeclineTransfer = useCallback(async (id: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -394,8 +428,21 @@ export default function NotificationsHubScreen() {
     const { error } = await declineTransferRequest(id);
     setProcessingTransferId(null);
     if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+    const req = transferRequests.find(r => r.id === id);
     setTransferRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'declined' as const } : r));
-  }, [showAlert, fr]);
+    // Notify sender
+    if (req) {
+      try {
+        const _pushModule = await import('@/services/pushTokenService');
+        _pushModule.triggerServerPush('player_transfer_response', {
+          senderUserId: req.senderUserId,
+          recipientName: user?.username || user?.email || '',
+          playerName: req.playerName,
+          accepted: false,
+        }).catch(() => {});
+      } catch { /* silent */ }
+    }
+  }, [showAlert, fr, transferRequests, user]);
 
   const filteredClaims = useMemo(() => {
     let items = clubClaims;
@@ -448,21 +495,33 @@ export default function NotificationsHubScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Segmented Tabs */}
-      <View style={s.segmentWrap}>
-        <View style={s.segmentBar}>
+      {/* Tab Navigation */}
+      <View style={s.tabNavWrap}>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.tabNavContent}
+        >
           {TABS.map(tab => {
             const isActive = activeTab === tab.key;
             const badge = tabBadges[tab.key];
             return (
-              <Pressable key={tab.key} style={[s.segmentItem, isActive && s.segmentItemActive]} onPress={() => handleTabChange(tab.key)}>
-                <MaterialIcons name={tab.icon as any} size={16} color={isActive ? '#FFF' : theme.textMuted} />
-                <Text style={[s.segmentLabel, isActive && s.segmentLabelActive]} numberOfLines={1}>{fr ? tab.labelFr : tab.labelEn}</Text>
-                {badge > 0 ? <View style={[s.segmentBadge, isActive && s.segmentBadgeActive]}><Text style={[s.segmentBadgeText, isActive && { color: theme.primary }]}>{badge > 9 ? '9+' : badge}</Text></View> : null}
+              <Pressable
+                key={tab.key}
+                style={[s.tabNavItem, isActive && { backgroundColor: tab.color, borderColor: tab.color }]}
+                onPress={() => handleTabChange(tab.key)}
+              >
+                <MaterialIcons name={tab.icon as any} size={18} color={isActive ? '#FFF' : tab.color} />
+                <Text style={[s.tabNavLabel, isActive && s.tabNavLabelActive]}>{fr ? tab.labelFr : tab.labelEn}</Text>
+                {badge > 0 ? (
+                  <View style={[s.tabNavBadge, isActive && { backgroundColor: '#FFF' }]}>
+                    <Text style={[s.tabNavBadgeText, isActive && { color: tab.color }]}>{badge > 9 ? '9+' : badge}</Text>
+                  </View>
+                ) : null}
               </Pressable>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -1007,39 +1066,7 @@ export default function NotificationsHubScreen() {
           </View>
         ) : null}
 
-        {/* ========== PREFERENCES TAB ========== */}
-        {activeTab === 'preferences' ? (
-          <View>
-            <View style={s.prefHero}>
-              <View style={s.prefHeroIcon}><MaterialIcons name="notifications-active" size={24} color={theme.primary} /></View>
-              <View style={{ flex: 1 }}>
-                <Text style={s.prefHeroTitle}>{fr ? 'Notifications push' : 'Push Notifications'}</Text>
-                <Text style={s.prefHeroSub}>{enabledPrefCount}/{NOTIF_ITEMS.length} {fr ? 'actives' : 'active'}</Text>
-              </View>
-            </View>
-
-            {!prefsLoaded ? <ActivityIndicator size="large" color={theme.primary} style={{ paddingVertical: 40 }} /> : (
-              <View style={s.prefList}>
-                {NOTIF_ITEMS.map((item, idx) => (
-                  <Animated.View key={item.key} entering={FadeInDown.duration(200).delay(idx * 25)}>
-                    <View style={[s.prefCard, notifPrefs[item.key] && { borderColor: item.color + '25' }]}>
-                      <View style={s.prefCardRow}>
-                        <View style={[s.prefCardIcon, { backgroundColor: item.color + '12' }]}><MaterialIcons name={item.icon as any} size={18} color={item.color} /></View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={s.prefCardLabel}>{fr ? item.labelFr : item.labelEn}</Text>
-                          <Text style={s.prefCardDesc}>{fr ? item.descFr : item.descEn}</Text>
-                        </View>
-                        <Switch value={notifPrefs[item.key]} onValueChange={() => handleTogglePref(item.key)} trackColor={{ false: theme.border, true: item.color + '50' }} thumbColor={notifPrefs[item.key] ? item.color : theme.textMuted} />
-                      </View>
-                    </View>
-                  </Animated.View>
-                ))}
-              </View>
-            )}
-
-            <View style={s.footnote}><MaterialIcons name="info-outline" size={14} color={theme.textMuted} /><Text style={s.footnoteText}>{fr ? 'Les tokens push sont desactives a la deconnexion.' : 'Push tokens are deactivated on logout.'}</Text></View>
-          </View>
-        ) : null}
+        {/* PREFERENCES TAB: handled by navigation in handleTabChange */}
       </ScrollView>
     </SafeAreaView>
   );
@@ -1054,16 +1081,14 @@ const s = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
 
-  // Segmented tabs
-  segmentWrap: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
-  segmentBar: { flexDirection: 'row', backgroundColor: '#F1F5F9', borderRadius: 14, padding: 3 },
-  segmentItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, paddingVertical: 10, paddingHorizontal: 2, borderRadius: 12 },
-  segmentItemActive: { backgroundColor: '#0F172A' },
-  segmentLabel: { fontSize: 10, fontWeight: '600', color: '#94A3B8' },
-  segmentLabelActive: { color: '#FFF' },
-  segmentBadge: { minWidth: 18, height: 18, borderRadius: 9, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 },
-  segmentBadgeActive: { backgroundColor: '#FFF' },
-  segmentBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFF' },
+  // Tab navigation
+  tabNavWrap: { backgroundColor: '#FFF', borderBottomWidth: 1, borderBottomColor: '#F1F5F9', paddingVertical: 10 },
+  tabNavContent: { paddingHorizontal: 16, gap: 8 },
+  tabNavItem: { flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 22, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  tabNavLabel: { fontSize: 13, fontWeight: '600', color: '#64748B' },
+  tabNavLabelActive: { color: '#FFF' },
+  tabNavBadge: { minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
+  tabNavBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFF' },
 
   // Filter chips
   chipBar: { paddingBottom: 14, gap: 6 },

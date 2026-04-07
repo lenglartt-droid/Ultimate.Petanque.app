@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform, TextInput } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ActivityIndicator, Platform, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -8,12 +8,13 @@ import * as Haptics from '@/services/haptics';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAlert } from '@/template';
+import { useAlert, getSupabaseClient } from '@/template';
 import { findEventByCode } from '@/services/sponsoredEventService';
 import { redeemShareCode } from '@/services/shareService';
 import { findMeetupByCode } from '@/services/meetupService';
+import { useAppData } from '@/contexts/AppContext';
 
-type DetectedType = 'event' | 'share' | 'meetup' | 'unknown';
+type DetectedType = 'event' | 'share' | 'meetup' | 'player_profile' | 'unknown';
 
 interface ScanResult {
   type: DetectedType;
@@ -26,6 +27,7 @@ export default function ScannerScreen() {
   const { language } = useLanguage();
   const { showAlert } = useAlert();
   const fr = language === 'fr';
+  const { players } = useAppData();
 
   const [cameraPermission, requestCameraPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
@@ -34,6 +36,7 @@ export default function ScannerScreen() {
   const [showManualEntry, setShowManualEntry] = useState(false);
   const [manualCode, setManualCode] = useState('');
   const [manualSearching, setManualSearching] = useState(false);
+  const [similarPlayers, setSimilarPlayers] = useState<Array<{ id: string; name: string }>>([]);
 
   const permissionGranted = cameraPermission?.granted;
 
@@ -47,8 +50,25 @@ export default function ScannerScreen() {
     }
   };
 
+  // Detect similar local players by name
+  const findSimilarLocalPlayers = useCallback((scannedName: string) => {
+    const normalize = (s: string) => s.toLowerCase().trim().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const scannedNorm = normalize(scannedName);
+    return players.filter(p => {
+      if (p.isPublic) return false; // Only local (non-public) players
+      const pNorm = normalize(p.name);
+      if (pNorm === scannedNorm) return true;
+      if (pNorm.includes(scannedNorm) || scannedNorm.includes(pNorm)) return true;
+      const aParts = scannedNorm.split(' ').filter(Boolean);
+      const bParts = pNorm.split(' ').filter(Boolean);
+      const overlap = aParts.filter(a => bParts.some(b => a === b || (a.length > 2 && b.startsWith(a)) || (b.length > 2 && a.startsWith(b))));
+      return overlap.length >= 1 && (overlap.length / Math.max(aParts.length, bParts.length)) >= 0.5;
+    }).map(p => ({ id: p.id, name: p.name }));
+  }, [players]);
+
   const detectAndRoute = useCallback(async (rawData: string) => {
     setProcessing(true);
+    setSimilarPlayers([]);
 
     // 1. Try event code (EVT-XXXXXX or ?event=CODE)
     const eventUrlMatch = rawData.match(/[?&]event=([A-Z0-9-]+)/i);
@@ -78,7 +98,37 @@ export default function ScannerScreen() {
       }
     }
 
-    // 3. Try share code (alphanumeric 8-12 chars)
+    // 3. Try player profile (UUID in URL)
+    const uuidMatch = rawData.match(/player\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)
+      || rawData.match(/profile\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i)
+      || rawData.match(/user\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i);
+    if (uuidMatch) {
+      const scannedId = uuidMatch[1];
+      try {
+        const supabase = getSupabaseClient();
+        const { data: scannedPlayer } = await supabase
+          .from('players')
+          .select('id, name, user_id, is_public')
+          .or(`id.eq.${scannedId},user_id.eq.${scannedId}`)
+          .eq('is_public', true)
+          .limit(1)
+          .maybeSingle();
+        if (scannedPlayer) {
+          const similar = findSimilarLocalPlayers(scannedPlayer.name);
+          setSimilarPlayers(similar);
+          setResult({
+            type: 'player_profile',
+            code: scannedPlayer.id,
+            label: scannedPlayer.name,
+            destination: `/player/${scannedPlayer.id}`,
+          });
+          setProcessing(false);
+          return;
+        }
+      } catch { /* silent */ }
+    }
+
+    // 4. Try share code (alphanumeric 8-12 chars)
     const cleanCode = rawData.replace(/[^A-Za-z0-9-]/g, '').toUpperCase();
     if (cleanCode.length >= 6 && cleanCode.length <= 16) {
       // Try as event code first
@@ -99,18 +149,43 @@ export default function ScannerScreen() {
 
       // Try as share code
       try {
-        // Share codes are typically shorter alphanumeric strings
-        // We just set result and let user navigate to share redemption
         setResult({ type: 'share', code: cleanCode, label: fr ? 'Code de partage detecte' : 'Share code detected', destination: undefined });
         setProcessing(false);
         return;
       } catch { /* silent */ }
     }
 
-    // 4. Unknown code
+    // 5. Try bare UUID (not in URL) — might be a player/user ID from QR
+    const bareUuid = rawData.trim().match(/^([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i);
+    if (bareUuid) {
+      try {
+        const supabase = getSupabaseClient();
+        const { data: scannedPlayer } = await supabase
+          .from('players')
+          .select('id, name, user_id, is_public')
+          .or(`id.eq.${bareUuid[1]},user_id.eq.${bareUuid[1]}`)
+          .eq('is_public', true)
+          .limit(1)
+          .maybeSingle();
+        if (scannedPlayer) {
+          const similar = findSimilarLocalPlayers(scannedPlayer.name);
+          setSimilarPlayers(similar);
+          setResult({
+            type: 'player_profile',
+            code: scannedPlayer.id,
+            label: scannedPlayer.name,
+            destination: `/player/${scannedPlayer.id}`,
+          });
+          setProcessing(false);
+          return;
+        }
+      } catch { /* silent */ }
+    }
+
+    // 6. Unknown code
     setResult({ type: 'unknown', code: rawData.substring(0, 50), label: fr ? 'Code non reconnu' : 'Unrecognized code' });
     setProcessing(false);
-  }, [fr]);
+  }, [fr, findSimilarLocalPlayers]);
 
   const handleBarCodeScanned = useCallback(async ({ data }: { data: string }) => {
     if (scanned || processing) return;
@@ -131,7 +206,6 @@ export default function ScannerScreen() {
     if (result.destination) {
       router.replace(result.destination as any);
     } else if (result.type === 'share') {
-      // Navigate to share page with the code
       router.replace({ pathname: '/share', params: { redeemCode: result.code } } as any);
     } else {
       showAlert(fr ? 'Code non reconnu' : 'Unrecognized code', result.code);
@@ -142,16 +216,18 @@ export default function ScannerScreen() {
     setScanned(false);
     setResult(null);
     setProcessing(false);
+    setSimilarPlayers([]);
   }, []);
 
   const resultConfig: Record<DetectedType, { icon: string; color: string; label: string }> = {
     event: { icon: 'campaign', color: '#7C3AED', label: fr ? 'Defi Ambassadeur' : 'Ambassador Challenge' },
     meetup: { icon: 'event', color: theme.accent, label: fr ? 'RDV Petanque' : 'Petanque Meetup' },
     share: { icon: 'share', color: theme.primary, label: fr ? 'Code de Partage' : 'Share Code' },
+    player_profile: { icon: 'person', color: '#0EA5E9', label: fr ? 'Profil Joueur' : 'Player Profile' },
     unknown: { icon: 'help-outline', color: theme.textMuted, label: fr ? 'Non reconnu' : 'Unknown' },
   };
 
-  // Web fallback - show manual entry only
+  // Web fallback
   if (Platform.OS === 'web') {
     return (
       <SafeAreaView style={s.container}>
@@ -212,7 +288,7 @@ export default function ScannerScreen() {
           </Pressable>
           <View style={{ flex: 1, alignItems: 'center' }}>
             <Text style={s.scannerTitle}>{fr ? 'Scanner un code' : 'Scan a Code'}</Text>
-            <Text style={s.scannerSubtitle}>{fr ? 'Evenements, meetups, partages' : 'Events, meetups, shares'}</Text>
+            <Text style={s.scannerSubtitle}>{fr ? 'Evenements, meetups, profils, partages' : 'Events, meetups, profiles, shares'}</Text>
           </View>
           <Pressable style={s.scannerCloseBtn} onPress={() => setShowManualEntry(!showManualEntry)}>
             <MaterialIcons name="keyboard" size={22} color="#FFF" />
@@ -282,11 +358,11 @@ export default function ScannerScreen() {
                 {!scanned ? (
                   <>
                     <Text style={s.hintText}>{fr ? 'Placez le QR code dans le cadre' : 'Place QR code in frame'}</Text>
-                    {/* Supported code types */}
                     <View style={s.supportedRow}>
                       {[
                         { icon: 'campaign', label: fr ? 'Defis' : 'Events', color: '#7C3AED' },
                         { icon: 'event', label: fr ? 'Meetups' : 'Meetups', color: theme.accent },
+                        { icon: 'person', label: fr ? 'Profils' : 'Profiles', color: '#0EA5E9' },
                         { icon: 'share', label: fr ? 'Partages' : 'Shares', color: theme.primary },
                       ].map((item, idx) => (
                         <View key={idx} style={s.supportedChip}>
@@ -305,28 +381,64 @@ export default function ScannerScreen() {
         {/* Result Card */}
         {result ? (
           <Animated.View entering={FadeInDown.duration(300)} style={s.resultOverlay}>
-            <View style={s.resultCard}>
-              <View style={[s.resultIconBg, { backgroundColor: resultConfig[result.type].color + '15' }]}>
-                <MaterialIcons name={resultConfig[result.type].icon as any} size={28} color={resultConfig[result.type].color} />
-              </View>
-              <View style={{ flex: 1, marginHorizontal: 12 }}>
-                <Text style={s.resultType}>{resultConfig[result.type].label}</Text>
-                <Text style={s.resultLabel} numberOfLines={2}>{result.label}</Text>
-                <Text style={s.resultCode}>{result.code}</Text>
-              </View>
-              <View style={s.resultActions}>
-                {result.type !== 'unknown' ? (
-                  <Pressable style={[s.resultGoBtn, { backgroundColor: resultConfig[result.type].color }]} onPress={handleNavigate}>
-                    <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
-                    <Text style={s.resultGoBtnText}>{fr ? 'Ouvrir' : 'Open'}</Text>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              <View style={s.resultCard}>
+                <View style={[s.resultIconBg, { backgroundColor: resultConfig[result.type].color + '15' }]}>
+                  <MaterialIcons name={resultConfig[result.type].icon as any} size={28} color={resultConfig[result.type].color} />
+                </View>
+                <View style={{ flex: 1, marginHorizontal: 12 }}>
+                  <Text style={s.resultType}>{resultConfig[result.type].label}</Text>
+                  <Text style={s.resultLabel} numberOfLines={2}>{result.label}</Text>
+                  <Text style={s.resultCode}>{result.code.substring(0, 20)}</Text>
+                </View>
+                <View style={s.resultActions}>
+                  {result.type !== 'unknown' ? (
+                    <Pressable style={[s.resultGoBtn, { backgroundColor: resultConfig[result.type].color }]} onPress={handleNavigate}>
+                      <MaterialIcons name="arrow-forward" size={20} color="#FFF" />
+                      <Text style={s.resultGoBtnText}>{fr ? 'Ouvrir' : 'Open'}</Text>
+                    </Pressable>
+                  ) : null}
+                  <Pressable style={s.resultRetryBtn} onPress={handleReset}>
+                    <MaterialIcons name="refresh" size={18} color="#FFF" />
+                    <Text style={s.resultRetryText}>{fr ? 'Re-scanner' : 'Re-scan'}</Text>
                   </Pressable>
-                ) : null}
-                <Pressable style={s.resultRetryBtn} onPress={handleReset}>
-                  <MaterialIcons name="refresh" size={18} color="#FFF" />
-                  <Text style={s.resultRetryText}>{fr ? 'Re-scanner' : 'Re-scan'}</Text>
-                </Pressable>
+                </View>
               </View>
-            </View>
+
+              {/* Similar local players detection for transfer */}
+              {result.type === 'player_profile' && similarPlayers.length > 0 ? (
+                <View style={s.transferSuggestion}>
+                  <View style={s.transferSuggestionHeader}>
+                    <MaterialIcons name="swap-horiz" size={18} color="#0EA5E9" />
+                    <Text style={s.transferSuggestionTitle}>
+                      {fr ? `${similarPlayers.length} joueur(s) local similaire(s) detecte(s)` : `${similarPlayers.length} similar local player(s) detected`}
+                    </Text>
+                  </View>
+                  <Text style={s.transferSuggestionDesc}>
+                    {fr ? 'Souhaitez-vous transferer leurs matchs vers ce profil inscrit ?' : 'Would you like to transfer their matches to this registered profile?'}
+                  </Text>
+                  {similarPlayers.map(sp => (
+                    <Pressable
+                      key={sp.id}
+                      style={s.transferSuggestionItem}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        router.replace({ pathname: `/player/${sp.id}` as any, params: { openTransfer: 'true', transferTargetId: result.code } });
+                      }}
+                    >
+                      <View style={s.transferSuggestionItemIcon}>
+                        <MaterialIcons name="person" size={16} color="#0EA5E9" />
+                      </View>
+                      <Text style={s.transferSuggestionItemName} numberOfLines={1}>{sp.name}</Text>
+                      <View style={s.transferSuggestionItemAction}>
+                        <MaterialIcons name="send" size={14} color="#0EA5E9" />
+                        <Text style={s.transferSuggestionItemActionText}>{fr ? 'Transferer' : 'Transfer'}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              ) : null}
+            </ScrollView>
           </Animated.View>
         ) : null}
       </SafeAreaView>
@@ -339,24 +451,20 @@ const s = StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   headerCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
-  // Scanner
   scannerContainer: { flex: 1, backgroundColor: '#000' },
   scannerHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: 'rgba(0,0,0,0.8)', gap: 8 },
   scannerCloseBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' },
   scannerTitle: { fontSize: 17, fontWeight: '700', color: '#FFF' },
   scannerSubtitle: { fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 1 },
-  // Manual entry bar
   manualBar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(0,0,0,0.8)', gap: 8 },
   manualBarInput: { flex: 1, fontSize: 16, fontWeight: '600', color: '#FFF', backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, letterSpacing: 1 },
   manualBarBtn: { width: 44, height: 44, borderRadius: 12, backgroundColor: '#7C3AED', alignItems: 'center', justifyContent: 'center' },
-  // Permission
   permissionView: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
   permissionIconBg: { width: 96, height: 96, borderRadius: 48, backgroundColor: 'rgba(255,255,255,0.08)', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
   permissionTitle: { fontSize: 20, fontWeight: '700', color: '#FFF', textAlign: 'center', marginBottom: 8 },
   permissionDesc: { fontSize: 14, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 24 },
   permissionBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#7C3AED', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 16 },
   permissionBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
-  // Camera
   cameraWrap: { flex: 1, position: 'relative' },
   overlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
   overlayTop: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.55)' },
@@ -368,10 +476,9 @@ const s = StyleSheet.create({
   processingText: { fontSize: 14, fontWeight: '600', color: '#FFF' },
   overlayBottom: { flex: 1, width: '100%', backgroundColor: 'rgba(0,0,0,0.55)', alignItems: 'center', paddingTop: 32, gap: 16 },
   hintText: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.8)' },
-  supportedRow: { flexDirection: 'row', gap: 8 },
+  supportedRow: { flexDirection: 'row', gap: 8, flexWrap: 'wrap', justifyContent: 'center' },
   supportedChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   supportedChipText: { fontSize: 11, fontWeight: '700' },
-  // Result
   resultOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, backgroundColor: 'rgba(0,0,0,0.85)' },
   resultCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 20, padding: 16 },
   resultIconBg: { width: 52, height: 52, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
@@ -383,6 +490,16 @@ const s = StyleSheet.create({
   resultGoBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   resultRetryBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: 'rgba(0,0,0,0.06)' },
   resultRetryText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
+  // Transfer suggestion
+  transferSuggestion: { backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginTop: 10, borderWidth: 2, borderColor: '#0EA5E930' },
+  transferSuggestionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  transferSuggestionTitle: { fontSize: 13, fontWeight: '700', color: '#0EA5E9', flex: 1 },
+  transferSuggestionDesc: { fontSize: 12, color: theme.textSecondary, marginBottom: 12, lineHeight: 17 },
+  transferSuggestionItem: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1, borderColor: '#BAE6FD' },
+  transferSuggestionItemIcon: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#0EA5E915', alignItems: 'center', justifyContent: 'center' },
+  transferSuggestionItemName: { flex: 1, fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  transferSuggestionItemAction: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#0EA5E9', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
+  transferSuggestionItemActionText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
   // Web fallback
   webFallback: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 12 },
   webFallbackTitle: { fontSize: 20, fontWeight: '700', color: theme.textPrimary },

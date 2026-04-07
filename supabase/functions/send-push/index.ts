@@ -1732,6 +1732,77 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // PLAYER_TRANSFER_REQUEST: Notify recipient about transfer request
+    // ============================================================
+    else if (type === 'player_transfer_request') {
+      const { recipientUserId, senderName, playerName, matchCount, challengeCount } = payload || {};
+      if (!recipientUserId || !playerName) {
+        return new Response(JSON.stringify({ error: 'Missing recipientUserId/playerName' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', recipientUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const total = (matchCount || 0) + (challengeCount || 0);
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F504} Demande de transfert de joueur`,
+          `${senderName || 'Un joueur'} souhaite vous transferer "${playerName}" (${total} match/defi). Consultez la demande.`,
+          { type: 'player_transfer_request' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // PLAYER_TRANSFER_RESPONSE: Notify sender about transfer acceptance/decline
+    // ============================================================
+    else if (type === 'player_transfer_response') {
+      const { senderUserId, recipientName, playerName, accepted } = payload || {};
+      if (!senderUserId || !playerName) {
+        return new Response(JSON.stringify({ error: 'Missing senderUserId/playerName' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', senderUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAccepted = accepted === true;
+        const title = isAccepted
+          ? `\u2705 Transfert accepte : ${playerName}`
+          : `\u274C Transfert refuse : ${playerName}`;
+        const body = isAccepted
+          ? `${recipientName || 'Le destinataire'} a accepte le transfert de "${playerName}". Les matchs et defis ont ete reassignes.`
+          : `${recipientName || 'Le destinataire'} a refuse le transfert de "${playerName}".`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'player_transfer_response', accepted: isAccepted },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
