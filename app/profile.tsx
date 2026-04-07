@@ -1678,20 +1678,6 @@ export default function ProfileScreen() {
 
             <Pressable 
               style={[styles.playerCardLink, { marginTop: 10 }]}
-              onPress={() => router.push('/following' as any)}
-            >
-              <View style={[styles.playerCardLinkIcon, { backgroundColor: '#EC4899' + '15' }]}>
-                <MaterialIcons name="person-add" size={24} color="#EC4899" />
-              </View>
-              <View style={styles.playerCardLinkInfo}>
-                <Text style={styles.playerCardLinkTitle}>{language === 'fr' ? 'Mes abonnements' : 'My Following'}</Text>
-                <Text style={styles.playerCardLinkSubtitle}>{language === 'fr' ? 'Joueurs suivis et abonnes' : 'Following and followers'}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={24} color={theme.textMuted} />
-            </Pressable>
-
-            <Pressable 
-              style={[styles.playerCardLink, { marginTop: 10 }]}
               onPress={() => router.push('/palmares')}
             >
               <View style={[styles.playerCardLinkIcon, { backgroundColor: theme.carreauColor + '15' }]}>
@@ -1972,6 +1958,16 @@ export default function ProfileScreen() {
 
             {expandedSections.community ? (
             <View style={styles.compactMenuGroup}>
+              {/* Joueurs suivis (above ambassadors) */}
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/following' as any); }}>
+                <View style={[styles.compactMenuIcon, { backgroundColor: '#EC4899' + '15' }]}><MaterialIcons name="person-add" size={16} color="#EC4899" /></View>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Joueurs suivis' : 'Followed Players'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Abonnements et abonnes' : 'Following and followers'}</Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+              </Pressable>
+              <View style={styles.compactMenuDivider} />
               {/* 1. Nos Ambassadeurs */}
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/ambassadors' as any); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: '#7C3AED' + '15' }]}><MaterialIcons name="verified" size={16} color="#7C3AED" /></View>
@@ -2008,6 +2004,7 @@ export default function ProfileScreen() {
                 <Text style={styles.compactMenuText}>{language === 'fr' ? 'Programme Partenaire' : 'Partner Program'}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
+
               {/* 5. Portail Partenaires (si sponsor) */}
               {isSponsor ? (
                 <>

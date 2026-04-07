@@ -49,6 +49,17 @@ import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { DashboardSkeleton } from '@/components/ui/AdminSkeleton';
 
 
+interface TransferStats {
+  pending: number;
+  accepted: number;
+  declined: number;
+  acceptanceRate: number;
+  avgResponseTimeHours: number;
+  weeklyEvolution: { week: string; count: number; accepted: number; declined: number }[];
+  topSenders: { name: string; count: number; accepted: number }[];
+  recent: { id: string; playerName: string; senderName: string; recipientName: string; status: string; matchCount: number; challengeCount: number; createdAt: string }[];
+}
+
 interface DashboardStats {
   totalUsers: number;
   premiumUsers: number;
@@ -158,8 +169,11 @@ export default function AdminDashboardScreen() {
   // Search modal
   const [showSearch, setShowSearch] = useState(false);
 
+  // Transfer stats
+  const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
+
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -312,6 +326,74 @@ export default function AdminDashboardScreen() {
       // Declining clubs
       setDecliningClubs(res.decliningClubs || []);
 
+      // Player transfers (client-side fetch since not in edge function)
+      try {
+        const { data: transferData } = await supabase.from('player_transfer_requests').select('id, player_name, sender_user_id, recipient_user_id, status, match_count, challenge_count, created_at, updated_at').order('created_at', { ascending: false }).limit(100);
+        if (transferData && transferData.length > 0) {
+          const pendingT = transferData.filter((t: any) => t.status === 'pending').length;
+          const acceptedT = transferData.filter((t: any) => t.status === 'accepted').length;
+          const declinedT = transferData.filter((t: any) => t.status === 'declined').length;
+          const resolved = acceptedT + declinedT;
+          const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
+
+          // Average response time (hours) for non-pending requests
+          let totalResponseMs = 0;
+          let responseCount = 0;
+          transferData.forEach((t: any) => {
+            if (t.status !== 'pending' && t.updated_at && t.created_at) {
+              const diff = new Date(t.updated_at).getTime() - new Date(t.created_at).getTime();
+              if (diff > 0) { totalResponseMs += diff; responseCount++; }
+            }
+          });
+          const avgResponseTimeHours = responseCount > 0 ? Math.round((totalResponseMs / responseCount / 3600000) * 10) / 10 : 0;
+
+          // Weekly evolution (last 6 weeks)
+          const weeklyMap: Record<string, { count: number; accepted: number; declined: number }> = {};
+          const now = Date.now();
+          transferData.forEach((t: any) => {
+            const created = new Date(t.created_at);
+            const weeksAgo = Math.floor((now - created.getTime()) / (7 * 86400000));
+            if (weeksAgo < 6) {
+              const weekStart = new Date(now - weeksAgo * 7 * 86400000);
+              const label = weekStart.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+              if (!weeklyMap[label]) weeklyMap[label] = { count: 0, accepted: 0, declined: 0 };
+              weeklyMap[label].count++;
+              if (t.status === 'accepted') weeklyMap[label].accepted++;
+              if (t.status === 'declined') weeklyMap[label].declined++;
+            }
+          });
+          const weeklyEvolution = Object.entries(weeklyMap).map(([week, d]) => ({ week, ...d })).reverse();
+
+          // Top senders
+          const senderMap: Record<string, { count: number; accepted: number; userId: string }> = {};
+          transferData.forEach((t: any) => {
+            if (!senderMap[t.sender_user_id]) senderMap[t.sender_user_id] = { count: 0, accepted: 0, userId: t.sender_user_id };
+            senderMap[t.sender_user_id].count++;
+            if (t.status === 'accepted') senderMap[t.sender_user_id].accepted++;
+          });
+
+          const userIds = [...new Set(transferData.flatMap((t: any) => [t.sender_user_id, t.recipient_user_id]))];
+          const { data: profiles } = await supabase.from('user_profiles').select('id, username, email').in('id', userIds);
+          const profileMap: Record<string, string> = {};
+          (profiles || []).forEach((p: any) => { profileMap[p.id] = p.username || p.email || '?'; });
+
+          const topSenders = Object.values(senderMap)
+            .sort((a, b) => b.count - a.count)
+            .slice(0, 5)
+            .map(s2 => ({ name: profileMap[s2.userId] || '?', count: s2.count, accepted: s2.accepted }));
+
+          setTransferStats({
+            pending: pendingT, accepted: acceptedT, declined: declinedT,
+            acceptanceRate, avgResponseTimeHours, weeklyEvolution, topSenders,
+            recent: transferData.slice(0, 10).map((t: any) => ({
+              id: t.id, playerName: t.player_name, senderName: profileMap[t.sender_user_id] || '?',
+              recipientName: profileMap[t.recipient_user_id] || '?', status: t.status,
+              matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at,
+            })),
+          });
+        }
+      } catch { /* silent - RLS may block if not admin */ }
+
       // Onboarding
       if (res.onboardingStats) setOnboardingStats(res.onboardingStats);
       if (res.onboardingAnalytics) setStepAnalytics(res.onboardingAnalytics);
@@ -458,6 +540,7 @@ export default function AdminDashboardScreen() {
               const items = [
                 { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
                 { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
+                { key: 'transfers', label: fr ? 'Transferts joueurs' : 'Player Transfers', icon: 'swap-horiz' },
                 { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
                 { key: 'clubHealthAlerts', label: fr ? 'Sante clubs' : 'Club Health', icon: 'favorite' },
                 { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
@@ -613,6 +696,148 @@ export default function AdminDashboardScreen() {
                 {alert.route ? <MaterialIcons name="chevron-right" size={18} color={alert.color} /> : null}
               </Pressable>
             ))}
+          </Animated.View>
+          );
+
+          if (wKey === 'transfers') return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>{fr ? 'TRANSFERTS JOUEURS' : 'PLAYER TRANSFERS'}</Text>
+            <View style={s.chartCard}>
+              {/* KPI row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#F59E0B08', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#F59E0B20' }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#F59E0B' }}>{transferStats.pending}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'En attente' : 'Pending'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#10B98108', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#10B98120' }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#10B981' }}>{transferStats.accepted}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Acceptes' : 'Accepted'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EF444408', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#EF444420' }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>{transferStats.declined}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Refuses' : 'Declined'}</Text>
+                </View>
+              </View>
+
+              {/* Analytics row: acceptance rate + avg response time */}
+              {(transferStats.accepted + transferStats.declined) > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: transferStats.acceptanceRate >= 60 ? '#DCFCE7' : transferStats.acceptanceRate >= 30 ? '#FEF3C7' : '#FEF2F2', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="pie-chart" size={14} color={transferStats.acceptanceRate >= 60 ? '#10B981' : transferStats.acceptanceRate >= 30 ? '#D97706' : '#EF4444'} />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: transferStats.acceptanceRate >= 60 ? '#10B981' : transferStats.acceptanceRate >= 30 ? '#D97706' : '#EF4444' }}>{transferStats.acceptanceRate}%</Text>
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase' }}>{fr ? 'Taux accept.' : 'Accept rate'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10 }}>
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="timer" size={14} color="#3B82F6" />
+                    </View>
+                    <View>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#3B82F6' }}>{transferStats.avgResponseTimeHours < 1 ? '<1' : transferStats.avgResponseTimeHours}h</Text>
+                      <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase' }}>{fr ? 'Temps moy.' : 'Avg response'}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Weekly evolution chart */}
+              {transferStats.weeklyEvolution.length > 1 ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Evolution par semaine' : 'Weekly evolution'}</Text>
+                  {(() => {
+                    const maxW = Math.max(...transferStats.weeklyEvolution.map(w => w.count), 1);
+                    return transferStats.weeklyEvolution.map((w, idx) => {
+                      const isLast = idx === transferStats.weeklyEvolution.length - 1;
+                      return (
+                        <View key={w.week} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ width: 42, fontSize: 9, fontWeight: isLast ? '800' : '600', color: isLast ? '#0EA5E9' : '#94A3B8' }}>{w.week}</Text>
+                          <View style={{ flex: 1, height: 16, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden', flexDirection: 'row' }}>
+                            {w.accepted > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(2, (w.accepted / maxW) * 100)}%`, backgroundColor: '#10B981', borderRadius: 4 }} /> : null}
+                            {w.declined > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, (w.declined / maxW) * 100)}%`, backgroundColor: '#EF4444' }} /> : null}
+                            {(w.count - w.accepted - w.declined) > 0 ? <View style={{ height: '100%' as any, width: `${Math.max(1, ((w.count - w.accepted - w.declined) / maxW) * 100)}%`, backgroundColor: '#F59E0B' }} /> : null}
+                          </View>
+                          <Text style={{ width: 20, fontSize: 10, fontWeight: '800', color: '#0F172A', textAlign: 'right' }}>{w.count}</Text>
+                        </View>
+                      );
+                    });
+                  })()}
+                  <View style={{ flexDirection: 'row', gap: 12, marginTop: 6, justifyContent: 'flex-end' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#10B981' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Accepte' : 'Accepted'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#EF4444' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Refuse' : 'Declined'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#F59E0B' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Attente' : 'Pending'}</Text>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Top senders */}
+              {transferStats.topSenders.length > 0 ? (
+                <View style={{ marginBottom: 14 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Top expediteurs' : 'Top senders'}</Text>
+                  {transferStats.topSenders.map((sender, idx) => {
+                    const senderAcceptRate = sender.count > 0 ? Math.round((sender.accepted / sender.count) * 100) : 0;
+                    return (
+                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: idx === 0 ? '#0EA5E9' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 10, fontWeight: '800', color: idx === 0 ? '#FFF' : '#94A3B8' }}>{idx + 1}</Text>
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>{sender.name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={{ fontSize: 12, fontWeight: '800', color: '#0EA5E9' }}>{sender.count}</Text>
+                          <View style={{ backgroundColor: senderAcceptRate >= 60 ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
+                            <Text style={{ fontSize: 8, fontWeight: '700', color: senderAcceptRate >= 60 ? '#10B981' : '#D97706' }}>{senderAcceptRate}%</Text>
+                          </View>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+
+              {/* Recent transfers list */}
+              {transferStats.recent.length > 0 ? (
+                <View style={{ gap: 0 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Recents' : 'Recent'}</Text>
+                  {transferStats.recent.map((tr, idx) => {
+                    const sc = tr.status === 'accepted' ? '#10B981' : tr.status === 'declined' ? '#EF4444' : '#F59E0B';
+                    return (
+                      <View key={tr.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: sc + '12', alignItems: 'center', justifyContent: 'center' }}>
+                          <MaterialIcons name={tr.status === 'accepted' ? 'check-circle' : tr.status === 'declined' ? 'cancel' : 'schedule'} size={16} color={sc} />
+                        </View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{tr.playerName}</Text>
+                          <Text style={{ fontSize: 10, color: '#94A3B8' }}>{tr.senderName} → {tr.recipientName}</Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#0EA5E9' }}>{tr.matchCount}m</Text>
+                            {tr.challengeCount > 0 ? <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{tr.challengeCount}d</Text> : null}
+                          </View>
+                          <Text style={{ fontSize: 8, color: '#CBD5E1' }}>{new Date(tr.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                  <MaterialIcons name="swap-horiz" size={24} color="#CBD5E1" />
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{fr ? 'Aucun transfert' : 'No transfers yet'}</Text>
+                </View>
+              )}
+            </View>
           </Animated.View>
           );
 

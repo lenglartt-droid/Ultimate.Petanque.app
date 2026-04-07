@@ -471,7 +471,7 @@ export default function PlayerDetailScreen() {
           <Pressable style={s.headerIconBtn} onPress={handleOpenSharePreview}>
             <MaterialIcons name="share" size={20} color={theme.success} />
           </Pressable>
-          {!isSelf && user?.id ? (
+          {!isSelf && user?.id && isRealUser ? (
             <Pressable
               style={[s.headerIconBtn, { backgroundColor: isFollowing ? '#EC4899' + '15' : theme.backgroundSecondary }]}
               onPress={handleToggleFollow}
@@ -492,6 +492,18 @@ export default function PlayerDetailScreen() {
               <MaterialIcons name="event" size={20} color={theme.accent} />
             </Pressable>
           ) : null}
+          {!isPublicItem && !isSelf && canEdit ? (
+            <Pressable style={[s.headerIconBtn, { backgroundColor: '#0EA5E9' + '15' }]} onPress={async () => {
+              Haptics.selectionAsync();
+              setShowTransferModal(true);
+              setTransferCountsLoading(true);
+              const counts = await countTransferableItems(id!);
+              setTransferCounts(counts);
+              setTransferCountsLoading(false);
+            }}>
+              <MaterialIcons name="swap-horiz" size={20} color="#0EA5E9" />
+            </Pressable>
+          ) : null}
           {canEdit ? (
             <Pressable style={[s.headerIconBtn, { backgroundColor: theme.primary + '15' }]} onPress={() => router.push(`/player/edit/${id}`)}>
               <MaterialIcons name="edit" size={20} color={theme.primary} />
@@ -505,13 +517,6 @@ export default function PlayerDetailScreen() {
                 '',
                 [
                   { text: language === 'fr' ? 'Fusionner avec un autre joueur' : 'Merge with another player', onPress: () => setShowMergePicker(true) },
-                  ...(!isPublicItem && !isSelf ? [{ text: language === 'fr' ? 'Lier a un utilisateur' : 'Link to user', onPress: async () => {
-                    setShowTransferModal(true);
-                    setTransferCountsLoading(true);
-                    const counts = await countTransferableItems(id!);
-                    setTransferCounts(counts);
-                    setTransferCountsLoading(false);
-                  }}] : []),
                   ...(!isSelf && !isSharedItem ? [{ text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive' as const, onPress: handleDelete }] : []),
                   { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' as const },
                 ]
@@ -1346,6 +1351,17 @@ export default function PlayerDetailScreen() {
                     } else if (err) {
                       showAlert(language === 'fr' ? 'Erreur' : 'Error', err);
                     } else {
+                      // Send push notification to recipient
+                      try {
+                        const _pushModule = await import('@/services/pushTokenService');
+                        _pushModule.triggerServerPush('player_transfer_request', {
+                          recipientUserId: transferTarget.id,
+                          senderName: user?.username || user?.email || '',
+                          playerName: player?.name,
+                          matchCount: transferCounts.matchCount,
+                          challengeCount: transferCounts.challengeCount,
+                        }).catch(() => {});
+                      } catch { /* silent */ }
                       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                       showAlert(language === 'fr' ? 'Demande envoyee' : 'Request sent', language === 'fr' ? `${transferTarget.username || transferTarget.email} recevra une notification pour accepter le transfert.` : `${transferTarget.username || transferTarget.email} will receive a notification to accept the transfer.`);
                       setShowTransferModal(false);

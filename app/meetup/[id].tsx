@@ -105,6 +105,10 @@ export default function MeetupDetailScreen() {
   const acceptedCount = responses.filter(r => r.status === 'accepted').length;
   const declinedCount = responses.filter(r => r.status === 'declined').length;
   const pendingCount = responses.filter(r => r.status === 'pending').length;
+  const endTime = meetup?.end_time ? new Date(meetup.end_time as string) : null;
+  const isExpired = endTime ? endTime < new Date() : isPast;
+  const isCancelled = meetup?.status === 'cancelled';
+  const isArchived = isExpired || isCancelled || meetup?.status === 'completed';
 
   const loadMeetup = useCallback(async () => {
     if (!id) return;
@@ -373,15 +377,17 @@ export default function MeetupDetailScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Status Banner */}
-        {isPast ? (
-          <View style={[styles.statusBanner, { backgroundColor: theme.textMuted + '15' }]}>
-            <MaterialIcons name="history" size={18} color={theme.textMuted} />
-            <Text style={[styles.statusBannerText, { color: theme.textMuted }]}>{t('meetup', 'meetupPassed')}</Text>
-          </View>
-        ) : meetup.status === 'cancelled' ? (
-          <View style={[styles.statusBanner, { backgroundColor: theme.error + '15' }]}>
-            <MaterialIcons name="cancel" size={18} color={theme.error} />
-            <Text style={[styles.statusBannerText, { color: theme.error }]}>{t('meetup', 'meetupCancelled')}</Text>
+        {isArchived ? (
+          <View style={[styles.statusBanner, { backgroundColor: isCancelled ? theme.error + '15' : '#64748B15' }]}>
+            <MaterialIcons name={isCancelled ? 'cancel' : 'archive'} size={18} color={isCancelled ? theme.error : '#64748B'} />
+            <Text style={[styles.statusBannerText, { color: isCancelled ? theme.error : '#64748B' }]}>
+              {isCancelled ? t('meetup', 'meetupCancelled') : (language === 'fr' ? 'Archive' : 'Archived')}
+            </Text>
+            {endTime && !isCancelled ? (
+              <Text style={{ fontSize: 11, color: '#94A3B8', marginLeft: 4 }}>
+                {language === 'fr' ? 'Termine a' : 'Ended at'} {endTime.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -398,7 +404,7 @@ export default function MeetupDetailScreen() {
           </View>
           <View style={styles.heroInfoRow}>
             <MaterialIcons name="schedule" size={16} color={theme.textSecondary} />
-            <Text style={styles.heroInfoText}>{timeFormatted}</Text>
+            <Text style={styles.heroInfoText}>{timeFormatted}{endTime ? ` → ${endTime.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}</Text>
           </View>
           
           {terrain ? (
@@ -448,7 +454,7 @@ export default function MeetupDetailScreen() {
         </Animated.View>
 
         {/* Reminders Section */}
-        {!isPast && meetup.status === 'active' ? (
+        {!isArchived ? (
           <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.remindersCard}>
             <View style={styles.remindersHeader}>
               <View style={styles.remindersHeaderLeft}>
@@ -526,15 +532,15 @@ export default function MeetupDetailScreen() {
               )}
             </Pressable>
           </Animated.View>
-        ) : isPast ? (
+        ) : (
           <View style={styles.remindersPastInfo}>
             <MaterialIcons name="notifications-off" size={16} color={theme.textMuted} />
-            <Text style={styles.remindersPastText}>{t('meetup', 'meetupPastNoReminder')}</Text>
+            <Text style={styles.remindersPastText}>{isArchived ? (language === 'fr' ? 'RDV archive - notifications desactivees' : 'Meetup archived - notifications disabled') : t('meetup', 'meetupPastNoReminder')}</Text>
           </View>
-        ) : null}
+        )}
 
         {/* Mini-Chat */}
-        {!isPast && meetup.status === 'active' ? (
+        {!isArchived ? (
           <Animated.View entering={FadeInDown.duration(400).delay(150)}>
             <MeetupChat
               meetupId={meetup.id}
@@ -665,7 +671,7 @@ export default function MeetupDetailScreen() {
       </Modal>
 
       {/* Bottom Action - Response Buttons or Cancel */}
-      {!isPast && meetup.status === 'active' ? (
+      {!isArchived ? (
         <View style={[styles.bottomAction, { paddingBottom: insets.bottom + 16 }]}>
           {isCreator ? (
             <View style={styles.responseBtns}>
