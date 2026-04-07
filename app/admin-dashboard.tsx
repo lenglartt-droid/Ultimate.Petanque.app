@@ -9,7 +9,7 @@
  * - Quick navigation to each admin section
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
@@ -56,7 +56,7 @@ interface TransferStats {
   acceptanceRate: number;
   avgResponseTimeHours: number;
   weeklyEvolution: { week: string; count: number; accepted: number; declined: number }[];
-  topSenders: { name: string; count: number; accepted: number }[];
+  topSenders: { name: string; count: number; accepted: number; userId: string }[];
   recent: { id: string; playerName: string; senderName: string; recipientName: string; status: string; matchCount: number; challengeCount: number; createdAt: string }[];
 }
 
@@ -158,6 +158,13 @@ export default function AdminDashboardScreen() {
 
   // Transfer CSV export
   const [exportingTransfers, setExportingTransfers] = useState(false);
+
+  // Transfer filters
+  const [rawTransferData, setRawTransferData] = useState<any[]>([]);
+  const [transferProfileMap, setTransferProfileMap] = useState<Record<string, string>>({});
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'pending' | 'accepted' | 'declined'>('all');
+  const [transferFilterPeriod, setTransferFilterPeriod] = useState<'all' | '7d' | '30d' | '3m'>('all');
+  const [transferFilterSender, setTransferFilterSender] = useState<string | null>(null);
 
   // Transfer stats
   const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
@@ -367,10 +374,14 @@ export default function AdminDashboardScreen() {
           const profileMap: Record<string, string> = {};
           (profiles || []).forEach((p: any) => { profileMap[p.id] = p.username || p.email || '?'; });
 
+          // Store raw data for client-side filtering
+          setRawTransferData(transferData);
+          setTransferProfileMap(profileMap);
+
           const topSenders = Object.values(senderMap)
             .sort((a, b) => b.count - a.count)
             .slice(0, 5)
-            .map(s2 => ({ name: profileMap[s2.userId] || '?', count: s2.count, accepted: s2.accepted }));
+            .map(s2 => ({ name: profileMap[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId }));
 
           setTransferStats({
             pending: pendingT, accepted: acceptedT, declined: declinedT,
@@ -420,6 +431,96 @@ export default function AdminDashboardScreen() {
   }, []);
 
   useEffect(() => { loadStats(); }, [loadStats]);
+
+  // Recompute transfer stats when filters change
+  useEffect(() => {
+    if (rawTransferData.length === 0) return;
+    const hasFilter = transferFilterStatus !== 'all' || transferFilterPeriod !== 'all' || transferFilterSender !== null;
+    if (!hasFilter) {
+      // Reset to unfiltered: recompute from raw data
+      const pm = transferProfileMap;
+      const all = rawTransferData;
+      const pendingT = all.filter((t: any) => t.status === 'pending').length;
+      const acceptedT = all.filter((t: any) => t.status === 'accepted').length;
+      const declinedT = all.filter((t: any) => t.status === 'declined').length;
+      const resolved = acceptedT + declinedT;
+      const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
+      let totalRMs = 0; let rcnt = 0;
+      all.forEach((t: any) => { if (t.status !== 'pending' && t.updated_at && t.created_at) { const d = new Date(t.updated_at).getTime() - new Date(t.created_at).getTime(); if (d > 0) { totalRMs += d; rcnt++; } } });
+      const avgH = rcnt > 0 ? Math.round((totalRMs / rcnt / 3600000) * 10) / 10 : 0;
+      const wMap: Record<string, { count: number; accepted: number; declined: number }> = {};
+      const nowMs = Date.now();
+      all.forEach((t: any) => { const c = new Date(t.created_at); const wa = Math.floor((nowMs - c.getTime()) / (7 * 86400000)); if (wa < 6) { const ws = new Date(nowMs - wa * 7 * 86400000); const lb = ws.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); if (!wMap[lb]) wMap[lb] = { count: 0, accepted: 0, declined: 0 }; wMap[lb].count++; if (t.status === 'accepted') wMap[lb].accepted++; if (t.status === 'declined') wMap[lb].declined++; } });
+      const sMap: Record<string, { count: number; accepted: number; userId: string }> = {};
+      all.forEach((t: any) => { if (!sMap[t.sender_user_id]) sMap[t.sender_user_id] = { count: 0, accepted: 0, userId: t.sender_user_id }; sMap[t.sender_user_id].count++; if (t.status === 'accepted') sMap[t.sender_user_id].accepted++; });
+      setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: all.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
+      return;
+    }
+    // Apply filters
+    let filtered = [...rawTransferData];
+    if (transferFilterStatus !== 'all') filtered = filtered.filter((t: any) => t.status === transferFilterStatus);
+    const nowMs = Date.now();
+    if (transferFilterPeriod === '7d') filtered = filtered.filter((t: any) => nowMs - new Date(t.created_at).getTime() < 7 * 86400000);
+    else if (transferFilterPeriod === '30d') filtered = filtered.filter((t: any) => nowMs - new Date(t.created_at).getTime() < 30 * 86400000);
+    else if (transferFilterPeriod === '3m') filtered = filtered.filter((t: any) => nowMs - new Date(t.created_at).getTime() < 90 * 86400000);
+    if (transferFilterSender) filtered = filtered.filter((t: any) => t.sender_user_id === transferFilterSender);
+    const pm = transferProfileMap;
+    const pendingT = filtered.filter((t: any) => t.status === 'pending').length;
+    const acceptedT = filtered.filter((t: any) => t.status === 'accepted').length;
+    const declinedT = filtered.filter((t: any) => t.status === 'declined').length;
+    const resolved = acceptedT + declinedT;
+    const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
+    let totalRMs = 0; let rcnt = 0;
+    filtered.forEach((t: any) => { if (t.status !== 'pending' && t.updated_at && t.created_at) { const d = new Date(t.updated_at).getTime() - new Date(t.created_at).getTime(); if (d > 0) { totalRMs += d; rcnt++; } } });
+    const avgH = rcnt > 0 ? Math.round((totalRMs / rcnt / 3600000) * 10) / 10 : 0;
+    const wMap: Record<string, { count: number; accepted: number; declined: number }> = {};
+    filtered.forEach((t: any) => { const c = new Date(t.created_at); const wa = Math.floor((nowMs - c.getTime()) / (7 * 86400000)); if (wa < 6) { const ws = new Date(nowMs - wa * 7 * 86400000); const lb = ws.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); if (!wMap[lb]) wMap[lb] = { count: 0, accepted: 0, declined: 0 }; wMap[lb].count++; if (t.status === 'accepted') wMap[lb].accepted++; if (t.status === 'declined') wMap[lb].declined++; } });
+    const sMap: Record<string, { count: number; accepted: number; userId: string }> = {};
+    filtered.forEach((t: any) => { if (!sMap[t.sender_user_id]) sMap[t.sender_user_id] = { count: 0, accepted: 0, userId: t.sender_user_id }; sMap[t.sender_user_id].count++; if (t.status === 'accepted') sMap[t.sender_user_id].accepted++; });
+    setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: filtered.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
+  }, [rawTransferData, transferProfileMap, transferFilterStatus, transferFilterPeriod, transferFilterSender, fr]);
+
+  const hasActiveTransferFilter = transferFilterStatus !== 'all' || transferFilterPeriod !== 'all' || transferFilterSender !== null;
+  const resetTransferFilters = useCallback(() => { Haptics.selectionAsync(); setTransferFilterStatus('all'); setTransferFilterPeriod('all'); setTransferFilterSender(null); }, []);
+
+  // Transfer smart alerts (computed from current filtered stats)
+  const transferAlerts = useMemo(() => {
+    const alerts: { id: string; severity: 'critical' | 'warning' | 'info'; title: string; message: string; icon: string; color: string }[] = [];
+    const ts = transferStats;
+    const total = ts.pending + ts.accepted + ts.declined;
+    if (total === 0) return alerts;
+    const resolved = ts.accepted + ts.declined;
+    // 1. Decline spike: > 50% decline rate with 3+ declines
+    if (resolved > 0) {
+      const declineRate = Math.round((ts.declined / resolved) * 100);
+      if (declineRate > 50 && ts.declined >= 3) {
+        alerts.push({ id: 'decline_spike', severity: 'critical', title: fr ? 'Pic de refus' : 'Decline spike', message: fr ? `${declineRate}% des transferts resolus sont refuses (${ts.declined} refus).` : `${declineRate}% of resolved transfers declined (${ts.declined} declines).`, icon: 'trending-down', color: '#DC2626' });
+      }
+    }
+    // 2. Abnormal response time: > 48h average
+    if (ts.avgResponseTimeHours > 48 && resolved >= 2) {
+      alerts.push({ id: 'slow_response', severity: 'warning', title: fr ? 'Temps de reponse eleve' : 'Slow response time', message: fr ? `Temps moyen de ${ts.avgResponseTimeHours}h (seuil recommande : 48h).` : `Average ${ts.avgResponseTimeHours}h response (recommended: 48h).`, icon: 'timer-off', color: '#D97706' });
+    }
+    // 3. Sender(s) with low acceptance rate: < 25% on 3+ transfers
+    const lowAcceptSenders = ts.topSenders.filter(s2 => { const r = s2.count > 0 ? Math.round((s2.accepted / s2.count) * 100) : 100; return r < 25 && s2.count >= 3; });
+    if (lowAcceptSenders.length > 0) {
+      const names = lowAcceptSenders.map(s2 => s2.name).join(', ');
+      alerts.push({ id: 'low_accept_sender', severity: 'warning', title: fr ? 'Expediteur(s) a risque' : 'At-risk sender(s)', message: fr ? `${names} : taux d'acceptation < 25% sur 3+ transferts.` : `${names}: < 25% acceptance on 3+ transfers.`, icon: 'person-off', color: '#EF4444' });
+    }
+    // 4. High pending backlog: pending > resolved and pending >= 3
+    if (ts.pending > resolved && ts.pending >= 3) {
+      alerts.push({ id: 'high_pending', severity: 'info', title: fr ? 'Accumulation de transferts' : 'Transfer backlog', message: fr ? `${ts.pending} transferts sans reponse. Relancez les destinataires.` : `${ts.pending} unanswered transfers. Follow up with recipients.`, icon: 'hourglass-top', color: '#3B82F6' });
+    }
+    // 5. Recent decline trend: last 2 weeks show increasing declines
+    if (ts.weeklyEvolution.length >= 2) {
+      const last = ts.weeklyEvolution[ts.weeklyEvolution.length - 1];
+      const prev = ts.weeklyEvolution[ts.weeklyEvolution.length - 2];
+      if (last && prev && last.declined > prev.declined && last.declined >= 2) {
+        alerts.push({ id: 'decline_trend', severity: 'info', title: fr ? 'Tendance refus en hausse' : 'Rising decline trend', message: fr ? `${last.declined} refus cette semaine vs ${prev.declined} la precedente.` : `${last.declined} declines this week vs ${prev.declined} prior.`, icon: 'show-chart', color: '#D97706' });
+      }
+    }
+    return alerts;
+  }, [transferStats, fr]);
 
   // Real-time polling every 30 seconds
   const [pollingActive, setPollingActive] = useState(true);
@@ -729,21 +830,88 @@ export default function AdminDashboardScreen() {
                 </Pressable>
               ) : null}
             </View>
+
+            {/* Transfer Filters */}
+            <View style={{ marginBottom: 8 }}>
+              {/* Status filter */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 6, paddingHorizontal: 2 }}>
+                {(['all', 'pending', 'accepted', 'declined'] as const).map(st => {
+                  const active = transferFilterStatus === st;
+                  const colors: Record<string, string> = { all: '#64748B', pending: '#F59E0B', accepted: '#10B981', declined: '#EF4444' };
+                  const labels: Record<string, string> = { all: fr ? 'Tous' : 'All', pending: fr ? 'Attente' : 'Pending', accepted: fr ? 'Acceptes' : 'Accepted', declined: fr ? 'Refuses' : 'Declined' };
+                  const icons: Record<string, string> = { all: 'list', pending: 'schedule', accepted: 'check-circle', declined: 'cancel' };
+                  return (
+                    <Pressable key={st} style={[s.filterChip, active && { backgroundColor: colors[st], borderColor: colors[st] }]} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(st); }}>
+                      <MaterialIcons name={icons[st] as any} size={12} color={active ? '#FFF' : colors[st]} />
+                      <Text style={[s.filterChipText, active && { color: '#FFF' }]}>{labels[st]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {/* Period filter */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingHorizontal: 2 }}>
+                {(['all', '7d', '30d', '3m'] as const).map(p => {
+                  const active = transferFilterPeriod === p;
+                  const labels: Record<string, string> = { all: fr ? 'Tout' : 'All', '7d': '7j', '30d': '30j', '3m': '3m' };
+                  return (
+                    <Pressable key={p} style={[s.filterChip, active && { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]} onPress={() => { Haptics.selectionAsync(); setTransferFilterPeriod(p); }}>
+                      <MaterialIcons name="date-range" size={12} color={active ? '#FFF' : '#3B82F6'} />
+                      <Text style={[s.filterChipText, active && { color: '#FFF' }]}>{labels[p]}</Text>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+              {/* Sender filter indicator */}
+              {transferFilterSender ? (
+                <Pressable style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, backgroundColor: '#0EA5E910', borderRadius: 8, paddingVertical: 6, paddingHorizontal: 10 }} onPress={() => { Haptics.selectionAsync(); setTransferFilterSender(null); }}>
+                  <MaterialIcons name="person" size={14} color="#0EA5E9" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#0EA5E9', flex: 1 }}>{transferProfileMap[transferFilterSender] || '?'}</Text>
+                  <MaterialIcons name="close" size={14} color="#0EA5E9" />
+                </Pressable>
+              ) : null}
+              {/* Reset filters */}
+              {hasActiveTransferFilter ? (
+                <Pressable style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 6, paddingVertical: 6 }} onPress={resetTransferFilters}>
+                  <MaterialIcons name="filter-list-off" size={14} color="#94A3B8" />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'Reinitialiser les filtres' : 'Reset filters'}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#64748B', backgroundColor: '#F1F5F9', paddingHorizontal: 6, paddingVertical: 1, borderRadius: 4 }}>{rawTransferData.length > 0 ? `${transferStats.pending + transferStats.accepted + transferStats.declined}/${rawTransferData.length}` : ''}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+
             <View style={s.chartCard}>
+              {/* Transfer Smart Alerts */}
+              {transferAlerts.length > 0 ? (
+                <View style={{ marginBottom: 12, gap: 6 }}>
+                  {transferAlerts.map(alert => (
+                    <View key={alert.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: alert.color + '08', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: alert.color + '20' }}>
+                      <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: alert.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={alert.icon as any} size={13} color={alert.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: alert.color }}>{alert.title}</Text>
+                        <Text style={{ fontSize: 10, color: alert.color + 'CC', lineHeight: 14, marginTop: 1 }}>{alert.message}</Text>
+                      </View>
+                      {alert.severity === 'critical' ? <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: alert.color }} /> : null}
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
               {/* KPI row */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
-                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#F59E0B08', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#F59E0B20' }}>
+                <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'pending' ? '#F59E0B15' : '#F59E0B08', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'pending' ? '#F59E0B40' : '#F59E0B20' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'pending' ? 'all' : 'pending'); }}>
                   <Text style={{ fontSize: 22, fontWeight: '800', color: '#F59E0B' }}>{transferStats.pending}</Text>
                   <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'En attente' : 'Pending'}</Text>
-                </View>
-                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#10B98108', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#10B98120' }}>
+                </Pressable>
+                <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'accepted' ? '#10B98115' : '#10B98108', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'accepted' ? '#10B98140' : '#10B98120' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'accepted' ? 'all' : 'accepted'); }}>
                   <Text style={{ fontSize: 22, fontWeight: '800', color: '#10B981' }}>{transferStats.accepted}</Text>
                   <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Acceptes' : 'Accepted'}</Text>
-                </View>
-                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EF444408', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: '#EF444420' }}>
+                </Pressable>
+                <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'declined' ? '#EF444415' : '#EF444408', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'declined' ? '#EF444440' : '#EF444420' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'declined' ? 'all' : 'declined'); }}>
                   <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>{transferStats.declined}</Text>
                   <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Refuses' : 'Declined'}</Text>
-                </View>
+                </Pressable>
               </View>
 
               {/* Analytics row: acceptance rate + avg response time */}
@@ -814,19 +982,20 @@ export default function AdminDashboardScreen() {
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Top expediteurs' : 'Top senders'}</Text>
                   {transferStats.topSenders.map((sender, idx) => {
                     const senderAcceptRate = sender.count > 0 ? Math.round((sender.accepted / sender.count) * 100) : 0;
+                    const isSenderFiltered = transferFilterSender === sender.userId;
                     return (
-                      <View key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
-                        <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: idx === 0 ? '#0EA5E9' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ fontSize: 10, fontWeight: '800', color: idx === 0 ? '#FFF' : '#94A3B8' }}>{idx + 1}</Text>
+                      <Pressable key={idx} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9', backgroundColor: isSenderFiltered ? '#0EA5E908' : 'transparent', marginHorizontal: isSenderFiltered ? -4 : 0, paddingHorizontal: isSenderFiltered ? 4 : 0, borderRadius: isSenderFiltered ? 8 : 0 }} onPress={() => { Haptics.selectionAsync(); setTransferFilterSender(isSenderFiltered ? null : sender.userId); }}>
+                        <View style={{ width: 22, height: 22, borderRadius: 7, backgroundColor: isSenderFiltered ? '#0EA5E9' : idx === 0 ? '#0EA5E9' : '#F1F5F9', alignItems: 'center', justifyContent: 'center' }}>
+                          {isSenderFiltered ? <MaterialIcons name="filter-list" size={11} color="#FFF" /> : <Text style={{ fontSize: 10, fontWeight: '800', color: idx === 0 ? '#FFF' : '#94A3B8' }}>{idx + 1}</Text>}
                         </View>
-                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: '#0F172A' }} numberOfLines={1}>{sender.name}</Text>
+                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: isSenderFiltered ? '#0EA5E9' : '#0F172A' }} numberOfLines={1}>{sender.name}</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={{ fontSize: 12, fontWeight: '800', color: '#0EA5E9' }}>{sender.count}</Text>
                           <View style={{ backgroundColor: senderAcceptRate >= 60 ? '#DCFCE7' : '#FEF3C7', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5 }}>
                             <Text style={{ fontSize: 8, fontWeight: '700', color: senderAcceptRate >= 60 ? '#10B981' : '#D97706' }}>{senderAcceptRate}%</Text>
                           </View>
                         </View>
-                      </View>
+                      </Pressable>
                     );
                   })}
                 </View>
@@ -1628,6 +1797,10 @@ const s = StyleSheet.create({
   activityIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   activityText: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
   activityMeta: { fontSize: 10, color: '#94A3B8', marginTop: 1 },
+
+  // Transfer filter chips
+  filterChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, backgroundColor: '#FFF', borderWidth: 1.5, borderColor: '#E2E8F0' },
+  filterChipText: { fontSize: 11, fontWeight: '700' as const, color: '#64748B' },
 });
 
 function getTimeAgo(dateStr: string, fr: boolean): string {
