@@ -53,6 +53,7 @@ interface TransferStats {
   pending: number;
   accepted: number;
   declined: number;
+  expired: number;
   acceptanceRate: number;
   avgResponseTimeHours: number;
   weeklyEvolution: { week: string; count: number; accepted: number; declined: number }[];
@@ -159,15 +160,20 @@ export default function AdminDashboardScreen() {
   // Transfer CSV export
   const [exportingTransfers, setExportingTransfers] = useState(false);
 
+  // Transfer reminder
+  const [sendingTransferReminder, setSendingTransferReminder] = useState(false);
+  const [lastTransferReminder, setLastTransferReminder] = useState<string | null>(null);
+  const [remindedTransferIds, setRemindedTransferIds] = useState<Set<string>>(new Set());
+
   // Transfer filters
   const [rawTransferData, setRawTransferData] = useState<any[]>([]);
   const [transferProfileMap, setTransferProfileMap] = useState<Record<string, string>>({});
-  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'pending' | 'accepted' | 'declined'>('all');
+  const [transferFilterStatus, setTransferFilterStatus] = useState<'all' | 'pending' | 'accepted' | 'declined' | 'expired'>('all');
   const [transferFilterPeriod, setTransferFilterPeriod] = useState<'all' | '7d' | '30d' | '3m'>('all');
   const [transferFilterSender, setTransferFilterSender] = useState<string | null>(null);
 
   // Transfer stats
-  const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
+  const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, expired: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
 
   // Widget order (persisted)
   const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
@@ -175,6 +181,12 @@ export default function AdminDashboardScreen() {
 
   // Load widget preferences + order
   useEffect(() => {
+    AsyncStorage.getItem('admin_transfer_last_reminder').then(val => {
+      if (val) setLastTransferReminder(val);
+    }).catch(() => {});
+    AsyncStorage.getItem('admin_transfer_reminded_ids').then(val => {
+      if (val) try { setRemindedTransferIds(new Set(JSON.parse(val))); } catch { /* silent */ }
+    }).catch(() => {});
     AsyncStorage.getItem('admin_widget_prefs').then(val => {
       if (val) try { setWidgetVisibility(JSON.parse(val)); } catch { /* silent */ }
     }).catch(() => {});
@@ -330,6 +342,7 @@ export default function AdminDashboardScreen() {
           const pendingT = transferData.filter((t: any) => t.status === 'pending').length;
           const acceptedT = transferData.filter((t: any) => t.status === 'accepted').length;
           const declinedT = transferData.filter((t: any) => t.status === 'declined').length;
+          const expiredT = transferData.filter((t: any) => t.status === 'expired').length;
           const resolved = acceptedT + declinedT;
           const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
 
@@ -384,7 +397,7 @@ export default function AdminDashboardScreen() {
             .map(s2 => ({ name: profileMap[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId }));
 
           setTransferStats({
-            pending: pendingT, accepted: acceptedT, declined: declinedT,
+            pending: pendingT, accepted: acceptedT, declined: declinedT, expired: expiredT,
             acceptanceRate, avgResponseTimeHours, weeklyEvolution, topSenders,
             recent: transferData.slice(0, 10).map((t: any) => ({
               id: t.id, playerName: t.player_name, senderName: profileMap[t.sender_user_id] || '?',
@@ -443,6 +456,7 @@ export default function AdminDashboardScreen() {
       const pendingT = all.filter((t: any) => t.status === 'pending').length;
       const acceptedT = all.filter((t: any) => t.status === 'accepted').length;
       const declinedT = all.filter((t: any) => t.status === 'declined').length;
+      const expiredT = all.filter((t: any) => t.status === 'expired').length;
       const resolved = acceptedT + declinedT;
       const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
       let totalRMs = 0; let rcnt = 0;
@@ -453,7 +467,7 @@ export default function AdminDashboardScreen() {
       all.forEach((t: any) => { const c = new Date(t.created_at); const wa = Math.floor((nowMs - c.getTime()) / (7 * 86400000)); if (wa < 6) { const ws = new Date(nowMs - wa * 7 * 86400000); const lb = ws.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); if (!wMap[lb]) wMap[lb] = { count: 0, accepted: 0, declined: 0 }; wMap[lb].count++; if (t.status === 'accepted') wMap[lb].accepted++; if (t.status === 'declined') wMap[lb].declined++; } });
       const sMap: Record<string, { count: number; accepted: number; userId: string }> = {};
       all.forEach((t: any) => { if (!sMap[t.sender_user_id]) sMap[t.sender_user_id] = { count: 0, accepted: 0, userId: t.sender_user_id }; sMap[t.sender_user_id].count++; if (t.status === 'accepted') sMap[t.sender_user_id].accepted++; });
-      setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: all.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
+      setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, expired: expiredT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: all.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
       return;
     }
     // Apply filters
@@ -468,6 +482,7 @@ export default function AdminDashboardScreen() {
     const pendingT = filtered.filter((t: any) => t.status === 'pending').length;
     const acceptedT = filtered.filter((t: any) => t.status === 'accepted').length;
     const declinedT = filtered.filter((t: any) => t.status === 'declined').length;
+    const expiredT = filtered.filter((t: any) => t.status === 'expired').length;
     const resolved = acceptedT + declinedT;
     const acceptanceRate = resolved > 0 ? Math.round((acceptedT / resolved) * 100) : 0;
     let totalRMs = 0; let rcnt = 0;
@@ -477,11 +492,59 @@ export default function AdminDashboardScreen() {
     filtered.forEach((t: any) => { const c = new Date(t.created_at); const wa = Math.floor((nowMs - c.getTime()) / (7 * 86400000)); if (wa < 6) { const ws = new Date(nowMs - wa * 7 * 86400000); const lb = ws.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }); if (!wMap[lb]) wMap[lb] = { count: 0, accepted: 0, declined: 0 }; wMap[lb].count++; if (t.status === 'accepted') wMap[lb].accepted++; if (t.status === 'declined') wMap[lb].declined++; } });
     const sMap: Record<string, { count: number; accepted: number; userId: string }> = {};
     filtered.forEach((t: any) => { if (!sMap[t.sender_user_id]) sMap[t.sender_user_id] = { count: 0, accepted: 0, userId: t.sender_user_id }; sMap[t.sender_user_id].count++; if (t.status === 'accepted') sMap[t.sender_user_id].accepted++; });
-    setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: filtered.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
+    setTransferStats({ pending: pendingT, accepted: acceptedT, declined: declinedT, expired: expiredT, acceptanceRate, avgResponseTimeHours: avgH, weeklyEvolution: Object.entries(wMap).map(([w, d]) => ({ week: w, ...d })).reverse(), topSenders: Object.values(sMap).sort((a, b) => b.count - a.count).slice(0, 5).map(s2 => ({ name: pm[s2.userId] || '?', count: s2.count, accepted: s2.accepted, userId: s2.userId })), recent: filtered.slice(0, 10).map((t: any) => ({ id: t.id, playerName: t.player_name, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?', status: t.status, matchCount: t.match_count || 0, challengeCount: t.challenge_count || 0, createdAt: t.created_at })) });
   }, [rawTransferData, transferProfileMap, transferFilterStatus, transferFilterPeriod, transferFilterSender, fr]);
 
   const hasActiveTransferFilter = transferFilterStatus !== 'all' || transferFilterPeriod !== 'all' || transferFilterSender !== null;
   const resetTransferFilters = useCallback(() => { Haptics.selectionAsync(); setTransferFilterStatus('all'); setTransferFilterPeriod('all'); setTransferFilterSender(null); }, []);
+
+  // Overdue transfers (pending > 7 days)
+  const overdueTransfers = useMemo(() => {
+    const sevenDaysAgo = Date.now() - 7 * 86400000;
+    return rawTransferData.filter((t: any) => t.status === 'pending' && new Date(t.created_at).getTime() < sevenDaysAgo);
+  }, [rawTransferData]);
+
+  const unremindedOverdue = useMemo(() => {
+    return overdueTransfers.filter((t: any) => !remindedTransferIds.has(t.id));
+  }, [overdueTransfers, remindedTransferIds]);
+
+  const sendTransferReminders = useCallback(async () => {
+    if (sendingTransferReminder || unremindedOverdue.length === 0) return;
+    setSendingTransferReminder(true);
+    try {
+      const supabase = getSupabaseClient();
+      let sentCount = 0;
+      for (const t of unremindedOverdue) {
+        try {
+          await supabase.functions.invoke('send-push', {
+            body: {
+              type: 'player_transfer_reminder',
+              payload: {
+                targetUserId: t.recipient_user_id,
+                playerName: t.player_name,
+                senderName: transferProfileMap[t.sender_user_id] || '?',
+                transferId: t.id,
+              },
+            },
+          });
+          sentCount++;
+        } catch { /* continue with next */ }
+      }
+      const newReminded = new Set(remindedTransferIds);
+      unremindedOverdue.forEach((t: any) => newReminded.add(t.id));
+      setRemindedTransferIds(newReminded);
+      AsyncStorage.setItem('admin_transfer_reminded_ids', JSON.stringify([...newReminded])).catch(() => {});
+      const now = new Date().toISOString();
+      setLastTransferReminder(now);
+      AsyncStorage.setItem('admin_transfer_last_reminder', now).catch(() => {});
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? `${sentCount} rappel(s) envoye(s)` : `${sentCount} reminder(s) sent`, fr ? `Notifications envoyees aux destinataires en attente depuis +7 jours.` : `Notifications sent to recipients pending for 7+ days.`);
+      logAdminAction({ actionType: 'transfer_reminder_sent', actionDetail: `Sent ${sentCount} transfer reminders for ${unremindedOverdue.length} overdue transfers`, metadata: { sentCount, overdueCount: unremindedOverdue.length } });
+    } catch (e) {
+      console.log('[Dashboard] Transfer reminder error:', e);
+    }
+    setSendingTransferReminder(false);
+  }, [sendingTransferReminder, unremindedOverdue, remindedTransferIds, transferProfileMap, fr, showAlert]);
 
   // Transfer smart alerts (computed from current filtered stats)
   const transferAlerts = useMemo(() => {
@@ -519,8 +582,14 @@ export default function AdminDashboardScreen() {
         alerts.push({ id: 'decline_trend', severity: 'info', title: fr ? 'Tendance refus en hausse' : 'Rising decline trend', message: fr ? `${last.declined} refus cette semaine vs ${prev.declined} la precedente.` : `${last.declined} declines this week vs ${prev.declined} prior.`, icon: 'show-chart', color: '#D97706' });
       }
     }
+    // 6. Escalated transfers: pending > 21 days
+    const twentyOneDaysMs = 21 * 86400000;
+    const escalatedCount = rawTransferData.filter((t2: any) => t2.status === 'pending' && (Date.now() - new Date(t2.created_at).getTime()) > twentyOneDaysMs).length;
+    if (escalatedCount > 0) {
+      alerts.push({ id: 'escalated_transfers', severity: 'critical', title: fr ? 'Transferts escalades (+21j)' : 'Escalated transfers (21+ days)', message: fr ? `${escalatedCount} transfert(s) en attente depuis plus de 21 jours. Intervention manuelle recommandee.` : `${escalatedCount} transfer(s) pending for 21+ days. Manual intervention recommended.`, icon: 'priority-high', color: '#DC2626' });
+    }
     return alerts;
-  }, [transferStats, fr]);
+  }, [transferStats, rawTransferData, fr]);
 
   // Real-time polling every 30 seconds
   const [pollingActive, setPollingActive] = useState(true);
@@ -835,11 +904,11 @@ export default function AdminDashboardScreen() {
             <View style={{ marginBottom: 8 }}>
               {/* Status filter */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 6, paddingHorizontal: 2 }}>
-                {(['all', 'pending', 'accepted', 'declined'] as const).map(st => {
+                {(['all', 'pending', 'accepted', 'declined', 'expired'] as const).map(st => {
                   const active = transferFilterStatus === st;
-                  const colors: Record<string, string> = { all: '#64748B', pending: '#F59E0B', accepted: '#10B981', declined: '#EF4444' };
-                  const labels: Record<string, string> = { all: fr ? 'Tous' : 'All', pending: fr ? 'Attente' : 'Pending', accepted: fr ? 'Acceptes' : 'Accepted', declined: fr ? 'Refuses' : 'Declined' };
-                  const icons: Record<string, string> = { all: 'list', pending: 'schedule', accepted: 'check-circle', declined: 'cancel' };
+                  const colors: Record<string, string> = { all: '#64748B', pending: '#F59E0B', accepted: '#10B981', declined: '#EF4444', expired: '#94A3B8' };
+                  const labels: Record<string, string> = { all: fr ? 'Tous' : 'All', pending: fr ? 'Attente' : 'Pending', accepted: fr ? 'Acceptes' : 'Accepted', declined: fr ? 'Refuses' : 'Declined', expired: fr ? 'Expires' : 'Expired' };
+                  const icons: Record<string, string> = { all: 'list', pending: 'schedule', accepted: 'check-circle', declined: 'cancel', expired: 'timer-off' };
                   return (
                     <Pressable key={st} style={[s.filterChip, active && { backgroundColor: colors[st], borderColor: colors[st] }]} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(st); }}>
                       <MaterialIcons name={icons[st] as any} size={12} color={active ? '#FFF' : colors[st]} />
@@ -898,6 +967,49 @@ export default function AdminDashboardScreen() {
                 </View>
               ) : null}
 
+              {/* Reminder button for overdue transfers */}
+              {overdueTransfers.length > 0 ? (
+                <View style={{ marginBottom: 12, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FDE68A' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="notifications-active" size={16} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#92400E' }}>
+                        {overdueTransfers.length} {fr ? 'transfert(s) en attente +7j' : 'transfer(s) pending 7+ days'}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#B45309', marginTop: 1 }}>
+                        {unremindedOverdue.length > 0
+                          ? (fr ? `${unremindedOverdue.length} non rappele(s)` : `${unremindedOverdue.length} not yet reminded`)
+                          : (fr ? 'Tous deja rappeles' : 'All already reminded')}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: unremindedOverdue.length > 0 ? '#D97706' : '#E2E8F0' }, sendingTransferReminder && { opacity: 0.5 }]}
+                      onPress={sendTransferReminders}
+                      disabled={sendingTransferReminder || unremindedOverdue.length === 0}
+                    >
+                      {sendingTransferReminder ? <ActivityIndicator size="small" color="#FFF" /> : (
+                        <>
+                          <MaterialIcons name="send" size={13} color={unremindedOverdue.length > 0 ? '#FFF' : '#94A3B8'} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: unremindedOverdue.length > 0 ? '#FFF' : '#94A3B8' }}>
+                            {fr ? 'Rappeler' : 'Remind'}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                  {lastTransferReminder ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#FDE68A' }}>
+                      <MaterialIcons name="check-circle" size={11} color="#D97706" />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#B45309' }}>
+                        {fr ? 'Dernier rappel' : 'Last reminder'}: {new Date(lastTransferReminder).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               {/* KPI row */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
                 <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'pending' ? '#F59E0B15' : '#F59E0B08', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'pending' ? '#F59E0B40' : '#F59E0B20' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'pending' ? 'all' : 'pending'); }}>
@@ -912,6 +1024,12 @@ export default function AdminDashboardScreen() {
                   <Text style={{ fontSize: 22, fontWeight: '800', color: '#EF4444' }}>{transferStats.declined}</Text>
                   <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Refuses' : 'Declined'}</Text>
                 </Pressable>
+                {transferStats.expired > 0 ? (
+                  <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'expired' ? '#94A3B815' : '#94A3B808', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'expired' ? '#94A3B840' : '#94A3B820' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'expired' ? 'all' : 'expired'); }}>
+                    <Text style={{ fontSize: 22, fontWeight: '800', color: '#94A3B8' }}>{transferStats.expired}</Text>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Expires' : 'Expired'}</Text>
+                  </Pressable>
+                ) : null}
               </View>
 
               {/* Analytics row: acceptance rate + avg response time */}
@@ -1006,14 +1124,29 @@ export default function AdminDashboardScreen() {
                 <View style={{ gap: 0 }}>
                   <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Recents' : 'Recent'}</Text>
                   {transferStats.recent.map((tr, idx) => {
-                    const sc = tr.status === 'accepted' ? '#10B981' : tr.status === 'declined' ? '#EF4444' : '#F59E0B';
+                    const sc = tr.status === 'accepted' ? '#10B981' : tr.status === 'declined' ? '#EF4444' : tr.status === 'expired' ? '#94A3B8' : '#F59E0B';
                     return (
                       <View key={tr.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
                         <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: sc + '12', alignItems: 'center', justifyContent: 'center' }}>
-                          <MaterialIcons name={tr.status === 'accepted' ? 'check-circle' : tr.status === 'declined' ? 'cancel' : 'schedule'} size={16} color={sc} />
+                          <MaterialIcons name={tr.status === 'accepted' ? 'check-circle' : tr.status === 'declined' ? 'cancel' : tr.status === 'expired' ? 'timer-off' : 'schedule'} size={16} color={sc} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{tr.playerName}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', flexShrink: 1 }} numberOfLines={1}>{tr.playerName}</Text>
+                            {tr.status === 'expired' ? (
+                              <View style={{ backgroundColor: '#94A3B8', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 }}>EXPIRED</Text>
+                              </View>
+                            ) : tr.status === 'pending' && (Date.now() - new Date(tr.createdAt).getTime()) > 21 * 86400000 ? (
+                              <View style={{ backgroundColor: '#DC2626', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 }}>ESCALATED</Text>
+                              </View>
+                            ) : tr.status === 'pending' && (Date.now() - new Date(tr.createdAt).getTime()) > 7 * 86400000 ? (
+                              <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 }}>OVERDUE</Text>
+                              </View>
+                            ) : null}
+                          </View>
                           <Text style={{ fontSize: 10, color: '#94A3B8' }}>{tr.senderName} → {tr.recipientName}</Text>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 2 }}>
