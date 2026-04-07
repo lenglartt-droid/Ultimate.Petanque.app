@@ -36,7 +36,7 @@ export default function RemoveAdsScreen() {
   const [purchasing, setPurchasing] = useState(false);
   const [restoring, setRestoring] = useState(false);
   const [iapReady, setIapReady] = useState(false);
-  const [productPrice, setProductPrice] = useState('5,99 \u20ac');
+  const [productPrice, setProductPrice] = useState('8,99 $CAD');
 
   // Init IAP on mount
   useEffect(() => {

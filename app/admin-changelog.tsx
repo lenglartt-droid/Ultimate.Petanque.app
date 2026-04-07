@@ -32,6 +32,63 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.30.0',
+    date: '2026-04-06',
+    type: 'patch',
+    highlights: [
+      { icon: 'attach-money', text: 'Ad removal price updated to 8.99 $CAD', color: '#22C55E' },
+    ],
+    details: [
+      'Ad removal price updated from 5.99 EUR to 8.99 $CAD across the app, FAQ and changelog',
+      'Default product price shown before IAP store response now reflects the new CAD pricing',
+    ],
+  },
+  {
+    version: '1.29.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'add-reaction', text: 'Emoji reactions on meetup chat messages', color: '#F59E0B' },
+      { icon: 'animation', text: 'Animated bounce on reaction toggle', color: '#7C3AED' },
+      { icon: 'thumb-up', text: 'Thumbs up, laugh, fire with counters', color: '#3B82F6' },
+    ],
+    details: [
+      'New emoji reactions on every message in meetup mini-chat: thumbs up, laugh, fire',
+      'Reaction picker appears via smiley button below each message bubble',
+      'Reaction pills show emoji + count below the bubble; own reactions highlighted in primary color',
+      'Tapping an existing reaction pill toggles your own reaction (add/remove)',
+      'Animated spring bounce (scale 1.35x) on reaction toggle via Reanimated for tactile feedback',
+      'Optimistic UI update: reaction appears instantly, server sync in background with consistency refresh at 500ms',
+      'Reactions polled every 8 seconds alongside message polling for near real-time updates',
+      'Database: new meetup_message_reactions table with unique constraint on (message_id, user_id, reaction_type) and RLS for participant-only access',
+      'Service: fetchMessageReactions returns grouped Map by messageId, toggleReaction handles insert/delete toggle',
+      'FAQ updated with emoji reaction feature in meetup chat section',
+    ],
+  },
+  {
+    version: '1.28.0',
+    date: '2026-04-06',
+    type: 'minor',
+    highlights: [
+      { icon: 'done-all', text: 'Read receipts (blue double check) in meetup chat', color: '#3B82F6' },
+      { icon: 'visibility', text: 'Know when participants have seen your messages', color: '#22C55E' },
+      { icon: 'sync', text: 'Auto-polling read status every 5 seconds', color: '#7C3AED' },
+    ],
+    details: [
+      'New read receipts in meetup mini-chat: blue double check icon on own messages when read by at least one other participant',
+      'Gray double check (done-all) shown on sent messages that have not been read yet',
+      'Blue double check (done-all) appears when any other participant has scrolled past the message',
+      'Read status polled every 5 seconds (independent of message polling at 8s and typing at 3s)',
+      'Messages automatically marked as read when chat is expanded and user views them',
+      'Read receipt upserted on send to immediately mark own messages as read by self',
+      'Read status computed by comparing message order against other participants last_read_message_id',
+      'Database: new meetup_read_receipts table with unique constraint on (meetup_id, user_id) and RLS for participant-only access',
+      'Service: markMessagesAsRead (upsert) and fetchReadReceipts functions added to meetupChatService',
+      'Message bubble footer redesigned: time + read status icon aligned on same row',
+      'FAQ updated with read receipt feature description in meetup chat section',
+    ],
+  },
+  {
     version: '1.27.0',
     date: '2026-04-06',
     type: 'minor',
