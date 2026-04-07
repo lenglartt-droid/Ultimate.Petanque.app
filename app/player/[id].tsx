@@ -29,6 +29,7 @@ import { Image } from 'expo-image';
 import { useAlert } from '@/template';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import { submitReport, REPORT_REASONS, ReportReason } from '@/services/reportService';
+import { countTransferableItems, searchRegisteredUsers, sendTransferRequest } from '@/services/playerTransferService';
 import { isFollowingPlayer, toggleFollowPlayer, getFollowerCount, getFollowingCount } from '@/services/activityFeedService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -150,6 +151,16 @@ export default function PlayerDetailScreen() {
   const [invitingToMeetup, setInvitingToMeetup] = React.useState<string | null>(null);
 
   const [showReportModal, setShowReportModal] = React.useState(false);
+  const [showTransferModal, setShowTransferModal] = React.useState(false);
+  const [transferSearch, setTransferSearch] = React.useState('');
+  const [transferResults, setTransferResults] = React.useState<Array<{ id: string; username: string; email: string; avatar?: string }>>([]);
+  const [transferSearching, setTransferSearching] = React.useState(false);
+  const [transferTarget, setTransferTarget] = React.useState<{ id: string; username: string; email: string } | null>(null);
+  const [transferMessage, setTransferMessage] = React.useState('');
+  const [transferCounts, setTransferCounts] = React.useState<{ matchCount: number; challengeCount: number }>({ matchCount: 0, challengeCount: 0 });
+  const [transferSending, setTransferSending] = React.useState(false);
+  const [transferCountsLoading, setTransferCountsLoading] = React.useState(false);
+  const transferSearchTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const [isFollowing, setIsFollowing] = React.useState(false);
   const [togglingFollow, setTogglingFollow] = React.useState(false);
   const [followerCount, setFollowerCount] = React.useState(0);
@@ -494,6 +505,13 @@ export default function PlayerDetailScreen() {
                 '',
                 [
                   { text: language === 'fr' ? 'Fusionner avec un autre joueur' : 'Merge with another player', onPress: () => setShowMergePicker(true) },
+                  ...(!isPublicItem && !isSelf ? [{ text: language === 'fr' ? 'Lier a un utilisateur' : 'Link to user', onPress: async () => {
+                    setShowTransferModal(true);
+                    setTransferCountsLoading(true);
+                    const counts = await countTransferableItems(id!);
+                    setTransferCounts(counts);
+                    setTransferCountsLoading(false);
+                  }}] : []),
                   ...(!isSelf && !isSharedItem ? [{ text: language === 'fr' ? 'Supprimer' : 'Delete', style: 'destructive' as const, onPress: handleDelete }] : []),
                   { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' as const },
                 ]
@@ -1185,7 +1203,173 @@ export default function PlayerDetailScreen() {
         </View>
       </Modal>
 
-      {/* Meetup Invitation Picker */}
+      {/* Transfer to User Modal */}
+      <Modal visible={showTransferModal} animationType="slide" transparent onRequestClose={() => { setShowTransferModal(false); setTransferTarget(null); setTransferSearch(''); setTransferResults([]); setTransferMessage(''); }}>
+        <View style={s.mipOverlay}>
+          <View style={[s.mipContent, { maxHeight: '80%' }]}>
+            <View style={s.mipHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={s.mipTitle}>{language === 'fr' ? 'Transferer le joueur' : 'Transfer Player'}</Text>
+                <Text style={s.mipSubtitle}>{player?.name}</Text>
+              </View>
+              <Pressable style={s.mipClose} onPress={() => { setShowTransferModal(false); setTransferTarget(null); setTransferSearch(''); setTransferResults([]); setTransferMessage(''); }}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+
+            {/* Transfer counts */}
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 16 }}>
+              <View style={{ flex: 1, backgroundColor: theme.primary + '08', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: theme.primary + '20' }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: theme.primary }}>{transferCountsLoading ? '...' : transferCounts.matchCount}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: '#7C3AED08', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#7C3AED20' }}>
+                <Text style={{ fontSize: 22, fontWeight: '800', color: '#7C3AED' }}>{transferCountsLoading ? '...' : transferCounts.challengeCount}</Text>
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
+              </View>
+            </View>
+
+            {!transferTarget ? (
+              <>
+                <Text style={{ fontSize: 13, color: theme.textSecondary, marginBottom: 12 }}>{language === 'fr' ? 'Recherchez l\'utilisateur inscrit a qui transferer les matchs et defis de ce joueur.' : 'Search for the registered user to transfer this player\'s matches and challenges to.'}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 14, height: 44, gap: 8, borderWidth: 1, borderColor: theme.border, marginBottom: 12 }}>
+                  <MaterialIcons name="search" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={{ flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 }}
+                    placeholder={language === 'fr' ? 'Nom ou email...' : 'Name or email...'}
+                    placeholderTextColor={theme.textMuted}
+                    value={transferSearch}
+                    onChangeText={(text) => {
+                      setTransferSearch(text);
+                      if (transferSearchTimer.current) clearTimeout(transferSearchTimer.current);
+                      if (text.trim().length < 2) { setTransferResults([]); return; }
+                      transferSearchTimer.current = setTimeout(async () => {
+                        setTransferSearching(true);
+                        const { users } = await searchRegisteredUsers(text, user?.id);
+                        setTransferResults(users);
+                        setTransferSearching(false);
+                      }, 400);
+                    }}
+                    autoFocus
+                  />
+                  {transferSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+                </View>
+                <ScrollView style={{ maxHeight: 240 }} showsVerticalScrollIndicator={false}>
+                  {transferResults.map((u) => (
+                    <Pressable
+                      key={u.id}
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 8 }}
+                      onPress={() => { Haptics.selectionAsync(); setTransferTarget({ id: u.id, username: u.username, email: u.email }); }}
+                    >
+                      <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        {u.avatar ? (
+                          <Image source={{ uri: u.avatar }} style={{ width: 40, height: 40, borderRadius: 20 }} contentFit="cover" />
+                        ) : (
+                          <Text style={{ fontSize: 16, fontWeight: '700', color: theme.primary }}>{(u.username || u.email || '?').charAt(0).toUpperCase()}</Text>
+                        )}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{u.username || u.email}</Text>
+                        {u.username ? <Text style={{ fontSize: 11, color: theme.textMuted }}>{u.email}</Text> : null}
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                    </Pressable>
+                  ))}
+                  {transferSearch.trim().length >= 2 && !transferSearching && transferResults.length === 0 ? (
+                    <View style={{ alignItems: 'center', paddingVertical: 24 }}>
+                      <MaterialIcons name="person-search" size={36} color={theme.textMuted} />
+                      <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun utilisateur trouve' : 'No user found'}</Text>
+                    </View>
+                  ) : null}
+                </ScrollView>
+              </>
+            ) : (
+              <>
+                {/* Selected target */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.success + '08', borderRadius: 14, padding: 14, marginBottom: 16, borderWidth: 1.5, borderColor: theme.success + '30' }}>
+                  <View style={{ width: 44, height: 44, borderRadius: 22, backgroundColor: theme.success + '15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="person" size={22} color={theme.success} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.textPrimary }}>{transferTarget.username || transferTarget.email}</Text>
+                    {transferTarget.username ? <Text style={{ fontSize: 11, color: theme.textMuted }}>{transferTarget.email}</Text> : null}
+                  </View>
+                  <Pressable onPress={() => setTransferTarget(null)} hitSlop={8}>
+                    <MaterialIcons name="close" size={18} color={theme.textMuted} />
+                  </Pressable>
+                </View>
+
+                {/* Message */}
+                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textMuted, marginBottom: 6 }}>{language === 'fr' ? 'Message (optionnel)' : 'Message (optional)'}</Text>
+                <TextInput
+                  style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.textPrimary, minHeight: 60, textAlignVertical: 'top', borderWidth: 1, borderColor: theme.border, marginBottom: 16 }}
+                  placeholder={language === 'fr' ? 'Ex: Ce sont nos matchs du club...' : 'E.g.: These are our club matches...'}
+                  placeholderTextColor={theme.textMuted}
+                  value={transferMessage}
+                  onChangeText={setTransferMessage}
+                  multiline
+                  maxLength={300}
+                />
+
+                {/* Summary */}
+                <View style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 14, marginBottom: 16, borderWidth: 1, borderColor: theme.border }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                    <MaterialIcons name="info-outline" size={16} color={theme.primary} />
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Resume du transfert' : 'Transfer Summary'}</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 18 }}>
+                    {language === 'fr'
+                      ? `${transferCounts.matchCount} match(s) et ${transferCounts.challengeCount} defi(s) de "${player?.name}" seront reassignes au profil de ${transferTarget.username || transferTarget.email} apres acceptation.`
+                      : `${transferCounts.matchCount} match(es) and ${transferCounts.challengeCount} challenge(s) from "${player?.name}" will be reassigned to ${transferTarget.username || transferTarget.email}\'s profile after acceptance.`}
+                  </Text>
+                </View>
+
+                {/* Send button */}
+                <Pressable
+                  style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.primary, borderRadius: 14, paddingVertical: 16 }, transferSending && { opacity: 0.6 }]}
+                  disabled={transferSending}
+                  onPress={async () => {
+                    if (!player || !transferTarget || !user) return;
+                    setTransferSending(true);
+                    const { error: err } = await sendTransferRequest({
+                      senderUserId: user.id,
+                      recipientUserId: transferTarget.id,
+                      playerId: player.id,
+                      playerName: player.name,
+                      matchCount: transferCounts.matchCount,
+                      challengeCount: transferCounts.challengeCount,
+                      message: transferMessage.trim() || undefined,
+                    });
+                    setTransferSending(false);
+                    if (err === 'already_pending') {
+                      showAlert(language === 'fr' ? 'Demande existante' : 'Existing request', language === 'fr' ? 'Une demande de transfert est deja en attente pour ce joueur.' : 'A transfer request is already pending for this player.');
+                    } else if (err) {
+                      showAlert(language === 'fr' ? 'Erreur' : 'Error', err);
+                    } else {
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      showAlert(language === 'fr' ? 'Demande envoyee' : 'Request sent', language === 'fr' ? `${transferTarget.username || transferTarget.email} recevra une notification pour accepter le transfert.` : `${transferTarget.username || transferTarget.email} will receive a notification to accept the transfer.`);
+                      setShowTransferModal(false);
+                      setTransferTarget(null);
+                      setTransferSearch('');
+                      setTransferResults([]);
+                      setTransferMessage('');
+                    }
+                  }}
+                >
+                  {transferSending ? <ActivityIndicator size="small" color="#FFF" /> : (
+                    <>
+                      <MaterialIcons name="send" size={18} color="#FFF" />
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: '#FFF' }}>{language === 'fr' ? 'Envoyer la demande' : 'Send Request'}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
+
+      {/* Meetup Invitation Picker */
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
         <View style={s.mipOverlay}>
           <View style={s.mipContent}>

@@ -54,12 +54,19 @@ import {
   declineClubClaim,
   ClubClaimRequest,
 } from '@/services/clubClaimService';
+import {
+  getReceivedTransferRequests,
+  acceptTransferRequest,
+  declineTransferRequest,
+  PlayerTransferRequest,
+} from '@/services/playerTransferService';
 
-type TabKey = 'invitations' | 'witness' | 'claims' | 'tournaments' | 'preferences';
+type TabKey = 'invitations' | 'witness' | 'transfers' | 'claims' | 'tournaments' | 'preferences';
 
 const TABS: { key: TabKey; labelFr: string; labelEn: string; icon: string; color: string }[] = [
   { key: 'invitations', labelFr: 'Invitations', labelEn: 'Invitations', icon: 'mail', color: theme.primary },
   { key: 'witness', labelFr: 'Attestations', labelEn: 'Witness', icon: 'visibility', color: '#7C3AED' },
+  { key: 'transfers', labelFr: 'Transferts', labelEn: 'Transfers', icon: 'swap-horiz', color: '#0EA5E9' },
   { key: 'claims', labelFr: 'Clubs', labelEn: 'Claims', icon: 'verified-user', color: '#2563EB' },
   { key: 'tournaments', labelFr: 'Tournois', labelEn: 'Tournaments', icon: 'emoji-events', color: theme.carreauColor },
   { key: 'preferences', labelFr: 'Réglages', labelEn: 'Settings', icon: 'tune', color: '#64748B' },
@@ -126,6 +133,11 @@ export default function NotificationsHubScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [prefsLoaded, setPrefsLoaded] = useState(false);
 
+  // Transfers state
+  const [transferRequests, setTransferRequests] = useState<PlayerTransferRequest[]>([]);
+  const [processingTransferId, setProcessingTransferId] = useState<string | null>(null);
+  const [transferFilter, setTransferFilter] = useState('all');
+
   // Claims state
   const [clubClaims, setClubClaims] = useState<ClubClaimRequest[]>([]);
   const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
@@ -141,10 +153,12 @@ export default function NotificationsHubScreen() {
   const pendingMatchCount = matchRequests.filter(r => r.status === 'pending').length;
   const pendingMeetupCount = meetupInvitations.length;
   const pendingWitnessCount = witnessInvitations.filter(i => i.status === 'pending').length;
+  const pendingTransferCount = transferRequests.filter(r => r.status === 'pending').length;
   const pendingClaimCount = clubClaims.filter(c => c.status === 'pending').length;
   const tabBadges: Record<TabKey, number> = {
     invitations: pendingMatchCount + pendingMeetupCount,
     witness: pendingWitnessCount,
+    transfers: pendingTransferCount,
     claims: pendingClaimCount,
     tournaments: 0,
     preferences: 0,
@@ -155,6 +169,7 @@ export default function NotificationsHubScreen() {
     setActiveTab(key);
     setInvFilter('all');
     setWitnessFilter('all');
+    setTransferFilter('all');
     setClaimFilter('all');
     setTournamentFilter('all');
   }, []);
@@ -244,6 +259,10 @@ export default function NotificationsHubScreen() {
       setPermissionStatus(enabled ? 'granted' : 'denied');
       const scheduled = await getAllScheduledNotifications();
       setScheduledCount(scheduled.length);
+
+      // Load transfer requests
+      const { requests: transferData } = await getReceivedTransferRequests();
+      setTransferRequests(transferData);
 
       // Load club claims
       const { claims: claimsData } = await getReceivedClaims();
@@ -350,6 +369,33 @@ export default function NotificationsHubScreen() {
       }},
     ]);
   }, [fr, showAlert]);
+
+  const filteredTransfers = useMemo(() => {
+    let items = transferRequests;
+    if (transferFilter === 'pending') items = items.filter(r => r.status === 'pending');
+    if (transferFilter === 'accepted') items = items.filter(r => r.status === 'accepted');
+    if (transferFilter === 'declined') items = items.filter(r => r.status === 'declined');
+    return items;
+  }, [transferRequests, transferFilter]);
+
+  const handleAcceptTransfer = useCallback(async (id: string) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setProcessingTransferId(id);
+    const { error } = await acceptTransferRequest(id);
+    setProcessingTransferId(null);
+    if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+    setTransferRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'accepted' as const } : r));
+    showAlert(fr ? 'Transfert accepte' : 'Transfer accepted', fr ? 'Les matchs et defis ont ete reassignes a votre profil.' : 'Matches and challenges have been reassigned to your profile.');
+  }, [fr, showAlert]);
+
+  const handleDeclineTransfer = useCallback(async (id: string) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setProcessingTransferId(id);
+    const { error } = await declineTransferRequest(id);
+    setProcessingTransferId(null);
+    if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+    setTransferRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'declined' as const } : r));
+  }, [showAlert, fr]);
 
   const filteredClaims = useMemo(() => {
     let items = clubClaims;
@@ -709,6 +755,91 @@ export default function NotificationsHubScreen() {
             ) : null}
 
             {filteredWitnessInvitations.length === 0 ? renderEmpty('visibility-off', witnessFilter !== 'all') : null}
+          </View>
+        ) : null}
+
+        {/* ========== TRANSFERS TAB ========== */}
+        {activeTab === 'transfers' ? (
+          <View>
+            {renderFilterChips([
+              { key: 'all', labelFr: 'Tout', labelEn: 'All', icon: 'list' },
+              { key: 'pending', labelFr: 'En attente', labelEn: 'Pending', icon: 'schedule' },
+              { key: 'accepted', labelFr: 'Acceptes', labelEn: 'Accepted', icon: 'check-circle' },
+              { key: 'declined', labelFr: 'Refuses', labelEn: 'Declined', icon: 'cancel' },
+            ], transferFilter, setTransferFilter)}
+
+            <View style={s.tipBanner}>
+              <View style={[s.tipIcon, { backgroundColor: '#DBEAFE' }]}><MaterialIcons name="info-outline" size={16} color="#0EA5E9" /></View>
+              <Text style={[s.tipText, { color: '#0369A1' }]}>{fr ? 'Quand vous acceptez un transfert, les matchs et defis du joueur local sont reassignes a votre profil et vos statistiques sont mises a jour.' : 'When you accept a transfer, the local player\'s matches and challenges are reassigned to your profile and stats are updated.'}</Text>
+            </View>
+
+            {filteredTransfers.filter(r => r.status === 'pending').length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#0EA5E9' }]} /><Text style={s.sectionLabel}>{fr ? 'En attente' : 'Pending'}</Text><Text style={s.sectionCount}>{filteredTransfers.filter(r => r.status === 'pending').length}</Text></View>
+                {filteredTransfers.filter(r => r.status === 'pending').map((req, idx) => (
+                  <Animated.View key={req.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
+                    <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: '#0EA5E9' }]}>
+                      <View style={s.cardRow}>
+                        <View style={[s.cardIconBg, { backgroundColor: '#0EA5E912' }]}><MaterialIcons name="swap-horiz" size={20} color="#0EA5E9" /></View>
+                        <View style={{ flex: 1 }}>
+                          <Text style={s.cardTitle} numberOfLines={1}>{req.playerName}</Text>
+                          <Text style={s.cardMeta}>{fr ? 'De' : 'From'} {req.senderName || '?'}</Text>
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: theme.primary + '10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                              <MaterialIcons name="sports" size={10} color={theme.primary} />
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary }}>{req.matchCount} {fr ? 'matchs' : 'matches'}</Text>
+                            </View>
+                            {req.challengeCount > 0 ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#7C3AED10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                <MaterialIcons name="track-changes" size={10} color="#7C3AED" />
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{req.challengeCount} {fr ? 'defis' : 'challenges'}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                        </View>
+                      </View>
+                      {req.message ? (
+                        <View style={{ flexDirection: 'row', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, marginTop: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                          <MaterialIcons name="format-quote" size={14} color="#94A3B8" />
+                          <Text style={{ flex: 1, fontSize: 12, color: '#64748B', lineHeight: 18, fontStyle: 'italic' }}>{req.message}</Text>
+                        </View>
+                      ) : null}
+                      <View style={s.actionRow}>
+                        <Pressable style={s.declineBtn} onPress={() => handleDeclineTransfer(req.id)} disabled={processingTransferId === req.id}><MaterialIcons name="close" size={16} color={theme.error} /><Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text></Pressable>
+                        <Pressable style={[s.acceptBtn, { backgroundColor: '#0EA5E9' }]} onPress={() => handleAcceptTransfer(req.id)} disabled={processingTransferId === req.id}>
+                          {processingTransferId === req.id ? <ActivityIndicator size="small" color="#FFF" /> : <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Accepter' : 'Accept'}</Text></>}
+                        </Pressable>
+                      </View>
+                    </View>
+                  </Animated.View>
+                ))}
+              </View>
+            ) : null}
+
+            {filteredTransfers.filter(r => r.status !== 'pending').length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: theme.textMuted }]} /><Text style={s.sectionLabel}>{fr ? 'Historique' : 'History'}</Text></View>
+                {filteredTransfers.filter(r => r.status !== 'pending').map((req, idx) => {
+                  const color = req.status === 'accepted' ? '#22C55E' : '#EF4444';
+                  return (
+                    <Animated.View key={req.id} entering={FadeIn.duration(200).delay(idx * 25)}>
+                      <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: color, opacity: 0.75 }]}>
+                        <View style={s.cardRow}>
+                          <View style={[s.cardIconBg, { backgroundColor: color + '10' }]}><MaterialIcons name={req.status === 'accepted' ? 'check-circle' : 'cancel'} size={20} color={color} /></View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.cardTitle} numberOfLines={1}>{req.playerName}</Text>
+                            <Text style={s.cardMeta}>{fr ? 'De' : 'From'} {req.senderName || '?'} {"\u2022"} {req.matchCount} {fr ? 'matchs' : 'matches'}</Text>
+                          </View>
+                          <View style={[s.statusChip, { backgroundColor: color + '12' }]}><Text style={[s.statusChipText, { color }]}>{req.status === 'accepted' ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Refuse' : 'Declined')}</Text></View>
+                        </View>
+                      </View>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            ) : null}
+
+            {filteredTransfers.length === 0 ? renderEmpty('swap-horiz', transferFilter !== 'all') : null}
           </View>
         ) : null}
 
