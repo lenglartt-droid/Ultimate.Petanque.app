@@ -84,8 +84,8 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
     ],
   },
   {
-    titleFr: 'Communaute & Evenements',
-    titleEn: 'Community & Events',
+    titleFr: 'Evenements Ambassadeurs',
+    titleEn: 'Ambassador Events',
     items: [
       {
         key: 'event_created',
@@ -97,15 +97,6 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
         descEn: 'Get notified when an ambassador creates an event within 200km radius.',
       },
       {
-        key: 'meetup_invitation',
-        icon: 'event',
-        color: '#10B981',
-        labelFr: 'Invitations RDV',
-        labelEn: 'Meetup invitations',
-        descFr: 'Soyez alerte quand un joueur vous invite a un rendez-vous terrain.',
-        descEn: 'Get alerted when a player invites you to a terrain meeting.',
-      },
-      {
         key: 'event_reminder',
         icon: 'alarm',
         color: '#F59E0B',
@@ -113,6 +104,21 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
         labelEn: 'Event reminders',
         descFr: 'Rappels automatiques avant les evenements sponsorises auxquels vous participez.',
         descEn: 'Automatic reminders before sponsored events you participate in.',
+      },
+    ],
+  },
+  {
+    titleFr: 'Rendez-vous Terrain',
+    titleEn: 'Terrain Meetups',
+    items: [
+      {
+        key: 'meetup_invitation',
+        icon: 'event',
+        color: '#10B981',
+        labelFr: 'Invitations RDV',
+        labelEn: 'Meetup invitations',
+        descFr: 'Soyez alerte quand un joueur vous invite a un rendez-vous terrain.',
+        descEn: 'Get alerted when a player invites you to a terrain meeting.',
       },
     ],
   },

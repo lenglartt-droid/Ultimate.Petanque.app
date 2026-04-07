@@ -228,6 +228,12 @@ function LayoutInner() {
           case 'club_invitation_response':
             router.push('/club-invitations' as any);
             break;
+          case 'player_transfer_request':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'transfers' } } as any);
+            break;
+          case 'player_transfer_response':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'transfers' } } as any);
+            break;
           case 'maintenance':
             // No navigation, banner auto-shows via polling
             break;
