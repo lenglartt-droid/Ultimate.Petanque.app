@@ -1765,6 +1765,50 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // PLAYER_TRANSFER_REMINDER: Admin sends reminder to recipients with pending transfers >7d
+    // ============================================================
+    else if (type === 'player_transfer_reminder') {
+      const { targetUserId, playerName, senderName, transferId } = payload || {};
+      if (!targetUserId || !playerName) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/playerName' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is admin
+      const { data: adminReminder } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminReminder?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send transfer reminders' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F514} Transfert en attente`,
+          `${senderName || 'Un joueur'} attend votre reponse pour le transfert de "${playerName}". Consultez vos notifications.`,
+          { type: 'player_transfer_request', transferId },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // PLAYER_TRANSFER_RESPONSE: Notify sender about transfer acceptance/decline
     // ============================================================
     else if (type === 'player_transfer_response') {
