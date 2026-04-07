@@ -97,20 +97,7 @@ const INITIAL_STATS: DashboardStats = {
   maintenanceActive: false, maintenanceScheduled: false, pendingAppeals: 0, overdueAppeals: 0,
 };
 
-const ADMIN_SECTIONS: { key: string; route: string; icon: string; color: string; labelFr: string; labelEn: string; descFr: string; descEn: string; statKey?: keyof DashboardStats; badgeColor?: string }[] = [
-  { key: 'moderation', route: '/admin-moderation', icon: 'gavel', color: '#DC2626', labelFr: 'Moderation', labelEn: 'Moderation', descFr: 'Signalements et actions', descEn: 'Reports and actions', statKey: 'pendingReports', badgeColor: '#F59E0B' },
-  { key: 'announcements', route: '/admin-announcements', icon: 'campaign', color: '#7C3AED', labelFr: 'Annonces', labelEn: 'Announcements', descFr: 'Push cibles aux joueurs', descEn: 'Targeted push to players', statKey: 'totalAnnouncements' },
-  { key: 'terrains', route: '/admin-terrains', icon: 'sports-soccer', color: '#10B981', labelFr: 'Terrains', labelEn: 'Terrains', descFr: 'Gestion et doublons', descEn: 'Management and duplicates', statKey: 'totalTerrains' },
-  { key: 'anticheat', route: '/admin-anticheat', icon: 'security', color: '#EF4444', labelFr: 'Anti-triche', labelEn: 'Anti-cheat', descFr: 'Trust score et detection', descEn: 'Trust score and detection', statKey: 'flaggedPlayers' },
-  { key: 'sponsors', route: '/admin-sponsors', icon: 'handshake', color: '#7C3AED', labelFr: 'Sponsors', labelEn: 'Sponsors', descFr: 'Ambassadeurs et partenaires', descEn: 'Ambassadors and partners' },
-  { key: 'promos', route: '/admin-promos', icon: 'admin-panel-settings', color: '#0EA5E9', labelFr: 'Codes promo', labelEn: 'Promo codes', descFr: 'Gestion des promotions', descEn: 'Promotion management' },
-  { key: 'maintenance', route: '/admin-maintenance', icon: 'construction', color: '#D97706', labelFr: 'Maintenance', labelEn: 'Maintenance', descFr: 'Mode maintenance et push', descEn: 'Maintenance mode and push' },
-  { key: 'users', route: '/admin-users', icon: 'people', color: '#3B82F6', labelFr: 'Utilisateurs', labelEn: 'Users', descFr: 'Gestion des comptes', descEn: 'Account management', statKey: 'totalUsers' },
-  { key: 'clubs', route: '/admin-clubs', icon: 'home', color: '#7C3AED', labelFr: 'Clubs', labelEn: 'Clubs', descFr: 'Verification et gestion', descEn: 'Verification and management', statKey: 'totalClubs' },
-  { key: 'reports', route: '/admin-reports', icon: 'assessment', color: '#0EA5E9', labelFr: 'Rapports', labelEn: 'Reports', descFr: 'Historique hebdomadaire', descEn: 'Weekly history' },
-  { key: 'notifications', route: '/admin-notifications', icon: 'notifications-active', color: '#DC2626', labelFr: 'Centre alertes', labelEn: 'Alert Center', descFr: 'Alertes et notifications admin', descEn: 'Admin alerts and notifications', statKey: 'pendingReports' as keyof DashboardStats },
-  { key: 'changelog', route: '/admin-changelog', icon: 'update', color: '#0EA5E9', labelFr: 'Changelog', labelEn: 'Changelog', descFr: 'Historique des versions', descEn: 'Version history' },
-];
+
 
 export default function AdminDashboardScreen() {
   const insets = useSafeAreaInsets();
@@ -169,11 +156,14 @@ export default function AdminDashboardScreen() {
   // Search modal
   const [showSearch, setShowSearch] = useState(false);
 
+  // Transfer CSV export
+  const [exportingTransfers, setExportingTransfers] = useState(false);
+
   // Transfer stats
   const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution', 'navigation'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -552,7 +542,6 @@ export default function AdminDashboardScreen() {
                 { key: 'userGrowth', label: fr ? 'Croissance' : 'Growth', icon: 'trending-up' },
                 { key: 'clubVerification', label: fr ? 'Verification clubs' : 'Club Verification', icon: 'verified' },
                 { key: 'eloDistribution', label: 'ELO', icon: 'leaderboard' },
-                { key: 'navigation', label: fr ? 'Navigation rapide' : 'Quick Nav', icon: 'menu' },
               ];
               const sorted = [...items].sort((a, b) => widgetOrder.indexOf(a.key) - widgetOrder.indexOf(b.key));
               return sorted.map((w, idx) => (
@@ -701,7 +690,45 @@ export default function AdminDashboardScreen() {
 
           if (wKey === 'transfers') return (
           <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
-            <Text style={s.sectionTitle}>{fr ? 'TRANSFERTS JOUEURS' : 'PLAYER TRANSFERS'}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
+              <Text style={s.sectionTitle}>{fr ? 'TRANSFERTS JOUEURS' : 'PLAYER TRANSFERS'}</Text>
+              {transferStats.recent.length > 0 ? (
+                <Pressable
+                  style={[s.growthExportBtn, exportingTransfers && { opacity: 0.5 }]}
+                  onPress={async () => {
+                    if (exportingTransfers) return;
+                    setExportingTransfers(true);
+                    try {
+                      const headers = 'Player,Sender,Recipient,Status,Matches,Challenges,Date';
+                      const rows = transferStats.recent.map(tr => `"${tr.playerName}","${tr.senderName}","${tr.recipientName}",${tr.status},${tr.matchCount},${tr.challengeCount},${tr.createdAt.slice(0, 10)}`);
+                      const summary = `\n--- Summary ---\nPending,${transferStats.pending}\nAccepted,${transferStats.accepted}\nDeclined,${transferStats.declined}\nAcceptance Rate,${transferStats.acceptanceRate}%\nAvg Response Time,${transferStats.avgResponseTimeHours}h`;
+                      const csv = [headers, ...rows, '', summary].join('\n');
+                      if (typeof document !== 'undefined') {
+                        const blob = new Blob([csv], { type: 'text/csv' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `transfers-${new Date().toISOString().slice(0, 10)}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      } else {
+                        const FS = require('expo-file-system');
+                        const SharingMod = require('expo-sharing');
+                        const path = `${FS.cacheDirectory}transfers-${new Date().toISOString().slice(0, 10)}.csv`;
+                        await FS.writeAsStringAsync(path, csv, { encoding: FS.EncodingType.UTF8 });
+                        const canShare = await SharingMod.isAvailableAsync();
+                        if (canShare) await SharingMod.shareAsync(path, { mimeType: 'text/csv', dialogTitle: fr ? 'Exporter les transferts' : 'Export transfers' });
+                      }
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    } catch (e) { console.log('[Dashboard] Transfer export error:', e); }
+                    setExportingTransfers(false);
+                  }}
+                  disabled={exportingTransfers}
+                >
+                  {exportingTransfers ? <ActivityIndicator size="small" color="#2563EB" /> : <MaterialIcons name="file-download" size={16} color="#2563EB" />}
+                </Pressable>
+              ) : null}
+            </View>
             <View style={s.chartCard}>
               {/* KPI row */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
@@ -1484,52 +1511,7 @@ export default function AdminDashboardScreen() {
           </Animated.View>
           );
 
-          if (wKey === 'navigation') return (
-        <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
-          <Text style={s.sectionTitle}>{fr ? 'NAVIGATION RAPIDE' : 'QUICK NAVIGATION'}</Text>
-          {ADMIN_SECTIONS.map((section, idx) => {
-            const statValue = section.statKey ? (stats as any)[section.statKey] : null;
-            const isMaintenance = section.key === 'maintenance';
-            const maintBadge = isMaintenance && (stats.maintenanceActive || stats.maintenanceScheduled);
-            return (
-              <Animated.View key={section.key} entering={FadeInDown.duration(200).delay(180 + idx * 25)}>
-                <Pressable
-                  style={({ pressed }) => [s.navCard, pressed && { opacity: 0.9, transform: [{ scale: 0.99 }] }]}
-                  onPress={() => { Haptics.selectionAsync(); router.push(section.route as any); }}
-                >
-                  <View style={[s.navIcon, { backgroundColor: section.color + '12' }]}>
-                    <MaterialIcons name={section.icon as any} size={22} color={section.color} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.navLabel}>{fr ? section.labelFr : section.labelEn}</Text>
-                    <Text style={s.navDesc}>{fr ? section.descFr : section.descEn}</Text>
-                  </View>
-                  {statValue !== null && statValue > 0 ? (
-                    <View style={[s.navBadge, { backgroundColor: (section.badgeColor || section.color) + '15' }]}>
-                      <Text style={[s.navBadgeText, { color: section.badgeColor || section.color }]}>{statValue}</Text>
-                    </View>
-                  ) : null}
-                  {maintBadge ? (
-                    <View style={[s.navBadge, { backgroundColor: stats.maintenanceActive ? '#FEF3C7' : '#EFF6FF' }]}>
-                      <View style={[s.maintDot, { backgroundColor: stats.maintenanceActive ? '#D97706' : '#3B82F6' }]} />
-                      <Text style={[s.navBadgeText, { color: stats.maintenanceActive ? '#92400E' : '#1E40AF' }]}>
-                        {stats.maintenanceActive ? 'ON' : (fr ? 'PLANIFIE' : 'SCHEDULED')}
-                      </Text>
-                    </View>
-                  ) : null}
-                  {section.key === 'notifications' && adminNotifCount > 0 ? (
-                    <View style={[s.navBadge, { backgroundColor: '#FEF2F2' }]}>
-                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: '#DC2626' }} />
-                      <Text style={[s.navBadgeText, { color: '#DC2626' }]}>{adminNotifCount}</Text>
-                    </View>
-                  ) : null}
-                  <MaterialIcons name="chevron-right" size={20} color="#CBD5E1" />
-                </Pressable>
-              </Animated.View>
-            );
-          })}
-        </Animated.View>
-          );
+
 
           return null;
         })}
@@ -1577,14 +1559,7 @@ const s = StyleSheet.create({
   modValue: { fontSize: 18, fontWeight: '800' },
   modLabel: { fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 },
 
-  // Navigation
-  navCard: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 8, borderWidth: 1, borderColor: '#F1F5F9', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.02, shadowRadius: 3, elevation: 1 },
-  navIcon: { width: 44, height: 44, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  navLabel: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
-  navDesc: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-  navBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  navBadgeText: { fontSize: 11, fontWeight: '800' },
-  maintDot: { width: 6, height: 6, borderRadius: 3 },
+
 
   // Polling indicator
   pollingIndicator: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, alignSelf: 'flex-end' as const, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#DCFCE7', marginBottom: 8 },
