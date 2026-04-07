@@ -1809,6 +1809,51 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // PLAYER_TRANSFER_URGENT_REMINDER: Admin sends urgent reminder for transfers expiring in 0-5 days
+    // ============================================================
+    else if (type === 'player_transfer_urgent_reminder') {
+      const { targetUserId, playerName, senderName, transferId, daysLeft } = payload || {};
+      if (!targetUserId || !playerName) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/playerName' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Verify caller is admin
+      const { data: adminUrgent } = await supabaseAdmin
+        .from('user_profiles')
+        .select('is_admin')
+        .eq('id', user.id)
+        .single();
+
+      if (!adminUrgent?.is_admin) {
+        return new Response(JSON.stringify({ error: 'Only admins can send urgent transfer reminders' }), {
+          status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const days = daysLeft ?? 5;
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{26A0}\u{FE0F} Transfert expire dans ${days}j !`,
+          `${senderName || 'Un joueur'} attend votre reponse pour "${playerName}". Sans action, le transfert sera automatiquement annule.`,
+          { type: 'player_transfer_request', transferId, urgent: true },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // PLAYER_TRANSFER_RESPONSE: Notify sender about transfer acceptance/decline
     // ============================================================
     else if (type === 'player_transfer_response') {
