@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders'];
 
     const results: Record<string, any> = {};
 
@@ -1502,7 +1502,323 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 15: Clean up old analytics (older than 365 days)
+    // TASK 15: Transfer Expiration - Auto-cancel transfers pending 30+ days
+    // ============================================================
+    if (tasks.includes('transfer_expiration')) {
+      console.log('[weekly-cron] Checking for expired transfers (pending 30+ days)...');
+      try {
+        const threshold30d = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Dedup: only run once per week
+        const expWeekStart = new Date();
+        expWeekStart.setDate(expWeekStart.getDate() - expWeekStart.getDay() + 1);
+        expWeekStart.setHours(0, 0, 0, 0);
+        const { data: existingExp } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'transfer_expiration_cron')
+          .gte('created_at', expWeekStart.toISOString())
+          .limit(1);
+
+        if (existingExp && existingExp.length > 0) {
+          console.log('[weekly-cron] Transfer expiration already processed this week');
+          results.transfer_expiration = { expired: 0, reason: 'already_processed_this_week' };
+        } else {
+          // Find pending transfers older than 30 days
+          const { data: expiredTransfers } = await supabaseAdmin
+            .from('player_transfer_requests')
+            .select('id, player_name, sender_user_id, recipient_user_id, created_at, match_count, challenge_count')
+            .eq('status', 'pending')
+            .lt('created_at', threshold30d);
+
+          if (!expiredTransfers || expiredTransfers.length === 0) {
+            results.transfer_expiration = { expired: 0 };
+          } else {
+            // Update status to 'expired'
+            const expiredIds = expiredTransfers.map(t => t.id);
+            await supabaseAdmin
+              .from('player_transfer_requests')
+              .update({ status: 'expired', updated_at: new Date().toISOString() })
+              .in('id', expiredIds);
+
+            console.log(`[weekly-cron] Expired ${expiredIds.length} transfers`);
+
+            // Fetch user profiles for readable names
+            const expUserIds = [...new Set(expiredTransfers.flatMap(t => [t.sender_user_id, t.recipient_user_id]))];
+            const { data: expProfiles } = await supabaseAdmin
+              .from('user_profiles')
+              .select('id, username, email')
+              .in('id', expUserIds);
+            const expNameMap = new Map<string, string>();
+            (expProfiles || []).forEach((p: any) => expNameMap.set(p.id, p.username || p.email || '?'));
+
+            let senderPushSent = 0;
+            let recipientPushSent = 0;
+            let pushErrors = 0;
+
+            // Group by sender for consolidated notification
+            const senderMap = new Map<string, { transfers: typeof expiredTransfers }>();
+            for (const t of expiredTransfers) {
+              if (!senderMap.has(t.sender_user_id)) senderMap.set(t.sender_user_id, { transfers: [] });
+              senderMap.get(t.sender_user_id)!.transfers.push(t);
+            }
+
+            // Notify senders
+            for (const [senderId, info] of senderMap) {
+              try {
+                const { data: sTokens } = await supabaseAdmin
+                  .from('push_tokens')
+                  .select('token')
+                  .eq('user_id', senderId)
+                  .eq('active', true);
+
+                if (sTokens && sTokens.length > 0) {
+                  const count = info.transfers.length;
+                  const playerNames = info.transfers.slice(0, 2).map(t => t.player_name).join(', ');
+                  const extra = count > 2 ? ` +${count - 2}` : '';
+                  const title = count === 1
+                    ? `\u{23F0} Transfert expire : ${info.transfers[0].player_name}`
+                    : `\u{23F0} ${count} transfert(s) expire(s)`;
+                  const body = count === 1
+                    ? `Votre demande de transfert pour "${info.transfers[0].player_name}" a expire apres 30 jours sans reponse du destinataire.`
+                    : `Vos demandes de transfert (${playerNames}${extra}) ont expire apres 30 jours sans reponse.`;
+
+                  const messages = sTokens.map((t: any) => buildPushMessage(
+                    t.token, title, body,
+                    { type: 'player_transfer_response', expired: true },
+                    { channelId: 'share-requests', priority: 'default' }
+                  ));
+                  const tickets = await sendPushNotifications(messages);
+                  senderPushSent += tickets.filter((t: any) => t.status === 'ok').length;
+                  pushErrors += tickets.filter((t: any) => t.status === 'error').length;
+
+                  for (let i = 0; i < tickets.length; i++) {
+                    if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                      const invalidToken = messages[i]?.to;
+                      if (invalidToken) await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              } catch { /* silent per-sender */ }
+            }
+
+            // Group by recipient for consolidated notification
+            const recipientMap = new Map<string, { transfers: typeof expiredTransfers }>();
+            for (const t of expiredTransfers) {
+              if (!recipientMap.has(t.recipient_user_id)) recipientMap.set(t.recipient_user_id, { transfers: [] });
+              recipientMap.get(t.recipient_user_id)!.transfers.push(t);
+            }
+
+            // Notify recipients
+            for (const [recipientId, info] of recipientMap) {
+              try {
+                // Check notification preference
+                const { data: prefData } = await supabaseAdmin
+                  .from('user_preferences')
+                  .select('notification_preferences')
+                  .eq('user_id', recipientId)
+                  .maybeSingle();
+                const prefs = prefData?.notification_preferences || {};
+                if (prefs.share_request === false) continue;
+
+                const { data: rTokens } = await supabaseAdmin
+                  .from('push_tokens')
+                  .select('token')
+                  .eq('user_id', recipientId)
+                  .eq('active', true);
+
+                if (rTokens && rTokens.length > 0) {
+                  const count = info.transfers.length;
+                  const senderName = expNameMap.get(info.transfers[0].sender_user_id) || '?';
+                  const playerNames = info.transfers.slice(0, 2).map(t => t.player_name).join(', ');
+                  const extra = count > 2 ? ` +${count - 2}` : '';
+                  const title = count === 1
+                    ? `\u{23F0} Transfert expire : ${info.transfers[0].player_name}`
+                    : `\u{23F0} ${count} transfert(s) expire(s)`;
+                  const body = count === 1
+                    ? `La demande de transfert de "${info.transfers[0].player_name}" par ${senderName} a expire apres 30 jours.`
+                    : `${count} demandes de transfert (${playerNames}${extra}) ont expire apres 30 jours sans reponse.`;
+
+                  const messages = rTokens.map((t: any) => buildPushMessage(
+                    t.token, title, body,
+                    { type: 'player_transfer_request' },
+                    { channelId: 'share-requests', priority: 'default' }
+                  ));
+                  const tickets = await sendPushNotifications(messages);
+                  recipientPushSent += tickets.filter((t: any) => t.status === 'ok').length;
+                  pushErrors += tickets.filter((t: any) => t.status === 'error').length;
+
+                  for (let i = 0; i < tickets.length; i++) {
+                    if (tickets[i].details?.error === 'DeviceNotRegistered') {
+                      const invalidToken = messages[i]?.to;
+                      if (invalidToken) await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              } catch { /* silent per-recipient */ }
+            }
+
+            // Track dedup
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'transfer_expiration_cron',
+              source_page: `expired:${expiredIds.length}|senderPush:${senderPushSent}|recipientPush:${recipientPushSent}|errors:${pushErrors}`,
+            }).catch(() => {});
+
+            console.log(`[weekly-cron] Transfer expiration: ${expiredIds.length} expired, sender push: ${senderPushSent}, recipient push: ${recipientPushSent}, errors: ${pushErrors}`);
+            results.transfer_expiration = {
+              expired: expiredIds.length,
+              senderPushSent,
+              recipientPushSent,
+              pushErrors,
+              transferIds: expiredIds,
+            };
+          }
+        }
+      } catch (expErr: any) {
+        console.error('[weekly-cron] Transfer expiration error:', expErr.message);
+        results.transfer_expiration = { error: expErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 16: Transfer Urgent Reminders - Auto-remind recipients with transfers expiring in 0-5 days (25-30d pending)
+    // ============================================================
+    if (tasks.includes('transfer_urgent_reminders')) {
+      console.log('[weekly-cron] Sending urgent reminders for transfers expiring soon (25-30 days)...');
+      try {
+        const twentyFiveDaysAgo = new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString();
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        // Dedup: only send once per week
+        const urgWeekStart = new Date();
+        urgWeekStart.setDate(urgWeekStart.getDate() - urgWeekStart.getDay() + 1);
+        urgWeekStart.setHours(0, 0, 0, 0);
+        const { data: existingUrg } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id')
+          .eq('event_type', 'transfer_urgent_reminder_cron')
+          .gte('created_at', urgWeekStart.toISOString())
+          .limit(1);
+
+        if (existingUrg && existingUrg.length > 0) {
+          console.log('[weekly-cron] Urgent transfer reminders already sent this week');
+          results.transfer_urgent_reminders = { sent: 0, reason: 'already_sent_this_week' };
+        } else {
+          // Find pending transfers created 25-30 days ago
+          const { data: expiringTransfers } = await supabaseAdmin
+            .from('player_transfer_requests')
+            .select('id, player_name, sender_user_id, recipient_user_id, created_at')
+            .eq('status', 'pending')
+            .lt('created_at', twentyFiveDaysAgo)
+            .gte('created_at', thirtyDaysAgo);
+
+          if (!expiringTransfers || expiringTransfers.length === 0) {
+            results.transfer_urgent_reminders = { sent: 0, expiring: 0 };
+          } else {
+            // Fetch sender names
+            const urgSenderIds = [...new Set(expiringTransfers.map(t => t.sender_user_id))];
+            const { data: urgSenderProfiles } = await supabaseAdmin
+              .from('user_profiles')
+              .select('id, username, email')
+              .in('id', urgSenderIds);
+            const urgSenderMap = new Map<string, string>();
+            (urgSenderProfiles || []).forEach((p: any) => urgSenderMap.set(p.id, p.username || p.email || '?'));
+
+            // Group by recipient
+            const urgRecipientMap = new Map<string, { transfers: typeof expiringTransfers }>();
+            for (const t of expiringTransfers) {
+              if (!urgRecipientMap.has(t.recipient_user_id)) urgRecipientMap.set(t.recipient_user_id, { transfers: [] });
+              urgRecipientMap.get(t.recipient_user_id)!.transfers.push(t);
+            }
+
+            let urgTotalSent = 0;
+            let urgTotalErrors = 0;
+
+            for (const [recipientId, info] of urgRecipientMap) {
+              try {
+                // Check notification preference
+                const { data: urgPrefData } = await supabaseAdmin
+                  .from('user_preferences')
+                  .select('notification_preferences')
+                  .eq('user_id', recipientId)
+                  .maybeSingle();
+                const urgPrefs = urgPrefData?.notification_preferences || {};
+                if (urgPrefs.share_request === false) continue;
+
+                const { data: urgTokens } = await supabaseAdmin
+                  .from('push_tokens')
+                  .select('token')
+                  .eq('user_id', recipientId)
+                  .eq('active', true);
+
+                if (!urgTokens || urgTokens.length === 0) continue;
+
+                const count = info.transfers.length;
+                const firstT = info.transfers[0];
+                const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(firstT.created_at).getTime()) / 86400000));
+                const senderName = urgSenderMap.get(firstT.sender_user_id) || '?';
+
+                let urgTitle: string;
+                let urgBody: string;
+                if (count === 1) {
+                  urgTitle = `\u{26A0}\u{FE0F} Transfert expire dans ${daysLeft}j !`;
+                  urgBody = `${senderName} attend votre reponse pour "${firstT.player_name}". Sans action, le transfert sera automatiquement annule.`;
+                } else {
+                  const playerNames = info.transfers.slice(0, 2).map(t => t.player_name).join(', ');
+                  const extra = count > 2 ? ` +${count - 2}` : '';
+                  urgTitle = `\u{26A0}\u{FE0F} ${count} transfert(s) expirent dans ${daysLeft}j !`;
+                  urgBody = `Vous avez ${count} transferts sans reponse (${playerNames}${extra}). Ils seront annules automatiquement sans action de votre part.`;
+                }
+
+                const urgMessages = urgTokens.map((t: any) => buildPushMessage(
+                  t.token, urgTitle, urgBody,
+                  { type: 'player_transfer_request', urgent: true },
+                  { channelId: 'share-requests', priority: 'high' }
+                ));
+
+                const urgTickets = await sendPushNotifications(urgMessages);
+                urgTotalSent += urgTickets.filter((t: any) => t.status === 'ok').length;
+                urgTotalErrors += urgTickets.filter((t: any) => t.status === 'error').length;
+
+                // Deactivate invalid tokens
+                for (let i = 0; i < urgTickets.length; i++) {
+                  if (urgTickets[i].details?.error === 'DeviceNotRegistered') {
+                    const invalidToken = urgMessages[i]?.to;
+                    if (invalidToken) {
+                      await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              } catch { /* silent per-recipient */ }
+            }
+
+            // Track dedup
+            const urgIds = expiringTransfers.map(t => t.id);
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'transfer_urgent_reminder_cron',
+              source_page: `sent:${urgTotalSent}|errors:${urgTotalErrors}|expiring:${expiringTransfers.length}|recipients:${urgRecipientMap.size}|ids:${urgIds.slice(0, 10).join(',')}`,
+            }).catch(() => {});
+
+            console.log(`[weekly-cron] Urgent transfer reminders: ${urgTotalSent} sent, ${urgTotalErrors} errors, ${expiringTransfers.length} expiring, ${urgRecipientMap.size} recipients`);
+            results.transfer_urgent_reminders = {
+              sent: urgTotalSent,
+              errors: urgTotalErrors,
+              expiring: expiringTransfers.length,
+              recipients: urgRecipientMap.size,
+              transferIds: urgIds,
+            };
+          }
+        }
+      } catch (urgErr: any) {
+        console.error('[weekly-cron] Urgent transfer reminders error:', urgErr.message);
+        results.transfer_urgent_reminders = { error: urgErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 17: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');
