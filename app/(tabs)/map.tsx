@@ -416,17 +416,18 @@ interface TerrainSubFiltersProps {
   terrainLightingFilter: boolean | null;
   terrainCoveredFilter: boolean | null;
   terrainParkingFilter: boolean | null;
+  terrainToiletsFilter: boolean | null;
   terrainPublicAccessFilter: boolean | null;
   terrainMembersOnlyFilter: boolean | null;
   terrainMultiCourtsFilter: boolean | null;
   onTerrainTypePress: (id: string) => void;
   onTerrainEnvPress: (id: 'indoor' | 'outdoor') => void;
-  onTerrainCharPress: (key: 'lighting' | 'covered' | 'parking' | 'public_access' | 'members_only' | 'multi_courts') => void;
+  onTerrainCharPress: (key: 'lighting' | 'covered' | 'parking' | 'toilets' | 'public_access' | 'members_only' | 'multi_courts') => void;
   onClear: () => void;
   count: number;
   language: string;
 }
-const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, onTerrainTypePress, onTerrainEnvPress, onTerrainCharPress, onClear, count, language }: TerrainSubFiltersProps) => (
+const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, onTerrainTypePress, onTerrainEnvPress, onTerrainCharPress, onClear, count, language }: TerrainSubFiltersProps) => (
   <View style={styles.subFiltersContainer}>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
       <View style={styles.subFilterLabel}>
@@ -455,11 +456,12 @@ const TerrainSubFilters = React.memo(({ terrainTypeFilter, terrainEnvFilter, ter
       <SubFilterChip label={language === 'fr' ? 'Eclairage' : 'Lighting'} icon="lightbulb" isActive={terrainLightingFilter === true} color="#EAB308" onPress={() => onTerrainCharPress('lighting')} />
       <SubFilterChip label={language === 'fr' ? 'Couvert' : 'Covered'} icon="roofing" isActive={terrainCoveredFilter === true} color="#6366F1" onPress={() => onTerrainCharPress('covered')} />
       <SubFilterChip label="Parking" icon="local-parking" isActive={terrainParkingFilter === true} color="#0EA5E9" onPress={() => onTerrainCharPress('parking')} />
+      <SubFilterChip label={language === 'fr' ? 'Toilettes' : 'Restrooms'} icon="wc" isActive={terrainToiletsFilter === true} color="#EC4899" onPress={() => onTerrainCharPress('toilets')} />
       <SubFilterChip label={language === 'fr' ? 'Acces public' : 'Public access'} icon="lock-open" isActive={terrainPublicAccessFilter === true} color="#22C55E" onPress={() => onTerrainCharPress('public_access')} />
       <SubFilterChip label={language === 'fr' ? 'Reserve membres' : 'Members only'} icon="lock" isActive={terrainMembersOnlyFilter === true} color="#EF4444" onPress={() => onTerrainCharPress('members_only')} />
       <SubFilterChip label={language === 'fr' ? '2+ terrains' : '2+ courts'} icon="grid-view" isActive={terrainMultiCourtsFilter === true} color="#8B5CF6" onPress={() => onTerrainCharPress('multi_courts')} />
     </ScrollView>
-    {(terrainTypeFilter || terrainEnvFilter || terrainLightingFilter || terrainCoveredFilter || terrainParkingFilter || terrainPublicAccessFilter || terrainMembersOnlyFilter || terrainMultiCourtsFilter) ? (
+    {(terrainTypeFilter || terrainEnvFilter || terrainLightingFilter || terrainCoveredFilter || terrainParkingFilter || terrainToiletsFilter || terrainPublicAccessFilter || terrainMembersOnlyFilter || terrainMultiCourtsFilter) ? (
       <View style={styles.subFilterActiveBar}>
         <Text style={styles.subFilterActiveText}>{count} {language === 'fr' ? 'terrain(s) filtre(s)' : 'terrain(s) filtered'}</Text>
         <Pressable style={styles.subFilterClearBtn} onPress={onClear}>
@@ -664,6 +666,7 @@ export default function MapScreen() {
   const [terrainLightingFilter, setTerrainLightingFilter] = useState<boolean | null>(null);
   const [terrainCoveredFilter, setTerrainCoveredFilter] = useState<boolean | null>(null);
   const [terrainParkingFilter, setTerrainParkingFilter] = useState<boolean | null>(null);
+  const [terrainToiletsFilter, setTerrainToiletsFilter] = useState<boolean | null>(null);
   const [terrainPublicAccessFilter, setTerrainPublicAccessFilter] = useState<boolean | null>(null);
   const [terrainMembersOnlyFilter, setTerrainMembersOnlyFilter] = useState<boolean | null>(null);
   const [terrainMultiCourtsFilter, setTerrainMultiCourtsFilter] = useState<boolean | null>(null);
@@ -966,6 +969,7 @@ export default function MapScreen() {
       if (terrainLightingFilter === true && !item.lighting) return false;
       if (terrainCoveredFilter === true && !item.covered) return false;
       if (terrainParkingFilter === true && !item.parking) return false;
+      if (terrainToiletsFilter === true && !item.toilets) return false;
       if (terrainPublicAccessFilter === true && item.publicAccess === false) return false;
       if (terrainMembersOnlyFilter === true && item.publicAccess !== false) return false;
       if (terrainMultiCourtsFilter === true && (item.courtsCount || item.courts_count || 1) < 2) return false;
@@ -1044,7 +1048,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter]);
 
   // Compute clusters with debounced region to avoid expensive re-clustering on every pan
   const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1215,6 +1219,7 @@ export default function MapScreen() {
       setTerrainLightingFilter(null);
       setTerrainCoveredFilter(null);
       setTerrainParkingFilter(null);
+      setTerrainToiletsFilter(null);
       setTerrainPublicAccessFilter(null);
       setTerrainMembersOnlyFilter(null);
       setTerrainMultiCourtsFilter(null);
@@ -1277,11 +1282,12 @@ export default function MapScreen() {
     setEloRangeFilter(null);
   }, []);
 
-  const handleTerrainCharToggle = useCallback((key: 'lighting' | 'covered' | 'parking' | 'public_access' | 'members_only' | 'multi_courts') => {
+  const handleTerrainCharToggle = useCallback((key: 'lighting' | 'covered' | 'parking' | 'toilets' | 'public_access' | 'members_only' | 'multi_courts') => {
     Haptics.selectionAsync();
     if (key === 'lighting') setTerrainLightingFilter(prev => prev === true ? null : true);
     else if (key === 'covered') setTerrainCoveredFilter(prev => prev === true ? null : true);
     else if (key === 'parking') setTerrainParkingFilter(prev => prev === true ? null : true);
+    else if (key === 'toilets') setTerrainToiletsFilter(prev => prev === true ? null : true);
     else if (key === 'public_access') { setTerrainPublicAccessFilter(prev => prev === true ? null : true); setTerrainMembersOnlyFilter(null); }
     else if (key === 'members_only') { setTerrainMembersOnlyFilter(prev => prev === true ? null : true); setTerrainPublicAccessFilter(null); }
     else if (key === 'multi_courts') setTerrainMultiCourtsFilter(prev => prev === true ? null : true);
@@ -1304,6 +1310,7 @@ export default function MapScreen() {
     setTerrainLightingFilter(null);
     setTerrainCoveredFilter(null);
     setTerrainParkingFilter(null);
+    setTerrainToiletsFilter(null);
     setTerrainPublicAccessFilter(null);
     setTerrainMembersOnlyFilter(null);
     setTerrainMultiCourtsFilter(null);
@@ -2093,6 +2100,7 @@ export default function MapScreen() {
             terrainLightingFilter={terrainLightingFilter}
             terrainCoveredFilter={terrainCoveredFilter}
             terrainParkingFilter={terrainParkingFilter}
+            terrainToiletsFilter={terrainToiletsFilter}
             terrainPublicAccessFilter={terrainPublicAccessFilter}
             terrainMembersOnlyFilter={terrainMembersOnlyFilter}
             terrainMultiCourtsFilter={terrainMultiCourtsFilter}
