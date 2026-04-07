@@ -159,12 +159,19 @@ export default function AdminDashboardScreen() {
 
   // Transfer CSV export
   const [exportingTransfers, setExportingTransfers] = useState(false);
+  const [exportingTransferPdf, setExportingTransferPdf] = useState(false);
 
   // Transfer reminder
   const [sendingTransferReminder, setSendingTransferReminder] = useState(false);
   const [lastTransferReminder, setLastTransferReminder] = useState<string | null>(null);
   const [remindedTransferIds, setRemindedTransferIds] = useState<Set<string>>(new Set());
   const [sendingUrgentReminder, setSendingUrgentReminder] = useState(false);
+
+  // Transfer archive
+  const [showArchive, setShowArchive] = useState(false);
+  const [archiveData, setArchiveData] = useState<any[]>([]);
+  const [loadingArchive, setLoadingArchive] = useState(false);
+  const [archiveCount, setArchiveCount] = useState(0);
 
   // Transfer filters
   const [rawTransferData, setRawTransferData] = useState<any[]>([]);
@@ -409,6 +416,12 @@ export default function AdminDashboardScreen() {
         }
       } catch { /* silent - RLS may block if not admin */ }
 
+      // Archive count
+      try {
+        const { count: arcCount } = await supabase.from('player_transfer_archives').select('id', { count: 'exact', head: true });
+        setArchiveCount(arcCount || 0);
+      } catch { /* silent */ }
+
       // Onboarding
       if (res.onboardingStats) setOnboardingStats(res.onboardingStats);
       if (res.onboardingAnalytics) setStepAnalytics(res.onboardingAnalytics);
@@ -589,6 +602,23 @@ export default function AdminDashboardScreen() {
     }
     setSendingUrgentReminder(false);
   }, [sendingUrgentReminder, approachingExpiration, transferProfileMap, fr, showAlert]);
+
+  const loadArchive = useCallback(async () => {
+    if (loadingArchive) return;
+    setLoadingArchive(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase.from('player_transfer_archives').select('*').order('archived_at', { ascending: false }).limit(50);
+      if (data) {
+        const userIds = [...new Set(data.flatMap((t: any) => [t.sender_user_id, t.recipient_user_id]))];
+        const { data: profiles } = await supabase.from('user_profiles').select('id, username, email').in('id', userIds);
+        const pm: Record<string, string> = {};
+        (profiles || []).forEach((p: any) => { pm[p.id] = p.username || p.email || '?'; });
+        setArchiveData(data.map((t: any) => ({ ...t, senderName: pm[t.sender_user_id] || '?', recipientName: pm[t.recipient_user_id] || '?' })));
+      }
+    } catch (e) { console.log('[Dashboard] Archive load error:', e); }
+    setLoadingArchive(false);
+  }, [loadingArchive]);
 
   // Transfer smart alerts (computed from current filtered stats)
   const transferAlerts = useMemo(() => {
@@ -790,6 +820,63 @@ export default function AdminDashboardScreen() {
         </SafeAreaView>
       </Modal>
 
+      {/* Transfer Archive Modal */}
+      <Modal visible={showArchive} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowArchive(false)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable style={s.backBtn} onPress={() => setShowArchive(false)}>
+              <MaterialIcons name="close" size={24} color="#0F172A" />
+            </Pressable>
+            <Text style={s.modalTitle}>{fr ? 'Archives transferts' : 'Transfer Archives'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16, backgroundColor: '#EDE9FE', borderRadius: 12, padding: 12 }}>
+              <MaterialIcons name="inventory-2" size={16} color="#7C3AED" />
+              <Text style={{ flex: 1, fontSize: 12, color: '#7C3AED', lineHeight: 18 }}>
+                {fr ? `${archiveCount} transfert(s) archive(s). Les transferts resolus sont archives automatiquement apres 90 jours.` : `${archiveCount} archived transfer(s). Resolved transfers are auto-archived after 90 days.`}
+              </Text>
+            </View>
+            {loadingArchive ? (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <ActivityIndicator size="large" color="#7C3AED" />
+              </View>
+            ) : archiveData.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingVertical: 32 }}>
+                <MaterialIcons name="inventory-2" size={32} color="#CBD5E1" />
+                <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Aucune archive' : 'No archives'}</Text>
+              </View>
+            ) : archiveData.map((ar: any, idx: number) => {
+              const sc = ar.status === 'accepted' ? '#10B981' : ar.status === 'declined' ? '#EF4444' : '#94A3B8';
+              return (
+                <View key={ar.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
+                  <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: sc + '12', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name={ar.status === 'accepted' ? 'check-circle' : ar.status === 'declined' ? 'cancel' : 'timer-off'} size={16} color={sc} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }} numberOfLines={1}>{ar.player_name}</Text>
+                    <Text style={{ fontSize: 10, color: '#94A3B8' }}>{ar.senderName} \u2192 {ar.recipientName}</Text>
+                    <Text style={{ fontSize: 9, color: '#CBD5E1', marginTop: 2 }}>
+                      {fr ? 'Archive le' : 'Archived'} {new Date(ar.archived_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                    </Text>
+                  </View>
+                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
+                    <View style={{ backgroundColor: sc + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: sc }}>{ar.status}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#0EA5E9' }}>{ar.match_count}m</Text>
+                      {ar.challenge_count > 0 ? <Text style={{ fontSize: 10, fontWeight: '700', color: '#7C3AED' }}>{ar.challenge_count}d</Text> : null}
+                    </View>
+                    <Text style={{ fontSize: 8, color: '#CBD5E1' }}>{ar.created_at ? new Date(ar.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }) : ''}</Text>
+                  </View>
+                </View>
+              );
+            })}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
       <ScrollView
         style={s.scroll}
         contentContainerStyle={[s.scrollContent, { paddingBottom: insets.bottom + 32 }]}
@@ -916,7 +1003,70 @@ export default function AdminDashboardScreen() {
           <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 0 }}>
               <Text style={s.sectionTitle}>{fr ? 'TRANSFERTS JOUEURS' : 'PLAYER TRANSFERS'}</Text>
-              {transferStats.recent.length > 0 ? (
+              {(transferStats.recent.length > 0 || archiveCount > 0) ? (
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                <Pressable
+                  style={[s.growthExportBtn, { borderColor: '#7C3AED30' }]}
+                  onPress={() => { Haptics.selectionAsync(); loadArchive(); setShowArchive(true); }}
+                >
+                  <MaterialIcons name="inventory-2" size={16} color="#7C3AED" />
+                  {archiveCount > 0 ? <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: '#7C3AED', borderRadius: 7, minWidth: 14, height: 14, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 2 }}><Text style={{ fontSize: 8, fontWeight: '800', color: '#FFF' }}>{archiveCount > 99 ? '99+' : archiveCount}</Text></View> : null}
+                </Pressable>
+                <Pressable
+                  style={[s.growthExportBtn, exportingTransferPdf && { opacity: 0.5 }]}
+                  onPress={async () => {
+                    if (exportingTransferPdf) return;
+                    setExportingTransferPdf(true);
+                    Haptics.selectionAsync();
+                    try {
+                      const now = new Date();
+                      const dateStr = now.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+                      const ts = transferStats;
+                      const total = ts.pending + ts.accepted + ts.declined + ts.expired;
+                      const filterParts = [
+                        transferFilterStatus !== 'all' ? (fr ? `Statut: ${transferFilterStatus}` : `Status: ${transferFilterStatus}`) : '',
+                        transferFilterPeriod !== 'all' ? (fr ? `Periode: ${transferFilterPeriod}` : `Period: ${transferFilterPeriod}`) : '',
+                        transferFilterSender ? `${fr ? 'Expediteur' : 'Sender'}: ${transferProfileMap[transferFilterSender] || '?'}` : '',
+                      ].filter(Boolean).join(' \u2022 ') || (fr ? 'Aucun filtre' : 'No filters');
+                      const maxW = Math.max(...(ts.weeklyEvolution.length > 0 ? ts.weeklyEvolution.map(w => w.count) : [1]), 1);
+                      const weeklyHtml = ts.weeklyEvolution.map(w => {
+                        const pct = Math.max(3, (w.count / maxW) * 100);
+                        const accPct = Math.max(0, (w.accepted / maxW) * 100);
+                        const decPct = Math.max(0, (w.declined / maxW) * 100);
+                        const penPct = Math.max(0, ((w.count - w.accepted - w.declined) / maxW) * 100);
+                        return `<div class="bar-row"><span class="label">${w.week}</span><div class="bar"><div class="fill" style="width:${accPct}%;background:#10B981"></div><div class="fill" style="width:${decPct}%;background:#EF4444"></div><div class="fill" style="width:${penPct}%;background:#F59E0B"></div></div><span class="num">${w.count}</span></div>`;
+                      }).join('');
+                      const senderHtml = ts.topSenders.map((sn, si) => {
+                        const rate = sn.count > 0 ? Math.round((sn.accepted / sn.count) * 100) : 0;
+                        return `<tr><td style="text-align:center;font-weight:800;color:#94A3B8">${si+1}</td><td>${sn.name}</td><td style="text-align:center;font-weight:800">${sn.count}</td><td style="text-align:center">${sn.accepted}</td><td style="text-align:center;color:${rate >= 60 ? '#10B981' : rate >= 30 ? '#D97706' : '#EF4444'};font-weight:800">${rate}%</td></tr>`;
+                      }).join('');
+                      const alertsHtml = transferAlerts.map(a => `<div class="alert ${a.severity === 'critical' ? 'crit' : a.severity === 'warning' ? 'warn' : 'info'}"><strong>${a.title}</strong>: ${a.message}</div>`).join('');
+                      const recentHtml = ts.recent.map(tr => {
+                        const sc = tr.status === 'accepted' ? '#10B981' : tr.status === 'declined' ? '#EF4444' : tr.status === 'expired' ? '#94A3B8' : '#F59E0B';
+                        const age = Math.floor((Date.now() - new Date(tr.createdAt).getTime()) / 86400000);
+                        let badge = '';
+                        if (tr.status === 'expired') badge = '<span class="badge expired">EXPIRED</span>';
+                        else if (tr.status === 'pending' && age > 25) badge = '<span class="badge expiring">EXPIRING</span>';
+                        else if (tr.status === 'pending' && age > 21) badge = '<span class="badge escalated">ESCALATED</span>';
+                        else if (tr.status === 'pending' && age > 7) badge = '<span class="badge overdue">OVERDUE</span>';
+                        return `<tr><td>${tr.playerName} ${badge}</td><td>${tr.senderName}</td><td>${tr.recipientName}</td><td style="color:${sc};font-weight:700">${tr.status}</td><td style="text-align:center">${tr.matchCount}m${tr.challengeCount > 0 ? ' ' + tr.challengeCount + 'd' : ''}</td><td>${tr.createdAt.slice(0,10)}</td></tr>`;
+                      }).join('');
+                      const pdfHtml = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>body{font-family:-apple-system,Helvetica,Arial,sans-serif;margin:0;padding:24px;color:#0F172A;background:#F8FAFC}h1{font-size:22px;margin:0 0 4px}h2{font-size:14px;color:#64748B;margin:24px 0 12px;text-transform:uppercase;letter-spacing:1px;border-bottom:2px solid #E2E8F0;padding-bottom:6px}.sub{font-size:12px;color:#94A3B8;margin-bottom:4px}.filter-tag{display:inline-block;background:#EFF6FF;color:#3B82F6;font-size:10px;font-weight:700;padding:3px 10px;border-radius:6px;margin-bottom:16px}.grid{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px}.card{flex:1;min-width:80px;background:#FFF;border-radius:12px;padding:14px 8px;text-align:center;border:1px solid #E2E8F0}.card .val{font-size:26px;font-weight:800;line-height:1.2}.card .lbl{font-size:9px;color:#94A3B8;text-transform:uppercase;letter-spacing:0.5px;margin-top:4px}table{width:100%;border-collapse:collapse;font-size:11px;margin-bottom:12px}th{background:#F1F5F9;text-align:left;padding:8px 6px;font-size:9px;text-transform:uppercase;letter-spacing:0.5px;color:#64748B;border-bottom:2px solid #E2E8F0}td{padding:7px 6px;border-bottom:1px solid #F1F5F9}.bar-row{display:flex;align-items:center;gap:8px;margin-bottom:5px;font-size:11px}.bar-row .label{width:50px;color:#64748B;font-weight:600;font-size:10px}.bar-row .bar{flex:1;height:14px;background:#F1F5F9;border-radius:4px;overflow:hidden;display:flex}.bar-row .fill{height:100%}.bar-row .num{width:28px;text-align:right;font-weight:800;font-size:11px}.legend{display:flex;gap:12px;margin-top:6px;justify-content:flex-end}.legend-item{display:flex;align-items:center;gap:4px;font-size:9px;color:#94A3B8}.legend-dot{width:8px;height:8px;border-radius:2px}.alert{border-radius:8px;padding:10px 12px;margin-bottom:6px;font-size:11px;line-height:1.5}.alert.crit{background:#FEF2F2;border:1px solid #FECACA;color:#991B1B}.alert.warn{background:#FFFBEB;border:1px solid #FDE68A;color:#92400E}.alert.info{background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF}.badge{display:inline-block;font-size:7px;font-weight:800;color:#FFF;padding:2px 5px;border-radius:3px;margin-left:4px;vertical-align:middle}.badge.expired{background:#94A3B8}.badge.expiring{background:#991B1B}.badge.escalated{background:#DC2626}.badge.overdue{background:#F59E0B}.reminder-box{background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:12px;margin-bottom:12px;font-size:11px;color:#92400E}footer{margin-top:32px;padding-top:12px;border-top:1px solid #E2E8F0;font-size:10px;color:#94A3B8;text-align:center}</style></head><body><h1>${fr ? 'Rapport des Transferts Joueurs' : 'Player Transfer Report'}</h1><p class="sub">${dateStr}</p><div class="filter-tag">${filterParts}</div><h2>KPIs</h2><div class="grid"><div class="card"><div class="val" style="color:#F59E0B">${ts.pending}</div><div class="lbl">${fr ? 'En attente' : 'Pending'}</div></div><div class="card"><div class="val" style="color:#10B981">${ts.accepted}</div><div class="lbl">${fr ? 'Acceptes' : 'Accepted'}</div></div><div class="card"><div class="val" style="color:#EF4444">${ts.declined}</div><div class="lbl">${fr ? 'Refuses' : 'Declined'}</div></div>${ts.expired > 0 ? `<div class="card"><div class="val" style="color:#94A3B8">${ts.expired}</div><div class="lbl">${fr ? 'Expires' : 'Expired'}</div></div>` : ''}<div class="card"><div class="val" style="color:${ts.acceptanceRate >= 60 ? '#10B981' : ts.acceptanceRate >= 30 ? '#D97706' : '#EF4444'}">${ts.acceptanceRate}%</div><div class="lbl">${fr ? 'Taux accept.' : 'Accept rate'}</div></div><div class="card"><div class="val" style="color:#3B82F6">${ts.avgResponseTimeHours < 1 ? '<1' : ts.avgResponseTimeHours}h</div><div class="lbl">${fr ? 'Temps moy.' : 'Avg response'}</div></div></div>${ts.weeklyEvolution.length > 1 ? `<h2>${fr ? 'Evolution Hebdomadaire' : 'Weekly Evolution'}</h2>${weeklyHtml}<div class="legend"><div class="legend-item"><div class="legend-dot" style="background:#10B981"></div>${fr ? 'Accepte' : 'Accepted'}</div><div class="legend-item"><div class="legend-dot" style="background:#EF4444"></div>${fr ? 'Refuse' : 'Declined'}</div><div class="legend-item"><div class="legend-dot" style="background:#F59E0B"></div>${fr ? 'Attente' : 'Pending'}</div></div>` : ''}${ts.topSenders.length > 0 ? `<h2>${fr ? 'Top Expediteurs' : 'Top Senders'}</h2><table><thead><tr><th>#</th><th>${fr ? 'Nom' : 'Name'}</th><th style="text-align:center">${fr ? 'Total' : 'Total'}</th><th style="text-align:center">${fr ? 'Acceptes' : 'Accepted'}</th><th style="text-align:center">${fr ? 'Taux' : 'Rate'}</th></tr></thead><tbody>${senderHtml}</tbody></table>` : ''}${transferAlerts.length > 0 ? `<h2>${fr ? 'Alertes Actives' : 'Active Alerts'}</h2>${alertsHtml}` : ''}<div class="reminder-box"><strong>${fr ? 'Rappels' : 'Reminders'}</strong><br/>${fr ? 'Transferts en retard (+7j)' : 'Overdue transfers (7+d)'}: <strong>${overdueTransfers.length}</strong><br/>${fr ? 'Non rappeles' : 'Not reminded'}: <strong>${unremindedOverdue.length}</strong><br/>${fr ? 'Expiration imminente (25-30j)' : 'Approaching expiration (25-30d)'}: <strong>${approachingExpiration.length}</strong>${lastTransferReminder ? `<br/>${fr ? 'Dernier rappel' : 'Last reminder'}: <strong>${new Date(lastTransferReminder).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</strong>` : ''}</div>${ts.recent.length > 0 ? `<h2>${fr ? 'Transferts Recents' : 'Recent Transfers'} (${ts.recent.length})</h2><table><thead><tr><th>${fr ? 'Joueur' : 'Player'}</th><th>${fr ? 'Expediteur' : 'Sender'}</th><th>${fr ? 'Destinataire' : 'Recipient'}</th><th>Status</th><th style="text-align:center">${fr ? 'Donnees' : 'Data'}</th><th>Date</th></tr></thead><tbody>${recentHtml}</tbody></table>` : ''}<footer>Ultimate Petanque - ${fr ? 'Rapport Transferts' : 'Transfer Report'} - ${dateStr} \u2022 ${total} ${fr ? 'transferts au total' : 'total transfers'}</footer></body></html>`;
+                      const PrintModule = require('expo-print');
+                      const { uri } = await PrintModule.printToFileAsync({ html: pdfHtml, base64: false });
+                      if (uri) {
+                        const SharingModule = require('expo-sharing');
+                        const canShare = await SharingModule.isAvailableAsync();
+                        if (canShare) await SharingModule.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: fr ? 'Rapport Transferts PDF' : 'Transfer Report PDF' });
+                      }
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                    } catch (e) { console.log('[Dashboard] Transfer PDF export error:', e); }
+                    setExportingTransferPdf(false);
+                  }}
+                  disabled={exportingTransferPdf}
+                >
+                  {exportingTransferPdf ? <ActivityIndicator size="small" color="#DC2626" /> : <MaterialIcons name="picture-as-pdf" size={16} color="#DC2626" />}
+                </Pressable>
                 <Pressable
                   style={[s.growthExportBtn, exportingTransfers && { opacity: 0.5 }]}
                   onPress={async () => {
@@ -951,6 +1101,7 @@ export default function AdminDashboardScreen() {
                 >
                   {exportingTransfers ? <ActivityIndicator size="small" color="#2563EB" /> : <MaterialIcons name="file-download" size={16} color="#2563EB" />}
                 </Pressable>
+                </View>
               ) : null}
             </View>
 
