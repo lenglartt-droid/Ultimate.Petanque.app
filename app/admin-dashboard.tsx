@@ -164,6 +164,7 @@ export default function AdminDashboardScreen() {
   const [sendingTransferReminder, setSendingTransferReminder] = useState(false);
   const [lastTransferReminder, setLastTransferReminder] = useState<string | null>(null);
   const [remindedTransferIds, setRemindedTransferIds] = useState<Set<string>>(new Set());
+  const [sendingUrgentReminder, setSendingUrgentReminder] = useState(false);
 
   // Transfer filters
   const [rawTransferData, setRawTransferData] = useState<any[]>([]);
@@ -508,6 +509,16 @@ export default function AdminDashboardScreen() {
     return overdueTransfers.filter((t: any) => !remindedTransferIds.has(t.id));
   }, [overdueTransfers, remindedTransferIds]);
 
+  // Transfers approaching expiration (pending 25-30 days)
+  const approachingExpiration = useMemo(() => {
+    const twentyFiveDaysAgo = Date.now() - 25 * 86400000;
+    const thirtyDaysAgo = Date.now() - 30 * 86400000;
+    return rawTransferData.filter((t: any) => {
+      const created = new Date(t.created_at).getTime();
+      return t.status === 'pending' && created < twentyFiveDaysAgo && created >= thirtyDaysAgo;
+    });
+  }, [rawTransferData]);
+
   const sendTransferReminders = useCallback(async () => {
     if (sendingTransferReminder || unremindedOverdue.length === 0) return;
     setSendingTransferReminder(true);
@@ -545,6 +556,39 @@ export default function AdminDashboardScreen() {
     }
     setSendingTransferReminder(false);
   }, [sendingTransferReminder, unremindedOverdue, remindedTransferIds, transferProfileMap, fr, showAlert]);
+
+  const sendUrgentReminders = useCallback(async () => {
+    if (sendingUrgentReminder || approachingExpiration.length === 0) return;
+    setSendingUrgentReminder(true);
+    try {
+      const supabase = getSupabaseClient();
+      let sentCount = 0;
+      for (const t of approachingExpiration) {
+        try {
+          const daysLeft = Math.max(0, 30 - Math.floor((Date.now() - new Date(t.created_at).getTime()) / 86400000));
+          await supabase.functions.invoke('send-push', {
+            body: {
+              type: 'player_transfer_urgent_reminder',
+              payload: {
+                targetUserId: t.recipient_user_id,
+                playerName: t.player_name,
+                senderName: transferProfileMap[t.sender_user_id] || '?',
+                transferId: t.id,
+                daysLeft,
+              },
+            },
+          });
+          sentCount++;
+        } catch { /* continue */ }
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      showAlert(fr ? `${sentCount} rappel(s) urgent(s) envoye(s)` : `${sentCount} urgent reminder(s) sent`, fr ? `Notifications envoyees aux destinataires dont les transferts expirent dans 0-5 jours.` : `Notifications sent to recipients with transfers expiring in 0-5 days.`);
+      logAdminAction({ actionType: 'transfer_urgent_reminder_sent', actionDetail: `Sent ${sentCount} urgent reminders for ${approachingExpiration.length} expiring transfers`, metadata: { sentCount, expiringCount: approachingExpiration.length } });
+    } catch (e) {
+      console.log('[Dashboard] Urgent transfer reminder error:', e);
+    }
+    setSendingUrgentReminder(false);
+  }, [sendingUrgentReminder, approachingExpiration, transferProfileMap, fr, showAlert]);
 
   // Transfer smart alerts (computed from current filtered stats)
   const transferAlerts = useMemo(() => {
@@ -587,6 +631,16 @@ export default function AdminDashboardScreen() {
     const escalatedCount = rawTransferData.filter((t2: any) => t2.status === 'pending' && (Date.now() - new Date(t2.created_at).getTime()) > twentyOneDaysMs).length;
     if (escalatedCount > 0) {
       alerts.push({ id: 'escalated_transfers', severity: 'critical', title: fr ? 'Transferts escalades (+21j)' : 'Escalated transfers (21+ days)', message: fr ? `${escalatedCount} transfert(s) en attente depuis plus de 21 jours. Intervention manuelle recommandee.` : `${escalatedCount} transfer(s) pending for 21+ days. Manual intervention recommended.`, icon: 'priority-high', color: '#DC2626' });
+    }
+    // 7. Approaching expiration: pending 25-30 days
+    const twentyFiveDaysMs = 25 * 86400000;
+    const thirtyDaysMs = 30 * 86400000;
+    const approachingExpCount = rawTransferData.filter((t2: any) => {
+      const age = Date.now() - new Date(t2.created_at).getTime();
+      return t2.status === 'pending' && age > twentyFiveDaysMs && age <= thirtyDaysMs;
+    }).length;
+    if (approachingExpCount > 0) {
+      alerts.push({ id: 'approaching_expiration', severity: 'critical', title: fr ? 'Expiration imminente (25-30j)' : 'Expiration imminent (25-30d)', message: fr ? `${approachingExpCount} transfert(s) expirent dans moins de 5 jours. Envoyez un rappel urgent.` : `${approachingExpCount} transfer(s) expiring within 5 days. Send urgent reminder.`, icon: 'timer', color: '#DC2626' });
     }
     return alerts;
   }, [transferStats, rawTransferData, fr]);
@@ -1010,6 +1064,39 @@ export default function AdminDashboardScreen() {
                 </View>
               ) : null}
 
+              {/* Urgent reminder for approaching expiration (25-30 days) */}
+              {approachingExpiration.length > 0 ? (
+                <View style={{ marginBottom: 12, backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FECACA' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#DC262615', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="timer" size={16} color="#DC2626" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 12, fontWeight: '700', color: '#991B1B' }}>
+                        {approachingExpiration.length} {fr ? 'transfert(s) expirent bientot' : 'transfer(s) expiring soon'}
+                      </Text>
+                      <Text style={{ fontSize: 10, color: '#DC2626', marginTop: 1 }}>
+                        {fr ? 'Annulation auto dans 0-5 jours' : 'Auto-cancel in 0-5 days'}
+                      </Text>
+                    </View>
+                    <Pressable
+                      style={[{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#DC2626' }, sendingUrgentReminder && { opacity: 0.5 }]}
+                      onPress={sendUrgentReminders}
+                      disabled={sendingUrgentReminder}
+                    >
+                      {sendingUrgentReminder ? <ActivityIndicator size="small" color="#FFF" /> : (
+                        <>
+                          <MaterialIcons name="priority-high" size={13} color="#FFF" />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>
+                            {fr ? 'Rappel urgent' : 'Urgent remind'}
+                          </Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </View>
+                </View>
+              ) : null}
+
               {/* KPI row */}
               <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
                 <Pressable style={{ flex: 1, alignItems: 'center', backgroundColor: transferFilterStatus === 'pending' ? '#F59E0B15' : '#F59E0B08', borderRadius: 12, paddingVertical: 12, gap: 2, borderWidth: 1, borderColor: transferFilterStatus === 'pending' ? '#F59E0B40' : '#F59E0B20' }} onPress={() => { Haptics.selectionAsync(); setTransferFilterStatus(transferFilterStatus === 'pending' ? 'all' : 'pending'); }}>
@@ -1136,6 +1223,10 @@ export default function AdminDashboardScreen() {
                             {tr.status === 'expired' ? (
                               <View style={{ backgroundColor: '#94A3B8', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
                                 <Text style={{ fontSize: 7, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 }}>EXPIRED</Text>
+                              </View>
+                            ) : tr.status === 'pending' && (Date.now() - new Date(tr.createdAt).getTime()) > 25 * 86400000 ? (
+                              <View style={{ backgroundColor: '#991B1B', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 7, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 }}>EXPIRING</Text>
                               </View>
                             ) : tr.status === 'pending' && (Date.now() - new Date(tr.createdAt).getTime()) > 21 * 86400000 ? (
                               <View style={{ backgroundColor: '#DC2626', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
