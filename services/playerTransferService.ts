@@ -28,13 +28,12 @@ export interface PlayerTransferRequest {
 export async function countTransferableItems(playerId: string): Promise<{ matchCount: number; challengeCount: number }> {
   const supabase = getSupabaseClient();
   
-  // Count matches where this player participates (in team_a or team_b)
+  // Fetch all user's matches and filter client-side for player participation
+  // (PostgREST cannot filter inside JSONB arrays with containment operators)
   const { data: matches } = await supabase
     .from('matches')
-    .select('id, team_a, team_b')
-    .or(`team_a->>players.cs.["${playerId}"],team_b->>players.cs.["${playerId}"]`);
+    .select('id, team_a, team_b');
   
-  // Fallback: count all matches and filter client-side since JSONB array containment varies
   let matchCount = 0;
   if (matches) {
     matchCount = matches.filter((m: any) => {
