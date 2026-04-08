@@ -12,6 +12,9 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",
       "associatedDomains": ["applinks:ultimatepetanque.app"],
+      "config": {
+          "googleMapsApiKey": "AIzaSyCN7isQnQhdYy7Rep2mDmwu931KZyGkMck"
+      },
       "entitlements": {
         "aps-environment": "production"
       },
@@ -27,6 +30,11 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/app-logo.png",
         "backgroundColor": "#ffffff"
+      },
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo"
+        }
       },
       "edgeToEdgeEnabled": false,
       "package": "com.ultimatepetanque.app",
@@ -99,6 +107,13 @@
           "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
         }
       ],
+      // [
+      //   "react-native-maps",
+      //   {
+      //     "iosGoogleMapsApiKey": "AIzaSyCN7isQnQhdYy7Rep2mDmwu931KZyGkMck",
+      //     "androidGoogleMapsApiKey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo"
+      //   }
+      // ]
 
     ],
     "experiments": {
