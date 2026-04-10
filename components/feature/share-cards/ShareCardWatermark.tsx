@@ -10,7 +10,7 @@ import { Image } from 'expo-image';
 import QRCode from 'react-native-qrcode-svg';
 
 const APP_DOWNLOAD_URL = 'https://ultimatepetanque.app/download';
-const APP_LOGO = require('@/assets/images/app-logo.png');
+const APP_LOGO = require('@/assets/images/logo-ultimate-petanque.png');
 
 interface WatermarkProps {
   variant?: 'light' | 'dark';
@@ -30,7 +30,7 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', abs
   const qrColor = isDark ? '#333333' : '#FFFFFF';
   const qrBgColor = isDark ? 'rgba(255,255,255,0.85)' : 'rgba(0,0,0,0.05)';
 
-  const logoSize = isXs ? 22 : isSm ? 32 : 42;
+  const logoSize = isXs ? 26 : isSm ? 38 : 48;
 
   return (
     <View style={[
