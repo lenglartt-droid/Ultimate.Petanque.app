@@ -906,7 +906,7 @@ const s = StyleSheet.create({
 
   // Language
   langContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 32, paddingTop: 32 },
-  langLogo: { width: 180, height: 180, marginBottom: 8 },
+  langLogo: { width: 360, height: 360, marginBottom: 8 },
   langHeader: { alignItems: 'center', marginBottom: 32, gap: 8 },
   langTitle: { fontSize: 24, fontWeight: '700', color: '#FFF', textAlign: 'center' },
   langSubtitle: { fontSize: 15, color: '#94A3B8', textAlign: 'center' },
