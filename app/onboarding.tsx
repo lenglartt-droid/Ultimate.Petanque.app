@@ -255,8 +255,8 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.splashContainer}>
-            <Image source={require('@/assets/images/app-logo.png')} style={s.splashImage} contentFit="contain" transition={300} />
-            <Text style={s.splashTitle}>Ultimate Petanque</Text>
+            <Image source={require('@/assets/images/logo-ultimate-petanque.png')} style={s.splashImage} contentFit="contain" transition={300} />
+
             <ActivityIndicator color="#60A5FA" size="small" style={{ marginTop: 24 }} />
           </View>
         </SafeAreaView>
@@ -273,8 +273,7 @@ export default function OnboardingScreen() {
         <SafeAreaView style={s.fullScreen}>
           <View style={s.langContent}>
             <View style={s.langHeader}>
-              <Image source={require('@/assets/images/app-logo.png')} style={s.langLogo} contentFit="contain" transition={300} />
-              <Text style={s.langAppName}>Ultimate Petanque</Text>
+              <Image source={require('@/assets/images/logo-ultimate-petanque.png')} style={s.langLogo} contentFit="contain" transition={300} />
               <View style={{ height: 16 }} />
               <MaterialIcons name="translate" size={32} color="#60A5FA" />
               <Text style={s.langTitle}>Choose your language</Text>
@@ -312,7 +311,7 @@ export default function OnboardingScreen() {
       <LinearGradient colors={['#0F172A', '#1E3A8A']} style={s.fullScreen}>
         <SafeAreaView style={s.fullScreen}>
           <View style={s.pageContainer}>
-            <Image source={require('@/assets/images/app-logo.png')} style={s.promiseLogo} contentFit="contain" transition={200} />
+            <Image source={require('@/assets/images/logo-ultimate-petanque.png')} style={s.promiseLogo} contentFit="contain" transition={200} />
             <Text style={s.promiseTitle}>{fr ? 'Votre vrai niveau, enfin.' : 'Your real level, finally.'}</Text>
             <Text style={s.promiseSubtitle}>
               {fr ? "La petanque, ce n'est pas juste un score.\nC'est des parties reelles, des rencontres, et du plaisir." : "Petanque is not just a score.\nIt is real games, encounters, and fun."}
@@ -875,8 +874,9 @@ const s = StyleSheet.create({
 
   // Splash
   splashContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  splashImage: { width: 220, height: 220 },
-  splashTitle: { fontSize: 26, fontWeight: '700', color: '#FFF', marginTop: 20, letterSpacing: 1 },
+  splashImage: { width: 260, height: 260 },
+  splashTitle: { fontSize: 26, fontWeight: '700', color: '#FFF', marginTop: 16, letterSpacing: 1 },
+  splashTitleHidden: { display: 'none' },
 
   // Progress dots
   progressDots: { flexDirection: 'row', gap: 6 },
@@ -906,8 +906,7 @@ const s = StyleSheet.create({
 
   // Language
   langContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 32, paddingTop: 32 },
-  langLogo: { width: 120, height: 120, marginBottom: 4 },
-  langAppName: { fontSize: 20, fontWeight: '800', color: '#FFF', letterSpacing: 1, marginBottom: 0 },
+  langLogo: { width: 180, height: 180, marginBottom: 8 },
   langHeader: { alignItems: 'center', marginBottom: 32, gap: 8 },
   langTitle: { fontSize: 24, fontWeight: '700', color: '#FFF', textAlign: 'center' },
   langSubtitle: { fontSize: 15, color: '#94A3B8', textAlign: 'center' },
@@ -922,7 +921,7 @@ const s = StyleSheet.create({
   langCheck: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#60A5FA', alignItems: 'center', justifyContent: 'center' },
 
   // Promise
-  promiseLogo: { width: 160, height: 160, marginBottom: 8, alignSelf: 'center' },
+  promiseLogo: { width: 180, height: 180, marginBottom: 8, alignSelf: 'center' },
   promiseTitle: { fontSize: 24, fontWeight: '800', color: '#FFF', textAlign: 'center', marginBottom: 6 },
   promiseSubtitle: { fontSize: 13, color: '#94A3B8', textAlign: 'center', lineHeight: 19, marginBottom: 12, paddingHorizontal: 8 },
   promiseHighlight: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F59E0B10', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 10, marginBottom: 10, width: '100%', borderWidth: 1, borderColor: '#F59E0B25' },
