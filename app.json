@@ -4,7 +4,7 @@
     "slug": "ppss-petanque-scorer",
     "version": "1.15.0",
     "orientation": "portrait",
-    "icon": "./assets/images/app-logo.png",
+    "icon": "./assets/images/logo-ultimate-petanque.png",
     "scheme": "ultimatepetanque",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -28,7 +28,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/app-logo.png",
+        "foregroundImage": "./assets/images/logo-ultimate-petanque.png",
         "backgroundColor": "#ffffff"
       },
       "config": {
@@ -78,14 +78,14 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/app-logo.png"
+      "favicon": "./assets/images/logo-ultimate-petanque.png"
     },
     "plugins": [
       "expo-router",
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/app-logo.png",
+          "image": "./assets/images/logo-ultimate-petanque.png",
           "imageWidth": 200,
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
@@ -95,7 +95,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/app-logo.png",
+          "icon": "./assets/images/logo-ultimate-petanque.png",
           "color": "#2563EB",
           "sounds": [],
           "mode": "production"
@@ -106,15 +106,7 @@
         {
           "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
         }
-      ],
-      // [
-      //   "react-native-maps",
-      //   {
-      //     "iosGoogleMapsApiKey": "AIzaSyCN7isQnQhdYy7Rep2mDmwu931KZyGkMck",
-      //     "androidGoogleMapsApiKey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo"
-      //   }
-      // ]
-
+      ]
     ],
     "experiments": {
       "typedRoutes": true

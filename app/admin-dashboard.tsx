@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -173,6 +174,12 @@ export default function AdminDashboardScreen() {
   const [loadingArchive, setLoadingArchive] = useState(false);
   const [archiveCount, setArchiveCount] = useState(0);
   const [exportingArchiveCsv, setExportingArchiveCsv] = useState(false);
+  const [purgingArchive, setPurgingArchive] = useState(false);
+  const [archiveSearchText, setArchiveSearchText] = useState('');
+  const [archiveFilterStatus, setArchiveFilterStatus] = useState<'all' | 'accepted' | 'declined' | 'expired'>('all');
+  const [archiveDateField, setArchiveDateField] = useState<'created' | 'archived'>('archived');
+  const [archiveDateFrom, setArchiveDateFrom] = useState('');
+  const [archiveDateTo, setArchiveDateTo] = useState('');
 
   // Transfer filters
   const [rawTransferData, setRawTransferData] = useState<any[]>([]);
@@ -562,6 +569,40 @@ export default function AdminDashboardScreen() {
     return months;
   }, [rawTransferData, fr]);
 
+  // Daily transfer heatmap (last 90 days)
+  const dailyTransferHeatmap = useMemo(() => {
+    if (rawTransferData.length === 0) return { weeks: [] as { date: string; count: number; dayOfWeek: number }[][], maxCount: 0, totalTransfers: 0, activeDays: 0, peakDay: '' };
+    const now = new Date();
+    const ninetyDaysAgo = new Date(now.getTime() - 90 * 86400000);
+    const dayCounts: Record<string, number> = {};
+    rawTransferData.forEach((t: any) => {
+      const d = new Date(t.created_at).toISOString().slice(0, 10);
+      if (new Date(d + 'T00:00:00').getTime() >= ninetyDaysAgo.getTime()) {
+        dayCounts[d] = (dayCounts[d] || 0) + 1;
+      }
+    });
+    const startDay = new Date(ninetyDaysAgo);
+    startDay.setDate(startDay.getDate() - ((startDay.getDay() + 6) % 7));
+    const weeks: { date: string; count: number; dayOfWeek: number }[][] = [];
+    let currentWeek: { date: string; count: number; dayOfWeek: number }[] = [];
+    const cursor = new Date(startDay);
+    while (cursor <= now) {
+      const dateStr = cursor.toISOString().slice(0, 10);
+      const dow = (cursor.getDay() + 6) % 7;
+      if (dow === 0 && currentWeek.length > 0) { weeks.push(currentWeek); currentWeek = []; }
+      currentWeek.push({ date: dateStr, count: dayCounts[dateStr] || 0, dayOfWeek: dow });
+      cursor.setDate(cursor.getDate() + 1);
+    }
+    if (currentWeek.length > 0) weeks.push(currentWeek);
+    const maxCount = Math.max(...Object.values(dayCounts), 0);
+    const activeDays = Object.values(dayCounts).filter(c => c > 0).length;
+    const totalTransfers = Object.values(dayCounts).reduce((a, b) => a + b, 0);
+    let peakDay = '';
+    let peakCount = 0;
+    Object.entries(dayCounts).forEach(([d, c]) => { if (c > peakCount) { peakCount = c; peakDay = d; } });
+    return { weeks, maxCount, totalTransfers, activeDays, peakDay };
+  }, [rawTransferData]);
+
   const sendTransferReminders = useCallback(async () => {
     if (sendingTransferReminder || unremindedOverdue.length === 0) return;
     setSendingTransferReminder(true);
@@ -650,6 +691,43 @@ export default function AdminDashboardScreen() {
     setLoadingArchive(false);
   }, [loadingArchive]);
 
+  const purgeOldArchives = useCallback(async () => {
+    if (purgingArchive || purgeableArchives.length === 0) return;
+    showAlert(
+      fr ? 'Purger les archives ?' : 'Purge archives?',
+      fr ? `${purgeableArchives.length} archive(s) de plus de 2 ans seront supprimees definitivement. Cette action est irreversible.` : `${purgeableArchives.length} archive(s) older than 2 years will be permanently deleted. This action is irreversible.`,
+      [
+        { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: fr ? 'Supprimer' : 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            setPurgingArchive(true);
+            try {
+              const supabase = getSupabaseClient();
+              const twoYearsAgo = new Date(Date.now() - 2 * 365 * 86400000).toISOString();
+              const { error, count } = await supabase.from('player_transfer_archives').delete({ count: 'exact' }).lt('archived_at', twoYearsAgo);
+              if (error) {
+                console.log('[Dashboard] Purge error:', error);
+                showAlert(fr ? 'Erreur' : 'Error', error.message);
+              } else {
+                const purgedCount = count || purgeableArchives.length;
+                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                showAlert(fr ? 'Purge terminee' : 'Purge complete', fr ? `${purgedCount} archive(s) supprimee(s).` : `${purgedCount} archive(s) deleted.`);
+                logAdminAction({ actionType: 'transfer_archive_purge', actionDetail: `Purged ${purgedCount} archives older than 2 years`, metadata: { purgedCount, cutoffDate: twoYearsAgo } });
+                setArchiveData(prev => prev.filter((ar: any) => !(ar.archived_at && new Date(ar.archived_at).getTime() < Date.now() - 2 * 365 * 86400000)));
+                setArchiveCount(prev => Math.max(0, prev - purgedCount));
+              }
+            } catch (e) {
+              console.log('[Dashboard] Purge error:', e);
+            }
+            setPurgingArchive(false);
+          },
+        },
+      ]
+    );
+  }, [purgingArchive, purgeableArchives, fr, showAlert]);
+
   // Transfer smart alerts (computed from current filtered stats)
   const transferAlerts = useMemo(() => {
     const alerts: { id: string; severity: 'critical' | 'warning' | 'info'; title: string; message: string; icon: string; color: string }[] = [];
@@ -704,6 +782,56 @@ export default function AdminDashboardScreen() {
     }
     return alerts;
   }, [transferStats, rawTransferData, fr]);
+
+  const filteredArchiveData = useMemo(() => {
+    let filtered = archiveData;
+    if (archiveFilterStatus !== 'all') filtered = filtered.filter((ar: any) => ar.status === archiveFilterStatus);
+    if (archiveSearchText.trim().length > 0) {
+      const q = archiveSearchText.trim().toLowerCase();
+      filtered = filtered.filter((ar: any) => (ar.player_name || '').toLowerCase().includes(q) || (ar.senderName || '').toLowerCase().includes(q) || (ar.recipientName || '').toLowerCase().includes(q));
+    }
+    // Date range filter
+    if (archiveDateFrom || archiveDateTo) {
+      const dateKey = archiveDateField === 'created' ? 'created_at' : 'archived_at';
+      const fromMs = archiveDateFrom ? new Date(archiveDateFrom + 'T00:00:00').getTime() : 0;
+      const toMs = archiveDateTo ? new Date(archiveDateTo + 'T23:59:59').getTime() : Infinity;
+      if (!isNaN(fromMs) && !isNaN(toMs)) {
+        filtered = filtered.filter((ar: any) => {
+          const d = ar[dateKey] ? new Date(ar[dateKey]).getTime() : 0;
+          return d >= fromMs && d <= toMs;
+        });
+      }
+    }
+    return filtered;
+  }, [archiveData, archiveFilterStatus, archiveSearchText, archiveDateField, archiveDateFrom, archiveDateTo]);
+
+  const purgeableArchives = useMemo(() => {
+    const twoYearsAgo = Date.now() - 2 * 365 * 86400000;
+    return archiveData.filter((ar: any) => ar.archived_at && new Date(ar.archived_at).getTime() < twoYearsAgo);
+  }, [archiveData]);
+
+  const trendAlerts = useMemo(() => {
+    const ta: { id: string; severity: 'critical' | 'warning' | 'info'; title: string; message: string; icon: string; color: string }[] = [];
+    const recent = monthlyTransferHistory.filter(m => m.total > 0);
+    if (recent.length < 2) return ta;
+    if (recent.length >= 3) {
+      const l3 = recent.slice(-3);
+      if (l3[2].total < l3[1].total && l3[1].total < l3[0].total && l3[2].total > 0) {
+        const decline = l3[0].total > 0 ? Math.round(((l3[0].total - l3[2].total) / l3[0].total) * 100) : 0;
+        ta.push({ id: 'volume_decline_trend', severity: 'warning', title: fr ? 'Baisse de volume continue' : 'Continuous volume decline', message: fr ? `Volume en baisse sur 3 mois consecutifs (-${decline}%). Verifiez les causes.` : `Volume declining 3 consecutive months (-${decline}%). Check causes.`, icon: 'trending-down', color: '#D97706' });
+      }
+    }
+    const l2 = recent.slice(-2);
+    if (l2.length === 2) {
+      const rd = l2[1].acceptanceRate - l2[0].acceptanceRate;
+      if (rd < -10 && l2[1].total >= 2) ta.push({ id: 'acceptance_rate_drop', severity: 'warning', title: fr ? 'Taux acceptation en baisse' : 'Acceptance rate dropping', message: fr ? `${l2[1].acceptanceRate}% vs ${l2[0].acceptanceRate}% le mois precedent (${rd}pts).` : `${l2[1].acceptanceRate}% vs ${l2[0].acceptanceRate}% prior month (${rd}pts).`, icon: 'thumb-down', color: '#EF4444' });
+    }
+    if (l2.length === 2 && l2[0].avgResponseH > 0 && l2[1].avgResponseH > 0) {
+      const ri = Math.round(((l2[1].avgResponseH - l2[0].avgResponseH) / l2[0].avgResponseH) * 100);
+      if (ri > 20 && l2[1].avgResponseH > 24) ta.push({ id: 'response_time_increase', severity: 'info', title: fr ? 'Temps de reponse en hausse' : 'Response time increasing', message: fr ? `${l2[1].avgResponseH}h vs ${l2[0].avgResponseH}h (+${ri}%). Destinataires plus lents.` : `${l2[1].avgResponseH}h vs ${l2[0].avgResponseH}h (+${ri}%). Recipients slower.`, icon: 'timer', color: '#3B82F6' });
+    }
+    return ta;
+  }, [monthlyTransferHistory, fr]);
 
   // Real-time polling every 30 seconds
   const [pollingActive, setPollingActive] = useState(true);
@@ -861,11 +989,11 @@ export default function AdminDashboardScreen() {
             <Pressable
               style={[s.backBtn, exportingArchiveCsv && { opacity: 0.5 }]}
               onPress={async () => {
-                if (exportingArchiveCsv || archiveData.length === 0) return;
+                if (exportingArchiveCsv || filteredArchiveData.length === 0) return;
                 setExportingArchiveCsv(true);
                 try {
                   const headers = 'Player,Sender,Recipient,Status,Matches,Challenges,Created,Archived';
-                  const rows = archiveData.map((ar: any) => `"${ar.player_name}","${ar.senderName}","${ar.recipientName}",${ar.status},${ar.match_count || 0},${ar.challenge_count || 0},${ar.created_at ? ar.created_at.slice(0, 10) : ''},${ar.archived_at ? ar.archived_at.slice(0, 10) : ''}`);
+                  const rows = filteredArchiveData.map((ar: any) => `"${ar.player_name}","${ar.senderName}","${ar.recipientName}",${ar.status},${ar.match_count || 0},${ar.challenge_count || 0},${ar.created_at ? ar.created_at.slice(0, 10) : ''},${ar.archived_at ? ar.archived_at.slice(0, 10) : ''}`);
                   const csv = [headers, ...rows].join('\n');
                   if (typeof document !== 'undefined') {
                     const blob = new Blob([csv], { type: 'text/csv' });
@@ -887,9 +1015,9 @@ export default function AdminDashboardScreen() {
                 } catch (e) { console.log('[Dashboard] Archive CSV export error:', e); }
                 setExportingArchiveCsv(false);
               }}
-              disabled={exportingArchiveCsv || archiveData.length === 0}
+              disabled={exportingArchiveCsv || filteredArchiveData.length === 0}
             >
-              {exportingArchiveCsv ? <ActivityIndicator size="small" color="#7C3AED" /> : <MaterialIcons name="file-download" size={20} color={archiveData.length > 0 ? '#7C3AED' : '#CBD5E1'} />}
+              {exportingArchiveCsv ? <ActivityIndicator size="small" color="#7C3AED" /> : <MaterialIcons name="file-download" size={20} color={filteredArchiveData.length > 0 ? '#7C3AED' : '#CBD5E1'} />}
             </Pressable>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16 }} showsVerticalScrollIndicator={false}>
@@ -899,16 +1027,128 @@ export default function AdminDashboardScreen() {
                 {fr ? `${archiveCount} transfert(s) archive(s). Les transferts resolus sont archives automatiquement apres 90 jours.` : `${archiveCount} archived transfer(s). Resolved transfers are auto-archived after 90 days.`}
               </Text>
             </View>
+            <View style={{ marginBottom: 12, gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFF', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#E2E8F0' }}>
+                <MaterialIcons name="search" size={18} color="#94A3B8" />
+                <TextInput style={{ flex: 1, fontSize: 13, color: '#0F172A', paddingVertical: 4 }} placeholder={fr ? 'Rechercher par joueur, expediteur...' : 'Search by player, sender...'} placeholderTextColor="#CBD5E1" value={archiveSearchText} onChangeText={setArchiveSearchText} />
+                {archiveSearchText.length > 0 ? <Pressable onPress={() => setArchiveSearchText('')} hitSlop={8}><MaterialIcons name="close" size={16} color="#94A3B8" /></Pressable> : null}
+              </View>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                {(['all', 'accepted', 'declined', 'expired'] as const).map(st => {
+                  const active = archiveFilterStatus === st;
+                  const colors: Record<string, string> = { all: '#64748B', accepted: '#10B981', declined: '#EF4444', expired: '#94A3B8' };
+                  const labels: Record<string, string> = { all: fr ? 'Tous' : 'All', accepted: fr ? 'Acceptes' : 'Accepted', declined: fr ? 'Refuses' : 'Declined', expired: fr ? 'Expires' : 'Expired' };
+                  return <Pressable key={st} style={[s.filterChip, active && { backgroundColor: colors[st], borderColor: colors[st] }]} onPress={() => { Haptics.selectionAsync(); setArchiveFilterStatus(st); }}><Text style={[s.filterChipText, active && { color: '#FFF' }]}>{labels[st]}</Text></Pressable>;
+                })}
+              </ScrollView>
+              {/* Date range filter */}
+              <View style={{ gap: 6, marginTop: 2 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="date-range" size={14} color="#64748B" />
+                  <Pressable style={[s.filterChip, archiveDateField === 'created' && { backgroundColor: '#3B82F6', borderColor: '#3B82F6' }]} onPress={() => { Haptics.selectionAsync(); setArchiveDateField('created'); }}>
+                    <Text style={[s.filterChipText, archiveDateField === 'created' && { color: '#FFF' }]}>{fr ? 'Date creation' : 'Created date'}</Text>
+                  </Pressable>
+                  <Pressable style={[s.filterChip, archiveDateField === 'archived' && { backgroundColor: '#7C3AED', borderColor: '#7C3AED' }]} onPress={() => { Haptics.selectionAsync(); setArchiveDateField('archived'); }}>
+                    <Text style={[s.filterChipText, archiveDateField === 'archived' && { color: '#FFF' }]}>{fr ? 'Date archivage' : 'Archived date'}</Text>
+                  </Pressable>
+                </View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {[
+                    { key: 'all', label: fr ? 'Tout' : 'All' },
+                    { key: '7d', label: '7j' },
+                    { key: '30d', label: '30j' },
+                    { key: '3m', label: '3m' },
+                    { key: '6m', label: '6m' },
+                    { key: '1y', label: '1an' },
+                  ].map(p => {
+                    const isActive = (() => {
+                      if (p.key === 'all') return !archiveDateFrom && !archiveDateTo;
+                      const now = new Date();
+                      let expected = '';
+                      if (p.key === '7d') expected = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+                      else if (p.key === '30d') expected = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+                      else if (p.key === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); expected = d.toISOString().slice(0, 10); }
+                      else if (p.key === '6m') { const d = new Date(now); d.setMonth(d.getMonth() - 6); expected = d.toISOString().slice(0, 10); }
+                      else if (p.key === '1y') { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); expected = d.toISOString().slice(0, 10); }
+                      return archiveDateFrom === expected && !archiveDateTo;
+                    })();
+                    return (
+                      <Pressable key={p.key} style={[s.filterChip, isActive && { backgroundColor: '#0EA5E9', borderColor: '#0EA5E9' }]} onPress={() => {
+                        Haptics.selectionAsync();
+                        if (p.key === 'all') { setArchiveDateFrom(''); setArchiveDateTo(''); return; }
+                        const now = new Date();
+                        let from = '';
+                        if (p.key === '7d') from = new Date(now.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+                        else if (p.key === '30d') from = new Date(now.getTime() - 30 * 86400000).toISOString().slice(0, 10);
+                        else if (p.key === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); from = d.toISOString().slice(0, 10); }
+                        else if (p.key === '6m') { const d = new Date(now); d.setMonth(d.getMonth() - 6); from = d.toISOString().slice(0, 10); }
+                        else if (p.key === '1y') { const d = new Date(now); d.setFullYear(d.getFullYear() - 1); from = d.toISOString().slice(0, 10); }
+                        setArchiveDateFrom(from); setArchiveDateTo('');
+                      }}>
+                        <Text style={[s.filterChipText, isActive && { color: '#FFF' }]}>{p.label}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </ScrollView>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginBottom: 3 }}>{fr ? 'De' : 'From'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: archiveDateFrom ? '#0EA5E9' : '#E2E8F0', paddingHorizontal: 8, paddingVertical: 6 }}>
+                      <MaterialIcons name="calendar-today" size={13} color={archiveDateFrom ? '#0EA5E9' : '#CBD5E1'} />
+                      <TextInput style={{ flex: 1, fontSize: 12, color: '#0F172A', paddingVertical: 2, paddingHorizontal: 6 }} placeholder="YYYY-MM-DD" placeholderTextColor="#CBD5E1" value={archiveDateFrom} onChangeText={setArchiveDateFrom} maxLength={10} keyboardType="numbers-and-punctuation" />
+                      {archiveDateFrom ? <Pressable onPress={() => setArchiveDateFrom('')} hitSlop={6}><MaterialIcons name="close" size={14} color="#94A3B8" /></Pressable> : null}
+                    </View>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 9, fontWeight: '600', color: '#94A3B8', marginBottom: 3 }}>{fr ? 'A' : 'To'}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: '#FFF', borderRadius: 10, borderWidth: 1, borderColor: archiveDateTo ? '#0EA5E9' : '#E2E8F0', paddingHorizontal: 8, paddingVertical: 6 }}>
+                      <MaterialIcons name="event" size={13} color={archiveDateTo ? '#0EA5E9' : '#CBD5E1'} />
+                      <TextInput style={{ flex: 1, fontSize: 12, color: '#0F172A', paddingVertical: 2, paddingHorizontal: 6 }} placeholder="YYYY-MM-DD" placeholderTextColor="#CBD5E1" value={archiveDateTo} onChangeText={setArchiveDateTo} maxLength={10} keyboardType="numbers-and-punctuation" />
+                      {archiveDateTo ? <Pressable onPress={() => setArchiveDateTo('')} hitSlop={6}><MaterialIcons name="close" size={14} color="#94A3B8" /></Pressable> : null}
+                    </View>
+                  </View>
+                </View>
+              </View>
+              {(archiveSearchText.length > 0 || archiveFilterStatus !== 'all' || archiveDateFrom || archiveDateTo) ? <Text style={{ fontSize: 10, color: '#94A3B8', fontWeight: '600', marginTop: 4 }}>{filteredArchiveData.length}/{archiveData.length} {fr ? 'resultat(s)' : 'result(s)'}</Text> : null}
+            </View>
+            {/* Purge old archives (2+ years) */}
+            {purgeableArchives.length > 0 ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12, backgroundColor: '#FEF2F2', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FECACA' }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#DC262615', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="delete-sweep" size={16} color="#DC2626" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#991B1B' }}>
+                    {purgeableArchives.length} {fr ? 'archive(s) > 2 ans' : 'archive(s) > 2 years'}
+                  </Text>
+                  <Text style={{ fontSize: 10, color: '#DC2626', marginTop: 1 }}>
+                    {fr ? 'Suppression definitive possible' : 'Eligible for permanent deletion'}
+                  </Text>
+                </View>
+                <Pressable
+                  style={[{ flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: '#DC2626' }, purgingArchive && { opacity: 0.5 }]}
+                  onPress={purgeOldArchives}
+                  disabled={purgingArchive}
+                >
+                  {purgingArchive ? <ActivityIndicator size="small" color="#FFF" /> : (
+                    <>
+                      <MaterialIcons name="delete-forever" size={13} color="#FFF" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{fr ? 'Purger' : 'Purge'}</Text>
+                    </>
+                  )}
+                </Pressable>
+              </View>
+            ) : null}
             {loadingArchive ? (
               <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                 <ActivityIndicator size="large" color="#7C3AED" />
               </View>
-            ) : archiveData.length === 0 ? (
+            ) : filteredArchiveData.length === 0 ? (
               <View style={{ alignItems: 'center', paddingVertical: 32 }}>
                 <MaterialIcons name="inventory-2" size={32} color="#CBD5E1" />
                 <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Aucune archive' : 'No archives'}</Text>
               </View>
-            ) : archiveData.map((ar: any, idx: number) => {
+            ) : filteredArchiveData.map((ar: any, idx: number) => {
               const sc = ar.status === 'accepted' ? '#10B981' : ar.status === 'declined' ? '#EF4444' : '#94A3B8';
               return (
                 <View key={ar.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, borderTopWidth: idx > 0 ? 1 : 0, borderTopColor: '#F1F5F9' }}>
@@ -1234,6 +1474,24 @@ export default function AdminDashboardScreen() {
                 </View>
               ) : null}
 
+              {/* Transfer Trend Alerts (monthly history) */}
+              {trendAlerts.length > 0 ? (
+                <View style={{ marginBottom: 12, gap: 6 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#94A3B8', letterSpacing: 0.5, marginBottom: 2 }}>{fr ? 'TENDANCES MENSUELLES' : 'MONTHLY TRENDS'}</Text>
+                  {trendAlerts.map(ta => (
+                    <View key={ta.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: ta.color + '08', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: ta.color + '20' }}>
+                      <View style={{ width: 26, height: 26, borderRadius: 8, backgroundColor: ta.color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={ta.icon as any} size={13} color={ta.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: ta.color }}>{ta.title}</Text>
+                        <Text style={{ fontSize: 10, color: ta.color + 'CC', lineHeight: 14, marginTop: 1 }}>{ta.message}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
               {/* Reminder button for overdue transfers */}
               {overdueTransfers.length > 0 ? (
                 <View style={{ marginBottom: 12, backgroundColor: '#FFFBEB', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#FDE68A' }}>
@@ -1490,6 +1748,65 @@ export default function AdminDashboardScreen() {
                       </View>
                     );
                   })() : null}
+                </View>
+              ) : null}
+
+              {/* Daily transfer heatmap (90 days) */}
+              {dailyTransferHeatmap.weeks.length > 0 ? (
+                <View style={{ marginBottom: 14 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>{fr ? 'Activite quotidienne (90j)' : 'Daily activity (90d)'}</Text>
+                    {dailyTransferHeatmap.peakDay ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FEF2F2', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                        <MaterialIcons name="local-fire-department" size={10} color="#EF4444" />
+                        <Text style={{ fontSize: 8, fontWeight: '700', color: '#EF4444' }}>
+                          {fr ? 'Pic' : 'Peak'}: {new Date(dailyTransferHeatmap.peakDay + 'T00:00:00').toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })} ({dailyTransferHeatmap.maxCount})
+                        </Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 2 }}>
+                    {/* Day of week labels */}
+                    <View style={{ gap: 2, justifyContent: 'flex-start', paddingTop: 0 }}>
+                      {[fr ? 'L' : 'M', '', fr ? 'M' : 'W', '', fr ? 'V' : 'F', '', fr ? 'D' : 'S'].map((d, i) => (
+                        <View key={i} style={{ height: 11, width: 14, justifyContent: 'center' }}>
+                          {d ? <Text style={{ fontSize: 7, fontWeight: '600', color: '#CBD5E1', textAlign: 'right' }}>{d}</Text> : null}
+                        </View>
+                      ))}
+                    </View>
+                    {/* Heatmap grid */}
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 2 }}>
+                      {dailyTransferHeatmap.weeks.map((week, wi) => (
+                        <View key={wi} style={{ gap: 2 }}>
+                          {Array.from({ length: 7 }, (_, di) => {
+                            const cell = week.find(c => c.dayOfWeek === di);
+                            if (!cell) return <View key={di} style={{ width: 11, height: 11, borderRadius: 2, backgroundColor: 'transparent' }} />;
+                            const ct = cell.count;
+                            const bg = ct === 0 ? '#F1F5F9' : ct === 1 ? '#86EFAC' : ct <= 3 ? '#FDE047' : '#FCA5A5';
+                            const isToday = cell.date === new Date().toISOString().slice(0, 10);
+                            return (
+                              <View key={di} style={{ width: 11, height: 11, borderRadius: 2, backgroundColor: bg, borderWidth: isToday ? 1.5 : 0, borderColor: isToday ? '#3B82F6' : 'transparent' }} />
+                            );
+                          })}
+                        </View>
+                      ))}
+                    </ScrollView>
+                  </View>
+                  {/* Legend + summary */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 8, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Moins' : 'Less'}</Text>
+                      {['#F1F5F9', '#86EFAC', '#FDE047', '#FCA5A5'].map((c, i) => (
+                        <View key={i} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c }} />
+                      ))}
+                      <Text style={{ fontSize: 8, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Plus' : 'More'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{dailyTransferHeatmap.totalTransfers} {fr ? 'transferts' : 'transfers'}</Text>
+                      <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                      <Text style={{ fontSize: 9, fontWeight: '700', color: '#64748B' }}>{dailyTransferHeatmap.activeDays} {fr ? 'jours actifs' : 'active days'}</Text>
+                    </View>
+                  </View>
                 </View>
               ) : null}
 
