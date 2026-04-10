@@ -787,8 +787,8 @@ export default function HomeScreen() {
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <Image
-              source={require('@/assets/images/banner-fr-promo.png')}
-              style={{ width: '100%', height: undefined, aspectRatio: 1200 / 628, borderRadius: 16 }}
+              source={require('@/assets/images/banner-home-fr.png')}
+              style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
               transition={300}
             />
@@ -800,8 +800,8 @@ export default function HomeScreen() {
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <Image
-              source={require('@/assets/images/banner-en-promo.png')}
-              style={{ width: '100%', height: undefined, aspectRatio: 1200 / 628, borderRadius: 16 }}
+              source={require('@/assets/images/banner-home-en.png')}
+              style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
               transition={300}
             />
