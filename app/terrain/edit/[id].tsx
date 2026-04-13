@@ -21,7 +21,7 @@ import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as Location from '@/services/location';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 import theme from '@/constants/theme';
 import config, { TerrainType } from '@/constants/config';
 import { useAppData, useAppActions } from '@/contexts/AppContext';

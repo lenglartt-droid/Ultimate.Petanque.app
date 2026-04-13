@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 import { useLocalSearchParams, router } from 'expo-router';
 import { uploadPlayerAvatar } from '@/services/storageService';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
