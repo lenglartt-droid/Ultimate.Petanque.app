@@ -11,9 +11,11 @@
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",
-      "associatedDomains": ["applinks:ultimatepetanque.app"],
+      "associatedDomains": [
+        "applinks:ultimatepetanque.app"
+      ],
       "config": {
-          "googleMapsApiKey": "AIzaSyCN7isQnQhdYy7Rep2mDmwu931KZyGkMck"
+        "googleMapsApiKey": "AIzaSyCN7isQnQhdYy7Rep2mDmwu931KZyGkMck"
       },
       "entitlements": {
         "aps-environment": "production"
@@ -23,7 +25,9 @@
         "NSPhotoLibraryUsageDescription": "Ultimate Petanque accède à vos photos pour ajouter des images de profil, de boules et de terrains.",
         "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs à proximité sur la carte.",
         "NSUserTrackingUsageDescription": "Ultimate Petanque utilise cet identifiant pour vous proposer des publicités pertinentes et améliorer votre expérience.",
-        "UIBackgroundModes": ["remote-notification"]
+        "UIBackgroundModes": [
+          "remote-notification"
+        ]
       }
     },
     "android": {
@@ -43,7 +47,9 @@
         "CAMERA",
         "READ_MEDIA_IMAGES",
         "POST_NOTIFICATIONS",
-        "VIBRATE"
+        "VIBRATE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ],
       "intentFilters": [
         {
@@ -71,7 +77,10 @@
               "pathPrefix": "/meetup"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -110,6 +119,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "80801df7-6ed9-4bb4-bc6b-a66f77a24796"
+      }
     }
   }
 }
