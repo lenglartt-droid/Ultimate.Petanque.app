@@ -23,7 +23,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { Image } from 'expo-image';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 // expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import * as Linking2 from 'expo-linking';
 import { decode } from '@/services/base64';
