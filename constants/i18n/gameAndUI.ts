@@ -124,6 +124,8 @@ export const gameAndUITranslations = {
     citySearchMode: { fr: 'Recherche de villes uniquement', en: 'City search only' },
     enterCity: { fr: 'Rechercher une ville...', en: 'Search a city...' },
     miniMapPreview: { fr: 'Aperçu de la position', en: 'Position preview' },
+    postalCodeDetected: { fr: 'Recherche par code postal', en: 'Postal code search' },
+    tipPostalCode: { fr: 'Saisissez un code postal (ex: 75001)', en: 'Enter a postal code (e.g. 75001)' },
   },
   creatorNote: {
     title: { fr: 'Note du createur', en: 'Creator Note' },

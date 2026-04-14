@@ -3235,6 +3235,11 @@ export const translations = {
     tipMinChars: { fr: 'Saisissez au moins 3 caractères', en: 'Enter at least 3 characters' },
     tipIncludeCity: { fr: 'Incluez la ville pour plus de précision', en: 'Include the city for better accuracy' },
     tipExample: { fr: 'Ex: 12 rue de la Paix, Paris', en: 'Ex: 12 Main Street, London' },
+    citySearchMode: { fr: 'Recherche de villes uniquement', en: 'City search only' },
+    enterCity: { fr: 'Rechercher une ville...', en: 'Search a city...' },
+    miniMapPreview: { fr: 'Aperçu de la position', en: 'Position preview' },
+    postalCodeDetected: { fr: 'Recherche par code postal', en: 'Postal code search' },
+    tipPostalCode: { fr: 'Saisissez un code postal (ex: 75001)', en: 'Enter a postal code (e.g. 75001)' },
   },
 
   // ============================================
