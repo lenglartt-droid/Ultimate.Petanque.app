@@ -139,28 +139,34 @@ export default function CreatorNoteScreen() {
         <View style={st.card}>
           <Text style={st.bodyText}>
             {fr
-              ? "Elles permettent de jouer, d'enregistrer des parties... mais rapidement, une limite apparait :"
-              : "They allow you to play, record games... but quickly, a limit appears:"}
+              ? "Elles permettent d'enregistrer des scores, de mesurer des distances par camera, de trouver des terrains... mais rapidement, une limite apparait :"
+              : "They allow you to record scores, measure distances by camera, find courts... but quickly, a limit appears:"}
           </Text>
           <View style={st.problemList}>
             <View style={st.problemItem}>
               <View style={st.problemDot} />
               <Text style={st.problemText}>
-                {fr ? 'Classements approximatifs' : 'Approximate rankings'}
+                {fr ? "Aucun classement de l'ensemble de la communaute petanque au niveau local comme mondial" : 'No ranking of the entire petanque community at local or global level'}
               </Text>
             </View>
             <View style={st.problemItem}>
               <View style={st.problemDot} />
               <Text style={st.problemText}>
-                {fr ? 'Statistiques peu exploitables' : 'Hard to use statistics'}
+                {fr ? 'Statistiques peu avancees' : 'Limited statistics'}
+              </Text>
+            </View>
+            <View style={st.problemItem}>
+              <View style={st.problemDot} />
+              <Text style={st.problemText}>
+                {fr ? 'Listes de terrains inactifs' : 'Inactive court listings'}
               </Text>
             </View>
             <View style={st.problemItem}>
               <View style={st.problemDot} />
               <Text style={st.problemText}>
                 {fr
-                  ? 'Impossible de vraiment savoir ou l\u2019on se situe'
-                  : 'Impossible to really know where you stand'}
+                  ? "Impossible de vraiment analyser son jeu, de l'ameliorer et de savoir ou l\u2019on se situe"
+                  : 'Impossible to truly analyze your game, improve it and know where you stand'}
               </Text>
             </View>
           </View>

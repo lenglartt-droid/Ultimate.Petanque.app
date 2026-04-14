@@ -17,7 +17,7 @@ import { Image } from 'expo-image';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 // expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
 import * as Linking from 'expo-linking';
 import { decode } from '@/services/base64';
@@ -886,6 +886,8 @@ export default function ProfileScreen() {
             const { error } = await logout();
             if (error) {
               showAlert(t('common', 'error'), error);
+            } else {
+              router.replace('/');
             }
           },
         },
