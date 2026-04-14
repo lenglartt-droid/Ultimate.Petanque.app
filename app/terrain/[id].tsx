@@ -19,7 +19,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Image } from 'expo-image';
 
 import * as Haptics from '@/services/haptics';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 import theme from '@/constants/theme';
 import { config } from '@/constants/config';
 import { useAppData, useAppActions } from '@/contexts/AppContext';

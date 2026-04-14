@@ -17,8 +17,12 @@ import { Image } from 'expo-image';
 import * as Location from '@/services/location';
 import * as Haptics from '@/services/haptics';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+
+const RECENT_SEARCHES_KEY = '@location_picker_recent_searches';
+const MAX_RECENT = 8;
 
 export interface LocationData {
   address: string;
@@ -133,6 +137,72 @@ async function searchCitiesNominatim(query: string): Promise<SearchResult[]> {
   }
 }
 
+// Postal code search using Nominatim postalcode parameter
+async function searchByPostalCode(postalCode: string, countryCode?: string): Promise<SearchResult[]> {
+  try {
+    // Build query with postalcode parameter for precise results
+    const params = new URLSearchParams({
+      postalcode: postalCode.trim(),
+      format: 'json',
+      addressdetails: '1',
+      limit: '10',
+      'accept-language': 'fr,en',
+    });
+    // Add country code bias if provided (e.g. 'fr' for France)
+    if (countryCode) {
+      params.set('countrycodes', countryCode);
+    }
+
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+      {
+        headers: {
+          'User-Agent': 'UltimatePetanque/1.0',
+          'Accept': 'application/json',
+        },
+      }
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (!Array.isArray(data)) return [];
+
+    return data
+      .map((item: any) => {
+        const addr = item.address || {};
+        const postcode = addr.postcode || postalCode;
+        const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
+        const state = addr.state || addr.region || '';
+        const country = addr.country || '';
+        const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
+        const displayParts = [postcode, city, state, country].filter(Boolean);
+
+        return {
+          id: `postal-${item.place_id}`,
+          address: street || '',
+          city,
+          country,
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          formattedAddress: displayParts.join(', ') || item.display_name || '',
+        };
+      })
+      .filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude) && r.city);
+  } catch (e) {
+    console.log('[Nominatim] Postal code search error:', e);
+    return [];
+  }
+}
+
+// Detect if a query looks like a postal code (digits only, 3-10 chars)
+function isPostalCodeQuery(query: string): boolean {
+  const trimmed = query.trim();
+  // Pure digits: 75001, 13000, 8000, etc.
+  if (/^\d{3,10}$/.test(trimmed)) return true;
+  // Common formats: UK (SW1A 1AA), Canada (K1A 0B1), etc.
+  if (/^[A-Z0-9]{2,4}\s?[A-Z0-9]{2,4}$/i.test(trimmed) && /\d/.test(trimmed)) return true;
+  return false;
+}
+
 // Generate static map URL from OpenStreetMap
 function getStaticMapUrl(lat: number, lng: number, zoom: number = 14, width: number = 600, height: number = 200): string {
   return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=${width}x${height}&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
@@ -194,6 +264,7 @@ export default function LocationPicker({
   const [isGeolocating, setIsGeolocating] = useState(false);
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
+  const recentLoadedRef = useRef(false);
 
   // Manual GPS state
   const [showManualGps, setShowManualGps] = useState(false);
@@ -208,6 +279,29 @@ export default function LocationPicker({
   useEffect(() => {
     checkLocationPermission();
   }, []);
+
+  // Load recent searches from AsyncStorage on mount
+  useEffect(() => {
+    AsyncStorage.getItem(RECENT_SEARCHES_KEY)
+      .then(raw => {
+        if (raw) {
+          try {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed)) {
+              setRecentSearches(parsed.slice(0, MAX_RECENT));
+            }
+          } catch { /* ignore */ }
+        }
+        recentLoadedRef.current = true;
+      })
+      .catch(() => { recentLoadedRef.current = true; });
+  }, []);
+
+  // Persist recent searches to AsyncStorage when they change
+  useEffect(() => {
+    if (!recentLoadedRef.current) return; // Skip initial load
+    AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches)).catch(() => {});
+  }, [recentSearches]);
 
   const checkLocationPermission = async () => {
     const { status } = await Location.getForegroundPermissionsAsync();
@@ -229,6 +323,24 @@ export default function LocationPicker({
 
     setIsSearching(true);
     try {
+      // Postal code detection: auto-route to postal code search
+      if (isPostalCodeQuery(query)) {
+        const postalResults = await searchByPostalCode(query);
+        if (postalResults.length > 0) {
+          // Deduplicate by city+country
+          const seen = new Set<string>();
+          const unique = postalResults.filter(r => {
+            const key = `${r.city.toLowerCase()}-${r.country.toLowerCase()}`;
+            if (seen.has(key)) return false;
+            seen.add(key);
+            return true;
+          });
+          setSearchResults(unique);
+          return;
+        }
+        // If no postal results, fall through to normal search
+      }
+
       // City-only mode: use settlement-filtered Nominatim search
       if (showCityOnly) {
         const cityResults = await searchCitiesNominatim(query);
@@ -473,10 +585,10 @@ export default function LocationPicker({
 
     onChange(newLocation);
 
-    // Add to recent searches (keep max 5)
+    // Add to recent searches (keep max)
     setRecentSearches(prev => {
       const filtered = prev.filter(r => r.id !== result.id);
-      return [result, ...filtered].slice(0, 5);
+      return [result, ...filtered].slice(0, MAX_RECENT);
     });
 
     setModalVisible(false);
@@ -662,6 +774,14 @@ export default function LocationPicker({
             </View>
           ) : null}
 
+          {/* Postal code detection indicator */}
+          {searchQuery.trim().length >= 3 && isPostalCodeQuery(searchQuery) ? (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.postalCodeIndicator}>
+              <MaterialIcons name="local-post-office" size={14} color="#0EA5E9" />
+              <Text style={styles.postalCodeText}>{t('locationPicker', 'postalCodeDetected')}</Text>
+            </Animated.View>
+          ) : null}
+
           {/* Search Input */}
           <View style={styles.searchContainer}>
             <MaterialIcons name="search" size={22} color={theme.textMuted} />
@@ -788,19 +908,43 @@ export default function LocationPicker({
                 {/* Recent searches */}
                 {recentSearches.length > 0 ? (
                   <Animated.View entering={FadeInDown.duration(300)}>
-                    <Text style={styles.hintsSectionTitle}>{t('locationPicker', 'recentSearches')}</Text>
-                    {recentSearches.map((result) => (
+                    <View style={styles.recentHeader}>
+                      <Text style={styles.hintsSectionTitle}>{t('locationPicker', 'recentSearches')}</Text>
                       <Pressable
-                        key={result.id}
-                        style={styles.recentItem}
-                        onPress={() => handleSelectResult(result)}
+                        style={styles.clearAllBtn}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          setRecentSearches([]);
+                        }}
+                        hitSlop={8}
                       >
-                        <MaterialIcons name="history" size={20} color={theme.textMuted} />
-                        <View style={styles.recentContent}>
-                          <Text style={styles.recentAddress}>{result.address || result.city}</Text>
-                          <Text style={styles.recentCity}>{result.city}</Text>
-                        </View>
+                        <MaterialIcons name="delete-sweep" size={16} color={theme.textMuted} />
+                        <Text style={styles.clearAllText}>{t('locationPicker', 'clearAll')}</Text>
                       </Pressable>
+                    </View>
+                    {recentSearches.map((result) => (
+                      <View key={result.id} style={styles.recentItem}>
+                        <Pressable
+                          style={styles.recentItemContent}
+                          onPress={() => handleSelectResult(result)}
+                        >
+                          <MaterialIcons name="history" size={20} color={theme.textMuted} />
+                          <View style={styles.recentContent}>
+                            <Text style={styles.recentAddress} numberOfLines={1}>{result.address || result.city}</Text>
+                            <Text style={styles.recentCity} numberOfLines={1}>{result.formattedAddress || result.city}</Text>
+                          </View>
+                        </Pressable>
+                        <Pressable
+                          style={styles.recentDeleteBtn}
+                          onPress={() => {
+                            Haptics.selectionAsync();
+                            setRecentSearches(prev => prev.filter(r => r.id !== result.id));
+                          }}
+                          hitSlop={6}
+                        >
+                          <MaterialIcons name="close" size={16} color={theme.textMuted} />
+                        </Pressable>
+                      </View>
                     ))}
                   </Animated.View>
                 ) : null}
@@ -811,7 +955,7 @@ export default function LocationPicker({
                   <View style={styles.hintsContent}>
                     <Text style={styles.hintsTitle}>{t('locationPicker', 'searchTips')}</Text>
                     <Text style={styles.hintsText}>
-                      {`\u2022 ${t('locationPicker', 'tipMinChars')}\n\u2022 ${t('locationPicker', 'tipIncludeCity')}\n\u2022 ${t('locationPicker', 'tipExample')}`}
+                      {`\u2022 ${t('locationPicker', 'tipMinChars')}\n\u2022 ${t('locationPicker', 'tipIncludeCity')}\n\u2022 ${t('locationPicker', 'tipPostalCode')}\n\u2022 ${t('locationPicker', 'tipExample')}`}
                     </Text>
                   </View>
                 </View>
@@ -1121,15 +1265,50 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
   },
+  recentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  clearAllBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    backgroundColor: theme.error + '10',
+    borderRadius: theme.borderRadius.sm,
+  },
+  clearAllText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: theme.error,
+  },
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: theme.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
     borderRadius: theme.borderRadius.md,
     marginBottom: 8,
+    overflow: 'hidden',
+  },
+  recentItemContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     gap: 12,
+  },
+  recentDeleteBtn: {
+    width: 40,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: theme.border,
+    paddingVertical: 12,
   },
   recentContent: {
     flex: 1,
@@ -1248,5 +1427,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     color: theme.primary,
+  },
+  // Postal code indicator
+  postalCodeIndicator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    backgroundColor: '#0EA5E9' + '10',
+    borderRadius: theme.borderRadius.full,
+    alignSelf: 'center',
+  },
+  postalCodeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#0EA5E9',
   },
 });
