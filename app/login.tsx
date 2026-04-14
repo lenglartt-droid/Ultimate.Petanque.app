@@ -225,11 +225,10 @@ export default function LoginScreen() {
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
             <Image
-              source={require('@/assets/images/app-logo.png')}
+              source={require('@/assets/images/logo-ultimate-petanque.png')}
               style={styles.logo}
               contentFit="contain"
             />
-            <Text style={styles.appName}>Ultimate Petanque</Text>
             <Text style={styles.tagline}>
               {mode === 'login' ? t('login', 'welcomeBack') : t('login', 'createAccount')}
             </Text>
@@ -630,18 +629,9 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logo: {
-    width: 160,
-    height: 160,
-    marginBottom: 12,
-    borderRadius: 32,
-  },
-  appName: {
-    fontSize: 22,
-    fontWeight: '800',
-    color: theme.textPrimary,
+    width: 200,
+    height: 200,
     marginBottom: 8,
-    textAlign: 'center',
-    letterSpacing: -0.3,
   },
   tagline: {
     fontSize: 16,

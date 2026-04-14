@@ -10,7 +10,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 // expo-file-system loaded dynamically to avoid web bundler issues
 import { decode } from '@/services/base64';
 import theme, { blurhash } from '@/constants/theme';
