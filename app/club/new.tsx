@@ -18,7 +18,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
-import * as ImagePicker from 'expo-image-picker';
+import * as ImagePicker from '@/services/imagePicker';
 import { Image } from 'expo-image';
 import { uploadImageToStorage } from '@/services/storageService';
 import theme, { blurhash } from '@/constants/theme';
