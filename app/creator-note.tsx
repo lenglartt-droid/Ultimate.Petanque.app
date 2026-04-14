@@ -286,6 +286,13 @@ export default function CreatorNoteScreen() {
                 : 'Find courts and clubs easily'}
             />
             <PillarBullet
+              icon="schedule"
+              color="#F59E0B"
+              text={fr
+                ? "Horaires d'activites des terrains mis a jour automatiquement par l'utilisation de l'application des joueurs"
+                : 'Court activity schedules automatically updated by player app usage'}
+            />
+            <PillarBullet
               icon="people"
               color="#3B82F6"
               text={fr
