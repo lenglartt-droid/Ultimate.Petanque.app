@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -1004,8 +1004,33 @@ function getQuickActions(language: string) {
 // ============================================
 // COMPONENTS
 // ============================================
-function AccordionItem({ question, answer, isOpen, onToggle, color }: {
-  question: string; answer: string; isOpen: boolean; onToggle: () => void; color: string;
+// ============================================
+// HIGHLIGHT TEXT — highlights matching search words
+// ============================================
+function HighlightText({ text, search, style, numberOfLines, highlightColor }: {
+  text: string; search: string; style: any; numberOfLines?: number; highlightColor: string;
+}) {
+  if (!search || search.trim().length < 2) return <Text style={style} numberOfLines={numberOfLines}>{text}</Text>;
+  const words = search.toLowerCase().split(/\s+/).filter(w => w.length >= 2);
+  if (words.length === 0) return <Text style={style} numberOfLines={numberOfLines}>{text}</Text>;
+  // Build regex from search words
+  const escaped = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
+  const parts = text.split(regex);
+  return (
+    <Text style={style} numberOfLines={numberOfLines}>
+      {parts.map((part, i) => {
+        const isMatch = words.some(w => part.toLowerCase() === w);
+        return isMatch
+          ? <Text key={i} style={{ backgroundColor: highlightColor + '25', color: highlightColor, fontWeight: '700' as const, borderRadius: 2 }}>{part}</Text>
+          : <Text key={i}>{part}</Text>;
+      })}
+    </Text>
+  );
+}
+
+function AccordionItem({ question, answer, isOpen, onToggle, color, search }: {
+  question: string; answer: string; isOpen: boolean; onToggle: () => void; color: string; search?: string;
 }) {
   const rotation = useSharedValue(0);
   React.useEffect(() => { rotation.value = withTiming(isOpen ? 180 : 0, { duration: 200 }); }, [isOpen]);
@@ -1014,12 +1039,12 @@ function AccordionItem({ question, answer, isOpen, onToggle, color }: {
   return (
     <Pressable style={[st.faqItem, isOpen && { borderLeftWidth: 3, borderLeftColor: color }]} onPress={() => { Haptics.selectionAsync(); onToggle(); }}>
       <View style={st.faqQuestion}>
-        <Text style={[st.faqQuestionText, isOpen && { color }]}>{question}</Text>
+        <HighlightText text={question} search={search || ''} style={[st.faqQuestionText, isOpen && { color }]} highlightColor={color} />
         <Animated.View style={[iconStyle, st.faqChevron]}>
           <MaterialIcons name="expand-more" size={22} color={isOpen ? color : theme.textMuted} />
         </Animated.View>
       </View>
-      {isOpen ? <View style={st.faqAnswerContainer}><Text style={st.faqAnswerText}>{answer}</Text></View> : null}
+      {isOpen ? <View style={st.faqAnswerContainer}><HighlightText text={answer} search={search || ''} style={st.faqAnswerText} highlightColor={color} /></View> : null}
     </Pressable>
   );
 }
@@ -1069,6 +1094,28 @@ export default function FAQScreen() {
   const [openQs, setOpenQs] = useState<Set<string>>(new Set());
   const [screenW, setScreenW] = useState(() => Dimensions.get('window').width || 375);
   React.useEffect(() => { const sub = Dimensions.addEventListener('change', ({ window }) => setScreenW(window.width)); return () => sub?.remove(); }, []);
+
+  // Quick jump
+  const scrollRef = useRef<ScrollView>(null);
+  const [showBackToTop, setShowBackToTop] = useState(false);
+  const sectionYMap = useRef(new Map<string, number>());
+
+  const handleScroll = useCallback((e: any) => {
+    setShowBackToTop(e.nativeEvent.contentOffset.y > 500);
+  }, []);
+
+  const scrollToSection = useCallback((catId: string) => {
+    Haptics.selectionAsync();
+    const y = sectionYMap.current.get(catId);
+    if (y !== undefined && scrollRef.current) {
+      scrollRef.current.scrollTo({ y: y - 80, animated: true });
+    }
+  }, []);
+
+  const scrollToTop = useCallback(() => {
+    Haptics.selectionAsync();
+    scrollRef.current?.scrollTo({ y: 0, animated: true });
+  }, []);
   const isTablet = screenW >= 600;
 
   const QUICK_ACTIONS = useMemo(() => getQuickActions(language), [language]);
@@ -1083,12 +1130,17 @@ export default function FAQScreen() {
   }, [activeTab, fr]);
 
   const filtered = useMemo(() => {
+    const searchLower = search.toLowerCase().trim();
+    const searchWords = searchLower.split(/\s+/).filter(w => w.length >= 2);
     return faqData.map(cat => ({
       ...cat,
       questions: cat.questions.filter(q => {
-        const ms = !search || q.q.toLowerCase().includes(search.toLowerCase()) || q.a.toLowerCase().includes(search.toLowerCase());
         const mc = !selectedCat || cat.id === selectedCat;
-        return ms && mc;
+        if (!mc) return false;
+        if (!searchLower || searchWords.length === 0) return true;
+        // Fuzzy word match: all search words must appear in Q or A
+        const combined = (q.q + ' ' + q.a).toLowerCase();
+        return searchWords.every(word => combined.includes(word));
       }),
     })).filter(cat => cat.questions.length > 0);
   }, [search, selectedCat, faqData]);
@@ -1121,7 +1173,7 @@ export default function FAQScreen() {
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={st.scrollView} contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && st.scrollContentTablet]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+      <ScrollView ref={scrollRef} style={st.scrollView} contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && st.scrollContentTablet]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled" onScroll={handleScroll} scrollEventThrottle={200}>
 
         {/* Hero */}
         <Animated.View entering={FadeInDown.duration(300)}>
@@ -1300,11 +1352,30 @@ export default function FAQScreen() {
           </ScrollView>
         </View>
 
+        {/* Quick Jump Bar */}
+        {!isSearching && !selectedCat && filtered.length > 2 ? (
+          <View style={st.quickJumpWrap}>
+            <View style={st.quickJumpHeader}>
+              <MaterialIcons name="bolt" size={14} color={activeTabConfig.color} />
+              <Text style={[st.quickJumpTitle, { color: activeTabConfig.color }]}>{fr ? 'Aller a' : 'Jump to'}</Text>
+            </View>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.quickJumpScroll}>
+              {filtered.map(cat => (
+                <Pressable key={cat.id} style={[st.quickJumpChip, { borderColor: cat.color + '40' }]} onPress={() => scrollToSection(cat.id)}>
+                  <MaterialIcons name={cat.icon as any} size={12} color={cat.color} />
+                  <Text style={[st.quickJumpChipText, { color: cat.color }]} numberOfLines={1}>{cat.category}</Text>
+                  <MaterialIcons name="south" size={10} color={cat.color} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        ) : null}
+
         {/* FAQ Sections */}
         {filtered.length > 0 ? (
-          <View style={isTablet ? st.tabletFaqGrid : undefined}>
+          <View style={isTablet ? st.tabletFaqGrid : undefined} onLayout={(e) => { sectionYMap.current.set('__offset', e.nativeEvent.layout.y); }}>
             {filtered.map(cat => (
-              <View key={cat.id} style={[st.catSection, isTablet && st.tabletCatSection]}>
+              <View key={cat.id} style={[st.catSection, isTablet && st.tabletCatSection]} onLayout={(e) => { sectionYMap.current.set(cat.id, e.nativeEvent.layout.y + (sectionYMap.current.get('__offset') || 0)); }}>
                 <View style={st.catSectionHeader}>
                   <View style={[st.catSectionIcon, { backgroundColor: cat.color + '15' }]}>
                     <MaterialIcons name={cat.icon as any} size={20} color={cat.color} />
@@ -1319,7 +1390,7 @@ export default function FAQScreen() {
                 </View>
                 <View style={st.faqList}>
                   {cat.questions.map(q => (
-                    <AccordionItem key={q.id} question={q.q} answer={q.a} isOpen={openQs.has(q.id)} onToggle={() => toggleQ(q.id)} color={cat.color} />
+                    <AccordionItem key={q.id} question={q.q} answer={q.a} isOpen={openQs.has(q.id)} onToggle={() => toggleQ(q.id)} color={cat.color} search={search} />
                   ))}
                 </View>
               </View>
@@ -1363,6 +1434,13 @@ export default function FAQScreen() {
 
         <Text style={st.version}>{t('common', 'version')}</Text>
       </ScrollView>
+
+      {/* Floating back to top button */}
+      {showBackToTop ? (
+        <Pressable style={[st.backToTopBtn, { bottom: insets.bottom + 20, backgroundColor: activeTabConfig.color }]} onPress={scrollToTop}>
+          <MaterialIcons name="keyboard-arrow-up" size={24} color="#FFF" />
+        </Pressable>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -1461,4 +1539,13 @@ const st = StyleSheet.create({
   contactBtnEmail: { fontSize: 12, color: theme.textSecondary, marginTop: 2 },
   contactBtnArrow: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' },
   version: { fontSize: 12, color: theme.textMuted, textAlign: 'center', marginTop: 8 },
+  // Quick Jump
+  quickJumpWrap: { marginBottom: 16, backgroundColor: theme.surface, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: theme.border },
+  quickJumpHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 },
+  quickJumpTitle: { fontSize: 12, fontWeight: '700' as const, letterSpacing: 0.3 },
+  quickJumpScroll: { gap: 6, paddingRight: 4 },
+  quickJumpChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10, borderWidth: 1.5, backgroundColor: theme.surface },
+  quickJumpChipText: { fontSize: 11, fontWeight: '600' as const, maxWidth: 100 },
+  // Back to top
+  backToTopBtn: { position: 'absolute' as const, right: 16, width: 48, height: 48, borderRadius: 24, alignItems: 'center' as const, justifyContent: 'center' as const, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 4 },
 });
