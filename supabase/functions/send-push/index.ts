@@ -16,7 +16,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
-import { sendPushNotifications, buildPushMessage, haversineDistance } from '../_shared/push.ts';
+import { sendPushNotifications, buildPushMessage, haversineDistance, getPushReceipts } from '../_shared/push.ts';
 
 const PROXIMITY_RADIUS_KM = 200;
 
@@ -1025,7 +1025,7 @@ Deno.serve(async (req: Request) => {
     // ANNOUNCEMENT: Admin sends targeted announcement push
     // ============================================================
     else if (type === 'announcement') {
-      const { titleFr, titleEn, messageFr, messageEn, targetType, targetValue } = payload || {};
+      const { titleFr, titleEn, messageFr, messageEn, targetType, targetValue, abTest, variantBTitleFr, variantBTitleEn, variantBMessageFr, variantBMessageEn, combinedFilters } = payload || {};
       if (!titleFr && !titleEn) {
         return new Response(JSON.stringify({ error: 'Missing title' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -1059,88 +1059,100 @@ Deno.serve(async (req: Request) => {
 
       let targetTokens = allAnnTokens;
 
-      // Apply targeting filter
-      if (targetType && targetType !== 'all' && targetValue) {
+      // Apply targeting filter (supports single target or combined filters)
+      const hasCombined = combinedFilters && typeof combinedFilters === 'object' && Object.keys(combinedFilters).length > 0;
+      if ((targetType && targetType !== 'all' && targetValue) || hasCombined) {
         const allUserIds = [...new Set(allAnnTokens.map((t: any) => t.user_id))];
         let matchedUserIds = new Set<string>();
+        const combinedSets: Set<string>[] = [];
 
-        if (targetType === 'rank') {
-          // Filter by ELO rank tier(s) from players.elo_rating
-          // targetValue can be comma-separated for multi-rank selection
-          const rankRanges: Record<string, { min: number; max: number }> = {
-            bronze: { min: 0, max: 1099 },
-            silver: { min: 1100, max: 1199 },
-            gold: { min: 1200, max: 1499 },
-            diamond: { min: 1500, max: 1799 },
-            master: { min: 1800, max: 1999 },
-            grand_master: { min: 2000, max: 999999 },
-          };
-          const rankKeys = targetValue.split(',').map((r: string) => r.trim()).filter(Boolean);
-          for (const rk of rankKeys) {
-            const range = rankRanges[rk];
-            if (range) {
-              const { data: rankPlayers } = await supabaseAdmin
-                .from('players')
-                .select('user_id')
-                .gte('elo_rating', range.min)
-                .lte('elo_rating', range.max)
-                .in('user_id', allUserIds);
-              (rankPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+        // Helper to build a set from a single criteria
+        const buildCriteriaSet = async (cType: string, cValue: string): Promise<Set<string>> => {
+          const cSet = new Set<string>();
+          if (cType === 'rank' && cValue) {
+            const rankRanges: Record<string, { min: number; max: number }> = {
+              bronze: { min: 0, max: 1099 }, silver: { min: 1100, max: 1199 },
+              gold: { min: 1200, max: 1499 }, diamond: { min: 1500, max: 1799 },
+              master: { min: 1800, max: 1999 }, grand_master: { min: 2000, max: 999999 },
+            };
+            const rankKeys = cValue.split(',').map((r: string) => r.trim()).filter(Boolean);
+            for (const rk of rankKeys) {
+              const range = rankRanges[rk];
+              if (range) {
+                const { data: rp } = await supabaseAdmin.from('players').select('user_id').gte('elo_rating', range.min).lte('elo_rating', range.max).in('user_id', allUserIds);
+                (rp || []).forEach((p: any) => cSet.add(p.user_id));
+              }
+            }
+          } else if (cType === 'account_age' && cValue) {
+            const maxDays = parseInt(cValue) || 7;
+            const cutoff = new Date(Date.now() - maxDays * 86400000).toISOString();
+            const { data: nu } = await supabaseAdmin.from('user_profiles').select('id').gte('created_at', cutoff).in('id', allUserIds);
+            (nu || []).forEach((u: any) => cSet.add(u.id));
+          } else if (cType === 'match_count' && cValue) {
+            const parts = cValue.split('-');
+            const minM = parseInt(parts[0]) || 0;
+            const maxM = parseInt(parts[1]) || 999999;
+            const { data: ps } = await supabaseAdmin.from('players').select('user_id, stats').in('user_id', allUserIds);
+            (ps || []).forEach((p: any) => { const mc = p.stats?.matchesPlayed || 0; if (mc >= minM && mc <= maxM) cSet.add(p.user_id); });
+          } else if (cType === 'last_active' && cValue) {
+            const days = parseInt(cValue) || 30;
+            const cutoff = new Date(Date.now() - days * 86400000).toISOString();
+            const { data: ip } = await supabaseAdmin.from('players').select('user_id').in('user_id', allUserIds).lt('last_match_date', cutoff);
+            (ip || []).forEach((p: any) => cSet.add(p.user_id));
+            const { data: nm } = await supabaseAdmin.from('players').select('user_id').in('user_id', allUserIds).is('last_match_date', null);
+            (nm || []).forEach((p: any) => cSet.add(p.user_id));
+          } else if (cType === 'city' && cValue) {
+            const cl = cValue.toLowerCase();
+            const { data: tc } = await supabaseAdmin.from('terrains').select('user_id, city').in('user_id', allUserIds);
+            const { data: cc } = await supabaseAdmin.from('clubs').select('user_id, city').in('user_id', allUserIds);
+            (tc || []).forEach((t: any) => { if (t.city?.toLowerCase() === cl) cSet.add(t.user_id); });
+            (cc || []).forEach((c: any) => { if (c.city?.toLowerCase() === cl) cSet.add(c.user_id); });
+          } else if (cType === 'club' && cValue) {
+            const cl = cValue.toLowerCase();
+            const { data: cp } = await supabaseAdmin.from('players').select('user_id, club').in('user_id', allUserIds);
+            (cp || []).forEach((p: any) => { if (p.club?.toLowerCase() === cl) cSet.add(p.user_id); });
+          }
+          return cSet;
+        };
+
+        // Combined filters mode: intersect multiple criteria
+        if (hasCombined) {
+          for (const [cType, cValue] of Object.entries(combinedFilters as Record<string, string>)) {
+            if (cValue) {
+              const cSet = await buildCriteriaSet(cType, cValue);
+              if (cSet.size > 0) combinedSets.push(cSet);
             }
           }
-        } else if (targetType === 'level') {
-          // Legacy: filter by user_profiles.level
-          const { data: profileUsers } = await supabaseAdmin
-            .from('user_profiles')
-            .select('id')
-            .eq('level', targetValue)
-            .in('id', allUserIds);
-          (profileUsers || []).forEach((p: any) => matchedUserIds.add(p.id));
+          if (combinedSets.length > 0) {
+            // Intersect all sets
+            let intersection = combinedSets[0];
+            for (let si = 1; si < combinedSets.length; si++) {
+              intersection = new Set([...intersection].filter(uid => combinedSets[si].has(uid)));
+            }
+            intersection.forEach(uid => matchedUserIds.add(uid));
+            console.log(`[send-push] announcement: combined filters, ${combinedSets.length} criteria, ${matchedUserIds.size} matched after intersection`);
+          }
+        } else if (targetType === 'rank') {
+          const rSet = await buildCriteriaSet('rank', targetValue);
+          rSet.forEach(uid => matchedUserIds.add(uid));
         } else if (targetType === 'city') {
-          // Filter by city from players location, terrains, or clubs
-          const cityLower = targetValue.toLowerCase();
-          for (const uid of allUserIds) {
-            // Check player location
-            const { data: pLoc } = await supabaseAdmin
-              .from('players')
-              .select('location')
-              .eq('user_id', uid)
-              .limit(1)
-              .maybeSingle();
-            if (pLoc?.location?.city?.toLowerCase() === cityLower) {
-              matchedUserIds.add(uid);
-              continue;
-            }
-            // Check terrains
-            const { data: tCities } = await supabaseAdmin
-              .from('terrains')
-              .select('city')
-              .eq('user_id', uid)
-              .limit(5);
-            if ((tCities || []).some((t: any) => t.city?.toLowerCase() === cityLower)) {
-              matchedUserIds.add(uid);
-              continue;
-            }
-            // Check clubs
-            const { data: cCities } = await supabaseAdmin
-              .from('clubs')
-              .select('city')
-              .eq('user_id', uid)
-              .limit(5);
-            if ((cCities || []).some((c: any) => c.city?.toLowerCase() === cityLower)) {
-              matchedUserIds.add(uid);
-            }
-          }
+          const cSet = await buildCriteriaSet('city', targetValue);
+          cSet.forEach(uid => matchedUserIds.add(uid));
         } else if (targetType === 'club') {
-          // Filter by club name
-          const clubLower = targetValue.toLowerCase();
-          const { data: clubPlayers } = await supabaseAdmin
-            .from('players')
-            .select('user_id, club')
-            .in('user_id', allUserIds);
-          (clubPlayers || []).forEach((p: any) => {
-            if (p.club?.toLowerCase() === clubLower) matchedUserIds.add(p.user_id);
-          });
+          const cSet = await buildCriteriaSet('club', targetValue);
+          cSet.forEach(uid => matchedUserIds.add(uid));
+        } else if (targetType === 'account_age') {
+          const aSet = await buildCriteriaSet('account_age', targetValue);
+          aSet.forEach(uid => matchedUserIds.add(uid));
+        } else if (targetType === 'match_count') {
+          const mSet = await buildCriteriaSet('match_count', targetValue);
+          mSet.forEach(uid => matchedUserIds.add(uid));
+        } else if (targetType === 'last_active') {
+          const lSet = await buildCriteriaSet('last_active', targetValue);
+          lSet.forEach(uid => matchedUserIds.add(uid));
+        } else if (targetType === 'level') {
+          const { data: profileUsers } = await supabaseAdmin.from('user_profiles').select('id').eq('level', targetValue).in('id', allUserIds);
+          (profileUsers || []).forEach((p: any) => matchedUserIds.add(p.id));
         }
 
         console.log(`[send-push] announcement: ${targetType}=${targetValue}, matched ${matchedUserIds.size} users`);
@@ -1158,27 +1170,102 @@ Deno.serve(async (req: Request) => {
       const annTitle = titleFr || titleEn;
       const annBody = messageFr || messageEn;
 
+      // Build platform breakdown for analytics
+      const platformCounts: Record<string, number> = {};
+      targetTokens.forEach((t: any) => {
+        const platform = t.platform || 'unknown';
+        platformCounts[platform] = (platformCounts[platform] || 0) + 1;
+      });
+
+      // A/B test: split tokens 50/50
+      let variantASent = 0, variantAErrors = 0, variantBSent = 0, variantBErrors = 0;
+      const isAB = abTest === true && variantBTitleFr;
+      const variantATokens = isAB ? targetTokens.filter((_: any, idx: number) => idx % 2 === 0) : targetTokens;
+      const variantBTokens = isAB ? targetTokens.filter((_: any, idx: number) => idx % 2 === 1) : [];
+
+      const ticketIds: string[] = [];
       const BATCH_SIZE = 100;
-      for (let i = 0; i < targetTokens.length; i += BATCH_SIZE) {
-        const batch = targetTokens.slice(i, i + BATCH_SIZE).map((t: any) => buildPushMessage(
+
+      // Send Variant A
+      for (let i = 0; i < variantATokens.length; i += BATCH_SIZE) {
+        const batch = variantATokens.slice(i, i + BATCH_SIZE).map((t: any) => buildPushMessage(
           t.token,
           `\u{1F4E2} ${annTitle}`,
           annBody,
-          { type: 'announcement' },
+          { type: 'announcement', variant: isAB ? 'A' : undefined },
           { channelId: 'tournament-reminders', priority: 'high' }
         ));
         const tickets = await sendPushNotifications(batch);
-        sent += tickets.filter((t: any) => t.status === 'ok').length;
-        errors += tickets.filter((t: any) => t.status === 'error').length;
-
+        const bSent = tickets.filter((t: any) => t.status === 'ok').length;
+        const bErr = tickets.filter((t: any) => t.status === 'error').length;
+        sent += bSent; errors += bErr;
+        variantASent += bSent; variantAErrors += bErr;
+        tickets.forEach((t: any) => { if (t.id) ticketIds.push(t.id); });
         for (let j = 0; j < tickets.length; j++) {
           if (tickets[j].details?.error === 'DeviceNotRegistered') {
             const invalidToken = batch[j]?.to;
-            if (invalidToken) {
-              await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+            if (invalidToken) await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+          }
+        }
+      }
+
+      // Send Variant B (if A/B test)
+      if (isAB && variantBTokens.length > 0) {
+        const vbTitle = variantBTitleFr || annTitle;
+        const vbBody = variantBMessageFr || annBody;
+        for (let i = 0; i < variantBTokens.length; i += BATCH_SIZE) {
+          const batch = variantBTokens.slice(i, i + BATCH_SIZE).map((t: any) => buildPushMessage(
+            t.token,
+            `\u{1F4E2} ${vbTitle}`,
+            vbBody,
+            { type: 'announcement', variant: 'B' },
+            { channelId: 'tournament-reminders', priority: 'high' }
+          ));
+          const tickets = await sendPushNotifications(batch);
+          const bSent = tickets.filter((t: any) => t.status === 'ok').length;
+          const bErr = tickets.filter((t: any) => t.status === 'error').length;
+          sent += bSent; errors += bErr;
+          variantBSent += bSent; variantBErrors += bErr;
+          tickets.forEach((t: any) => { if (t.id) ticketIds.push(t.id); });
+          for (let j = 0; j < tickets.length; j++) {
+            if (tickets[j].details?.error === 'DeviceNotRegistered') {
+              const invalidToken = batch[j]?.to;
+              if (invalidToken) await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
             }
           }
         }
+        console.log(`[send-push] A/B test: A=${variantASent}/${variantATokens.length}, B=${variantBSent}/${variantBTokens.length}`);
+      }
+
+      // Store ticket IDs for later receipt verification
+      if (ticketIds.length > 0) {
+        await supabaseAdmin.from('ambassador_analytics').insert({
+          ambassador_id: '00000000-0000-0000-0000-000000000000',
+          event_type: 'push_tickets',
+          source_page: ticketIds.slice(0, 500).join(','),
+          social_platform: `announcement:${payload?.titleFr || payload?.titleEn || 'unknown'}`.substring(0, 200),
+        }).catch(() => {});
+      }
+
+      // Estimate opens by checking which targeted users logged in recently (within 2 hours)
+      try {
+        const twoHoursLater = new Date(Date.now() + 2 * 3600000).toISOString();
+        // Store target user IDs for later open rate correlation
+        const targetUserIds = [...new Set(targetTokens.map((t: any) => t.user_id))];
+        await supabaseAdmin.from('ambassador_analytics').insert({
+          ambassador_id: '00000000-0000-0000-0000-000000000000',
+          event_type: 'announcement_targets',
+          source_page: targetUserIds.slice(0, 500).join(','),
+          social_platform: `ann_id:pending`,
+        }).catch(() => {});
+      } catch { /* silent */ }
+
+      // Return A/B variant stats if applicable
+      if (isAB) {
+        return new Response(
+          JSON.stringify({ sent, errors, variantASent, variantAErrors, variantBSent, variantBErrors }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
     }
 
