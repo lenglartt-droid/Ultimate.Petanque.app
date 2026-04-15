@@ -135,7 +135,7 @@ export default function AdminQuickNav({ currentRoute }: AdminQuickNavProps) {
           onPress={() => {
             if (!isDashboard) {
               Haptics.selectionAsync();
-              router.replace('/admin-dashboard' as any);
+              router.push('/admin-dashboard' as any);
             }
           }}
         >
@@ -171,7 +171,7 @@ export default function AdminQuickNav({ currentRoute }: AdminQuickNavProps) {
                 onPress={() => {
                   if (!isActive) {
                     Haptics.selectionAsync();
-                    router.replace(section.route as any);
+                    router.push(section.route as any);
                   }
                 }}
                 onLayout={(e) => handleItemLayout(section.route, e)}
