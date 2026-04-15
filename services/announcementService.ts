@@ -27,8 +27,26 @@ export interface Announcement {
     variantB?: { titleFr: string; titleEn: string; messageFr: string; messageEn: string };
     variantASent?: number; variantAErrors?: number;
     variantBSent?: number; variantBErrors?: number;
+    winner?: 'A' | 'B' | null;
+    winnerDeterminedAt?: string;
+    resent?: boolean;
+    resentAt?: string;
+    resentSent?: number;
+    resentErrors?: number;
   } | null;
   estimatedOpens: number;
+}
+
+export interface CustomTemplate {
+  id: string;
+  name: string;
+  titleFr: string;
+  titleEn: string;
+  messageFr: string;
+  messageEn: string;
+  targetType: string;
+  targetValue: string;
+  createdAt: string;
 }
 
 /**
@@ -222,6 +240,42 @@ export async function getAnnouncementHistory(limit = 30): Promise<{ announcement
     return { announcements, error: null };
   } catch (e: any) {
     return { announcements: [], error: e.message };
+  }
+}
+
+/**
+ * Resend the winning A/B variant to the other half of recipients.
+ */
+export async function resendWinningVariant(announcement: Announcement, winner: 'A' | 'B'): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
+  try {
+    const supabase = getSupabaseClient();
+    const titleFr = winner === 'B' && announcement.abData?.variantB?.titleFr ? announcement.abData.variantB.titleFr : announcement.titleFr;
+    const titleEn = winner === 'B' && announcement.abData?.variantB?.titleEn ? announcement.abData.variantB.titleEn : announcement.titleEn;
+    const messageFr = winner === 'B' && announcement.abData?.variantB?.messageFr ? announcement.abData.variantB.messageFr : announcement.messageFr;
+    const messageEn = winner === 'B' && announcement.abData?.variantB?.messageEn ? announcement.abData.variantB.messageEn : announcement.messageEn;
+
+    const pushResult = await triggerServerPush('announcement', {
+      titleFr,
+      titleEn,
+      messageFr,
+      messageEn,
+      targetType: announcement.targetType,
+      targetValue: announcement.targetValue || null,
+    }).catch(() => ({ sent: 0, errors: 0 }));
+
+    const updatedAbData = {
+      ...announcement.abData,
+      winner,
+      resent: true,
+      resentAt: new Date().toISOString(),
+      resentSent: pushResult.sent || 0,
+      resentErrors: pushResult.errors || 0,
+    };
+    await supabase.from('announcements').update({ ab_data: updatedAbData }).eq('id', announcement.id);
+
+    return { error: null, pushSent: pushResult.sent, pushErrors: pushResult.errors };
+  } catch (e: any) {
+    return { error: e.message };
   }
 }
 
