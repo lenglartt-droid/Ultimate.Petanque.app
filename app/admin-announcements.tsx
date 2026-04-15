@@ -205,6 +205,14 @@ export default function AdminAnnouncementsScreen() {
   const [showSaveTemplate, setShowSaveTemplate] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
 
+  // Smart scheduler
+  const [smartScheduleLoading, setSmartScheduleLoading] = useState(false);
+  const [smartSlots, setSmartSlots] = useState<{ hour: number; score: number }[]>([]);
+  const [showSmartSlots, setShowSmartSlots] = useState(false);
+
+  // Preview platform toggle
+  const [previewPlatform, setPreviewPlatform] = useState<'ios' | 'android'>('ios');
+
   // Combined segmentation
   const [combinedFilters, setCombinedFilters] = useState<Record<string, string>>({});
   const [combinedCount, setCombinedCount] = useState(0);
@@ -763,6 +771,7 @@ export default function AdminAnnouncementsScreen() {
                 <MaterialIcons name={showTemplates ? 'expand-less' : 'expand-more'} size={18} color="#94A3B8" />
               </Pressable>
               {showTemplates ? (
+                <>
                 <View style={s.templateGrid}>
                   {ANNOUNCEMENT_TEMPLATES.map(tpl => (
                     <Pressable
@@ -813,6 +822,7 @@ export default function AdminAnnouncementsScreen() {
                     ))}
                   </View>
                 ) : null}
+                </>
               ) : null}
             </View>
 
@@ -1222,6 +1232,85 @@ export default function AdminAnnouncementsScreen() {
                 <MaterialIcons name={scheduleMode ? 'toggle-on' : 'toggle-off'} size={24} color={scheduleMode ? '#10B981' : '#CBD5E1'} />
               </Pressable>
               {scheduleMode ? (
+                <>
+                {/* Smart Scheduler */}
+                <Pressable
+                  style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#0EA5E908', borderWidth: 1, borderColor: '#0EA5E920', marginTop: 8, marginBottom: 8 }, smartScheduleLoading && { opacity: 0.5 }]}
+                  onPress={async () => {
+                    if (smartScheduleLoading) return;
+                    setSmartScheduleLoading(true);
+                    Haptics.selectionAsync();
+                    try {
+                      const supabase = (await import('@/template')).getSupabaseClient();
+                      const { data: annData } = await supabase.from('announcements').select('created_at, push_sent_count, push_error_count').eq('status', 'sent').order('created_at', { ascending: false }).limit(100);
+                      const hourScores = new Map<number, { sent: number; errors: number; count: number }>();
+                      for (let h = 0; h < 24; h++) hourScores.set(h, { sent: 0, errors: 0, count: 0 });
+                      (annData || []).forEach((a: any) => {
+                        const hour = new Date(a.created_at).getHours();
+                        const entry = hourScores.get(hour)!;
+                        entry.sent += (a.push_sent_count || 0);
+                        entry.errors += (a.push_error_count || 0);
+                        entry.count++;
+                      });
+                      const scored = Array.from(hourScores.entries()).map(([hour, d]) => {
+                        const deliveryRate = d.sent > 0 ? ((d.sent - d.errors) / d.sent) * 100 : 50;
+                        const volumeScore = Math.min(100, d.sent / Math.max(1, (annData || []).reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0) / 24) * 100);
+                        const score = Math.round(deliveryRate * 0.6 + volumeScore * 0.2 + (d.count > 0 ? 20 : 0));
+                        return { hour, score };
+                      }).sort((a, b) => b.score - a.score);
+                      setSmartSlots(scored.slice(0, 5));
+                      setShowSmartSlots(true);
+                      if (scored.length > 0) {
+                        const best = scored[0];
+                        const tomorrow = new Date();
+                        tomorrow.setDate(tomorrow.getDate() + 1);
+                        setScheduleDate(tomorrow.toISOString().slice(0, 10));
+                        setScheduleTime(`${String(best.hour).padStart(2, '0')}:00`);
+                      }
+                    } catch (e) { console.log('[SmartSchedule] Error:', e); }
+                    setSmartScheduleLoading(false);
+                  }}
+                  disabled={smartScheduleLoading}
+                >
+                  {smartScheduleLoading ? <ActivityIndicator size="small" color="#0EA5E9" /> : <MaterialIcons name="tips-and-updates" size={14} color="#0EA5E9" />}
+                  <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Recommander creneau optimal' : 'Recommend optimal slot'}</Text>
+                </Pressable>
+                {showSmartSlots && smartSlots.length > 0 ? (
+                  <View style={{ backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                    <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 }}>
+                      <MaterialIcons name="auto-awesome" size={14} color="#0EA5E9" />
+                      <Text style={{ fontSize: 11, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Creneaux optimaux (base sur l\'historique)' : 'Optimal slots (based on history)'}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 }}>
+                      {smartSlots.map((slot, idx) => {
+                        const isSelected = scheduleTime === `${String(slot.hour).padStart(2, '0')}:00`;
+                        const scoreColor = slot.score >= 80 ? '#10B981' : slot.score >= 60 ? '#3B82F6' : '#D97706';
+                        return (
+                          <Pressable
+                            key={slot.hour}
+                            style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: isSelected ? scoreColor : '#FFF', borderWidth: 1.5, borderColor: isSelected ? scoreColor : '#E2E8F0' }]}
+                            onPress={() => {
+                              Haptics.selectionAsync();
+                              const tomorrow = new Date();
+                              tomorrow.setDate(tomorrow.getDate() + 1);
+                              setScheduleDate(tomorrow.toISOString().slice(0, 10));
+                              setScheduleTime(`${String(slot.hour).padStart(2, '0')}:00`);
+                            }}
+                          >
+                            {idx === 0 ? <MaterialIcons name="star" size={12} color={isSelected ? '#FFF' : '#F59E0B'} /> : null}
+                            <Text style={{ fontSize: 12, fontWeight: '700' as const, color: isSelected ? '#FFF' : '#0F172A' }}>{slot.hour}h</Text>
+                            <View style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : scoreColor + '15', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                              <Text style={{ fontSize: 8, fontWeight: '800' as const, color: isSelected ? '#FFF' : scoreColor }}>{slot.score}</Text>
+                            </View>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    <Text style={{ fontSize: 9, color: '#64748B', marginTop: 6, lineHeight: 13 }}>
+                      {fr ? 'Score base sur le taux de livraison, le volume et la frequence des envois passes a cette heure.' : 'Score based on delivery rate, volume and frequency of past sends at this hour.'}
+                    </Text>
+                  </View>
+                ) : null}
                 <View style={s.scheduleRow}>
                   <View style={s.scheduleField}>
                     <Text style={s.scheduleLabel}>{fr ? 'Date' : 'Date'}</Text>
@@ -1254,6 +1343,8 @@ export default function AdminAnnouncementsScreen() {
                     </View>
                   </View>
                 </View>
+              ) : null}
+              </>
               ) : null}
               {scheduleMode && scheduleDate && scheduleTime ? (() => {
                 const schedMs = new Date(`${scheduleDate}T${scheduleTime}:00`).getTime();
@@ -1349,54 +1440,152 @@ export default function AdminAnnouncementsScreen() {
         {/* Preview */}
         <Animated.View entering={FadeInDown.duration(300).delay(100)}>
           <View style={s.previewSection}>
-            <View style={s.formHeader}>
+            <View style={[s.formHeader, { marginBottom: 12 }]}>
               <View style={[s.formHeaderIcon, { backgroundColor: '#0EA5E912' }]}>
                 <MaterialIcons name="preview" size={20} color="#0EA5E9" />
               </View>
-              <Text style={s.formHeaderTitle}>{fr ? 'Apercu du push' : 'Push preview'}</Text>
+              <Text style={[s.formHeaderTitle, { flex: 1 }]}>{fr ? 'Apercu du push' : 'Push preview'}</Text>
+              {/* Platform toggle */}
+              <View style={{ flexDirection: 'row' as const, backgroundColor: '#F1F5F9', borderRadius: 10, padding: 3 }}>
+                <Pressable
+                  style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }, previewPlatform === 'ios' && { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 }]}
+                  onPress={() => { Haptics.selectionAsync(); setPreviewPlatform('ios'); }}
+                >
+                  <MaterialIcons name="phone-iphone" size={14} color={previewPlatform === 'ios' ? '#0F172A' : '#94A3B8'} />
+                  <Text style={{ fontSize: 11, fontWeight: '700' as const, color: previewPlatform === 'ios' ? '#0F172A' : '#94A3B8' }}>iOS</Text>
+                </Pressable>
+                <Pressable
+                  style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }, previewPlatform === 'android' && { backgroundColor: '#FFF', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.08, shadowRadius: 2, elevation: 1 }]}
+                  onPress={() => { Haptics.selectionAsync(); setPreviewPlatform('android'); }}
+                >
+                  <MaterialIcons name="phone-android" size={14} color={previewPlatform === 'android' ? '#3DDC84' : '#94A3B8'} />
+                  <Text style={{ fontSize: 11, fontWeight: '700' as const, color: previewPlatform === 'android' ? '#3DDC84' : '#94A3B8' }}>Android</Text>
+                </Pressable>
+              </View>
             </View>
 
-            <View style={s.previewFrame}>
-              <View style={s.previewStatusBar}>
-                <Text style={s.previewTime}>9:41</Text>
-                <View style={s.previewNotch} />
-                <View style={s.previewBattery} />
-              </View>
-
-              {hasMessage ? (
-                <View style={s.previewNotif}>
-                  <View style={s.previewNotifHeader}>
-                    <View style={s.previewAppIcon}>
-                      <MaterialIcons name="sports-baseball" size={12} color="#FFF" />
+            {/* iOS Preview */}
+            {previewPlatform === 'ios' ? (
+              <View style={s.previewFrame}>
+                <View style={s.previewStatusBar}>
+                  <Text style={s.previewTime}>9:41</Text>
+                  <View style={s.previewNotch} />
+                  <View style={s.previewBattery} />
+                </View>
+                {hasMessage ? (
+                  <View style={s.previewNotif}>
+                    <View style={s.previewNotifHeader}>
+                      <View style={s.previewAppIcon}>
+                        <MaterialIcons name="sports-baseball" size={12} color="#FFF" />
+                      </View>
+                      <Text style={s.previewAppName}>ULTIMATE PETANQUE</Text>
+                      <Text style={s.previewNotifTime}>{fr ? 'maintenant' : 'now'}</Text>
                     </View>
-                    <Text style={s.previewAppName}>Ultimate Petanque</Text>
-                    <Text style={s.previewNotifTime}>{fr ? 'maintenant' : 'now'}</Text>
+                    <Text style={s.previewNotifTitle} numberOfLines={1}>
+                      {(fr ? titleFr : titleEn) || titleFr || titleEn || (fr ? 'Titre...' : 'Title...')}
+                    </Text>
+                    <Text style={s.previewNotifBody} numberOfLines={2}>
+                      {(fr ? messageFr : messageEn) || messageFr || messageEn || (fr ? 'Message...' : 'Message...')}
+                    </Text>
+                    {targetType !== 'all' && targetValue ? (
+                      <View style={s.previewTargetRow}>
+                        <MaterialIcons name={getTargetIcon(targetType) as any} size={10} color="#94A3B8" />
+                        <Text style={s.previewTargetText}>{targetValue}</Text>
+                      </View>
+                    ) : null}
                   </View>
-                  <Text style={s.previewNotifTitle} numberOfLines={1}>
-                    {(fr ? titleFr : titleEn) || titleFr || titleEn || (fr ? 'Titre...' : 'Title...')}
-                  </Text>
-                  <Text style={s.previewNotifBody} numberOfLines={2}>
-                    {(fr ? messageFr : messageEn) || messageFr || messageEn || (fr ? 'Message...' : 'Message...')}
-                  </Text>
-                  {targetType !== 'all' && targetValue ? (
-                    <View style={s.previewTargetRow}>
-                      <MaterialIcons name={getTargetIcon(targetType) as any} size={10} color="#94A3B8" />
-                      <Text style={s.previewTargetText}>{targetValue}</Text>
-                    </View>
-                  ) : null}
+                ) : (
+                  <View style={s.previewEmpty}>
+                    <MaterialIcons name="visibility-off" size={20} color="#64748B" />
+                    <Text style={s.previewEmptyText}>{fr ? 'Saisissez titre et message' : 'Enter title and message'}</Text>
+                  </View>
+                )}
+                <View style={{ flexDirection: 'row' as const, justifyContent: 'center' as const, paddingVertical: 12 }}>
+                  <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: '#334155' }} />
                 </View>
-              ) : (
-                <View style={s.previewEmpty}>
-                  <MaterialIcons name="visibility-off" size={20} color="#64748B" />
-                  <Text style={s.previewEmptyText}>{fr ? 'Saisissez titre et message' : 'Enter title and message'}</Text>
-                </View>
-              )}
-
-              <View style={s.previewContent}>
-                <View style={s.previewPlaceholder} />
-                <View style={[s.previewPlaceholder, { width: '70%' }]} />
               </View>
-            </View>
+            ) : null}
+
+            {/* Android Preview */}
+            {previewPlatform === 'android' ? (
+              <View style={{ backgroundColor: '#1A1C1E', borderRadius: 18, overflow: 'hidden' as const, borderWidth: 3, borderColor: '#2C2E30' }}>
+                {/* Android status bar */}
+                <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4, gap: 4 }}>
+                  <MaterialIcons name="signal-cellular-alt" size={12} color="#A0A0A0" />
+                  <MaterialIcons name="wifi" size={12} color="#A0A0A0" />
+                  <Text style={{ fontSize: 10, fontWeight: '500' as const, color: '#A0A0A0' }}>85%</Text>
+                  <View style={{ width: 18, height: 9, borderRadius: 2, borderWidth: 1, borderColor: '#A0A0A0', justifyContent: 'center' as const, paddingHorizontal: 1 }}>
+                    <View style={{ width: '85%' as any, height: 5, borderRadius: 1, backgroundColor: '#A0A0A0' }} />
+                  </View>
+                </View>
+                {hasMessage ? (
+                  <View style={{ marginHorizontal: 8, marginTop: 6, backgroundColor: '#2C2E30', borderRadius: 16, padding: 14 }}>
+                    <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 }}>
+                      <View style={{ width: 22, height: 22, borderRadius: 11, backgroundColor: '#3B82F6', alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                        <MaterialIcons name="sports-baseball" size={11} color="#FFF" />
+                      </View>
+                      <Text style={{ fontSize: 11, fontWeight: '600' as const, color: '#E0E0E0', flex: 1 }}>Ultimate Petanque</Text>
+                      <Text style={{ fontSize: 10, color: '#808080' }}>{fr ? 'maintenant' : 'now'}</Text>
+                      <MaterialIcons name="expand-more" size={16} color="#808080" />
+                    </View>
+                    <Text style={{ fontSize: 13, fontWeight: '700' as const, color: '#F5F5F5', marginBottom: 4 }} numberOfLines={1}>
+                      {(fr ? titleFr : titleEn) || titleFr || titleEn || (fr ? 'Titre...' : 'Title...')}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#BDBDBD', lineHeight: 17 }} numberOfLines={3}>
+                      {(fr ? messageFr : messageEn) || messageFr || messageEn || (fr ? 'Message...' : 'Message...')}
+                    </Text>
+                    {targetType !== 'all' && targetValue ? (
+                      <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#3A3C3E' }}>
+                        <MaterialIcons name={getTargetIcon(targetType) as any} size={10} color="#808080" />
+                        <Text style={{ fontSize: 10, color: '#808080', fontWeight: '500' as const }}>{targetValue}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : (
+                  <View style={s.previewEmpty}>
+                    <MaterialIcons name="visibility-off" size={20} color="#64748B" />
+                    <Text style={s.previewEmptyText}>{fr ? 'Saisissez titre et message' : 'Enter title and message'}</Text>
+                  </View>
+                )}
+                {/* Android nav bar hint */}
+                <View style={{ flexDirection: 'row' as const, justifyContent: 'center' as const, paddingVertical: 10, gap: 28 }}>
+                  <View style={{ width: 16, height: 16, borderWidth: 1.5, borderColor: '#505050', borderRadius: 2 }} />
+                  <View style={{ width: 16, height: 16, borderRadius: 8, borderWidth: 1.5, borderColor: '#505050' }} />
+                  <View style={{ width: 0, height: 0, borderLeftWidth: 8, borderRightWidth: 8, borderBottomWidth: 14, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderBottomColor: '#505050' }} />
+                </View>
+              </View>
+            ) : null}
+
+            {/* A/B Variant B Preview */}
+            {abTestMode && hasMessage && (variantBTitleFr.trim() || variantBTitleEn.trim()) ? (
+              <View style={{ marginTop: 12 }}>
+                <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                    <Text style={{ fontSize: 10, fontWeight: '900' as const, color: '#FFF' }}>B</Text>
+                  </View>
+                  <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#7C3AED' }}>{fr ? 'Variante B' : 'Variant B'}</Text>
+                </View>
+                <View style={[previewPlatform === 'ios' ? s.previewFrame : { backgroundColor: '#1A1C1E', borderRadius: 18, overflow: 'hidden' as const, borderWidth: 3, borderColor: '#2C2E30' }]}>
+                  <View style={{ marginHorizontal: 8, marginVertical: 8, backgroundColor: previewPlatform === 'ios' ? '#1E293B' : '#2C2E30', borderRadius: 16, padding: 12 }}>
+                    <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 6 }}>
+                      <View style={{ width: 20, height: 20, borderRadius: previewPlatform === 'ios' ? 5 : 10, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const }}>
+                        <MaterialIcons name="sports-baseball" size={10} color="#FFF" />
+                      </View>
+                      <Text style={{ fontSize: 9, fontWeight: '700' as const, color: '#94A3B8', flex: 1, textTransform: 'uppercase' as const, letterSpacing: 0.5 }}>Ultimate Petanque</Text>
+                      <View style={{ backgroundColor: '#7C3AED20', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                        <Text style={{ fontSize: 7, fontWeight: '800' as const, color: '#7C3AED' }}>B</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#F8FAFC', marginBottom: 3 }} numberOfLines={1}>
+                      {(fr ? variantBTitleFr : variantBTitleEn) || variantBTitleFr || variantBTitleEn}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: '#CBD5E1', lineHeight: 15 }} numberOfLines={2}>
+                      {(fr ? variantBMessageFr : variantBMessageEn) || variantBMessageFr || variantBMessageEn}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            ) : null}
           </View>
         </Animated.View>
 
@@ -1590,6 +1779,18 @@ export default function AdminAnnouncementsScreen() {
                   })}
                 </View>
               </View>
+            ) : null}
+
+            {/* A/B Test Dashboard Link */}
+            {history.some(a => a.abData?.variantB) ? (
+              <Pressable
+                style={{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 12, borderRadius: 12, backgroundColor: '#7C3AED08', borderWidth: 1, borderColor: '#7C3AED20', marginBottom: 12 }}
+                onPress={() => { Haptics.selectionAsync(); router.push('/admin-ab-tests' as any); }}
+              >
+                <MaterialIcons name="science" size={16} color="#7C3AED" />
+                <Text style={{ fontSize: 13, fontWeight: '700' as const, color: '#7C3AED' }}>{fr ? 'Voir le dashboard A/B complet' : 'View full A/B dashboard'}</Text>
+                <MaterialIcons name="arrow-forward" size={14} color="#7C3AED" />
+              </Pressable>
             ) : null}
 
             {/* A/B Test Results */}
