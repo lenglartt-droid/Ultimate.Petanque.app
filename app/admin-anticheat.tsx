@@ -17,7 +17,7 @@ import { useAppUI } from '@/contexts/AppContext';
 import {
   fetchSuspiciousPlayers, updateSuspiciousStatus, updateTrustScore,
   getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore,
-  banPlayer,
+  banPlayer, fetchDeletionAlerts, DeletionAlert,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { recalculateAllElo, ELO_RANKS, getEloRank, ELO_INITIAL, applyInactivityDecay } from '@/services/eloService';
@@ -55,6 +55,10 @@ export default function AdminAntiCheatScreen() {
   const [eloLoading, setEloLoading] = useState(true);
   const [applyingDecay, setApplyingDecay] = useState(false);
 
+  // Deletion alerts
+  const [deletionAlerts, setDeletionAlerts] = useState<DeletionAlert[]>([]);
+  const [deletionAlertsLoading, setDeletionAlertsLoading] = useState(true);
+
   // Detail modal
   const [selectedPlayer, setSelectedPlayer] = useState<any | null>(null);
   const [adminNotes, setAdminNotes] = useState('');
@@ -71,6 +75,16 @@ export default function AdminAntiCheatScreen() {
   }, [language]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Load deletion alerts
+  useEffect(() => {
+    (async () => {
+      setDeletionAlertsLoading(true);
+      const { alerts } = await fetchDeletionAlerts();
+      setDeletionAlerts(alerts);
+      setDeletionAlertsLoading(false);
+    })();
+  }, [players]);
 
   // Load ELO dashboard
   useEffect(() => {
@@ -297,6 +311,89 @@ export default function AdminAntiCheatScreen() {
       </View>
 
       <AdminQuickNav currentRoute="/admin-anticheat" />
+
+      {/* ============ DELETION ALERTS ============ */}
+      {!deletionAlertsLoading && deletionAlerts.length > 0 ? (
+        <View style={st.deletionSection}>
+          <View style={st.deletionHeader}>
+            <View style={[st.deletionIconWrap, { backgroundColor: '#EF444415' }]}>
+              <MaterialIcons name="delete-sweep" size={18} color="#EF4444" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={st.deletionTitle}>{(et.deletionAlertTitle as any)?.[language] || 'Defeat Deletion Alerts'}</Text>
+              <Text style={st.deletionSubtitle}>{(et.deletionAlertDesc as any)?.[language] || 'Players who deleted lost matches'}</Text>
+            </View>
+            <View style={st.deletionCountBadge}>
+              <Text style={st.deletionCountText}>{deletionAlerts.length}</Text>
+            </View>
+          </View>
+          {deletionAlerts.slice(0, 5).map((alert, idx) => {
+            const isCritical = alert.recentDeletedLost7d >= 5 || alert.deletedLostMatches >= 10;
+            const severityColor = isCritical ? '#EF4444' : '#F59E0B';
+            const severityLabel = isCritical
+              ? ((et.deletionCritical as any)?.[language] || 'Critical')
+              : ((et.deletionWarning as any)?.[language] || 'Warning');
+            return (
+              <Pressable
+                key={alert.playerId}
+                style={[st.deletionCard, { borderLeftColor: severityColor }]}
+                onPress={() => {
+                  const p = players.find(pl => pl.playerId === alert.playerId);
+                  if (p) { setSelectedPlayer(p); setAdminNotes(p.adminNotes || ''); }
+                  else router.push(`/player/${alert.playerId}` as any);
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                  <View style={st.deletionAvatar}>
+                    {alert.playerAvatar ? (
+                      <Image source={{ uri: alert.playerAvatar }} style={{ width: 32, height: 32, borderRadius: 10 }} contentFit="cover" />
+                    ) : (
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textSecondary }}>{(alert.playerName || '?').charAt(0)}</Text>
+                    )}
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.deletionPlayerName}>{alert.playerName || alert.playerId.substring(0, 8)}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+                      <View style={[st.deletionSeverity, { backgroundColor: severityColor + '15', borderColor: severityColor + '30' }]}>
+                        <MaterialIcons name={isCritical ? 'error' : 'warning'} size={10} color={severityColor} />
+                        <Text style={[st.deletionSeverityText, { color: severityColor }]}>{severityLabel}</Text>
+                      </View>
+                      <View style={[st.deletionTrustBadge, { borderColor: getTrustScoreColor(alert.trustScore) }]}>
+                        <Text style={[st.deletionTrustText, { color: getTrustScoreColor(alert.trustScore) }]}>{alert.trustScore}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+                </View>
+                <View style={st.deletionStatsRow}>
+                  <View style={st.deletionStatItem}>
+                    <Text style={[st.deletionStatValue, { color: '#EF4444' }]}>{alert.recentDeletedLost7d}</Text>
+                    <Text style={st.deletionStatLabel}>{(et.recentDeletions7d as any)?.[language] || '7d'}</Text>
+                  </View>
+                  <View style={st.deletionStatDivider} />
+                  <View style={st.deletionStatItem}>
+                    <Text style={[st.deletionStatValue, { color: '#F97316' }]}>{alert.deletedLostMatches}</Text>
+                    <Text style={st.deletionStatLabel}>{(et.deletedLostMatches as any)?.[language] || 'Losses del.'}</Text>
+                  </View>
+                  <View style={st.deletionStatDivider} />
+                  <View style={st.deletionStatItem}>
+                    <Text style={[st.deletionStatValue, { color: '#DC2626' }]}>-{alert.avoidedEloLoss}</Text>
+                    <Text style={st.deletionStatLabel}>{(et.avoidedEloLoss as any)?.[language] || 'ELO avoided'}</Text>
+                  </View>
+                  <View style={st.deletionStatDivider} />
+                  <View style={st.deletionStatItem}>
+                    <Text style={[st.deletionStatValue, { color: theme.textSecondary }]}>{alert.totalDeletedMatches}</Text>
+                    <Text style={st.deletionStatLabel}>{(et.totalDeletedMatches as any)?.[language] || 'Total del.'}</Text>
+                  </View>
+                </View>
+              </Pressable>
+            );
+          })}
+          {deletionAlerts.length > 5 ? (
+            <Text style={st.deletionMoreText}>+{deletionAlerts.length - 5} {isFr ? 'autres alertes' : 'more alerts'}</Text>
+          ) : null}
+        </View>
+      ) : null}
 
       {/* ============ ELO Dashboard ============ */}
       {!eloLoading && eloDashboard ? (
@@ -602,6 +699,8 @@ export default function AdminAntiCheatScreen() {
                       { label: isFr ? 'Coherence' : 'Consistency', value: `${selectedPlayer.details.performanceConsistency || 0}%` },
                       { label: isFr ? 'Modifs externes' : 'External mods', value: selectedPlayer.details.modificationLogs?.external || 0 },
                       { label: isFr ? 'Matchs/semaine' : 'Matches/week', value: selectedPlayer.details.matchesPerWeek || '-' },
+                      { label: isFr ? 'Defaites supprimees' : 'Deleted losses', value: selectedPlayer.details.deletionAnalysis?.deletedLostMatches || 0 },
+                      { label: isFr ? 'Perte ELO evitee' : 'ELO loss avoided', value: selectedPlayer.details.deletionAnalysis?.avoidedEloLoss ? `-${selectedPlayer.details.deletionAnalysis.avoidedEloLoss}` : '0' },
                       { label: isFr ? 'Anciennete (jours)' : 'Account age (days)', value: selectedPlayer.details.accountAgeDays || '-' },
                       { label: isFr ? 'Signalements' : 'Reports', value: selectedPlayer.details.totalReports || 0 },
                     ].map((stat, i) => (
@@ -817,4 +916,26 @@ const st = StyleSheet.create({
   eloDashDistLabel: { fontSize: 7, color: theme.textMuted, fontWeight: '600' as const, textAlign: 'center' as const },
   eloDashDistCount: { fontSize: 10, fontWeight: '700' as const },
   eloDashActionBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10, borderWidth: 1 },
+
+  // Deletion alerts
+  deletionSection: { marginHorizontal: 16, marginBottom: 10, backgroundColor: theme.surface, borderRadius: 16, padding: 14, ...theme.shadows.card, borderWidth: 1, borderColor: '#EF4444' + '20' },
+  deletionHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  deletionIconWrap: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  deletionTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  deletionSubtitle: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  deletionCountBadge: { backgroundColor: '#EF4444', borderRadius: 12, minWidth: 24, height: 24, alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 8 },
+  deletionCountText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF' },
+  deletionCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 3 },
+  deletionAvatar: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.surface, alignItems: 'center' as const, justifyContent: 'center' as const, overflow: 'hidden' as const },
+  deletionPlayerName: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  deletionSeverity: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1 },
+  deletionSeverityText: { fontSize: 9, fontWeight: '700' as const },
+  deletionTrustBadge: { width: 26, height: 26, borderRadius: 13, borderWidth: 2, alignItems: 'center' as const, justifyContent: 'center' as const },
+  deletionTrustText: { fontSize: 10, fontWeight: '900' as const },
+  deletionStatsRow: { flexDirection: 'row' as const, alignItems: 'center' as const },
+  deletionStatItem: { flex: 1, alignItems: 'center' as const },
+  deletionStatValue: { fontSize: 16, fontWeight: '800' as const },
+  deletionStatLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600' as const, marginTop: 2, textAlign: 'center' as const },
+  deletionStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
+  deletionMoreText: { fontSize: 12, color: theme.textMuted, fontWeight: '600' as const, textAlign: 'center' as const, paddingTop: 4 },
 });

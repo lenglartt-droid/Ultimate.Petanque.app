@@ -3240,6 +3240,7 @@ export const translations = {
     miniMapPreview: { fr: 'Aperçu de la position', en: 'Position preview' },
     postalCodeDetected: { fr: 'Recherche par code postal', en: 'Postal code search' },
     tipPostalCode: { fr: 'Saisissez un code postal (ex: 75001)', en: 'Enter a postal code (e.g. 75001)' },
+    clearAll: { fr: 'Tout effacer', en: 'Clear all' },
   },
 
   // ============================================

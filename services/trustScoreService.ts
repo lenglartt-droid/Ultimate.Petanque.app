@@ -418,6 +418,90 @@ export function getValidationWeightFromLevel(level: MatchValidationLevel): numbe
 }
 
 // ============================================
+// DELETION ALERTS (Admin)
+// ============================================
+
+export interface DeletionAlert {
+  userId: string;
+  playerId: string;
+  playerName?: string;
+  playerAvatar?: string;
+  totalDeletedMatches: number;
+  deletedLostMatches: number;
+  avoidedEloLoss: number;
+  recentDeletedLost7d: number;
+  trustScore: number;
+  flags: string[];
+  analyzedAt: string;
+}
+
+/**
+ * Fetch players with suspicious match deletion patterns for admin dashboard.
+ * Returns players who deleted 3+ lost matches in last 7 days, or 5+ total.
+ */
+export async function fetchDeletionAlerts(): Promise<{
+  alerts: DeletionAlert[];
+  error: string | null;
+}> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data, error } = await supabase
+      .from('suspicious_players')
+      .select('*')
+      .order('trust_score', { ascending: true });
+
+    if (error) return { alerts: [], error: error.message };
+
+    const alerts: DeletionAlert[] = [];
+    for (const row of data || []) {
+      const details = row.details || {};
+      const delAnalysis = details.deletionAnalysis;
+      if (!delAnalysis) continue;
+
+      const { totalDeletedMatches, deletedLostMatches, avoidedEloLoss, recentDeletedLost7d } = delAnalysis;
+      // Alert threshold: 3+ recent deletions of lost matches OR 5+ total
+      if (recentDeletedLost7d >= 3 || deletedLostMatches >= 5) {
+        let playerName: string | undefined;
+        let playerAvatar: string | undefined;
+        try {
+          const { data: p } = await supabase
+            .from('players')
+            .select('name, avatar')
+            .eq('id', row.player_id)
+            .single();
+          playerName = p?.name;
+          playerAvatar = p?.avatar || undefined;
+        } catch { /* silent */ }
+
+        alerts.push({
+          userId: row.user_id,
+          playerId: row.player_id,
+          playerName,
+          playerAvatar,
+          totalDeletedMatches,
+          deletedLostMatches,
+          avoidedEloLoss,
+          recentDeletedLost7d,
+          trustScore: row.trust_score,
+          flags: Array.isArray(row.flags) ? row.flags : [],
+          analyzedAt: row.analyzed_at,
+        });
+      }
+    }
+
+    // Sort by recentDeletedLost7d desc, then by avoidedEloLoss desc
+    alerts.sort((a, b) => {
+      if (b.recentDeletedLost7d !== a.recentDeletedLost7d) return b.recentDeletedLost7d - a.recentDeletedLost7d;
+      return b.avoidedEloLoss - a.avoidedEloLoss;
+    });
+
+    return { alerts, error: null };
+  } catch (e: any) {
+    return { alerts: [], error: e.message };
+  }
+}
+
+// ============================================
 // BAN ENFORCEMENT
 // ============================================
 
