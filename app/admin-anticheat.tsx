@@ -11,9 +11,10 @@ import { router } from 'expo-router';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
+import AdminGuard from '@/components/feature/AdminGuard';
+import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
-import { useAppUI } from '@/contexts/AppContext';
 import {
   fetchSuspiciousPlayers, updateSuspiciousStatus, updateTrustScore,
   getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore,
@@ -22,6 +23,7 @@ import {
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { recalculateAllElo, ELO_RANKS, getEloRank, ELO_INITIAL, applyInactivityDecay } from '@/services/eloService';
+import { useAdminCache } from '@/hooks/useAdminCache';
 
 const et = extraTranslations.trustScore;
 
@@ -32,8 +34,8 @@ export default function AdminAntiCheatScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
-  const { isAdmin } = useAppUI();
   const isFr = language === 'fr';
+  const adminCache = useAdminCache();
 
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -72,11 +74,29 @@ export default function AdminAntiCheatScreen() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [reversingElo, setReversingElo] = useState(false);
 
+  // Bulk ELO reversal
+  const [bulkReversing, setBulkReversing] = useState(false);
+
+  // Deletion heatmap (day x hour) for detail modal
+  const [deletionHeatmap, setDeletionHeatmap] = useState<number[][]>([]);
+
   const loadData = useCallback(async () => {
     setLoading(true);
+    const cached = adminCache.getCached<any[]>('anticheat-players');
+    if (cached) {
+      setPlayers(cached);
+      setLoading(false);
+      // Background refresh
+      fetchSuspiciousPlayers().then(({ players: p }) => {
+        setPlayers(p);
+        adminCache.setCached('anticheat-players', p, 30000);
+      });
+      return;
+    }
     const { players: p, error } = await fetchSuspiciousPlayers();
     if (error) showAlert((et.adminTitle as any)?.[language] || 'Error', error);
     setPlayers(p);
+    adminCache.setCached('anticheat-players', p, 30000);
     setLoading(false);
   }, [language]);
 
@@ -250,16 +270,7 @@ export default function AdminAntiCheatScreen() {
     banned: players.filter(p => p.status === 'banned').length,
   };
 
-  if (!isAdmin) {
-    return (
-      <SafeAreaView style={st.container}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-          <MaterialIcons name="lock" size={48} color={theme.textMuted} />
-          <Text style={{ fontSize: 16, color: theme.textMuted, marginTop: 12 }}>Admin only</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -281,7 +292,46 @@ export default function AdminAntiCheatScreen() {
     return (labels[status] as any)?.[language] || status;
   };
 
+  // Bulk ELO reversal handler
+  const handleBulkReverseElo = async () => {
+    if (bulkReversing || deletionAlerts.length === 0) return;
+    const totalAvoided = deletionAlerts.reduce((s, a) => s + a.avoidedEloLoss, 0);
+    showAlert(
+      ((et.bulkReverseEloConfirmTitle as any)?.[language] || 'Reverse ELO for {count} player(s)?').replace('{count}', String(deletionAlerts.length)),
+      ((et.bulkReverseEloConfirmMsg as any)?.[language] || 'Subtract total {elo} ELO pts').replace('{elo}', String(totalAvoided)),
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: (et.reverseElo as any)?.[language] || 'Reverse',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkReversing(true);
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+            let reversed = 0;
+            let totalEloSubtracted = 0;
+            for (const alert of deletionAlerts) {
+              if (alert.avoidedEloLoss === 0) continue;
+              const { error, eloBefore, eloAfter } = await reverseDeletedEloLoss(alert.userId, alert.playerId);
+              if (!error) {
+                reversed++;
+                totalEloSubtracted += (eloBefore - eloAfter);
+              }
+            }
+            setBulkReversing(false);
+            const msg = ((et.bulkReverseEloSuccess as any)?.[language] || '{count} reversed, {elo} pts')
+              .replace('{count}', String(reversed))
+              .replace('{elo}', String(totalEloSubtracted));
+            showAlert(msg);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   return (
+    <PageErrorBoundary pageName="AntiCheat">
+    <AdminGuard language={language}>
     <SafeAreaView edges={['top']} style={st.container}>
       <View style={st.header}>
         <View style={{ flex: 1 }}>
@@ -398,6 +448,19 @@ export default function AdminAntiCheatScreen() {
           {deletionAlerts.length > 5 ? (
             <Text style={st.deletionMoreText}>+{deletionAlerts.length - 5} {isFr ? 'autres alertes' : 'more alerts'}</Text>
           ) : null}
+          {/* Bulk ELO reversal */}
+          <Pressable
+            style={[st.bulkReverseBtn, bulkReversing && { opacity: 0.6 }]}
+            onPress={handleBulkReverseElo}
+            disabled={bulkReversing}
+          >
+            {bulkReversing ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="undo" size={14} color="#FFF" />}
+            <Text style={st.bulkReverseBtnText}>
+              {bulkReversing
+                ? ((et.bulkReversing as any)?.[language] || 'Reversing...')
+                : `${(et.bulkReverseElo as any)?.[language] || 'Reverse all'} (-${deletionAlerts.reduce((s, a) => s + a.avoidedEloLoss, 0)} ELO)`}
+            </Text>
+          </Pressable>
         </View>
       ) : null}
 
@@ -738,6 +801,23 @@ export default function AdminAntiCheatScreen() {
                         setTimelineLoading(true);
                         const { timeline } = await fetchDeletionTimeline(selectedPlayer.userId);
                         setDeletionTimeline(timeline);
+                        // Build heatmap (7 days x 24 hours)
+                        try {
+                          const supabase = getSupabaseClient();
+                          const { data: softDels } = await supabase
+                            .from('soft_deletes')
+                            .select('deleted_at')
+                            .eq('user_id', selectedPlayer.userId)
+                            .eq('table_name', 'matches');
+                          const hm: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+                          for (const sd of softDels || []) {
+                            const dt = new Date(sd.deleted_at);
+                            const dow = (dt.getDay() + 6) % 7; // Monday=0
+                            const hour = dt.getHours();
+                            hm[dow][hour]++;
+                          }
+                          setDeletionHeatmap(hm);
+                        } catch { setDeletionHeatmap([]); }
                         setTimelineLoading(false);
                       }}
                       disabled={timelineLoading}
@@ -746,6 +826,55 @@ export default function AdminAntiCheatScreen() {
                       <Text style={{ fontSize: 11, fontWeight: '600', color: '#EF4444' }}>{timelineLoading ? '...' : (isFr ? 'Charger' : 'Load')}</Text>
                     </Pressable>
                   </View>
+
+                  {/* Deletion Heatmap (day x hour) */}
+                  {deletionHeatmap.length > 0 ? (
+                    <View style={st.heatmapContainer}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <MaterialIcons name="grid-on" size={14} color="#7C3AED" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary }}>{(et.deletionHeatmapTitle as any)?.[language] || 'Deletion Heatmap'}</Text>
+                      </View>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, marginBottom: 6 }}>{(et.deletionHeatmapDesc as any)?.[language] || 'Day vs hour'}</Text>
+                      <View style={{ flexDirection: 'row', gap: 1 }}>
+                        <View style={{ gap: 1, marginRight: 2 }}>
+                          <View style={{ height: 12 }} />
+                          {[isFr ? 'L' : 'M', isFr ? 'Ma' : 'Tu', isFr ? 'Me' : 'W', isFr ? 'J' : 'Th', isFr ? 'V' : 'F', isFr ? 'S' : 'Sa', isFr ? 'D' : 'Su'].map((d, i) => (
+                            <View key={i} style={{ height: 12, justifyContent: 'center' }}>
+                              <Text style={{ fontSize: 7, fontWeight: '600', color: theme.textMuted }}>{d}</Text>
+                            </View>
+                          ))}
+                        </View>
+                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 1 }}>
+                          {Array.from({ length: 24 }, (_, h) => {
+                            return (
+                              <View key={h} style={{ gap: 1, alignItems: 'center' }}>
+                                <Text style={{ fontSize: 6, fontWeight: '600', color: theme.textMuted, height: 12, textAlign: 'center' }}>{h}</Text>
+                                {Array.from({ length: 7 }, (_, d) => {
+                                  const count = deletionHeatmap[d]?.[h] || 0;
+                                  const maxHeat = Math.max(...deletionHeatmap.flat(), 1);
+                                  const intensity = count / maxHeat;
+                                  const bg = count === 0 ? theme.backgroundSecondary
+                                    : intensity < 0.33 ? '#FDE047'
+                                    : intensity < 0.66 ? '#F97316'
+                                    : '#EF4444';
+                                  return (
+                                    <View key={d} style={{ width: 12, height: 12, borderRadius: 2, backgroundColor: bg }} />
+                                  );
+                                })}
+                              </View>
+                            );
+                          })}
+                        </ScrollView>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6, justifyContent: 'flex-end' }}>
+                        <Text style={{ fontSize: 7, color: theme.textMuted }}>0</Text>
+                        {[theme.backgroundSecondary, '#FDE047', '#F97316', '#EF4444'].map((c, i) => (
+                          <View key={i} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c }} />
+                        ))}
+                        <Text style={{ fontSize: 7, color: theme.textMuted }}>max</Text>
+                      </View>
+                    </View>
+                  ) : null}
 
                   {/* Deletion summary stats */}
                   <View style={st.deletionSummaryRow}>
@@ -946,6 +1075,8 @@ export default function AdminAntiCheatScreen() {
         </View>
       </Modal>
     </SafeAreaView>
+    </AdminGuard>
+    </PageErrorBoundary>
   );
 }
 
@@ -1112,4 +1243,11 @@ const st = StyleSheet.create({
   timelineLegendText: { fontSize: 10, color: theme.textMuted, fontWeight: '600' as const },
   reverseEloBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 12 },
   reverseEloBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+
+  // Bulk reverse ELO
+  bulkReverseBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 12, marginTop: 8 },
+  bulkReverseBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#FFF' },
+
+  // Heatmap
+  heatmapContainer: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 12 },
 });

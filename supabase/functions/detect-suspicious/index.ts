@@ -485,6 +485,76 @@ Deno.serve(async (req: Request) => {
       details.witnessedMatchCount = attestedItems?.length || 0;
 
       // ================================================
+      // FACTOR 13: Suspicious Match Deletion (15 pts)
+      // Cross-reference soft_deletes (matches) with elo_history (won=false)
+      // ================================================
+      const { data: softDeletes } = await supabaseClient
+        .from('soft_deletes')
+        .select('item_id, deleted_at')
+        .eq('user_id', player.user_id)
+        .eq('table_name', 'matches');
+
+      const deletedMatchIds = (softDeletes || []).map((sd: any) => sd.item_id);
+      let deletedLostCount = 0;
+      let deletedLostEloImpact = 0;
+      let recentDeletedLostCount = 0; // last 7 days
+      const sevenDaysAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+      if (deletedMatchIds.length > 0) {
+        // Fetch ELO history for deleted matches where player lost
+        const { data: eloEntries } = await supabaseClient
+          .from('elo_history')
+          .select('match_id, elo_delta, won, recorded_at')
+          .eq('user_id', player.user_id)
+          .eq('won', false)
+          .in('match_id', deletedMatchIds);
+
+        deletedLostCount = eloEntries?.length || 0;
+        deletedLostEloImpact = (eloEntries || []).reduce((sum: number, e: any) => sum + Math.abs(e.elo_delta || 0), 0);
+
+        // Count recent deletions (last 7 days)
+        const recentDeletes = (softDeletes || []).filter((sd: any) => sd.deleted_at >= sevenDaysAgo);
+        const recentDeletedIds = recentDeletes.map((sd: any) => sd.item_id);
+        if (recentDeletedIds.length > 0) {
+          const recentLost = (eloEntries || []).filter((e: any) => recentDeletedIds.includes(e.match_id));
+          recentDeletedLostCount = recentLost.length;
+        }
+      }
+
+      details.deletionAnalysis = {
+        totalDeletedMatches: deletedMatchIds.length,
+        deletedLostMatches: deletedLostCount,
+        avoidedEloLoss: deletedLostEloImpact,
+        recentDeletedLost7d: recentDeletedLostCount,
+      };
+
+      // Penalty: proportional to deleted lost matches
+      if (deletedLostCount >= 10) {
+        score -= 15;
+        flags.push('mass_deletion_lost_matches');
+      } else if (deletedLostCount >= 5) {
+        score -= 10;
+        flags.push('frequent_deletion_lost_matches');
+      } else if (deletedLostCount >= 3) {
+        score -= 7;
+        flags.push('suspicious_deletion_lost_matches');
+      } else if (deletedLostCount >= 1) {
+        score -= 3;
+        flags.push('deletion_lost_match');
+      }
+
+      // Extra penalty for recent burst deletions (3+ in 7 days)
+      if (recentDeletedLostCount >= 5) {
+        score -= 8;
+        if (!flags.includes('mass_deletion_lost_matches')) flags.push('burst_deletion_7d');
+      } else if (recentDeletedLostCount >= 3) {
+        score -= 5;
+        if (!flags.includes('frequent_deletion_lost_matches') && !flags.includes('mass_deletion_lost_matches')) {
+          flags.push('burst_deletion_7d');
+        }
+      }
+
+      // ================================================
       // BONUS: Arranged match detection
       // ================================================
       // Same opponent pair > 5 times this week with same/similar scores
@@ -653,6 +723,67 @@ Deno.serve(async (req: Request) => {
         } catch (e) {
           console.error(`[detect-suspicious] Error sending trust score notification:`, e);
         }
+      }
+    }
+
+    // ============================================
+    // ADMIN PUSH NOTIFICATIONS FOR DELETION ALERTS
+    // ============================================
+    const deletionAlertPlayers = results.filter(r => {
+      const da = r.details.deletionAnalysis;
+      return da && (da.recentDeletedLost7d >= 3 || da.deletedLostMatches >= 5);
+    });
+
+    if (deletionAlertPlayers.length > 0) {
+      console.log(`[detect-suspicious] ${deletionAlertPlayers.length} deletion alert(s) - notifying admins`);
+      try {
+        const { data: admins } = await supabaseClient
+          .from('user_profiles')
+          .select('id')
+          .eq('is_admin', true);
+
+        if (admins && admins.length > 0) {
+          const adminIds = admins.map((a: any) => a.id);
+          const { data: adminTokens } = await supabaseClient
+            .from('push_tokens')
+            .select('token, user_id')
+            .in('user_id', adminIds)
+            .eq('active', true);
+
+          if (adminTokens && adminTokens.length > 0) {
+            const totalAlerts = deletionAlertPlayers.length;
+            const totalAvoided = deletionAlertPlayers.reduce((sum, p) => sum + (p.details.deletionAnalysis?.avoidedEloLoss || 0), 0);
+            const topNames: string[] = [];
+            for (const dp of deletionAlertPlayers.slice(0, 3)) {
+              try {
+                const { data: pInfo } = await supabaseClient
+                  .from('players')
+                  .select('name')
+                  .eq('id', dp.player_id)
+                  .single();
+                if (pInfo?.name) topNames.push(pInfo.name);
+              } catch { /* skip */ }
+            }
+            const namesStr = topNames.length > 0 ? topNames.join(', ') : 'Joueurs suspects';
+
+            const pushMessages = adminTokens.map((t: any) => ({
+              to: t.token,
+              title: `\u26A0\uFE0F ${totalAlerts} alerte(s) suppression de defaites`,
+              body: `${namesStr} - ${totalAvoided} pts ELO evites au total. Verifiez dans Anti-triche.`,
+              data: { type: 'admin_deletion_alert', count: totalAlerts, totalAvoided },
+              channelId: 'tournament-reminders',
+            }));
+
+            await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify(pushMessages),
+            });
+            console.log(`[detect-suspicious] Sent deletion alerts to ${adminTokens.length} admin tokens`);
+          }
+        }
+      } catch (e) {
+        console.error(`[detect-suspicious] Error sending deletion alert to admins:`, e);
       }
     }
 
