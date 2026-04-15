@@ -2454,16 +2454,40 @@ export default function SponsorPortalScreen() {
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Ciblage audience' : 'Audience targeting'}</Text>
                     <View style={{ flex: 1 }} />
                     <View style={{ backgroundColor: tierColor + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: tierColor }}>~{(() => { let b = 500; if (segLevels.length > 0 && segLevels.length < 4) b = Math.round(b * segLevels.length / 4); if (segRoles.length > 0 && segRoles.length < 3) b = Math.round(b * segRoles.length / 3); if (segActivity === '7d') b = Math.round(b * 0.4); else if (segActivity === '30d') b = Math.round(b * 0.7); return Math.max(10, b); })()} {fr ? 'joueurs' : 'players'}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '800', color: tierColor }}>~{(() => { let b = 500; const rankFilters = segLevels.filter(l => !l.startsWith('exp_')); const expFilters = segRoles.filter(r => r.startsWith('exp_')); const roleFilters = segRoles.filter(r => !r.startsWith('exp_')); if (rankFilters.length > 0 && rankFilters.length < 6) b = Math.round(b * rankFilters.length / 6); if (roleFilters.length > 0 && roleFilters.length < 3) b = Math.round(b * roleFilters.length / 3); if (expFilters.length > 0 && expFilters.length < 4) b = Math.round(b * expFilters.length / 4); if (segActivity === '7d') b = Math.round(b * 0.4); else if (segActivity === '30d') b = Math.round(b * 0.7); return Math.max(10, b); })()} {fr ? 'joueurs' : 'players'}</Text>
                     </View>
                   </View>
-                  <Text style={st.segLabel}>{fr ? 'Niveau' : 'Level'}</Text>
+                  <Text style={st.segLabel}>{fr ? 'Rang ELO' : 'ELO Rank'}</Text>
                   <View style={st.segChipsRow}>
-                    {['Debutant', 'Intermediaire', 'Confirme', 'Expert'].map(lv => {
-                      const sel = segLevels.includes(lv);
+                    {[
+                      { id: 'bronze', label: 'Bronze', icon: 'shield' as const, color: '#CD7F32' },
+                      { id: 'silver', label: fr ? 'Argent' : 'Silver', icon: 'workspace-premium' as const, color: '#94A3B8' },
+                      { id: 'gold', label: fr ? 'Or' : 'Gold', icon: 'emoji-events' as const, color: '#F59E0B' },
+                      { id: 'diamond', label: fr ? 'Diamant' : 'Diamond', icon: 'diamond' as const, color: '#06B6D4' },
+                      { id: 'master', label: fr ? 'Maitre' : 'Master', icon: 'military-tech' as const, color: '#9333EA' },
+                      { id: 'grand_master', label: fr ? 'Grand Maitre' : 'Grand Master', icon: 'auto-awesome' as const, color: '#FFD700' },
+                    ].map(rank => {
+                      const sel = segLevels.includes(rank.id);
                       return (
-                        <Pressable key={lv} style={[st.segChip, sel && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); setSegLevels(prev => sel ? prev.filter(l => l !== lv) : [...prev, lv]); }}>
-                          <Text style={[st.segChipText, sel && { color: tierColor, fontWeight: '700' }]}>{lv}</Text>
+                        <Pressable key={rank.id} style={[st.segChip, sel && { backgroundColor: rank.color + '15', borderColor: rank.color + '30' }]} onPress={() => { Haptics.selectionAsync(); setSegLevels(prev => sel ? prev.filter(l => l !== rank.id) : [...prev, rank.id]); }}>
+                          <MaterialIcons name={rank.icon} size={12} color={sel ? rank.color : '#94A3B8'} />
+                          <Text style={[st.segChipText, sel && { color: rank.color, fontWeight: '700' }]}>{rank.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                  <Text style={st.segLabel}>{fr ? 'Experience' : 'Experience'}</Text>
+                  <View style={st.segChipsRow}>
+                    {[
+                      { id: 'less_1', label: fr ? '< 1 an' : '< 1 year' },
+                      { id: '1_3', label: fr ? '1-3 ans' : '1-3 years' },
+                      { id: '3_10', label: fr ? '3-10 ans' : '3-10 years' },
+                      { id: '10_plus', label: '10+' },
+                    ].map(exp => {
+                      const sel = segRoles.includes('exp_' + exp.id);
+                      return (
+                        <Pressable key={exp.id} style={[st.segChip, sel && { backgroundColor: tierColor + '15', borderColor: tierColor + '30' }]} onPress={() => { Haptics.selectionAsync(); const key = 'exp_' + exp.id; setSegRoles(prev => sel ? prev.filter(r => r !== key) : [...prev, key]); }}>
+                          <Text style={[st.segChipText, sel && { color: tierColor, fontWeight: '700' }]}>{exp.label}</Text>
                         </Pressable>
                       );
                     })}
