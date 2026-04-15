@@ -858,3 +858,157 @@ export async function isMatchWitnessed(matchId: string): Promise<boolean> {
     return false;
   }
 }
+
+// ============================================
+// ELO REVERSAL (Admin action)
+// ============================================
+
+export interface DeletionTimelinePoint {
+  weekStart: string;
+  deletedLostCount: number;
+  avoidedEloLoss: number;
+  totalDeleted: number;
+}
+
+/**
+ * Reverse ELO loss avoided by deleting lost matches.
+ * Re-applies the avoided losses to the player's current ELO.
+ */
+export async function reverseDeletedEloLoss(
+  userId: string,
+  playerId: string
+): Promise<{ error: string | null; eloBefore: number; eloAfter: number; matchesReversed: number }> {
+  const supabase = getSupabaseClient();
+  try {
+    // 1. Get soft-deleted match IDs
+    const { data: softDeletes } = await supabase
+      .from('soft_deletes')
+      .select('item_id')
+      .eq('user_id', userId)
+      .eq('table_name', 'matches');
+
+    const deletedMatchIds = (softDeletes || []).map((sd: any) => sd.item_id);
+    if (deletedMatchIds.length === 0) {
+      return { error: null, eloBefore: 0, eloAfter: 0, matchesReversed: 0 };
+    }
+
+    // 2. Get ELO history entries for deleted lost matches
+    const { data: eloEntries } = await supabase
+      .from('elo_history')
+      .select('id, match_id, elo_delta, won')
+      .eq('user_id', userId)
+      .eq('won', false)
+      .in('match_id', deletedMatchIds);
+
+    if (!eloEntries || eloEntries.length === 0) {
+      return { error: null, eloBefore: 0, eloAfter: 0, matchesReversed: 0 };
+    }
+
+    // 3. Get current player ELO
+    const { data: player } = await supabase
+      .from('players')
+      .select('elo_rating')
+      .eq('id', playerId)
+      .single();
+
+    const currentElo = player?.elo_rating || 1000;
+
+    // 4. Calculate total avoided loss
+    const totalAvoidedLoss = eloEntries.reduce((sum: number, e: any) => sum + Math.abs(e.elo_delta || 0), 0);
+
+    // 5. Apply penalty: subtract avoided loss from current ELO
+    const newElo = Math.max(0, currentElo - totalAvoidedLoss);
+
+    // 6. Update player ELO
+    const { error: updateError } = await supabase
+      .from('players')
+      .update({ elo_rating: newElo, updated_at: new Date().toISOString() })
+      .eq('id', playerId);
+
+    if (updateError) return { error: updateError.message, eloBefore: currentElo, eloAfter: currentElo, matchesReversed: 0 };
+
+    // 7. Log the reversal in elo_history
+    await supabase
+      .from('elo_history')
+      .insert({
+        user_id: userId,
+        player_id: playerId,
+        elo_before: currentElo,
+        elo_after: newElo,
+        elo_delta: -(totalAvoidedLoss),
+        won: false,
+        opponent_name: 'ADMIN_ELO_REVERSAL',
+        recorded_at: new Date().toISOString(),
+      });
+
+    return { error: null, eloBefore: currentElo, eloAfter: newElo, matchesReversed: eloEntries.length };
+  } catch (e: any) {
+    return { error: e.message, eloBefore: 0, eloAfter: 0, matchesReversed: 0 };
+  }
+}
+
+/**
+ * Fetch deletion timeline for a player (weekly aggregation of deleted lost matches).
+ */
+export async function fetchDeletionTimeline(userId: string): Promise<{
+  timeline: DeletionTimelinePoint[];
+  error: string | null;
+}> {
+  const supabase = getSupabaseClient();
+  try {
+    // 1. Fetch all soft-deleted matches
+    const { data: softDeletes } = await supabase
+      .from('soft_deletes')
+      .select('item_id, deleted_at')
+      .eq('user_id', userId)
+      .eq('table_name', 'matches')
+      .order('deleted_at', { ascending: true });
+
+    if (!softDeletes || softDeletes.length === 0) {
+      return { timeline: [], error: null };
+    }
+
+    const deletedMatchIds = softDeletes.map((sd: any) => sd.item_id);
+
+    // 2. Fetch ELO history for these deleted matches
+    const { data: eloEntries } = await supabase
+      .from('elo_history')
+      .select('match_id, elo_delta, won')
+      .eq('user_id', userId)
+      .in('match_id', deletedMatchIds);
+
+    const eloMap = new Map<string, { delta: number; won: boolean }>();
+    for (const e of eloEntries || []) {
+      if (e.match_id) eloMap.set(e.match_id, { delta: e.elo_delta || 0, won: e.won });
+    }
+
+    // 3. Group by week
+    const weekMap = new Map<string, { deletedLostCount: number; avoidedEloLoss: number; totalDeleted: number }>();
+
+    for (const sd of softDeletes) {
+      const deletedDate = new Date(sd.deleted_at);
+      const day = deletedDate.getDay();
+      const diff = day === 0 ? -6 : 1 - day;
+      const monday = new Date(deletedDate.getFullYear(), deletedDate.getMonth(), deletedDate.getDate() + diff);
+      const weekKey = `${monday.getFullYear()}-${String(monday.getMonth() + 1).padStart(2, '0')}-${String(monday.getDate()).padStart(2, '0')}`;
+
+      if (!weekMap.has(weekKey)) weekMap.set(weekKey, { deletedLostCount: 0, avoidedEloLoss: 0, totalDeleted: 0 });
+      const week = weekMap.get(weekKey)!;
+      week.totalDeleted++;
+
+      const eloEntry = eloMap.get(sd.item_id);
+      if (eloEntry && !eloEntry.won) {
+        week.deletedLostCount++;
+        week.avoidedEloLoss += Math.abs(eloEntry.delta);
+      }
+    }
+
+    const timeline: DeletionTimelinePoint[] = Array.from(weekMap.entries())
+      .map(([weekStart, data]) => ({ weekStart, ...data }))
+      .sort((a, b) => a.weekStart.localeCompare(b.weekStart));
+
+    return { timeline, error: null };
+  } catch (e: any) {
+    return { timeline: [], error: e.message };
+  }
+}

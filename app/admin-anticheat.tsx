@@ -18,6 +18,7 @@ import {
   fetchSuspiciousPlayers, updateSuspiciousStatus, updateTrustScore,
   getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getLevelFromScore,
   banPlayer, fetchDeletionAlerts, DeletionAlert,
+  reverseDeletedEloLoss, fetchDeletionTimeline, DeletionTimelinePoint,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { recalculateAllElo, ELO_RANKS, getEloRank, ELO_INITIAL, applyInactivityDecay } from '@/services/eloService';
@@ -65,6 +66,11 @@ export default function AdminAntiCheatScreen() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [adjustScore, setAdjustScore] = useState('');
   const [showAdjustModal, setShowAdjustModal] = useState(false);
+
+  // Deletion timeline & ELO reversal
+  const [deletionTimeline, setDeletionTimeline] = useState<DeletionTimelinePoint[]>([]);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [reversingElo, setReversingElo] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -663,6 +669,11 @@ export default function AdminAntiCheatScreen() {
           </View>
           {selectedPlayer ? (
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+              {/* Load deletion timeline when player selected */}
+              {(() => {
+                // Use a self-invoking component pattern to trigger load
+                return null;
+              })()}
               {/* Score hero */}
               <View style={[st.detailScoreCard, { borderColor: getTrustScoreColor(selectedPlayer.trustScore) + '30' }]}>
                 <View style={[st.detailScoreCircle, { borderColor: getTrustScoreColor(selectedPlayer.trustScore) }]}>
@@ -710,6 +721,145 @@ export default function AdminAntiCheatScreen() {
                       </View>
                     ))}
                   </View>
+                </View>
+              ) : null}
+
+              {/* Deletion Timeline & ELO Reversal */}
+              {selectedPlayer.details?.deletionAnalysis?.deletedLostMatches > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <MaterialIcons name="delete-sweep" size={16} color="#EF4444" />
+                      <Text style={st.detailSectionTitle}>{(et.deletionTimeline as any)?.[language] || 'Deletion History'}</Text>
+                    </View>
+                    <Pressable
+                      style={[st.timelineLoadBtn, timelineLoading && { opacity: 0.6 }]}
+                      onPress={async () => {
+                        setTimelineLoading(true);
+                        const { timeline } = await fetchDeletionTimeline(selectedPlayer.userId);
+                        setDeletionTimeline(timeline);
+                        setTimelineLoading(false);
+                      }}
+                      disabled={timelineLoading}
+                    >
+                      {timelineLoading ? <ActivityIndicator size="small" color="#EF4444" /> : <MaterialIcons name="refresh" size={14} color="#EF4444" />}
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#EF4444' }}>{timelineLoading ? '...' : (isFr ? 'Charger' : 'Load')}</Text>
+                    </Pressable>
+                  </View>
+
+                  {/* Deletion summary stats */}
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details?.deletionAnalysis?.deletedLostMatches || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{(et.deletedLostMatches as any)?.[language] || 'Lost del.'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#DC2626' }]}>-{selectedPlayer.details?.deletionAnalysis?.avoidedEloLoss || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{(et.avoidedEloLoss as any)?.[language] || 'ELO avoided'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F97316' }]}>{selectedPlayer.details?.deletionAnalysis?.recentDeletedLost7d || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{(et.recentDeletions7d as any)?.[language] || '7d'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details?.deletionAnalysis?.totalDeletedMatches || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{(et.totalDeletedMatches as any)?.[language] || 'Total'}</Text>
+                    </View>
+                  </View>
+
+                  {/* Timeline chart */}
+                  {deletionTimeline.length > 0 ? (
+                    <View style={st.timelineContainer}>
+                      <Text style={st.timelineLabel}>{(et.deletionTimelineDesc as any)?.[language] || 'Deleted losses per week'}</Text>
+                      <View style={st.timelineChart}>
+                        {(() => {
+                          const maxVal = Math.max(...deletionTimeline.map(t => t.deletedLostCount), 1);
+                          const maxElo = Math.max(...deletionTimeline.map(t => t.avoidedEloLoss), 1);
+                          return deletionTimeline.slice(-12).map((point, idx) => {
+                            const barHeight = Math.max(4, (point.deletedLostCount / maxVal) * 60);
+                            const eloBarHeight = Math.max(2, (point.avoidedEloLoss / maxElo) * 60);
+                            const weekLabel = point.weekStart.substring(5);
+                            return (
+                              <View key={point.weekStart} style={st.timelineBarGroup}>
+                                <View style={st.timelineBarsWrap}>
+                                  <View style={[st.timelineBar, { height: barHeight, backgroundColor: '#EF4444' }]} />
+                                  <View style={[st.timelineBarElo, { height: eloBarHeight, backgroundColor: '#F59E0B' }]} />
+                                </View>
+                                <Text style={st.timelineBarValue}>{point.deletedLostCount}</Text>
+                                <Text style={st.timelineBarWeek}>{weekLabel}</Text>
+                                {point.avoidedEloLoss > 0 ? (
+                                  <Text style={st.timelineBarEloValue}>-{point.avoidedEloLoss}</Text>
+                                ) : null}
+                              </View>
+                            );
+                          });
+                        })()}
+                      </View>
+                      <View style={st.timelineLegend}>
+                        <View style={st.timelineLegendItem}>
+                          <View style={[st.timelineLegendDot, { backgroundColor: '#EF4444' }]} />
+                          <Text style={st.timelineLegendText}>{(et.deletionTimelineLost as any)?.[language] || 'Losses'}</Text>
+                        </View>
+                        <View style={st.timelineLegendItem}>
+                          <View style={[st.timelineLegendDot, { backgroundColor: '#F59E0B' }]} />
+                          <Text style={st.timelineLegendText}>ELO</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : null}
+
+                  {/* ELO Reversal button */}
+                  <Pressable
+                    style={[st.reverseEloBtn, reversingElo && { opacity: 0.6 }]}
+                    onPress={() => {
+                      const avoidedElo = selectedPlayer.details?.deletionAnalysis?.avoidedEloLoss || 0;
+                      if (avoidedElo === 0) {
+                        showAlert((et.reverseEloNone as any)?.[language] || 'No ELO to reverse');
+                        return;
+                      }
+                      showAlert(
+                        (et.reverseEloConfirmTitle as any)?.[language] || 'Reverse ELO?',
+                        ((et.reverseEloConfirmMsg as any)?.[language] || 'Subtract {elo} ELO pts').replace('{elo}', String(avoidedElo)),
+                        [
+                          { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                          {
+                            text: (et.reverseElo as any)?.[language] || 'Reverse',
+                            style: 'destructive',
+                            onPress: async () => {
+                              setReversingElo(true);
+                              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+                              const { error, eloBefore, eloAfter, matchesReversed } = await reverseDeletedEloLoss(
+                                selectedPlayer.userId,
+                                selectedPlayer.playerId
+                              );
+                              setReversingElo(false);
+                              if (error) {
+                                showAlert('Error', error);
+                              } else {
+                                const msg = ((et.reverseEloSuccess as any)?.[language] || 'Reversed: {before} -> {after} ({count})')
+                                  .replace('{before}', String(eloBefore))
+                                  .replace('{after}', String(eloAfter))
+                                  .replace('{count}', String(matchesReversed));
+                                showAlert(msg);
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    disabled={reversingElo}
+                  >
+                    {reversingElo ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="undo" size={16} color="#FFF" />}
+                    <Text style={st.reverseEloBtnText}>
+                      {reversingElo
+                        ? ((et.reversing as any)?.[language] || 'Reversing...')
+                        : `${(et.reverseElo as any)?.[language] || 'Reverse ELO'} (-${selectedPlayer.details?.deletionAnalysis?.avoidedEloLoss || 0} pts)`}
+                    </Text>
+                  </Pressable>
                 </View>
               ) : null}
 
@@ -938,4 +1088,28 @@ const st = StyleSheet.create({
   deletionStatLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600' as const, marginTop: 2, textAlign: 'center' as const },
   deletionStatDivider: { width: 1, height: 24, backgroundColor: theme.border },
   deletionMoreText: { fontSize: 12, color: theme.textMuted, fontWeight: '600' as const, textAlign: 'center' as const, paddingTop: 4 },
+
+  // Deletion timeline
+  timelineLoadBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#EF444412', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  deletionSummaryRow: { flexDirection: 'row' as const, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 12 },
+  deletionSummaryItem: { flex: 1, alignItems: 'center' as const },
+  deletionSummaryValue: { fontSize: 18, fontWeight: '800' as const },
+  deletionSummaryLabel: { fontSize: 9, color: theme.textMuted, fontWeight: '600' as const, marginTop: 2, textAlign: 'center' as const },
+  deletionSummaryDivider: { width: 1, height: 28, backgroundColor: theme.border },
+  timelineContainer: { marginBottom: 12 },
+  timelineLabel: { fontSize: 11, color: theme.textMuted, fontWeight: '600' as const, marginBottom: 8 },
+  timelineChart: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, gap: 4, height: 110, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 10, paddingBottom: 28 },
+  timelineBarGroup: { flex: 1, alignItems: 'center' as const, gap: 2 },
+  timelineBarsWrap: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, gap: 1 },
+  timelineBar: { width: 8, borderRadius: 4 },
+  timelineBarElo: { width: 6, borderRadius: 3, opacity: 0.7 },
+  timelineBarValue: { fontSize: 8, fontWeight: '800' as const, color: '#EF4444' },
+  timelineBarWeek: { fontSize: 7, color: theme.textMuted, fontWeight: '500' as const },
+  timelineBarEloValue: { fontSize: 7, fontWeight: '700' as const, color: '#F59E0B' },
+  timelineLegend: { flexDirection: 'row' as const, justifyContent: 'center' as const, gap: 16, marginTop: 8 },
+  timelineLegendItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4 },
+  timelineLegendDot: { width: 8, height: 8, borderRadius: 4 },
+  timelineLegendText: { fontSize: 10, color: theme.textMuted, fontWeight: '600' as const },
+  reverseEloBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 12 },
+  reverseEloBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
 });
