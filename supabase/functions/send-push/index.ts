@@ -1065,13 +1065,23 @@ Deno.serve(async (req: Request) => {
         let matchedUserIds = new Set<string>();
 
         if (targetType === 'level') {
-          // Filter by player level
-          const { data: levelPlayers } = await supabaseAdmin
-            .from('players')
-            .select('user_id')
+          // Filter by user_profiles.level (primary) + players.level (fallback)
+          const { data: profileUsers } = await supabaseAdmin
+            .from('user_profiles')
+            .select('id')
             .eq('level', targetValue)
-            .in('user_id', allUserIds);
-          (levelPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+            .in('id', allUserIds);
+          (profileUsers || []).forEach((p: any) => matchedUserIds.add(p.id));
+          // Also check players table for users not matched via profiles
+          const remainingIds = allUserIds.filter((uid: string) => !matchedUserIds.has(uid));
+          if (remainingIds.length > 0) {
+            const { data: levelPlayers } = await supabaseAdmin
+              .from('players')
+              .select('user_id')
+              .eq('level', targetValue)
+              .in('user_id', remainingIds);
+            (levelPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+          }
         } else if (targetType === 'city') {
           // Filter by city from players location, terrains, or clubs
           const cityLower = targetValue.toLowerCase();
