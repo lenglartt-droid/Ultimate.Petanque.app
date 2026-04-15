@@ -145,6 +145,13 @@ export default function AdminDashboardScreen() {
   // Push analytics
   const [pushStats, setPushStats] = useState({ sent: 0, errors: 0, types: {} as Record<string, number>, daily: [] as { date: string; sent: number; errors: number }[] });
 
+  // Receipt delivery stats
+  const [receiptStats, setReceiptStats] = useState<{ checked: number; delivered: number; failed: number; deliveryRate: number; tokensDeactivated: number; history: { date: string; rate: number }[] }>({ checked: 0, delivered: 0, failed: 0, deliveryRate: 0, tokensDeactivated: 0, history: [] });
+  const [receiptLoading, setReceiptLoading] = useState(false);
+
+  // Push delivery heatmap (hour-of-day distribution)
+  const [pushHourlyData, setPushHourlyData] = useState<{ hour: number; count: number; platformBreakdown: Record<string, number> }[]>([]);
+
   // Push token analytics
   const [pushTokenStats, setPushTokenStats] = useState<{ totalTokens: number; activeTokens: number; inactiveTokens: number; usersWithToken: number; coverage: number; deactivatedThisWeek: number; platforms: Record<string, number> }>({ totalTokens: 0, activeTokens: 0, inactiveTokens: 0, usersWithToken: 0, coverage: 0, deactivatedThisWeek: 0, platforms: {} });
 
@@ -197,7 +204,7 @@ export default function AdminDashboardScreen() {
   const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, expired: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'receiptDelivery', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -359,6 +366,9 @@ export default function AdminDashboardScreen() {
       // Push analytics
       setPushStats(res.pushAnalytics || { sent: 0, errors: 0, types: {}, daily: [] });
 
+      // Receipt delivery stats (from check_push_receipts cron results)
+      if (res.receiptStats) setReceiptStats(res.receiptStats);
+
       // Push token analytics
       if (res.pushTokenAnalytics) setPushTokenStats(res.pushTokenAnalytics);
 
@@ -372,6 +382,26 @@ export default function AdminDashboardScreen() {
 
       // Declining clubs
       setDecliningClubs(res.decliningClubs || []);
+
+      // Fetch announcement timestamps for push delivery heatmap
+      try {
+        const { data: annHeatmapData } = await supabase.from('announcements').select('created_at, push_sent_count, platform_breakdown').eq('status', 'sent').order('created_at', { ascending: false }).limit(100);
+        if (annHeatmapData && annHeatmapData.length > 0) {
+          const hourMap = new Map<number, { count: number; platforms: Record<string, number> }>();
+          for (let h = 0; h < 24; h++) hourMap.set(h, { count: 0, platforms: {} });
+          annHeatmapData.forEach((a: any) => {
+            const hour = new Date(a.created_at).getHours();
+            const entry = hourMap.get(hour)!;
+            entry.count += (a.push_sent_count || 1);
+            if (a.platform_breakdown) {
+              Object.entries(a.platform_breakdown).forEach(([p, c]) => {
+                entry.platforms[p] = (entry.platforms[p] || 0) + (c as number);
+              });
+            }
+          });
+          setPushHourlyData(Array.from(hourMap.entries()).map(([hour, data]) => ({ hour, count: data.count, platformBreakdown: data.platforms })));
+        }
+      } catch { /* silent */ }
 
       // Player transfers (client-side fetch since not in edge function)
       try {
@@ -477,6 +507,19 @@ export default function AdminDashboardScreen() {
       if (overdueCount > 0) detectedAlerts.push({ id: 'overdue_appeals', severity: 'critical', title: fr ? 'Appels en retard' : 'Overdue appeals', message: fr ? `${overdueCount} appel(s) en attente depuis +48h.` : `${overdueCount} appeal(s) pending for 48h+.`, icon: 'timer-off', color: '#DC2626', route: '/admin-moderation' });
       if (unverifiedCount > 5 && inactiveClubsPct > 60) detectedAlerts.push({ id: 'declining_clubs', severity: 'warning', title: fr ? 'Clubs a risque' : 'At-risk clubs', message: fr ? `${inactiveClubsPct}% des clubs ne sont pas verifies. Examinez les tendances de sante.` : `${inactiveClubsPct}% of clubs are unverified. Review health trends.`, icon: 'trending-down', color: '#D97706', route: '/admin-clubs' });
 
+      // Delivery rate smart alert: check if rate < 80% for 3+ consecutive entries in receipt history
+      const rHistory = res.receiptStats?.history || [];
+      if (rHistory.length >= 3) {
+        const lastThree = rHistory.slice(-3);
+        const allBelow80 = lastThree.every((h: any) => h.rate < 80);
+        if (allBelow80) {
+          const avgRate = Math.round(lastThree.reduce((s: number, h: any) => s + h.rate, 0) / lastThree.length);
+          detectedAlerts.push({ id: 'delivery_rate_critical', severity: 'critical', title: fr ? 'Taux de livraison push critique' : 'Critical push delivery rate', message: fr ? `Taux moyen de ${avgRate}% sur les 3 derniers jours (< 80%). Verifiez les tokens invalides et la configuration push.` : `Average ${avgRate}% delivery rate over last 3 days (< 80%). Check invalid tokens and push config.`, icon: 'mark-email-unread', color: '#DC2626' });
+        }
+      } else if (res.receiptStats && res.receiptStats.checked > 0 && res.receiptStats.deliveryRate < 80) {
+        detectedAlerts.push({ id: 'delivery_rate_low', severity: 'warning', title: fr ? 'Taux de livraison push bas' : 'Low push delivery rate', message: fr ? `${res.receiptStats.deliveryRate}% de livraison (seuil: 80%). ${res.receiptStats.tokensDeactivated} tokens desactives.` : `${res.receiptStats.deliveryRate}% delivery (threshold: 80%). ${res.receiptStats.tokensDeactivated} tokens deactivated.`, icon: 'mark-email-unread', color: '#D97706' });
+      }
+
       setSmartAlerts(detectedAlerts);
       setAdminNotifCount(detectedAlerts.filter(a => a.severity === 'critical' || a.severity === 'warning').length + (serverStats.pendingAppeals || 0) + pendingCount);
 
@@ -519,6 +562,7 @@ export default function AdminDashboardScreen() {
       setGrowthDelta(res.growthDelta || 0);
       if (res.pushAnalytics) setPushStats(res.pushAnalytics);
       if (res.pushTokenAnalytics) setPushTokenStats(res.pushTokenAnalytics);
+      if (res.receiptStats) setReceiptStats(res.receiptStats);
       if (res.onboardingStats) setOnboardingStats(res.onboardingStats);
       if (res.onboardingAnalytics) setStepAnalytics(res.onboardingAnalytics);
       setLoading(false);
@@ -1009,6 +1053,7 @@ export default function AdminDashboardScreen() {
                 { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
                 { key: 'clubHealthAlerts', label: fr ? 'Sante clubs' : 'Club Health', icon: 'favorite' },
                 { key: 'pushAnalytics', label: fr ? 'Push Analytics' : 'Push Analytics', icon: 'send' },
+                { key: 'receiptDelivery', label: fr ? 'Livraison Push' : 'Push Delivery', icon: 'mark-email-read' },
                 { key: 'pushTokenAnalytics', label: fr ? 'Tokens Push' : 'Push Tokens', icon: 'phonelink-ring' },
                 { key: 'moderation', label: fr ? 'Moderation' : 'Moderation', icon: 'gavel' },
                 { key: 'appeals', label: fr ? 'Appels de ban' : 'Ban Appeals', icon: 'rate-review' },
@@ -2498,6 +2543,231 @@ export default function AdminDashboardScreen() {
                   <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6 }}>{fr ? 'Aucune notification envoyee' : 'No notifications sent yet'}</Text>
                 </View>
               )}
+
+              {/* Push Delivery Heatmap (hour of day) */}
+              {pushHourlyData.some(h => h.count > 0) ? (
+                <View style={{ marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="grid-on" size={14} color="#7C3AED" />
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B' }}>{fr ? 'Heatmap par heure' : 'Hourly Heatmap'}</Text>
+                    </View>
+                    {(() => {
+                      const bestHour = pushHourlyData.reduce((best, h) => h.count > best.count ? h : best, { hour: 0, count: 0, platformBreakdown: {} });
+                      return bestHour.count > 0 ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#DCFCE7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                          <MaterialIcons name="local-fire-department" size={10} color="#10B981" />
+                          <Text style={{ fontSize: 9, fontWeight: '700', color: '#10B981' }}>{fr ? 'Pic' : 'Peak'}: {bestHour.hour}h ({bestHour.count})</Text>
+                        </View>
+                      ) : null;
+                    })()}
+                  </View>
+                  {/* Heatmap grid: 4 rows × 6 columns (4-hour blocks) */}
+                  <View style={{ gap: 3 }}>
+                    {[0, 6, 12, 18].map(startHour => {
+                      const maxCount = Math.max(...pushHourlyData.map(h => h.count), 1);
+                      return (
+                        <View key={startHour} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                          <Text style={{ width: 24, fontSize: 8, fontWeight: '600', color: '#94A3B8', textAlign: 'right' }}>{startHour}h</Text>
+                          {Array.from({ length: 6 }, (_, i) => {
+                            const hour = startHour + i;
+                            const data = pushHourlyData.find(h => h.hour === hour) || { hour, count: 0, platformBreakdown: {} };
+                            const intensity = data.count / maxCount;
+                            const bg = data.count === 0 ? '#F1F5F9'
+                              : intensity < 0.25 ? '#C7D2FE'
+                              : intensity < 0.5 ? '#818CF8'
+                              : intensity < 0.75 ? '#6366F1'
+                              : '#4F46E5';
+                            const textColor = intensity >= 0.5 ? '#FFF' : '#64748B';
+                            return (
+                              <View key={hour} style={{ flex: 1, height: 28, borderRadius: 4, backgroundColor: bg, alignItems: 'center', justifyContent: 'center' }}>
+                                {data.count > 0 ? <Text style={{ fontSize: 7, fontWeight: '800', color: textColor }}>{data.count}</Text> : null}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
+                    })}
+                    {/* Hour labels */}
+                    <View style={{ flexDirection: 'row', marginLeft: 27, gap: 3 }}>
+                      {[0, 6, 12, 18].map(startHour => (
+                        <React.Fragment key={startHour}>
+                          {Array.from({ length: 6 }, (_, i) => (
+                            <View key={startHour + i} style={{ flex: 1, alignItems: 'center' }}>
+                              <Text style={{ fontSize: 6, color: '#CBD5E1', fontWeight: '600' }}>{startHour + i}</Text>
+                            </View>
+                          ))}
+                        </React.Fragment>
+                      )).flat().slice(0, 6)}
+                    </View>
+                    <View style={{ flexDirection: 'row', marginLeft: 27, gap: 3 }}>
+                      {Array.from({ length: 6 }, (_, i) => (
+                        <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                          <Text style={{ fontSize: 6, color: '#CBD5E1', fontWeight: '600' }}>{i}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                  {/* Legend + Platform breakdown */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                      <Text style={{ fontSize: 7, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Moins' : 'Less'}</Text>
+                      {['#F1F5F9', '#C7D2FE', '#818CF8', '#6366F1', '#4F46E5'].map((c, i) => (
+                        <View key={i} style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: c }} />
+                      ))}
+                      <Text style={{ fontSize: 7, color: '#94A3B8', fontWeight: '600' }}>{fr ? 'Plus' : 'More'}</Text>
+                    </View>
+                    {(() => {
+                      const totalHeatmap = pushHourlyData.reduce((s, h) => s + h.count, 0);
+                      const platformTotals: Record<string, number> = {};
+                      pushHourlyData.forEach(h => Object.entries(h.platformBreakdown).forEach(([p, c]) => { platformTotals[p] = (platformTotals[p] || 0) + c; }));
+                      const platformColors: Record<string, string> = { ios: '#000', android: '#3DDC84', web: '#3B82F6', unknown: '#94A3B8' };
+                      return Object.keys(platformTotals).length > 0 ? (
+                        <View style={{ flexDirection: 'row', gap: 6 }}>
+                          {Object.entries(platformTotals).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([p, c]) => (
+                            <View key={p} style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                              <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: platformColors[p] || '#94A3B8' }} />
+                              <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8' }}>{p} {Math.round((c / totalHeatmap) * 100)}%</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : null;
+                    })()}
+                  </View>
+                  {/* Best send time recommendation */}
+                  {(() => {
+                    const sorted = [...pushHourlyData].filter(h => h.count > 0).sort((a, b) => b.count - a.count);
+                    if (sorted.length < 3) return null;
+                    const top3 = sorted.slice(0, 3).map(h => `${h.hour}h`).join(', ');
+                    return (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#EFF6FF', borderRadius: 8, padding: 8 }}>
+                        <MaterialIcons name="tips-and-updates" size={12} color="#3B82F6" />
+                        <Text style={{ flex: 1, fontSize: 9, color: '#3B82F6', lineHeight: 13 }}>{fr ? `Creneaux optimaux : ${top3}` : `Optimal slots: ${top3}`}</Text>
+                      </View>
+                    );
+                  })()}
+                </View>
+              ) : null}
+            </View>
+          </Animated.View>
+          );
+
+          if (wKey === 'receiptDelivery') return (
+          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
+            <Text style={s.sectionTitle}>{fr ? 'LIVRAISON PUSH (RECEIPTS)' : 'PUSH DELIVERY (RECEIPTS)'}</Text>
+            <View style={s.chartCard}>
+              {/* KPI row */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: receiptStats.deliveryRate >= 80 ? '#DCFCE7' : receiptStats.deliveryRate >= 60 ? '#FEF3C7' : '#FEF2F2', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 26, fontWeight: '900', color: receiptStats.deliveryRate >= 80 ? '#10B981' : receiptStats.deliveryRate >= 60 ? '#D97706' : '#EF4444' }}>{receiptStats.deliveryRate}%</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Taux livraison' : 'Delivery Rate'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#EFF6FF', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#3B82F6' }}>{receiptStats.checked}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Verifies' : 'Checked'}</Text>
+                </View>
+                <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#DCFCE7', borderRadius: 12, paddingVertical: 12, gap: 2 }}>
+                  <Text style={{ fontSize: 22, fontWeight: '800', color: '#10B981' }}>{receiptStats.delivered}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: '#64748B', textTransform: 'uppercase' }}>{fr ? 'Livres' : 'Delivered'}</Text>
+                </View>
+              </View>
+
+              {/* Alert if delivery rate drops below 80% */}
+              {receiptStats.checked > 0 && receiptStats.deliveryRate < 80 ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#FECACA' }}>
+                  <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#DC262615', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="warning" size={14} color="#DC2626" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#991B1B' }}>{fr ? 'Taux de livraison bas' : 'Low delivery rate'}</Text>
+                    <Text style={{ fontSize: 10, color: '#DC2626', lineHeight: 14, marginTop: 1 }}>
+                      {fr
+                        ? `${receiptStats.deliveryRate}% < 80%. ${receiptStats.failed} echecs, ${receiptStats.tokensDeactivated} tokens desactives.`
+                        : `${receiptStats.deliveryRate}% < 80%. ${receiptStats.failed} failed, ${receiptStats.tokensDeactivated} tokens deactivated.`}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+
+              {/* Delivery stats row */}
+              <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12, paddingHorizontal: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <MaterialIcons name="error" size={14} color="#EF4444" />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#EF4444' }}>{receiptStats.failed} {fr ? 'echecs' : 'failed'}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <MaterialIcons name="phonelink-erase" size={14} color="#D97706" />
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: '#D97706' }}>{receiptStats.tokensDeactivated} {fr ? 'desactives' : 'deactivated'}</Text>
+                </View>
+              </View>
+
+              {/* Delivery rate history (mini chart) */}
+              {receiptStats.history && receiptStats.history.length > 1 ? (
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#64748B', marginBottom: 8 }}>{fr ? 'Evolution du taux' : 'Rate Evolution'}</Text>
+                  {(() => {
+                    const hst = receiptStats.history.slice(-7);
+                    return hst.map((h, idx) => {
+                      const isLast = idx === hst.length - 1;
+                      const rateColor = h.rate >= 90 ? '#10B981' : h.rate >= 80 ? '#3B82F6' : h.rate >= 60 ? '#D97706' : '#EF4444';
+                      return (
+                        <View key={h.date} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ width: 42, fontSize: 9, fontWeight: isLast ? '800' : '600', color: isLast ? '#3B82F6' : '#94A3B8' }}>
+                            {new Date(h.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                          </Text>
+                          <View style={{ flex: 1, height: 14, backgroundColor: '#F1F5F9', borderRadius: 4, overflow: 'hidden' }}>
+                            <View style={{ height: '100%' as any, width: `${Math.max(3, h.rate)}%`, backgroundColor: rateColor, borderRadius: 4 }} />
+                          </View>
+                          <Text style={{ width: 32, fontSize: 10, fontWeight: '800', color: rateColor, textAlign: 'right' }}>{h.rate}%</Text>
+                        </View>
+                      );
+                    });
+                  })()}
+                  {/* 80% threshold line indicator */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, justifyContent: 'flex-end' }}>
+                    <View style={{ width: 16, height: 2, backgroundColor: '#EF4444', borderRadius: 1 }} />
+                    <Text style={{ fontSize: 8, fontWeight: '600', color: '#EF4444' }}>80% {fr ? 'seuil' : 'threshold'}</Text>
+                  </View>
+                </View>
+              ) : receiptStats.checked === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+                  <MaterialIcons name="mark-email-read" size={24} color="#CBD5E1" />
+                  <Text style={{ fontSize: 12, color: '#94A3B8', marginTop: 6, textAlign: 'center' }}>
+                    {fr ? 'Les receipts seront verifies par le cron hebdomadaire.' : 'Receipts will be checked by the weekly cron.'}
+                  </Text>
+                </View>
+              ) : null}
+
+              {/* Manual check button */}
+              <Pressable
+                style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#3B82F610', borderWidth: 1, borderColor: '#3B82F620', marginTop: 10 }, receiptLoading && { opacity: 0.5 }]}
+                onPress={async () => {
+                  if (receiptLoading) return;
+                  setReceiptLoading(true);
+                  Haptics.selectionAsync();
+                  try {
+                    const supabase = getSupabaseClient();
+                    const { data } = await supabase.functions.invoke('weekly-cron', { body: { tasks: ['check_push_receipts'] } });
+                    if (data?.results?.check_push_receipts) {
+                      const r = data.results.check_push_receipts;
+                      setReceiptStats(prev => ({
+                        ...prev,
+                        checked: (prev.checked || 0) + (r.checked || 0),
+                        delivered: (prev.delivered || 0) + (r.delivered || 0),
+                        failed: (prev.failed || 0) + (r.failed || 0),
+                        tokensDeactivated: (prev.tokensDeactivated || 0) + (r.tokensDeactivated || 0),
+                        deliveryRate: r.deliveryRate || prev.deliveryRate,
+                      }));
+                      showAlert(fr ? 'Receipts verifies' : 'Receipts checked', `${r.checked || 0} ${fr ? 'verifies' : 'checked'}, ${r.delivered || 0} ${fr ? 'livres' : 'delivered'}`);
+                    }
+                  } catch (e) { console.log('[Dashboard] Receipt check error:', e); }
+                  setReceiptLoading(false);
+                }}
+                disabled={receiptLoading}
+              >
+                {receiptLoading ? <ActivityIndicator size="small" color="#3B82F6" /> : <MaterialIcons name="refresh" size={14} color="#3B82F6" />}
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#3B82F6' }}>{receiptLoading ? '...' : (fr ? 'Verifier maintenant' : 'Check now')}</Text>
+              </Pressable>
             </View>
           </Animated.View>
           );

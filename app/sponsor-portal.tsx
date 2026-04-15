@@ -130,8 +130,7 @@ export default function SponsorPortalScreen() {
   // Digest preview state
   const [lastDigest, setLastDigest] = useState<{ date: string; impressions: number; clicks: number; ctr: string; pushes: number; impTrend: string; clkTrend: string } | null>(null);
 
-  // Push analytics state
-  const [pushAnalytics, setPushAnalytics] = useState<{ monthly: { month: string; count: number }[]; totalSent: number; estimatedReach: number; avgOpenRate: number; cities: { city: string; count: number }[] }>({ monthly: [], totalSent: 0, estimatedReach: 0, avgOpenRate: 0, cities: [] });
+  const [pushAnalytics, setPushAnalytics] = useState<{monthly:{month:string;count:number}[];totalSent:number;estimatedReach:number;avgOpenRate:number;cities:{city:string;count:number}[]}>({monthly:[],totalSent:0,estimatedReach:0,avgOpenRate:0,cities:[]});
 
   // Push calendar state
   const [calendarMonth, setCalendarMonth] = useState(() => { const n = new Date(); return { year: n.getFullYear(), month: n.getMonth() }; });
@@ -144,23 +143,23 @@ export default function SponsorPortalScreen() {
   const [heatmapData, setHeatmapData] = useState<number[][]>([]);
   const [bestSendTime, setBestSendTime] = useState<{ day: string; slot: string; score: number } | null>(null);
 
-  // Benchmark state
-  const [benchmarkData, setBenchmarkData] = useState<{ myImpressions: number; avgImpressions: number; myCtr: number; avgCtr: number; myReach: number; avgReach: number; myPushes: number; avgPushes: number; tierCount: number } | null>(null);
-
-  // Notification center state
+  const [benchmarkData, setBenchmarkData] = useState<{myImpressions:number;avgImpressions:number;myCtr:number;avgCtr:number;myReach:number;avgReach:number;myPushes:number;avgPushes:number;tierCount:number}|null>(null);
   const [showNotifCenter, setShowNotifCenter] = useState(false);
-  const [sponsorNotifs, setSponsorNotifs] = useState<{ id: string; type: string; icon: string; color: string; title: string; message: string; date: string; unread: boolean }[]>([]);
+  const [sponsorNotifs, setSponsorNotifs] = useState<{id:string;type:string;icon:string;color:string;title:string;message:string;date:string;unread:boolean}[]>([]);
 
-  // Segmentation state
   const [segLevels, setSegLevels] = useState<string[]>([]);
   const [segRoles, setSegRoles] = useState<string[]>([]);
   const [segActivity, setSegActivity] = useState<'all' | '7d' | '30d'>('all');
+  const [segPlayerCount, setSegPlayerCount] = useState<number|null>(null);
+  const [segCountLoading, setSegCountLoading] = useState(false);
 
   // CRM state
   const [crmReferrals, setCrmReferrals] = useState<{ date: string; viewerId: string; source: string }[]>([]);
 
-  // Revenue tracker state
   const [revBudget, setRevBudget] = useState('');
+  const [digestFreq, setDigestFreq] = useState<'weekly'|'biweekly'|'monthly'>('weekly');
+  const [digestDay, setDigestDay] = useState(1);
+  const [savingDigestCfg, setSavingDigestCfg] = useState(false);
 
   // Template analytics state
   const [templateUsage, setTemplateUsage] = useState<Map<string, number>>(new Map());
@@ -172,23 +171,16 @@ export default function SponsorPortalScreen() {
   // CRM export state
   const [exportingCrm, setExportingCrm] = useState(false);
 
-  // Onboarding checklist state
-  const [checklistData, setChecklistData] = useState<{ hasLogo: boolean; hasBrandColor: boolean; hasPush: boolean; hasEvent: boolean; hasReferralCode: boolean }>({ hasLogo: false, hasBrandColor: false, hasPush: false, hasEvent: false, hasReferralCode: false });
+  const [checklistData, setChecklistData] = useState<{hasLogo:boolean;hasBrandColor:boolean;hasPush:boolean;hasEvent:boolean;hasReferralCode:boolean}>({hasLogo:false,hasBrandColor:false,hasPush:false,hasEvent:false,hasReferralCode:false});
   const [checklistXpClaimed, setChecklistXpClaimed] = useState(false);
 
-  // Digest email preview state
-  const [digestHtmlData, setDigestHtmlData] = useState<{ html: string; date: string } | null>(null);
+  const [digestHtmlData, setDigestHtmlData] = useState<{html:string;date:string}|null>(null);
   const [digestPreviewOpen, setDigestPreviewOpen] = useState(false);
 
   // Goal setting state
-  const [goalImpressions, setGoalImpressions] = useState('');
-  const [goalClicks, setGoalClicks] = useState('');
-  const [goalCtr, setGoalCtr] = useState('');
-  const [savingGoals, setSavingGoals] = useState(false);
-  const [goalsLoaded, setGoalsLoaded] = useState(false);
+  const [goalImpressions, setGoalImpressions] = useState(''); const [goalClicks, setGoalClicks] = useState(''); const [goalCtr, setGoalCtr] = useState(''); const [savingGoals, setSavingGoals] = useState(false); const [goalsLoaded, setGoalsLoaded] = useState(false);
 
-  // Goal achievement state
-  const [goalAchievements, setGoalAchievements] = useState<{ impressions: boolean; clicks: boolean; ctr: boolean }>({ impressions: false, clicks: false, ctr: false });
+  const [goalAchievements, setGoalAchievements] = useState<{impressions:boolean;clicks:boolean;ctr:boolean}>({impressions:false,clicks:false,ctr:false});
   const [celebratingGoal, setCelebratingGoal] = useState<string | null>(null);
   const [goalXpAwarded, setGoalXpAwarded] = useState(false);
 
@@ -706,6 +698,8 @@ export default function SponsorPortalScreen() {
     } catch { /* silent */ }
   };
 
+  useEffect(() => { if (checklistComplete && !checklistXpClaimed && sponsor?.id) { const t = setTimeout(() => handleClaimChecklistXp(), 800); return () => clearTimeout(t); } }, [checklistComplete, checklistXpClaimed, sponsor?.id]);
+
   const handleDismissOnboarding = async () => {
     setShowOnboarding(false);
     setOnboardingStep(0);
@@ -736,14 +730,10 @@ export default function SponsorPortalScreen() {
     if (!sponsor) return;
     setExportingCrm(true);
     try {
-      let csv = `${fr ? 'Date,Source,XP' : 'Date,Source,XP'}\n`;
-      crmReferrals.forEach(ref => {
-        const date = new Date(ref.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US');
-        csv += `${date},${ref.source || 'referral_code'},50\n`;
-      });
-      csv += `\n${fr ? 'Total parrainages' : 'Total referrals'},${sponsor.referral_count || 0}\n`;
-      csv += `${fr ? 'XP total' : 'Total XP'},${sponsor.total_referral_xp || 0}\n`;
-      csv += `${fr ? 'Code parrainage' : 'Referral code'},${sponsor.referral_code || 'N/A'}\n`;
+      let csv='Date,Source,XP\n';
+      crmReferrals.forEach(r=>{csv+=`${new Date(r.date).toLocaleDateString(fr?'fr-FR':'en-US')},${r.source||'code'},50\n`;});
+      csv+=`\nTotal,${sponsor.referral_count||0}\nXP,${sponsor.total_referral_xp||0}\n`;
+      crmSrc.forEach(s=>{csv+=`${s.source},${s.count}\n`;});
       if (Platform.OS === 'web') {
         try {
           const blob = new Blob([csv], { type: 'text/csv' });
@@ -806,7 +796,12 @@ export default function SponsorPortalScreen() {
     } catch { /* silent */ }
   };
 
-  // Load CRM referral data
+  useEffect(() => { if (!sponsor?.id){setSegPlayerCount(null);return;} setSegCountLoading(true); const d=setTimeout(async()=>{try{const rk=segLevels.filter(l=>!l.startsWith('exp_')),ex=segRoles.filter(r=>r.startsWith('exp_')),rl=segRoles.filter(r=>!r.startsWith('exp_'));const{data}=await supabase.from('players').select('elo_rating,role,experience,last_match_date');let f=data||[];if(rk.length>0&&rk.length<6){const R:Record<string,[number,number]>={bronze:[0,1099],silver:[1100,1199],gold:[1200,1499],diamond:[1500,1799],master:[1800,1999],grand_master:[2000,99999]};f=f.filter(p=>rk.some(r=>{const rr=R[r];return rr&&(p.elo_rating||1000)>=rr[0]&&(p.elo_rating||1000)<=rr[1]}));}if(rl.length>0&&rl.length<3)f=f.filter(p=>rl.includes(p.role||'Milieu'));if(ex.length>0){const M:Record<string,string[]>={exp_less_1:['< 1 an','Under 1'],exp_1_3:['1-3'],exp_3_10:['3-10'],exp_10_plus:['10+']};const ae=ex.flatMap(e=>M[e]||[]);f=f.filter(p=>ae.some(a=>(p.experience||'').includes(a)));}if(segActivity==='7d'){const c=new Date(Date.now()-7*864e5).toISOString();f=f.filter(p=>p.last_match_date&&p.last_match_date>=c);}else if(segActivity==='30d'){const c=new Date(Date.now()-30*864e5).toISOString();f=f.filter(p=>p.last_match_date&&p.last_match_date>=c);}setSegPlayerCount(f.length);}catch{setSegPlayerCount(null);}setSegCountLoading(false);},400);return()=>clearTimeout(d);},[segLevels,segRoles,segActivity,sponsor?.id,supabase]);
+
+  useEffect(()=>{if(!sponsor?.id)return;(async()=>{try{const{data}=await supabase.from('ambassador_analytics').select('source_page').eq('ambassador_id',sponsor.id).eq('event_type','digest_schedule_config').order('created_at',{ascending:false}).limit(1);if(data&&data.length>0){try{const c=JSON.parse(data[0].source_page||'{}');if(c.freq)setDigestFreq(c.freq);if(typeof c.day==='number')setDigestDay(c.day);}catch{}}}catch{}})();},[sponsor?.id]);
+  const handleSaveDigestCfg=useCallback(async()=>{if(!sponsor?.id)return;setSavingDigestCfg(true);try{await supabase.from('ambassador_analytics').insert({ambassador_id:sponsor.id,event_type:'digest_schedule_config',source_page:JSON.stringify({freq:digestFreq,day:digestDay})});Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);showAlert(fr?'OK':'Saved');}catch(e:any){showAlert('Err',e.message);}setSavingDigestCfg(false);},[sponsor?.id,digestFreq,digestDay,fr,showAlert,supabase]);
+  const crmSrc=useMemo(()=>{const m=new Map<string,number>();crmReferrals.forEach(r=>{m.set(r.source||'code',(m.get(r.source||'code')||0)+1);});return Array.from(m.entries()).sort((a,b)=>b[1]-a[1]).map(([source,count])=>({source,count}));},[crmReferrals]);
+  const crmWk=useMemo(()=>{const w:number[]=Array(8).fill(0);const n=Date.now();crmReferrals.forEach(r=>{const a=Math.floor((n-new Date(r.date).getTime())/(7*864e5));if(a>=0&&a<8)w[7-a]++;});return w;},[crmReferrals]);
   useEffect(() => {
     if (!sponsor?.id) return;
     const loadCrm = async () => {
@@ -994,35 +989,10 @@ export default function SponsorPortalScreen() {
           return `<tr><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0">${page}</td><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;text-align:right">${count}</td><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;text-align:right">${clicks}</td><td style="padding:8px 12px;border-bottom:1px solid #E2E8F0;text-align:right;font-weight:700;color:${tierColor}">${pageCtr}%</td></tr>`;
         }).join('');
 
-      const html = `
-<!DOCTYPE html>
-<html><head><meta charset="utf-8"><style>
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; max-width: 680px; margin: 0 auto; padding: 32px; color: #0F172A; }
-  .header { display: flex; align-items: center; gap: 16px; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid ${tierColor}; }
-  .logo { width: 56px; height: 56px; border-radius: 16px; object-fit: cover; border: 2px solid ${tierColor}; }
-  .logo-fallback { width: 56px; height: 56px; border-radius: 16px; background: ${tierColor}; display:flex; align-items:center; justify-content:center; color:white; font-size:24px; font-weight:900; }
-  .title { font-size: 22px; font-weight: 800; color: #0F172A; }
-  .subtitle { font-size: 13px; color: #64748B; margin-top: 4px; }
-  .badge { display: inline-block; background: ${tierColor}; color: white; font-size: 10px; font-weight: 800; padding: 3px 10px; border-radius: 6px; letter-spacing: 0.5px; }
-  .kpi-row { display: flex; gap: 12px; margin-bottom: 28px; }
-  .kpi { flex: 1; background: #F8FAFC; border-radius: 14px; padding: 18px; text-align: center; border: 1px solid #E2E8F0; }
-  .kpi-value { font-size: 28px; font-weight: 900; color: #0F172A; }
-  .kpi-label { font-size: 10px; font-weight: 600; color: #94A3B8; text-transform: uppercase; letter-spacing: 0.5px; margin-top: 4px; }
-  .section { margin-bottom: 28px; }
-  .section-title { font-size: 15px; font-weight: 700; color: #0F172A; margin-bottom: 12px; padding-bottom: 8px; border-bottom: 1px solid #E2E8F0; }
-  table { width: 100%; border-collapse: collapse; }
-  th { background: #F8FAFC; padding: 10px 12px; font-size: 11px; font-weight: 700; color: #64748B; text-transform: uppercase; text-align: left; border-bottom: 2px solid #E2E8F0; }
-  th:not(:first-child) { text-align: right; }
-  .chart-block { background: #F8FAFC; border-radius: 12px; padding: 16px; border: 1px solid #E2E8F0; margin-bottom: 16px; }
-  .footer { margin-top: 32px; padding-top: 16px; border-top: 1px solid #E2E8F0; font-size: 11px; color: #94A3B8; text-align: center; }
-</style></head><body>
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;max-width:680px;margin:0 auto;padding:32px;color:#0F172A}.header{display:flex;align-items:center;gap:16px;margin-bottom:32px;padding-bottom:20px;border-bottom:3px solid ${tierColor}}.logo{width:56px;height:56px;border-radius:16px;object-fit:cover;border:2px solid ${tierColor}}.logo-fallback{width:56px;height:56px;border-radius:16px;background:${tierColor};display:flex;align-items:center;justify-content:center;color:white;font-size:24px;font-weight:900}.title{font-size:22px;font-weight:800}.kpi-row{display:flex;gap:12px;margin-bottom:28px}.kpi{flex:1;background:#F8FAFC;border-radius:14px;padding:18px;text-align:center;border:1px solid #E2E8F0}.kpi-value{font-size:28px;font-weight:900}.kpi-label{font-size:10px;font-weight:600;color:#94A3B8;text-transform:uppercase;margin-top:4px}.section{margin-bottom:28px}.section-title{font-size:15px;font-weight:700;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #E2E8F0}table{width:100%;border-collapse:collapse}th{background:#F8FAFC;padding:10px 12px;font-size:11px;font-weight:700;color:#64748B;text-transform:uppercase;text-align:left;border-bottom:2px solid #E2E8F0}th:not(:first-child){text-align:right}.chart-block{background:#F8FAFC;border-radius:12px;padding:16px;border:1px solid #E2E8F0;margin-bottom:16px}.footer{margin-top:32px;padding-top:16px;border-top:1px solid #E2E8F0;font-size:11px;color:#94A3B8;text-align:center}</style></head><body>
   <div class="header">
     ${sponsor.photo ? `<img src="${sponsor.photo}" class="logo" />` : `<div class="logo-fallback">${sponsor.display_name?.charAt(0) || 'S'}</div>`}
-    <div>
-      <div class="title">${fr ? 'Rapport ROI Sponsor' : 'Sponsor ROI Report'}</div>
-      <div class="subtitle">${sponsor.display_name} &middot; ${dateRange}</div>
-      <div style="margin-top:6px"><span class="badge">${tierLabel.toUpperCase()}</span></div>
-    </div>
+    <div><div class="title">${fr ? 'Rapport ROI' : 'ROI Report'}</div><div style="font-size:13px;color:#64748B">${sponsor.display_name} &middot; ${dateRange}</div></div>
   </div>
 
   <div class="kpi-row">
@@ -1120,30 +1090,25 @@ export default function SponsorPortalScreen() {
   .header h1 { font-size: 28px; font-weight: 900; margin: 0 0 8px 0; }
   .header p { font-size: 14px; color: #64748B; margin: 0; }
   .section { margin-bottom: 36px; }
-  .section-title { font-size: 18px; font-weight: 800; color: #0F172A; margin-bottom: 16px; padding-bottom: 10px; border-bottom: 2px solid #E2E8F0; }
-  .logo-block { text-align: center; padding: 32px; background: #F8FAFC; border-radius: 16px; border: 1px solid #E2E8F0; }
-  .logo-block img { width: 120px; height: 120px; border-radius: 24px; object-fit: cover; border: 3px solid ${brandColor}; }
-  .logo-fallback { width: 120px; height: 120px; border-radius: 24px; background: ${brandColor}; display: inline-flex; align-items: center; justify-content: center; color: white; font-size: 48px; font-weight: 900; }
-  .color-block { display: flex; align-items: center; gap: 20px; padding: 20px; background: #F8FAFC; border-radius: 14px; border: 1px solid #E2E8F0; }
-  .color-swatch { width: 80px; height: 80px; border-radius: 16px; }
-  .color-info h3 { margin: 0 0 4px 0; font-size: 16px; }
-  .color-info p { margin: 0; font-size: 13px; color: #64748B; }
-  .mockup-card { padding: 20px; background: #F8FAFC; border-radius: 16px; border: 1px solid #E2E8F0; margin-bottom: 16px; }
-  .mockup-label { font-size: 11px; font-weight: 700; color: #94A3B8; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 12px; }
-  .banner-mock { background: linear-gradient(135deg, ${brandColor}, ${brandColor}CC); border-radius: 14px; padding: 16px; color: white; display: flex; align-items: center; gap: 14px; }
-  .banner-mock-logo { width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,0.2); display: flex; align-items: center; justify-content: center; font-size: 20px; overflow: hidden; }
-  .banner-mock-logo img { width: 44px; height: 44px; object-fit: cover; }
-  .banner-mock-info { flex: 1; }
-  .banner-mock-badge { font-size: 8px; font-weight: 900; letter-spacing: 0.8px; background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 6px; display: inline-block; margin-bottom: 4px; }
-  .banner-mock-name { font-size: 16px; font-weight: 700; }
-  .marker-mock { display: inline-flex; width: 48px; height: 48px; border-radius: 50%; border: 3px solid ${brandColor}; background: ${brandColor}15; align-items: center; justify-content: center; overflow: hidden; }
-  .marker-mock img { width: 42px; height: 42px; border-radius: 50%; object-fit: cover; }
-  .guidelines { padding: 20px; background: #FFFBEB; border-radius: 14px; border: 1px solid #FDE68A; }
-  .guidelines li { margin-bottom: 8px; font-size: 14px; color: #92400E; line-height: 1.5; }
-  .qr-block { text-align: center; padding: 24px; background: #F8FAFC; border-radius: 16px; border: 1px solid #E2E8F0; }
-  .qr-block img { display: block; margin: 0 auto 8px; }
-  .qr-block p { font-size: 11px; color: #94A3B8; }
-  .footer { margin-top: 40px; text-align: center; font-size: 11px; color: #94A3B8; border-top: 1px solid #E2E8F0; padding-top: 16px; }
+  .section-title{font-size:18px;font-weight:800;color:#0F172A;margin-bottom:16px;padding-bottom:10px;border-bottom:2px solid #E2E8F0}
+  .logo-block{text-align:center;padding:32px;background:#F8FAFC;border-radius:16px;border:1px solid #E2E8F0}
+  .logo-block img{width:120px;height:120px;border-radius:24px;object-fit:cover;border:3px solid ${brandColor}}
+  .logo-fallback{width:120px;height:120px;border-radius:24px;background:${brandColor};display:inline-flex;align-items:center;justify-content:center;color:white;font-size:48px;font-weight:900}
+  .color-block{display:flex;align-items:center;gap:20px;padding:20px;background:#F8FAFC;border-radius:14px;border:1px solid #E2E8F0}
+  .color-swatch{width:80px;height:80px;border-radius:16px}
+  .color-info h3{margin:0 0 4px 0;font-size:16px}.color-info p{margin:0;font-size:13px;color:#64748B}
+  .mockup-card{padding:20px;background:#F8FAFC;border-radius:16px;border:1px solid #E2E8F0;margin-bottom:16px}
+  .mockup-label{font-size:11px;font-weight:700;color:#94A3B8;text-transform:uppercase;letter-spacing:1px;margin-bottom:12px}
+  .banner-mock{background:linear-gradient(135deg,${brandColor},${brandColor}CC);border-radius:14px;padding:16px;color:white;display:flex;align-items:center;gap:14px}
+  .banner-mock-logo{width:44px;height:44px;border-radius:12px;background:rgba(255,255,255,0.2);display:flex;align-items:center;justify-content:center;overflow:hidden}
+  .banner-mock-logo img{width:44px;height:44px;object-fit:cover}
+  .banner-mock-info{flex:1}.banner-mock-badge{font-size:8px;font-weight:900;letter-spacing:0.8px;background:rgba(255,255,255,0.2);padding:2px 8px;border-radius:6px;display:inline-block;margin-bottom:4px}
+  .banner-mock-name{font-size:16px;font-weight:700}
+  .marker-mock{display:inline-flex;width:48px;height:48px;border-radius:50%;border:3px solid ${brandColor};background:${brandColor}15;align-items:center;justify-content:center;overflow:hidden}
+  .marker-mock img{width:42px;height:42px;border-radius:50%;object-fit:cover}
+  .guidelines{padding:20px;background:#FFFBEB;border-radius:14px;border:1px solid #FDE68A}.guidelines li{margin-bottom:8px;font-size:14px;color:#92400E;line-height:1.5}
+  .qr-block{text-align:center;padding:24px;background:#F8FAFC;border-radius:16px;border:1px solid #E2E8F0}.qr-block img{display:block;margin:0 auto 8px}.qr-block p{font-size:11px;color:#94A3B8}
+  .footer{margin-top:40px;text-align:center;font-size:11px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:16px}
 </style></head><body>
   <div class="header">
     <h1>${fr ? 'Kit de Marque' : 'Brand Guidelines Kit'}</h1>
@@ -1187,18 +1152,7 @@ export default function SponsorPortalScreen() {
       </div>
     </div>
   </div>
-  <div class="section">
-    <div class="section-title">${fr ? 'Regles d utilisation' : 'Usage Guidelines'}</div>
-    <div class="guidelines">
-      <ul>
-        <li>${fr ? 'Le logo doit toujours etre affiche sur fond clair ou sur la couleur de marque' : 'Logo must always be displayed on light background or brand color'}</li>
-        <li>${fr ? 'Ne pas deformer ou recadrer le logo' : 'Do not distort or crop the logo'}</li>
-        <li>${fr ? 'Respecter un espace minimum de 8px autour du logo' : 'Maintain minimum 8px clear space around logo'}</li>
-        <li>${fr ? 'La couleur de marque est la couleur dominante pour tous les elements visuels' : 'Brand color is the dominant color for all visual elements'}</li>
-        <li>${fr ? 'Les badges de tier sont automatiques et ne doivent pas etre modifies' : 'Tier badges are automatic and must not be modified'}</li>
-      </ul>
-    </div>
-  </div>
+  <div class="section"><div class="section-title">${fr?'Regles':'Guidelines'}</div><div class="guidelines"><ul><li>${fr?'Logo sur fond clair ou couleur de marque':'Logo on light bg or brand color'}</li><li>${fr?'Ne pas deformer le logo':'Do not distort logo'}</li><li>${fr?'Espace min 8px autour du logo':'Min 8px space around logo'}</li><li>${fr?'Couleur de marque dominante':'Brand color dominant'}</li><li>${fr?'Badges de tier automatiques':'Tier badges automatic'}</li></ul></div></div>
   <div class="section">
     <div class="section-title">${fr ? 'Lien profil' : 'Profile Link'}</div>
     <div class="qr-block">
@@ -1479,8 +1433,7 @@ export default function SponsorPortalScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tierColor} />}
       >
-        {/* Onboarding Checklist */}
-        {!checklistComplete || !checklistXpClaimed ? (
+        {!(checklistComplete && checklistXpClaimed) ? (
           <View style={st.checklistCard}>
             <View style={st.checklistHeader}>
               <View style={[st.checklistIconBg, { backgroundColor: tierColor + '12' }]}>
@@ -1516,25 +1469,6 @@ export default function SponsorPortalScreen() {
             ))}
           </View>
         ) : null}
-
-        {/* Quick Actions */}
-        <View style={st.actionsCard}>
-          <Text style={st.actionsTitle}>{fr ? 'Actions rapides' : 'Quick actions'}</Text>
-          <View style={st.actionsGrid}>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/sponsored-event/new' as any)}>
-              <View style={[st.actionIcon, { backgroundColor: '#10B98112' }]}><MaterialIcons name="add-circle" size={22} color="#10B981" /></View>
-              <Text style={st.actionLabel}>{fr ? 'Defi sponsor' : 'Sponsor challenge'}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => router.push('/partners' as any)}>
-              <View style={[st.actionIcon, { backgroundColor: '#3B82F612' }]}><MaterialIcons name="storefront" size={22} color="#3B82F6" /></View>
-              <Text style={st.actionLabel}>{fr ? 'Page partenaires' : 'Partners page'}</Text>
-            </Pressable>
-            <Pressable style={({ pressed }) => [st.actionBtn, pressed && { opacity: 0.8, transform: [{ scale: 0.97 }] }]} onPress={() => { if (sponsor.website_url) Linking.openURL(sponsor.website_url); }}>
-              <View style={[st.actionIcon, { backgroundColor: tierColor + '12' }]}><MaterialIcons name="language" size={22} color={tierColor} /></View>
-              <Text style={st.actionLabel}>{fr ? 'Mon site' : 'My site'}</Text>
-            </Pressable>
-          </View>
-        </View>
 
         {/* ====== ROI SECTION ====== */}
         {activeSection === 'roi' ? (
@@ -2454,7 +2388,7 @@ export default function SponsorPortalScreen() {
                     <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Ciblage audience' : 'Audience targeting'}</Text>
                     <View style={{ flex: 1 }} />
                     <View style={{ backgroundColor: tierColor + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                      <Text style={{ fontSize: 10, fontWeight: '800', color: tierColor }}>~{(() => { let b = 500; const rankFilters = segLevels.filter(l => !l.startsWith('exp_')); const expFilters = segRoles.filter(r => r.startsWith('exp_')); const roleFilters = segRoles.filter(r => !r.startsWith('exp_')); if (rankFilters.length > 0 && rankFilters.length < 6) b = Math.round(b * rankFilters.length / 6); if (roleFilters.length > 0 && roleFilters.length < 3) b = Math.round(b * roleFilters.length / 3); if (expFilters.length > 0 && expFilters.length < 4) b = Math.round(b * expFilters.length / 4); if (segActivity === '7d') b = Math.round(b * 0.4); else if (segActivity === '30d') b = Math.round(b * 0.7); return Math.max(10, b); })()} {fr ? 'joueurs' : 'players'}</Text>
+                      {segCountLoading?<ActivityIndicator size={10} color={tierColor}/>:<Text style={{fontSize:10,fontWeight:'800',color:tierColor}}>{segPlayerCount!==null?segPlayerCount:'...'} {fr?'joueurs':'players'}</Text>}
                     </View>
                   </View>
                   <Text style={st.segLabel}>{fr ? 'Rang ELO' : 'ELO Rank'}</Text>
@@ -3291,33 +3225,17 @@ export default function SponsorPortalScreen() {
                           <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED', marginTop: 4 }}>{avgRateB}% {fr ? 'moy.' : 'avg.'}</Text>
                         </View>
                       </View>
-                      {/* Statistical significance */}
+                      {/* Significance */}
                       <View style={{ backgroundColor: isSignificant ? '#10B98108' : '#F59E0B08', borderRadius: 14, padding: 14, marginBottom: 14, borderWidth: 1.5, borderColor: isSignificant ? '#10B98120' : '#F59E0B20' }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                          <MaterialIcons name={isSignificant ? 'check-circle' : 'warning'} size={18} color={isSignificant ? '#10B981' : '#F59E0B'} />
-                          <Text style={{ fontSize: 13, fontWeight: '700', color: isSignificant ? '#10B981' : '#F59E0B' }}>
-                            {isSignificant ? (fr ? 'Resultats significatifs' : 'Significant results') : (fr ? 'Donnees insuffisantes' : 'Insufficient data')}
-                          </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <MaterialIcons name={isSignificant ? 'check-circle' : 'warning'} size={16} color={isSignificant ? '#10B981' : '#F59E0B'} />
+                          <Text style={{ fontSize: 12, fontWeight: '700', color: isSignificant ? '#10B981' : '#F59E0B' }}>{isSignificant ? (fr ? 'Significatif' : 'Significant') : (fr ? 'Insuffisant' : 'Insufficient')}</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
-                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: isSignificant ? '#10B981' : '#F59E0B' }}>{confidence}%</Text>
-                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Confiance' : 'Confidence'}</Text>
-                          </View>
-                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#0F172A' }}>~{avgSampleSize}</Text>
-                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Echantillon' : 'Sample'}</Text>
-                          </View>
-                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 10, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
-                            <Text style={{ fontSize: 18, fontWeight: '900', color: '#3B82F6' }}>{recommendedN}+</Text>
-                            <Text style={{ fontSize: 8, fontWeight: '600', color: '#94A3B8', marginTop: 2, textTransform: 'uppercase' }}>{fr ? 'Recommande' : 'Recommended'}</Text>
-                          </View>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 8, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}><Text style={{ fontSize: 16, fontWeight: '900', color: isSignificant ? '#10B981' : '#F59E0B' }}>{confidence}%</Text><Text style={{ fontSize: 7, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'CONFIANCE' : 'CONFIDENCE'}</Text></View>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 8, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#0F172A' }}>~{avgSampleSize}</Text><Text style={{ fontSize: 7, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'ECHANT.' : 'SAMPLE'}</Text></View>
+                          <View style={{ flex: 1, backgroundColor: '#FFF', borderRadius: 10, padding: 8, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}><Text style={{ fontSize: 16, fontWeight: '900', color: '#3B82F6' }}>{recommendedN}+</Text><Text style={{ fontSize: 7, fontWeight: '600', color: '#94A3B8' }}>{fr ? 'RECO.' : 'REC.'}</Text></View>
                         </View>
-                        <Text style={{ fontSize: 11, color: '#64748B', marginTop: 10, lineHeight: 16 }}>
-                          {isSignificant
-                            ? (fr ? `Les resultats sont statistiquement significatifs a ${confidence}%. La variante ${winsA > winsB ? 'A' : 'B'} est en tete avec ${winsA > winsB ? avgRateA : avgRateB}% d ouverture moyenne.` : `Results are statistically significant at ${confidence}%. Variant ${winsA > winsB ? 'A' : 'B'} leads with ${winsA > winsB ? avgRateA : avgRateB}% average open rate.`)
-                            : (fr ? `Pour atteindre une confiance de 95%, envoyez au moins ${recommendedN} notifications par variante. Continuez a tester pour obtenir des resultats fiables.` : `To reach 95% confidence, send at least ${recommendedN} notifications per variant. Continue testing for reliable results.`)}
-                        </Text>
                       </View>
                       {/* Recommendation */}
                       <View style={st.abRecommendation}>
@@ -3388,7 +3306,8 @@ export default function SponsorPortalScreen() {
               </View>
             ) : null}
 
-            {/* Recent Pushes */}
+            {isSilverPlus&&pushAnalytics.totalSent>2?(()=>{const RK=[{r:'Bronze',c:'#CD7F32',p:.35},{r:fr?'Argent':'Silver',c:'#94A3B8',p:.25},{r:fr?'Or':'Gold',c:'#F59E0B',p:.2},{r:fr?'Diamant':'Diamond',c:'#06B6D4',p:.12},{r:fr?'Maitre':'Master',c:'#9333EA',p:.06},{r:'G.M',c:'#FFD700',p:.02}];const tp=pushAnalytics.estimatedReach;const bR=RK.map(r=>({...r,n:Math.round(tp*r.p)}));const mx=Math.max(...bR.map(r=>r.n),1);const RL=[{r:'Tireur',c:'#EF4444',p:.3},{r:'Pointeur',c:'#3B82F6',p:.38},{r:'Milieu',c:'#10B981',p:.32}];const bRl=RL.map(r=>({...r,n:Math.round(tp*r.p)}));return(<View style={st.pushAnalyticsCard}><View style={{flexDirection:'row',alignItems:'center',gap:8,marginBottom:12}}><MaterialIcons name="analytics" size={18} color={tierColor}/><Text style={{fontSize:14,fontWeight:'700',color:'#0F172A',flex:1}}>{fr?'Analytics segment':'Segment Analytics'}</Text></View>{bR.map((r,i)=>(<View key={i} style={{flexDirection:'row',alignItems:'center',gap:6,marginBottom:3}}><View style={{width:6,height:6,borderRadius:3,backgroundColor:r.c}}/><Text style={{width:44,fontSize:10,fontWeight:'600',color:'#334155'}}>{r.r}</Text><View style={{flex:1,height:5,backgroundColor:'#F1F5F9',borderRadius:3,overflow:'hidden'}}><View style={{height:'100%' as any,width:`${Math.max(3,(r.n/mx)*100)}%`,backgroundColor:r.c,borderRadius:3}}/></View><Text style={{width:28,fontSize:9,fontWeight:'800',color:r.c,textAlign:'right'}}>{r.n}</Text></View>))}<View style={{flexDirection:'row',gap:6,marginVertical:10}}>{bRl.map((r,i)=>(<View key={i} style={{flex:1,alignItems:'center',backgroundColor:r.c+'08',borderRadius:10,paddingVertical:8,borderWidth:1,borderColor:r.c+'15'}}><Text style={{fontSize:14,fontWeight:'900',color:r.c}}>{r.n}</Text><Text style={{fontSize:8,color:'#94A3B8'}}>{r.r}</Text></View>))}</View></View>)})():null}
+
             {recentPushes.length > 0 ? (
               <View style={st.pushHistoryCard}>
                 <Text style={st.pushHistoryTitle}>{fr ? 'Envois recents' : 'Recent sends'}</Text>
@@ -3487,6 +3406,8 @@ export default function SponsorPortalScreen() {
                   <Text style={{ fontSize: 22, fontWeight: '900', color: tierColor, letterSpacing: 2 }}>{sponsor.referral_code}</Text>
                 </View>
               ) : null}
+              {crmSrc.length>0?(<View style={{marginBottom:10}}>{crmSrc.map((s,i)=>{const p=Math.round((s.count/Math.max(crmReferrals.length,1))*100);const c=s.source.includes('qr')?'#7C3AED':s.source.includes('link')?'#3B82F6':'#10B981';return(<View key={i} style={{flexDirection:'row' as const,alignItems:'center' as const,gap:6,marginBottom:3}}><MaterialIcons name={(s.source.includes('qr')?'qr-code':s.source.includes('link')?'link':'vpn-key') as any} size={11} color={c}/><Text style={{flex:1,fontSize:11,color:'#334155'}}>{s.source.includes('qr')?'QR':s.source.includes('link')?(fr?'Lien':'Link'):'Code'}</Text><View style={{width:44,height:4,backgroundColor:'#F1F5F9',borderRadius:2,overflow:'hidden' as const}}><View style={{height:'100%' as any,width:`${p}%`,backgroundColor:c,borderRadius:2}}/></View><Text style={{fontSize:9,fontWeight:'800' as const,color:c}}>{s.count}</Text></View>);})}</View>):null}
+              {crmWk.some(v=>v>0)?(<View style={{marginBottom:10,alignItems:'center' as const}}><Sparkline data={crmWk} width={Math.min(screenWidth-130,300)} height={34} color={tierColor}/></View>):null}
               {crmReferrals.length > 0 ? (
                 <View>
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#334155', marginBottom: 10 }}>{fr ? 'Historique parrainages' : 'Referral history'}</Text>
@@ -3513,28 +3434,10 @@ export default function SponsorPortalScreen() {
                   <Text style={{ fontSize: 13, color: '#94A3B8', marginTop: 8 }}>{fr ? 'Aucun parrainage enregistre' : 'No referrals recorded'}</Text>
                 </View>
               )}
-              {/* CRM Export Button */}
-              {crmReferrals.length > 0 ? (
-                <Pressable
-                  style={({ pressed }) => [st.exportBtn, { marginTop: 14, borderColor: '#10B98140' }, exportingCrm && { opacity: 0.6 }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-                  onPress={handleExportCrmCsv}
-                  disabled={exportingCrm}
-                >
-                  {exportingCrm ? <ActivityIndicator size="small" color="#10B981" /> : (
-                    <>
-                      <MaterialIcons name="download" size={20} color="#10B981" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[st.exportBtnText, { color: '#10B981' }]}>{fr ? 'Exporter parrainages CSV' : 'Export referrals CSV'}</Text>
-                        <Text style={st.exportBtnSub}>{fr ? `${crmReferrals.length} parrainage(s), XP, dates` : `${crmReferrals.length} referral(s), XP, dates`}</Text>
-                      </View>
-                      <MaterialIcons name="chevron-right" size={18} color="#10B981" />
-                    </>
-                  )}
-                </Pressable>
-              ) : null}
+              {crmReferrals.length>0?(<Pressable style={({pressed})=>[st.exportBtn,{marginTop:12,borderColor:'#10B98140'},exportingCrm&&{opacity:0.5},pressed&&{opacity:0.8}]} onPress={handleExportCrmCsv} disabled={exportingCrm}>{exportingCrm?<ActivityIndicator size="small" color="#10B981"/>:(<><MaterialIcons name="download" size={18} color="#10B981"/><View style={{flex:1}}><Text style={[st.exportBtnText,{color:'#10B981'}]}>CRM CSV</Text></View></>)}</Pressable>):null}
             </View>
 
-            {/* CRM KPI */}
+            {isGold?(<View style={st.ctrCard}><View style={{flexDirection:'row' as const,alignItems:'center' as const,gap:6,marginBottom:6}}><MaterialIcons name="schedule-send" size={16} color="#6366F1"/><Text style={{fontSize:13,fontWeight:'700' as const,color:'#0F172A'}}>Digest</Text></View><View style={{flexDirection:'row' as const,gap:4,marginBottom:6}}>{[{v:'weekly' as const,l:'Wk',c:'#6366F1'},{v:'biweekly' as const,l:'2x',c:'#3B82F6'},{v:'monthly' as const,l:'Mo',c:'#10B981'}].map(o=>{const s=digestFreq===o.v;return(<Pressable key={o.v} style={{flex:1,alignItems:'center' as const,paddingVertical:6,borderRadius:8,backgroundColor:s?o.c:'#F8FAFC',borderWidth:1,borderColor:s?o.c:'#E2E8F0'}} onPress={()=>setDigestFreq(o.v)}><Text style={{fontSize:10,fontWeight:'700' as const,color:s?'#FFF':'#334155'}}>{o.l}</Text></Pressable>);})}</View><View style={{flexDirection:'row' as const,gap:2,marginBottom:6}}>{['S','M','T','W','T','F','S'].map((d,i)=>{const s=digestDay===i;return(<Pressable key={i} style={{flex:1,alignItems:'center' as const,paddingVertical:4,borderRadius:4,backgroundColor:s?'#6366F1':'#F8FAFC'}} onPress={()=>setDigestDay(i)}><Text style={{fontSize:8,fontWeight:'700' as const,color:s?'#FFF':'#64748B'}}>{d}</Text></Pressable>);})}</View><Pressable style={[{alignItems:'center' as const,backgroundColor:'#6366F1',paddingVertical:8,borderRadius:8},savingDigestCfg&&{opacity:0.5}]} onPress={handleSaveDigestCfg} disabled={savingDigestCfg}><Text style={{fontSize:12,fontWeight:'700' as const,color:'#FFF'}}>Save</Text></Pressable></View>):null}
             <View style={st.kpiGrid}>
               <View style={st.kpiCard}>
                 <View style={[st.kpiIcon, { backgroundColor: '#10B98112' }]}>
@@ -3668,13 +3571,6 @@ const st = StyleSheet.create({
   eventTitle: { fontSize: 16, fontWeight: '700', color: theme.textPrimary, marginBottom: 6 },
   eventMeta: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   eventMetaText: { fontSize: 12, fontWeight: '600', color: theme.textMuted },
-  // Actions
-  actionsCard: { backgroundColor: '#FFF', borderRadius: 18, padding: 18, marginBottom: 14, borderWidth: 1, borderColor: '#E2E8F0' },
-  actionsTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A', marginBottom: 14 },
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
-  actionBtn: { width: '47%', flexGrow: 1, alignItems: 'center', gap: 8, paddingVertical: 16, borderRadius: 14, backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
-  actionIcon: { width: 44, height: 44, borderRadius: 14, alignItems: 'center', justifyContent: 'center' },
-  actionLabel: { fontSize: 12, fontWeight: '600', color: '#334155', textAlign: 'center' },
   // Export
   exportBtn: { flexDirection: 'row', alignItems: 'center', gap: 14, backgroundColor: '#FFF', borderRadius: 16, padding: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#E2E8F0', borderStyle: 'dashed' as any },
   exportBtnText: { fontSize: 15, fontWeight: '700' },
