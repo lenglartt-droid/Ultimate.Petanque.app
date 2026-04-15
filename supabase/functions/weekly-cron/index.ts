@@ -13,7 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
-import { sendPushNotifications, buildPushMessage } from '../_shared/push.ts';
+import { sendPushNotifications, buildPushMessage, getPushReceipts } from '../_shared/push.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'process_scheduled_announcements', 'check_push_receipts', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
 
     const results: Record<string, any> = {};
 
@@ -556,6 +556,263 @@ Deno.serve(async (req: Request) => {
       } catch (schedErr: any) {
         console.error('[weekly-cron] Scheduled push task error:', schedErr.message);
         results.process_scheduled_pushes = { error: schedErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 5b: Process Scheduled Announcements
+    // Sends announcements whose scheduled_at has passed
+    // ============================================================
+    if (tasks.includes('process_scheduled_announcements')) {
+      console.log('[weekly-cron] Processing scheduled announcements...');
+      try {
+        const now = new Date().toISOString();
+
+        // Find all scheduled announcements that are due
+        const { data: dueAnnouncements } = await supabaseAdmin
+          .from('announcements')
+          .select('*')
+          .eq('status', 'scheduled')
+          .not('scheduled_at', 'is', null)
+          .lte('scheduled_at', now);
+
+        let processed = 0;
+        let totalSent = 0;
+        let totalErrors = 0;
+
+        if (dueAnnouncements && dueAnnouncements.length > 0) {
+          for (const ann of dueAnnouncements) {
+            try {
+              console.log(`[weekly-cron] Sending scheduled announcement: ${ann.title_fr || ann.title_en} (id: ${ann.id})`);
+
+              // Get ALL active push tokens
+              const { data: allTokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('user_id, token, platform')
+                .eq('active', true);
+
+              if (!allTokens || allTokens.length === 0) {
+                await supabaseAdmin.from('announcements').update({
+                  status: 'sent',
+                  push_sent_count: 0,
+                  push_error_count: 0,
+                }).eq('id', ann.id);
+                processed++;
+                continue;
+              }
+
+              let targetTokens = allTokens;
+
+              // Apply targeting filter
+              if (ann.target_type && ann.target_type !== 'all' && ann.target_value) {
+                const allUserIds = [...new Set(allTokens.map((t: any) => t.user_id))];
+                const matchedUserIds = new Set<string>();
+
+                if (ann.target_type === 'rank') {
+                  const rankRanges: Record<string, { min: number; max: number }> = {
+                    bronze: { min: 0, max: 1099 }, silver: { min: 1100, max: 1199 },
+                    gold: { min: 1200, max: 1499 }, diamond: { min: 1500, max: 1799 },
+                    master: { min: 1800, max: 1999 }, grand_master: { min: 2000, max: 999999 },
+                  };
+                  const rankKeys = ann.target_value.split(',').map((r: string) => r.trim()).filter(Boolean);
+                  for (const rk of rankKeys) {
+                    const range = rankRanges[rk];
+                    if (range) {
+                      const { data: rankPlayers } = await supabaseAdmin
+                        .from('players').select('user_id')
+                        .gte('elo_rating', range.min).lte('elo_rating', range.max)
+                        .in('user_id', allUserIds);
+                      (rankPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+                    }
+                  }
+                } else if (ann.target_type === 'city') {
+                  const cityLower = ann.target_value.toLowerCase();
+                  const { data: tCities } = await supabaseAdmin.from('terrains').select('user_id, city').in('user_id', allUserIds);
+                  const { data: cCities } = await supabaseAdmin.from('clubs').select('user_id, city').in('user_id', allUserIds);
+                  (tCities || []).forEach((t: any) => { if (t.city?.toLowerCase() === cityLower) matchedUserIds.add(t.user_id); });
+                  (cCities || []).forEach((c: any) => { if (c.city?.toLowerCase() === cityLower) matchedUserIds.add(c.user_id); });
+                } else if (ann.target_type === 'club') {
+                  const clubLower = ann.target_value.toLowerCase();
+                  const { data: clubPlayers } = await supabaseAdmin.from('players').select('user_id, club').in('user_id', allUserIds);
+                  (clubPlayers || []).forEach((p: any) => { if (p.club?.toLowerCase() === clubLower) matchedUserIds.add(p.user_id); });
+                } else if (ann.target_type === 'account_age') {
+                  const maxDays = parseInt(ann.target_value) || 7;
+                  const cutoff = new Date(Date.now() - maxDays * 86400000).toISOString();
+                  const { data: newUsers } = await supabaseAdmin.from('user_profiles').select('id').gte('created_at', cutoff).in('id', allUserIds);
+                  (newUsers || []).forEach((u: any) => matchedUserIds.add(u.id));
+                } else if (ann.target_type === 'match_count') {
+                  const parts = ann.target_value.split('-');
+                  const minMatches = parseInt(parts[0]) || 0;
+                  const maxMatches = parseInt(parts[1]) || 999999;
+                  const { data: playerStats } = await supabaseAdmin.from('players').select('user_id, stats').in('user_id', allUserIds);
+                  (playerStats || []).forEach((p: any) => {
+                    const mc = p.stats?.matchesPlayed || 0;
+                    if (mc >= minMatches && mc <= maxMatches) matchedUserIds.add(p.user_id);
+                  });
+                } else if (ann.target_type === 'last_active') {
+                  const maxDays = parseInt(ann.target_value) || 30;
+                  const cutoff = new Date(Date.now() - maxDays * 86400000).toISOString();
+                  const { data: inactivePlayers } = await supabaseAdmin.from('players').select('user_id, last_match_date').in('user_id', allUserIds).lt('last_match_date', cutoff);
+                  (inactivePlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+                  // Also include users without any match
+                  const { data: noMatchPlayers } = await supabaseAdmin.from('players').select('user_id').in('user_id', allUserIds).is('last_match_date', null);
+                  (noMatchPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+                }
+
+                targetTokens = allTokens.filter((t: any) => matchedUserIds.has(t.user_id));
+              }
+
+              if (targetTokens.length === 0) {
+                await supabaseAdmin.from('announcements').update({
+                  status: 'sent', push_sent_count: 0, push_error_count: 0,
+                }).eq('id', ann.id);
+                processed++;
+                continue;
+              }
+
+              // Build platform breakdown
+              const platformCounts: Record<string, number> = {};
+              targetTokens.forEach((t: any) => { platformCounts[t.platform || 'unknown'] = (platformCounts[t.platform || 'unknown'] || 0) + 1; });
+
+              const annTitle = ann.title_fr || ann.title_en;
+              const annBody = ann.message_fr || ann.message_en;
+
+              let annSent = 0;
+              let annErrors = 0;
+              const ticketIds: string[] = [];
+
+              const BATCH_SIZE = 100;
+              for (let i = 0; i < targetTokens.length; i += BATCH_SIZE) {
+                const batch = targetTokens.slice(i, i + BATCH_SIZE).map((t: any) => buildPushMessage(
+                  t.token,
+                  `\u{1F4E2} ${annTitle}`,
+                  annBody,
+                  { type: 'announcement' },
+                  { channelId: 'tournament-reminders', priority: 'high' }
+                ));
+                const tickets = await sendPushNotifications(batch);
+                annSent += tickets.filter((t: any) => t.status === 'ok').length;
+                annErrors += tickets.filter((t: any) => t.status === 'error').length;
+                tickets.forEach((t: any) => { if (t.id) ticketIds.push(t.id); });
+
+                for (let j = 0; j < tickets.length; j++) {
+                  if (tickets[j].details?.error === 'DeviceNotRegistered') {
+                    const invalidToken = batch[j]?.to;
+                    if (invalidToken) {
+                      await supabaseAdmin.from('push_tokens').update({ active: false }).eq('token', invalidToken);
+                    }
+                  }
+                }
+              }
+
+              // Update announcement as sent
+              await supabaseAdmin.from('announcements').update({
+                status: 'sent',
+                push_sent_count: annSent,
+                push_error_count: annErrors,
+                platform_breakdown: platformCounts,
+              }).eq('id', ann.id);
+
+              // Store ticket IDs for later receipt checking
+              if (ticketIds.length > 0) {
+                await supabaseAdmin.from('ambassador_analytics').insert({
+                  ambassador_id: '00000000-0000-0000-0000-000000000000',
+                  event_type: 'push_tickets',
+                  source_page: ticketIds.slice(0, 500).join(','),
+                  social_platform: `announcement:${ann.id}`,
+                }).catch(() => {});
+              }
+
+              totalSent += annSent;
+              totalErrors += annErrors;
+              processed++;
+              console.log(`[weekly-cron] Scheduled announcement sent: ${annSent}/${targetTokens.length} for "${annTitle}"`);
+            } catch (annErr: any) {
+              console.error(`[weekly-cron] Error processing announcement ${ann.id}:`, annErr.message);
+              // Mark as sent with error to avoid retrying forever
+              await supabaseAdmin.from('announcements').update({
+                status: 'sent', push_sent_count: 0, push_error_count: 1,
+              }).eq('id', ann.id);
+              processed++;
+            }
+          }
+        }
+
+        console.log(`[weekly-cron] Processed ${processed} scheduled announcements (${totalSent} sent, ${totalErrors} errors)`);
+        results.process_scheduled_announcements = { processed, sent: totalSent, errors: totalErrors };
+      } catch (schedAnnErr: any) {
+        console.error('[weekly-cron] Scheduled announcements task error:', schedAnnErr.message);
+        results.process_scheduled_announcements = { error: schedAnnErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 5c: Check Push Receipts
+    // Verifies delivery of previously sent push notifications
+    // ============================================================
+    if (tasks.includes('check_push_receipts')) {
+      console.log('[weekly-cron] Checking push notification receipts...');
+      try {
+        // Fetch recent ticket IDs stored from the last 24 hours
+        const threshold24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        const { data: ticketRecords } = await supabaseAdmin
+          .from('ambassador_analytics')
+          .select('id, source_page, social_platform')
+          .eq('event_type', 'push_tickets')
+          .gte('created_at', threshold24h)
+          .limit(50);
+
+        let totalChecked = 0;
+        let totalDelivered = 0;
+        let totalFailed = 0;
+        let tokensDeactivated = 0;
+
+        if (ticketRecords && ticketRecords.length > 0) {
+          for (const record of ticketRecords) {
+            const ticketIds = (record.source_page || '').split(',').filter(Boolean);
+            if (ticketIds.length === 0) continue;
+
+            const receipts = await getPushReceipts(ticketIds);
+            totalChecked += receipts.size;
+
+            for (const [ticketId, receipt] of receipts) {
+              if (receipt.status === 'ok') {
+                totalDelivered++;
+              } else {
+                totalFailed++;
+                // Handle specific errors
+                if (receipt.details?.error === 'DeviceNotRegistered') {
+                  // Find and deactivate the token
+                  // We cannot directly map ticket to token, so we log it
+                  tokensDeactivated++;
+                  console.log(`[weekly-cron] Receipt error DeviceNotRegistered for ticket ${ticketId}`);
+                } else if (receipt.details?.error === 'MessageTooBig') {
+                  console.log(`[weekly-cron] Receipt error MessageTooBig for ticket ${ticketId}`);
+                } else if (receipt.details?.error === 'MessageRateExceeded') {
+                  console.log(`[weekly-cron] Receipt error MessageRateExceeded for ticket ${ticketId}`);
+                } else if (receipt.details?.error === 'InvalidCredentials') {
+                  console.error(`[weekly-cron] CRITICAL: InvalidCredentials error - check Expo push credentials`);
+                }
+              }
+            }
+
+            // Clean up processed ticket records
+            await supabaseAdmin.from('ambassador_analytics').delete().eq('id', record.id);
+          }
+        }
+
+        const deliveryRate = totalChecked > 0 ? Math.round((totalDelivered / totalChecked) * 100) : 0;
+        console.log(`[weekly-cron] Push receipts: ${totalChecked} checked, ${totalDelivered} delivered, ${totalFailed} failed, ${tokensDeactivated} tokens flagged, ${deliveryRate}% delivery rate`);
+        results.check_push_receipts = {
+          checked: totalChecked,
+          delivered: totalDelivered,
+          failed: totalFailed,
+          tokensDeactivated,
+          deliveryRate,
+        };
+      } catch (receiptErr: any) {
+        console.error('[weekly-cron] Push receipts check error:', receiptErr.message);
+        results.check_push_receipts = { error: receiptErr.message };
       }
     }
 

@@ -368,6 +368,13 @@ export default function AdminAntiCheatScreen() {
 
       <AdminQuickNav currentRoute="/admin-anticheat" />
 
+      <ScrollView
+        style={st.mainScroll}
+        contentContainerStyle={[st.mainScrollContent, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+      >
+
       {/* ============ DELETION ALERTS ============ */}
       {!deletionAlertsLoading && deletionAlerts.length > 0 ? (
         <View style={st.deletionSection}>
@@ -605,7 +612,7 @@ export default function AdminAntiCheatScreen() {
       ) : null}
 
       {/* Status filter chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
+      <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
         {(['all', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => (
           <Pressable
             key={sf}
@@ -618,7 +625,7 @@ export default function AdminAntiCheatScreen() {
             </View>
           </Pressable>
         ))}
-      </ScrollView>
+      </ScrollView></View>
 
       {/* Search */}
       <View style={st.searchBar}>
@@ -627,12 +634,7 @@ export default function AdminAntiCheatScreen() {
         {search.length > 0 ? <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable> : null}
       </View>
 
-      <ScrollView
-        style={st.list}
-        contentContainerStyle={[st.listContent, { paddingBottom: insets.bottom + 32 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
-      >
+      <View style={st.listInner}>
         {loading ? (
           <View style={{ paddingVertical: 60, alignItems: 'center' }}>
             <ActivityIndicator size="large" color={theme.primary} />
@@ -716,6 +718,8 @@ export default function AdminAntiCheatScreen() {
             );
           })
         )}
+      </View>
+
       </ScrollView>
 
       {/* Detail Modal */}
@@ -1100,8 +1104,9 @@ const st = StyleSheet.create({
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.surface, marginHorizontal: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary, padding: 0 },
 
-  list: { flex: 1 },
-  listContent: { paddingHorizontal: 16, paddingTop: 12 },
+  mainScroll: { flex: 1 },
+  mainScrollContent: { paddingTop: 0 },
+  listInner: { paddingHorizontal: 16, paddingTop: 4 },
 
   playerCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderLeftWidth: 4, ...theme.shadows.card },
   playerHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 10 },

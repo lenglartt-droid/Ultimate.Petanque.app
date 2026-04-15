@@ -45,6 +45,7 @@ import { getEloRank } from '@/services/eloService';
 import { ADMIN_PERMISSIONS, PermissionKey, getUserPermissions, setUserPermissions, getBulkUserPermissions } from '@/services/adminPermissionService';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { UsersSkeleton } from '@/components/ui/AdminSkeleton';
+import { useAdminCache } from '@/hooks/useAdminCache';
 
 interface AdminUser {
   id: string;
@@ -80,6 +81,7 @@ export default function AdminUsersScreen() {
   const { showAlert } = useAlert();
   const fr = language === 'fr';
 
+  const adminCache = useAdminCache();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [users, setUsers] = useState<AdminUser[]>([]);
@@ -167,6 +169,7 @@ export default function AdminUsersScreen() {
       }
 
       setUsers(mappedUsers);
+      adminCache.setCached('admin-users', mappedUsers, 30000);
     } catch (e) {
       console.log('[AdminUsers] Load error:', e);
     } finally {
@@ -174,7 +177,17 @@ export default function AdminUsersScreen() {
     }
   }, []);
 
-  useEffect(() => { loadUsers(); }, [loadUsers]);
+  useEffect(() => {
+    const cached = adminCache.getCached<AdminUser[]>('admin-users');
+    if (cached) {
+      setUsers(cached);
+      setLoading(false);
+      // Background refresh
+      loadUsers();
+    } else {
+      loadUsers();
+    }
+  }, [loadUsers]);
 
   const handleRefresh = useCallback(async () => {
     setRefreshing(true);
