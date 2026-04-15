@@ -665,7 +665,7 @@ const st = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   scrollView: { flex: 1 },
-  scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
+  scrollContent: { paddingHorizontal: 16, paddingTop: 16, flexGrow: 1 },
 
   // How it works
   howItWorksCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#3B82F620', ...theme.shadows.card },

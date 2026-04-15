@@ -289,8 +289,8 @@ export default function CreatorNoteScreen() {
               icon="schedule"
               color="#F59E0B"
               text={fr
-                ? "Horaires d'activites des terrains mis a jour automatiquement par l'utilisation de l'application des joueurs"
-                : 'Court activity schedules automatically updated by player app usage'}
+                ? "Horaire d'affluence des terrains mis a jour automatiquement et instantanement : sachez ou jouer tout de suite"
+                : 'Court peak hours updated automatically and instantly: know where to play right now'}
             />
             <PillarBullet
               icon="people"

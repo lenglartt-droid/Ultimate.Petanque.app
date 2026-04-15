@@ -1064,24 +1064,38 @@ Deno.serve(async (req: Request) => {
         const allUserIds = [...new Set(allAnnTokens.map((t: any) => t.user_id))];
         let matchedUserIds = new Set<string>();
 
-        if (targetType === 'level') {
-          // Filter by user_profiles.level (primary) + players.level (fallback)
+        if (targetType === 'rank') {
+          // Filter by ELO rank tier(s) from players.elo_rating
+          // targetValue can be comma-separated for multi-rank selection
+          const rankRanges: Record<string, { min: number; max: number }> = {
+            bronze: { min: 0, max: 1099 },
+            silver: { min: 1100, max: 1199 },
+            gold: { min: 1200, max: 1499 },
+            diamond: { min: 1500, max: 1799 },
+            master: { min: 1800, max: 1999 },
+            grand_master: { min: 2000, max: 999999 },
+          };
+          const rankKeys = targetValue.split(',').map((r: string) => r.trim()).filter(Boolean);
+          for (const rk of rankKeys) {
+            const range = rankRanges[rk];
+            if (range) {
+              const { data: rankPlayers } = await supabaseAdmin
+                .from('players')
+                .select('user_id')
+                .gte('elo_rating', range.min)
+                .lte('elo_rating', range.max)
+                .in('user_id', allUserIds);
+              (rankPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
+            }
+          }
+        } else if (targetType === 'level') {
+          // Legacy: filter by user_profiles.level
           const { data: profileUsers } = await supabaseAdmin
             .from('user_profiles')
             .select('id')
             .eq('level', targetValue)
             .in('id', allUserIds);
           (profileUsers || []).forEach((p: any) => matchedUserIds.add(p.id));
-          // Also check players table for users not matched via profiles
-          const remainingIds = allUserIds.filter((uid: string) => !matchedUserIds.has(uid));
-          if (remainingIds.length > 0) {
-            const { data: levelPlayers } = await supabaseAdmin
-              .from('players')
-              .select('user_id')
-              .eq('level', targetValue)
-              .in('user_id', remainingIds);
-            (levelPlayers || []).forEach((p: any) => matchedUserIds.add(p.user_id));
-          }
         } else if (targetType === 'city') {
           // Filter by city from players location, terrains, or clubs
           const cityLower = targetValue.toLowerCase();
