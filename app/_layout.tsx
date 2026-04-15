@@ -867,6 +867,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="admin-ab-tests" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="activity-feed" 
                 options={{ 
                   presentation: 'card',
