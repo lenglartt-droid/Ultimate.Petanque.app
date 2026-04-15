@@ -15,11 +15,20 @@ export interface Announcement {
   titleEn: string;
   messageFr: string;
   messageEn: string;
-  targetType: 'all' | 'city' | 'club' | 'level';
+  targetType: 'all' | 'city' | 'club' | 'level' | 'rank' | 'account_age' | 'match_count' | 'last_active';
   targetValue: string | null;
   pushSentCount: number;
   pushErrorCount: number;
   createdAt: string;
+  scheduledAt: string | null;
+  status: 'sent' | 'scheduled' | 'cancelled';
+  platformBreakdown: { ios?: number; android?: number; unknown?: number } | null;
+  abData: {
+    variantB?: { titleFr: string; titleEn: string; messageFr: string; messageEn: string };
+    variantASent?: number; variantAErrors?: number;
+    variantBSent?: number; variantBErrors?: number;
+  } | null;
+  estimatedOpens: number;
 }
 
 /**
@@ -30,24 +39,76 @@ export async function sendAnnouncement(params: {
   titleEn: string;
   messageFr: string;
   messageEn: string;
-  targetType: 'all' | 'city' | 'club' | 'level';
+  targetType: 'all' | 'city' | 'club' | 'level' | 'rank' | 'account_age' | 'match_count' | 'last_active';
   targetValue?: string;
   adminName?: string;
-}): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
+  scheduledAt?: string | null;
+  abTest?: boolean;
+  variantBTitleFr?: string;
+  variantBTitleEn?: string;
+  variantBMessageFr?: string;
+  variantBMessageEn?: string;
+  combinedFilters?: Record<string, string>;
+}): Promise<{ error: string | null; pushSent?: number; pushErrors?: number; scheduled?: boolean }> {
   try {
     const supabase = getSupabaseClient();
     const { data: userData } = await supabase.auth.getUser();
     if (!userData?.user?.id) return { error: 'Not authenticated' };
 
+    // Build A/B data if enabled
+    const abData = params.abTest ? {
+      variantB: {
+        titleFr: params.variantBTitleFr || params.titleFr,
+        titleEn: params.variantBTitleEn || params.titleEn,
+        messageFr: params.variantBMessageFr || params.messageFr,
+        messageEn: params.variantBMessageEn || params.messageEn,
+      },
+    } : null;
+
+    // If scheduled for the future, save without sending
+    if (params.scheduledAt) {
+      const schedDate = new Date(params.scheduledAt);
+      if (schedDate.getTime() > Date.now() + 60000) {
+        const { error: logError } = await supabase.from('announcements').insert({
+          admin_user_id: userData.user.id,
+          admin_name: params.adminName || null,
+          title_fr: params.titleFr,
+          title_en: params.titleEn,
+          message_fr: params.messageFr,
+          message_en: params.messageEn,
+          target_type: params.targetType,
+          target_value: params.targetValue || null,
+          push_sent_count: 0,
+          push_error_count: 0,
+          scheduled_at: params.scheduledAt,
+          status: 'scheduled',
+          ab_data: abData,
+        });
+        if (logError) return { error: logError.message };
+        return { error: null, pushSent: 0, pushErrors: 0, scheduled: true };
+      }
+    }
+
     // Send push via edge function
-    const pushResult = await triggerServerPush('announcement', {
+    const pushPayload: any = {
       titleFr: params.titleFr,
       titleEn: params.titleEn,
       messageFr: params.messageFr,
       messageEn: params.messageEn,
       targetType: params.targetType,
       targetValue: params.targetValue || null,
-    }).catch(() => ({ sent: 0, errors: 0 }));
+    };
+    if (params.abTest) {
+      pushPayload.abTest = true;
+      pushPayload.variantBTitleFr = params.variantBTitleFr;
+      pushPayload.variantBTitleEn = params.variantBTitleEn;
+      pushPayload.variantBMessageFr = params.variantBMessageFr;
+      pushPayload.variantBMessageEn = params.variantBMessageEn;
+    }
+    if (params.combinedFilters) {
+      pushPayload.combinedFilters = params.combinedFilters;
+    }
+    const pushResult = await triggerServerPush('announcement', pushPayload).catch(() => ({ sent: 0, errors: 0 })) as any;
 
     // Log to announcements table
     const { error: logError } = await supabase.from('announcements').insert({
@@ -61,9 +122,62 @@ export async function sendAnnouncement(params: {
       target_value: params.targetValue || null,
       push_sent_count: pushResult.sent || 0,
       push_error_count: pushResult.errors || 0,
+      status: 'sent',
+      ab_data: params.abTest ? {
+        ...abData,
+        variantASent: pushResult.variantASent || 0,
+        variantAErrors: pushResult.variantAErrors || 0,
+        variantBSent: pushResult.variantBSent || 0,
+        variantBErrors: pushResult.variantBErrors || 0,
+      } : null,
     });
 
     if (logError) console.log('Error logging announcement:', logError.message);
+
+    return { error: null, pushSent: pushResult.sent, pushErrors: pushResult.errors };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Cancel a scheduled announcement.
+ */
+export async function cancelScheduledAnnouncement(id: string): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('announcements')
+      .update({ status: 'cancelled' })
+      .eq('id', id)
+      .eq('status', 'scheduled');
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
+/**
+ * Send a previously scheduled announcement now.
+ */
+export async function sendScheduledAnnouncementNow(announcement: Announcement): Promise<{ error: string | null; pushSent?: number; pushErrors?: number }> {
+  try {
+    const supabase = getSupabaseClient();
+    const pushResult = await triggerServerPush('announcement', {
+      titleFr: announcement.titleFr,
+      titleEn: announcement.titleEn,
+      messageFr: announcement.messageFr,
+      messageEn: announcement.messageEn,
+      targetType: announcement.targetType,
+      targetValue: announcement.targetValue || null,
+    }).catch(() => ({ sent: 0, errors: 0 }));
+
+    await supabase.from('announcements').update({
+      status: 'sent',
+      push_sent_count: pushResult.sent || 0,
+      push_error_count: pushResult.errors || 0,
+    }).eq('id', announcement.id);
 
     return { error: null, pushSent: pushResult.sent, pushErrors: pushResult.errors };
   } catch (e: any) {
@@ -98,6 +212,11 @@ export async function getAnnouncementHistory(limit = 30): Promise<{ announcement
       pushSentCount: row.push_sent_count || 0,
       pushErrorCount: row.push_error_count || 0,
       createdAt: row.created_at,
+      scheduledAt: row.scheduled_at || null,
+      status: row.status || 'sent',
+      platformBreakdown: row.platform_breakdown || null,
+      abData: row.ab_data || null,
+      estimatedOpens: row.estimated_opens || 0,
     }));
 
     return { announcements, error: null };

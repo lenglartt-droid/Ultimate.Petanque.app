@@ -5,6 +5,7 @@
  */
 
 const EXPO_PUSH_URL = 'https://exp.host/--/api/v2/push/send';
+const EXPO_RECEIPTS_URL = 'https://exp.host/--/api/v2/push/getReceipts';
 
 export interface PushMessage {
   to: string; // Expo push token
@@ -100,6 +101,60 @@ export function buildPushMessage(
     priority: options?.priority ?? 'high',
     ttl: options?.ttl ?? 86400, // 24 hours
   };
+}
+
+/**
+ * Check push notification receipts to verify actual delivery.
+ * Call this with ticket IDs from a previous send (after ~15 minutes).
+ * Returns receipt status for each ticket.
+ */
+export interface PushReceipt {
+  id: string;
+  status: 'ok' | 'error';
+  message?: string;
+  details?: { error?: string };
+}
+
+export async function getPushReceipts(ticketIds: string[]): Promise<Map<string, PushReceipt>> {
+  const receiptMap = new Map<string, PushReceipt>();
+  if (ticketIds.length === 0) return receiptMap;
+
+  // Batch in groups of 300 (Expo API limit for receipts)
+  for (let i = 0; i < ticketIds.length; i += 300) {
+    const batch = ticketIds.slice(i, i + 300);
+    try {
+      const response = await fetch(EXPO_RECEIPTS_URL, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ids: batch }),
+      });
+
+      if (!response.ok) {
+        console.error(`[push] Receipts API error (${response.status}):`, await response.text());
+        continue;
+      }
+
+      const result = await response.json();
+      const receipts = result.data || {};
+
+      for (const [id, receipt] of Object.entries(receipts)) {
+        const r = receipt as any;
+        receiptMap.set(id, {
+          id,
+          status: r.status || 'error',
+          message: r.message,
+          details: r.details,
+        });
+      }
+    } catch (err: any) {
+      console.error('[push] Receipts network error:', err.message);
+    }
+  }
+
+  return receiptMap;
 }
 
 /**

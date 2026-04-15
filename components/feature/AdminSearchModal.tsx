@@ -26,7 +26,7 @@ import theme from '@/constants/theme';
 
 interface SearchResult {
   id: string;
-  type: 'user' | 'club' | 'terrain' | 'report' | 'player';
+  type: 'user' | 'club' | 'terrain' | 'report' | 'player' | 'suspicious' | 'transfer' | 'announcement';
   title: string;
   subtitle: string;
   icon: string;
@@ -46,6 +46,9 @@ const TYPE_CONFIG = {
   terrain: { icon: 'sports-soccer', color: '#10B981', labelFr: 'Terrains', labelEn: 'Terrains' },
   report: { icon: 'flag', color: '#EF4444', labelFr: 'Signalements', labelEn: 'Reports' },
   player: { icon: 'sports', color: '#D97706', labelFr: 'Joueurs', labelEn: 'Players' },
+  suspicious: { icon: 'gpp-bad', color: '#DC2626', labelFr: 'Joueurs suspects', labelEn: 'Suspicious Players' },
+  transfer: { icon: 'swap-horiz', color: '#0EA5E9', labelFr: 'Transferts', labelEn: 'Transfers' },
+  announcement: { icon: 'campaign', color: '#7C3AED', labelFr: 'Annonces', labelEn: 'Announcements' },
 };
 
 export default function AdminSearchModal({ visible, onClose, language }: AdminSearchModalProps) {
@@ -130,6 +133,70 @@ export default function AdminSearchModal({ visible, onClose, language }: AdminSe
         });
       });
 
+      // Search suspicious players
+      const { data: suspicious } = await supabase
+        .from('suspicious_players')
+        .select('id, player_id, trust_score, status, details')
+        .or(`status.ilike.${searchTerm}`)
+        .limit(5);
+      // Also search by player name in suspicious table via join
+      const { data: suspByName } = await supabase
+        .from('players')
+        .select('id, name, user_id')
+        .ilike('name', searchTerm)
+        .limit(10);
+      const suspPlayerIds = new Set((suspByName || []).map((p: any) => p.id));
+      if (suspPlayerIds.size > 0) {
+        const { data: suspMatched } = await supabase
+          .from('suspicious_players')
+          .select('id, player_id, trust_score, status')
+          .in('player_id', [...suspPlayerIds])
+          .limit(5);
+        const nameMap = new Map((suspByName || []).map((p: any) => [p.id, p.name]));
+        (suspMatched || []).forEach((sp: any) => {
+          if (!allResults.some(r => r.type === 'suspicious' && r.id === sp.id)) {
+            allResults.push({
+              id: sp.id, type: 'suspicious',
+              title: nameMap.get(sp.player_id) || sp.player_id.substring(0, 8),
+              subtitle: `Trust: ${sp.trust_score}/100 · ${sp.status}`,
+              icon: 'gpp-bad', color: '#DC2626', route: '/admin-anticheat',
+            });
+          }
+        });
+      }
+
+      // Search pending transfers
+      const { data: transfers } = await supabase
+        .from('player_transfer_requests')
+        .select('id, player_name, status, sender_user_id, recipient_user_id, created_at')
+        .ilike('player_name', searchTerm)
+        .limit(5);
+      (transfers || []).forEach((t: any) => {
+        const statusLabel = t.status === 'pending' ? (fr ? 'En attente' : 'Pending') : t.status;
+        allResults.push({
+          id: t.id, type: 'transfer', title: t.player_name,
+          subtitle: `${statusLabel} · ${new Date(t.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}`,
+          icon: 'swap-horiz', color: '#0EA5E9', route: '/admin-dashboard',
+        });
+      });
+
+      // Search announcements
+      const { data: announcements } = await supabase
+        .from('announcements')
+        .select('id, title_fr, title_en, target_type, push_sent_count, created_at, status')
+        .or(`title_fr.ilike.${searchTerm},title_en.ilike.${searchTerm},message_fr.ilike.${searchTerm}`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+      (announcements || []).forEach((a: any) => {
+        const title = fr ? a.title_fr : (a.title_en || a.title_fr);
+        const statusBadge = a.status === 'scheduled' ? (fr ? ' [Planifie]' : ' [Scheduled]') : a.status === 'cancelled' ? (fr ? ' [Annule]' : ' [Cancelled]') : '';
+        allResults.push({
+          id: a.id, type: 'announcement', title: title + statusBadge,
+          subtitle: `${a.target_type} · ${a.push_sent_count} sent · ${new Date(a.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}`,
+          icon: 'campaign', color: '#7C3AED', route: '/admin-announcements',
+        });
+      });
+
       setResults(allResults);
     } catch (e) {
       console.log('[AdminSearch] Error:', e);
@@ -195,7 +262,7 @@ export default function AdminSearchModal({ visible, onClose, language }: AdminSe
             <View style={s.centerWrap}>
               <View style={s.hintIcon}><MaterialIcons name="search" size={40} color="#CBD5E1" /></View>
               <Text style={s.hintTitle}>{fr ? 'Recherche globale admin' : 'Admin global search'}</Text>
-              <Text style={s.hintDesc}>{fr ? 'Tapez au moins 2 caracteres pour rechercher.' : 'Type at least 2 characters to search.'}</Text>
+              <Text style={s.hintDesc}>{fr ? 'Tapez au moins 2 caracteres pour rechercher dans toutes les donnees admin.' : 'Type at least 2 characters to search across all admin data.'}</Text>
               <View style={s.hintCategories}>
                 {Object.entries(TYPE_CONFIG).map(([key, cfg]) => (
                   <View key={key} style={[s.hintCat, { backgroundColor: cfg.color + '10' }]}>
