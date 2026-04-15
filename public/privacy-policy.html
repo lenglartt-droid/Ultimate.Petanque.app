@@ -331,8 +331,8 @@
         <div class="section-title" lang="fr">Modifications</div>
         <div class="section-title" lang="en">Changes</div>
       </div>
-      <div class="section-content" lang="fr">Nous pouvons modifier cette politique. Les changements seront notifiés dans l'application. La dernière mise à jour (v1.2.0) intègre les sections sur le programme ambassadeur/partenaire, les événements sponsorisés, le score de confiance, les badges, les notifications push ciblées, le portail partenaires, la publicité, les achats intégrés, les codes promo et l'export de données.</div>
-      <div class="section-content" lang="en">We may modify this policy. Changes will be notified in the app. The latest update (v1.2.0) includes sections on the ambassador/partner program, sponsored events, trust score, badges, targeted push notifications, partner portal, advertising, in-app purchases, promo codes and data export.</div>
+      <div class="section-content" lang="fr">Nous pouvons modifier cette politique. Les changements seront notifiés dans l'application. La dernière mise à jour (v1.50.0) intègre les sections sur la vérification de livraison push, l'empreinte d'appareil anti-triche, et les données des tests A/B, en plus des sections existantes sur le programme ambassadeur/partenaire, les événements sponsorisés, le score de confiance, les badges, les notifications push ciblées, le portail partenaires, la publicité, les achats intégrés, les codes promo et l'export de données.</div>
+      <div class="section-content" lang="en">We may modify this policy. Changes will be notified in the app. The latest update (v1.50.0) includes sections on push delivery verification, anti-cheat device fingerprinting, and A/B test data, in addition to existing sections on the ambassador/partner program, sponsored events, trust score, badges, targeted push notifications, partner portal, advertising, in-app purchases, promo codes and data export.</div>
     </div>
 
     <!-- Ambassador Program -->
@@ -399,7 +399,40 @@
       </a>
     </div>
 
-    <div class="footer">Ultimate Petanque v1.2.0 — March 27, 2026 — Updated March 27, 2026</div>
+    <!-- Push Delivery Receipts -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">📬</div>
+        <div class="section-title" lang="fr">Verification de livraison push</div>
+        <div class="section-title" lang="en">Push Delivery Verification</div>
+      </div>
+      <div class="section-content" lang="fr">Les reçus de livraison des notifications push sont verifies periodiquement via l'API Expo Push Receipts. Ces donnees techniques (ticket ID, statut de livraison) ne contiennent aucune information personnelle. Les tokens invalides sont automatiquement desactives. Les taux de livraison agreges sont affiches dans le tableau de bord administrateur.</div>
+      <div class="section-content" lang="en">Push notification delivery receipts are periodically verified via the Expo Push Receipts API. This technical data (ticket ID, delivery status) contains no personal information. Invalid tokens are automatically deactivated. Aggregate delivery rates are displayed in the admin dashboard.</div>
+    </div>
+
+    <!-- Device Fingerprinting -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">📱</div>
+        <div class="section-title" lang="fr">Empreinte d'appareil</div>
+        <div class="section-title" lang="en">Device Fingerprinting</div>
+      </div>
+      <div class="section-content" lang="fr">Une empreinte d'appareil anonymisee est generee pour detecter les multi-comptes dans le cadre du systeme anti-triche. Cette empreinte est un hash non reversible et ne permet pas d'identifier l'appareil ni l'utilisateur. Elle est utilisee exclusivement pour la detection de fraude et n'est pas partagee avec des tiers.</div>
+      <div class="section-content" lang="en">An anonymized device fingerprint is generated to detect multi-accounts as part of the anti-cheat system. This fingerprint is a non-reversible hash and does not identify the device or user. It is used exclusively for fraud detection and is not shared with third parties.</div>
+    </div>
+
+    <!-- A/B Test Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(124,58,237,0.1)">🧪</div>
+        <div class="section-title" lang="fr">Donnees des tests A/B</div>
+        <div class="section-title" lang="en">A/B Test Data</div>
+      </div>
+      <div class="section-content" lang="fr">Les tests A/B des annonces push enregistrent des metriques agregees (nombre d'envois, erreurs, taux de livraison par variante). La repartition A/B est aleatoire (index pair/impair des tokens). Aucune donnee personnelle n'est associee aux variantes. Les resultats sont utilises uniquement pour optimiser les communications futures.</div>
+      <div class="section-content" lang="en">A/B announcement tests record aggregate metrics (send count, errors, delivery rate per variant). A/B distribution is random (even/odd token index). No personal data is associated with variants. Results are used solely to optimize future communications.</div>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.50.0 — April 15, 2026 — Updated April 15, 2026</div>
   </div>
 
   <script>

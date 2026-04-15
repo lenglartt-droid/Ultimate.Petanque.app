@@ -870,6 +870,36 @@ Deno.serve(async (req: Request) => {
             winnersFound++;
             processed++;
             console.log(`[weekly-cron] A/B winner for "${ann.title_fr || ann.title_en}": ${winner} (A=${aRate}%, B=${bRate}%)`);
+
+            // Auto-resend winner to the other half
+            if (!ab.resent) {
+              try {
+                const winnerTitle = winner === 'B' && ab.variantB?.titleFr ? ab.variantB.titleFr : ann.title_fr;
+                const winnerBody = winner === 'B' && ab.variantB?.messageFr ? ab.variantB.messageFr : ann.message_fr;
+                const { data: resendTokens } = await supabaseAdmin.from('push_tokens').select('user_id, token').eq('active', true);
+                if (resendTokens && resendTokens.length > 0) {
+                  // Send to the half that did NOT get the winner variant
+                  const otherHalf = resendTokens.filter((_: any, idx: number) => winner === 'A' ? idx % 2 === 1 : idx % 2 === 0);
+                  let resentSent = 0;
+                  let resentErrors = 0;
+                  const BATCH = 100;
+                  for (let bi = 0; bi < otherHalf.length; bi += BATCH) {
+                    const batch = otherHalf.slice(bi, bi + BATCH).map((t: any) => buildPushMessage(t.token, `\u{1F4E2} ${winnerTitle}`, winnerBody, { type: 'announcement', variant: winner }, { channelId: 'tournament-reminders', priority: 'high' }));
+                    const tickets = await sendPushNotifications(batch);
+                    resentSent += tickets.filter((t: any) => t.status === 'ok').length;
+                    resentErrors += tickets.filter((t: any) => t.status === 'error').length;
+                  }
+                  updatedAbData.resent = true;
+                  updatedAbData.resentAt = new Date().toISOString();
+                  updatedAbData.resentSent = resentSent;
+                  updatedAbData.resentErrors = resentErrors;
+                  await supabaseAdmin.from('announcements').update({ ab_data: updatedAbData }).eq('id', ann.id);
+                  console.log(`[weekly-cron] A/B auto-resend winner ${winner}: ${resentSent} sent, ${resentErrors} errors`);
+                }
+              } catch (resendErr: any) {
+                console.error(`[weekly-cron] A/B auto-resend error for ${ann.id}:`, resendErr.message);
+              }
+            }
           }
         }
 
