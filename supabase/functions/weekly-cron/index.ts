@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'process_scheduled_announcements', 'check_push_receipts', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'process_scheduled_announcements', 'check_push_receipts', 'ab_auto_winner', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
 
     const results: Record<string, any> = {};
 
@@ -813,6 +813,71 @@ Deno.serve(async (req: Request) => {
       } catch (receiptErr: any) {
         console.error('[weekly-cron] Push receipts check error:', receiptErr.message);
         results.check_push_receipts = { error: receiptErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 5d: A/B Auto-Winner Selection
+    // After 24h, determine which A/B variant won and update ab_data
+    // ============================================================
+    if (tasks.includes('ab_auto_winner')) {
+      console.log('[weekly-cron] Checking A/B test winners...');
+      try {
+        const threshold24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+
+        // Find A/B announcements sent 24+ hours ago without a winner
+        const { data: abAnnouncements } = await supabaseAdmin
+          .from('announcements')
+          .select('id, ab_data, title_fr, title_en, target_type, target_value, push_sent_count')
+          .eq('status', 'sent')
+          .not('ab_data', 'is', null)
+          .lt('created_at', threshold24h)
+          .limit(20);
+
+        let processed = 0;
+        let winnersFound = 0;
+
+        if (abAnnouncements && abAnnouncements.length > 0) {
+          for (const ann of abAnnouncements) {
+            const ab = ann.ab_data as any;
+            // Skip if already has a winner or no variant B data
+            if (!ab || !ab.variantB || ab.winner) continue;
+
+            const aSent = ab.variantASent || 0;
+            const aErrors = ab.variantAErrors || 0;
+            const bSent = ab.variantBSent || 0;
+            const bErrors = ab.variantBErrors || 0;
+
+            // Need at least some sends to determine winner
+            if (aSent === 0 && bSent === 0) continue;
+
+            const aRate = aSent > 0 ? Math.round(((aSent - aErrors) / aSent) * 100) : 0;
+            const bRate = bSent > 0 ? Math.round(((bSent - bErrors) / bSent) * 100) : 0;
+
+            const winner = aRate >= bRate ? 'A' : 'B';
+            const updatedAbData = {
+              ...ab,
+              winner,
+              winnerDeterminedAt: new Date().toISOString(),
+              winnerRateA: aRate,
+              winnerRateB: bRate,
+            };
+
+            await supabaseAdmin.from('announcements')
+              .update({ ab_data: updatedAbData })
+              .eq('id', ann.id);
+
+            winnersFound++;
+            processed++;
+            console.log(`[weekly-cron] A/B winner for "${ann.title_fr || ann.title_en}": ${winner} (A=${aRate}%, B=${bRate}%)`);
+          }
+        }
+
+        console.log(`[weekly-cron] A/B auto-winner: ${winnersFound} winners found out of ${processed} processed`);
+        results.ab_auto_winner = { processed, winnersFound };
+      } catch (abErr: any) {
+        console.error('[weekly-cron] A/B auto-winner error:', abErr.message);
+        results.ab_auto_winner = { error: abErr.message };
       }
     }
 
