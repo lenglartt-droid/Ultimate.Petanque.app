@@ -48,6 +48,7 @@ import AdminGuard from '@/components/feature/AdminGuard';
 import { OnboardingAnalytics, StepAnalytics } from '@/services/onboardingAnalyticsService';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { DashboardSkeleton } from '@/components/ui/AdminSkeleton';
+import { useAdminCache } from '@/hooks/useAdminCache';
 
 
 interface TransferStats {
@@ -107,9 +108,13 @@ export default function AdminDashboardScreen() {
   const { showAlert } = useAlert();
   const fr = language === 'fr';
 
+  const adminCache = useAdminCache();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [stats, setStats] = useState<DashboardStats>(INITIAL_STATS);
+
+  // Lazy loading phases: load critical data first, then secondary
+  const [phase, setPhase] = useState<'critical' | 'secondary' | 'done'>('critical');
   const [activityLogs, setActivityLogs] = useState<AdminActivityLog[]>([]);
 
   // Statistics data
@@ -289,6 +294,23 @@ export default function AdminDashboardScreen() {
       const res = data as any;
       const serverStats = res.stats;
 
+      // Cache the raw response for other admin pages
+      adminCache.setCached('admin-stats-response', res, 30000);
+
+      // Update shared stats for cross-page access
+      adminCache.setSharedStats({
+        pendingReports: serverStats.pendingReports || 0,
+        activeBans: serverStats.activeBans || 0,
+        flaggedPlayers: serverStats.flaggedPlayers || 0,
+        totalUsers: serverStats.totalUsers || 0,
+        premiumUsers: serverStats.premiumUsers || 0,
+        totalClubs: serverStats.totalClubs || 0,
+        verifiedClubs: serverStats.verifiedClubs || 0,
+        totalTerrains: serverStats.totalTerrains || 0,
+        totalMatches: serverStats.totalMatches || 0,
+        totalPlayers: serverStats.totalPlayers || 0,
+      });
+
       setStats({
         totalUsers: serverStats.totalUsers || 0,
         premiumUsers: serverStats.premiumUsers || 0,
@@ -462,10 +484,51 @@ export default function AdminDashboardScreen() {
       console.log('[AdminDashboard] Error loading stats:', e);
     } finally {
       setLoading(false);
+      setPhase('done');
     }
   }, []);
 
-  useEffect(() => { loadStats(); }, [loadStats]);
+  // Try to restore from cache first for instant render, then refresh
+  useEffect(() => {
+    const cached = adminCache.getCached<any>('admin-stats-response');
+    if (cached && adminCache.sharedStatsAge < 30000) {
+      // Restore from cache instantly — skip loading state
+      const res = cached;
+      const serverStats = res.stats;
+      setStats({
+        totalUsers: serverStats.totalUsers || 0,
+        premiumUsers: serverStats.premiumUsers || 0,
+        totalPlayers: serverStats.totalPlayers || 0,
+        totalTerrains: serverStats.totalTerrains || 0,
+        totalClubs: serverStats.totalClubs || 0,
+        verifiedClubs: serverStats.verifiedClubs || 0,
+        totalMatches: serverStats.totalMatches || 0,
+        pendingReports: serverStats.pendingReports || 0,
+        activeWarnings: serverStats.activeWarnings || 0,
+        activeBans: serverStats.activeBans || 0,
+        totalAnnouncements: serverStats.totalAnnouncements || 0,
+        flaggedPlayers: serverStats.flaggedPlayers || 0,
+        maintenanceActive: serverStats.maintenanceActive || false,
+        maintenanceScheduled: serverStats.maintenanceScheduled || false,
+        pendingAppeals: serverStats.pendingAppeals || 0,
+        overdueAppeals: serverStats.overdueAppeals || 0,
+      });
+      setWeeklyMatches(res.weeklyMatches || []);
+      setRecentSignups(res.recentSignups || 0);
+      setMonthlyGrowth(res.monthlyGrowth || []);
+      setGrowthDelta(res.growthDelta || 0);
+      if (res.pushAnalytics) setPushStats(res.pushAnalytics);
+      if (res.pushTokenAnalytics) setPushTokenStats(res.pushTokenAnalytics);
+      if (res.onboardingStats) setOnboardingStats(res.onboardingStats);
+      if (res.onboardingAnalytics) setStepAnalytics(res.onboardingAnalytics);
+      setLoading(false);
+      setPhase('secondary');
+      // Background refresh
+      loadStats();
+    } else {
+      loadStats();
+    }
+  }, [loadStats]);
 
   // Recompute transfer stats when filters change
   useEffect(() => {
