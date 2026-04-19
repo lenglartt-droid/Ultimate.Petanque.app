@@ -4,8 +4,8 @@
     "slug": "ppss-petanque-scorer",
     "version": "1.15.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo-ultimate-petanque.png",
-    "scheme": "ultimatepetanque",
+    "icon": "./assets/images/home_logo.png",
+    "scheme": "onspaceapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
@@ -32,12 +32,12 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/logo-ultimate-petanque.png",
+        "foregroundImage": "./assets/images/home_logo.png",
         "backgroundColor": "#ffffff"
       },
       "config": {
-        "googleMaps": {
-          "apiKey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo"
+        "googlemaps": {
+          "apikey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo111"
         }
       },
       "edgeToEdgeEnabled": false,
@@ -56,6 +56,11 @@
           "action": "VIEW",
           "autoVerify": true,
           "data": [
+            {
+              "scheme": "onspaceapp",
+              "host": "*",
+              "pathPrefix": "/auth"
+            },
             {
               "scheme": "ultimatepetanque",
               "host": "*",
@@ -104,7 +109,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/logo-ultimate-petanque.png",
+          "icon": "./assets/images/home_logo.png",
           "color": "#2563EB",
           "sounds": [],
           "mode": "production"

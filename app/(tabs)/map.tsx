@@ -43,6 +43,7 @@ import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { Image } from 'expo-image';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+// import MapView from "react-native-map-clustering";
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events' | 'partners';
 type MapMode = 'all' | 'public';
@@ -53,6 +54,7 @@ let CircleComponent: React.ComponentType<any> | null = null;
 
 if (Platform.OS !== 'web') {
   const Maps = require('react-native-maps');
+  
   MapViewComponent = Maps.default;
   MarkerComponent = Maps.Marker;
   CircleComponent = Maps.Circle;
@@ -187,37 +189,68 @@ interface PartnerMarkerData extends Ambassador {
   _tier: string;
 }
 
-const PartnerMarkerView = React.memo(({ partner }: { partner: PartnerMarkerData }) => {
-  const customColor = partner.brandColor;
-  const tier = customColor
-    ? { primary: customColor, bg: customColor + '15', border: customColor }
-    : (TIER_COLORS[partner._tier] || TIER_COLORS.sponsor);
-  const isGold = partner._tier === 'gold_sponsor';
-  const size = isGold ? 44 : 38;
-  return (
-    <View style={{ alignItems: 'center' }}>
-      <View style={[
-        pMarkerStyles.container,
-        { width: size, height: size, borderRadius: size / 2, borderColor: tier.border, backgroundColor: tier.bg },
-        isGold && pMarkerStyles.containerGold,
-      ]}>
-        {partner.photo ? (
-          <Image
-            source={{ uri: partner.photo }}
-            style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2 }}
-            contentFit="cover"
-            cachePolicy="memory-disk"
+const PartnerMarkerView = React.memo(
+  ({ partner }: { partner: PartnerMarkerData }) => {
+    const customColor = partner.brandColor;
+
+    const tier = customColor
+      ? { primary: customColor, bg: customColor + '15', border: customColor }
+      : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+
+    const isGold = partner._tier === 'gold_sponsor';
+    const size = isGold ? 44 : 38;
+
+    return (
+      <View style={{ alignItems: 'center' }} collapsable={false}>
+        <View
+          style={[
+            pMarkerStyles.container,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              borderColor: tier.border,
+              backgroundColor: tier.bg,
+            },
+            isGold && pMarkerStyles.containerGold,
+          ]}
+        >
+          {partner.photo ? (
+            <Image
+              source={{ uri: partner.photo }}
+              style={{
+                width: size - 6,
+                height: size - 6,
+                borderRadius: (size - 6) / 2,
+              }}
+              contentFit="cover"
+              cachePolicy="memory-disk"
+            />
+          ) : (
+            <MaterialIcons
+              name={isGold ? 'workspace-premium' : 'handshake'}
+              size={isGold ? 20 : 16}
+              color={tier.primary}
+            />
+          )}
+        </View>
+
+        <View
+          style={[
+            pMarkerStyles.badge,
+            { backgroundColor: tier.primary },
+          ]}
+        >
+          <MaterialIcons
+            name={isGold ? 'star' : 'workspace-premium'}
+            size={7}
+            color="#FFF"
           />
-        ) : (
-          <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color={tier.primary} />
-        )}
+        </View>
       </View>
-      <View style={[pMarkerStyles.badge, { backgroundColor: tier.primary }]}>
-        <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={7} color="#FFF" />
-      </View>
-    </View>
-  );
-});
+    );
+  }
+);
 
 const pMarkerStyles = StyleSheet.create({
   container: {
@@ -336,53 +369,45 @@ const CLUSTER_ICON_MAP: Record<string, string> = {
   players: 'person',
 };
 
-const ClusterMarkerView = React.memo(({ count, typeCounts }: { count: number; typeCounts: Record<string, number> }) => {
-  const sorted = Object.entries(typeCounts).filter(([, c]) => c > 0).sort((a, b) => b[1] - a[1]);
-  const dominantType = sorted[0]?.[0] || 'players';
-  const dominantColor = CLUSTER_COLOR_MAP[dominantType] || theme.primary;
-  const secondaryType = sorted[1]?.[0];
-  const secondaryColor = secondaryType ? (CLUSTER_COLOR_MAP[secondaryType] || theme.textMuted) : dominantColor;
 
-  const size = count <= 5 ? 48 : count <= 15 ? 56 : 64;
-  const fontSize = count <= 5 ? 15 : count <= 15 ? 17 : 19;
-  const outerSize = size + 14;
-  const showCategoryPills = sorted.length > 1;
+const ClusterMarkerView = React.memo(
+  ({ count, typeCounts }: { count: number; typeCounts: Record<string, number> }) => {
+    const sorted = Object.entries(typeCounts)
+      .filter(([, c]) => c > 0)
+      .sort((a, b) => b[1] - a[1]);
 
-  return (
-    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
-      {/* Outer glow ring */}
-      <View style={[styles.clusterOuter, { width: outerSize, height: outerSize, borderRadius: outerSize / 2, backgroundColor: dominantColor + '18', borderColor: dominantColor + '30' }]} />
-      {/* Gradient core */}
-      <LinearGradient
-        colors={[dominantColor, secondaryColor, dominantColor + 'DD']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.clusterInner, { width: size, height: size, borderRadius: size / 2, position: 'absolute' }]}
+    const dominantType = sorted[0]?.[0] || 'players';
+    const dominantColor = CLUSTER_COLOR_MAP[dominantType] || theme.primary;
+
+    const size = count <= 5 ? 44 : count <= 15 ? 52 : 60;
+
+    return (
+      <View
+        style={{
+          width: size,
+          height: size,
+          borderRadius: size / 2,
+          backgroundColor: dominantColor,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: 2,
+          borderColor: "#fff"
+        }}
+        collapsable={false}
       >
-        <Text style={[styles.clusterCount, { fontSize }]}>{count}</Text>
-        {/* Category mini-pills inside circle */}
-        {showCategoryPills ? (
-          <View style={styles.clusterPillRow}>
-            {sorted.slice(0, 3).map(([type, cnt]) => (
-              <View key={type} style={styles.clusterPill}>
-                <MaterialIcons name={(CLUSTER_ICON_MAP[type] || 'place') as any} size={7} color="#FFF" />
-                <Text style={styles.clusterPillText}>{cnt}</Text>
-              </View>
-            ))}
-          </View>
-        ) : null}
-      </LinearGradient>
-      {/* Bottom type dots */}
-      {sorted.length > 1 ? (
-        <View style={[styles.clusterDots, { bottom: -4 }]}>
-          {sorted.map(([type]) => (
-            <View key={type} style={[styles.clusterDot, { backgroundColor: CLUSTER_COLOR_MAP[type] || theme.textMuted }]} />
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-});
+        <Text
+          style={{
+            color: '#fff',
+            fontWeight: 'bold',
+            fontSize: 14,
+          }}
+        >
+          {count}
+        </Text>
+      </View>
+    );
+  }
+);
 
 // ============================================
 // MEMOIZED FILTER CHIP
@@ -1100,12 +1125,15 @@ export default function MapScreen() {
 
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
+    console.log("#######countType########");
+    console.log(countType('partners'));
     return {
       terrains: countType('terrains'),
       clubs: countType('clubs'),
       players: countType('players'),
       tournaments: countType('tournaments'),
       events: countType('events'),
+      partners: countType('partners'),
       total: results.length,
       publicTotal: results.filter(r => r._isPublic).length,
     };
@@ -1346,6 +1374,13 @@ export default function MapScreen() {
   // Active now mode from directory
   const [activeNowMode, setActiveNowMode] = useState(false);
   const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
+
+  const [freezeMarkers, setFreezeMarkers] = useState(false);
+  useEffect(() => {
+  const t = setTimeout(() => setFreezeMarkers(true), 20000000000000);
+  return () => clearTimeout(t);
+}, []);
+
 
   // Player density heatmap
   const [showHeatmap, setShowHeatmap] = useState(false);
@@ -1625,6 +1660,7 @@ export default function MapScreen() {
     return (
       <MapViewComponent
         ref={mapRef}
+        zoomControlEnabled={true}
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
         showsUserLocation showsMyLocationButton={false}
@@ -1632,7 +1668,7 @@ export default function MapScreen() {
         onRegionChangeComplete={handleRegionChange}
       >
         {/* Partner markers (Gold/Silver) — rendered with higher zIndex, always visible or when partners filter active */}
-        {(filter === 'all' || filter === 'partners') ? partnerMarkers.map((pm, idx) => (
+        {(filter === 'all') ? partnerMarkers.map((pm, idx) => (
           <MarkerComponent
             key={`partner-${pm.id}-${pm._itemType}-${pm._itemId}-${idx}`}
             coordinate={{ latitude: pm.location.latitude, longitude: pm.location.longitude }}
@@ -1642,13 +1678,14 @@ export default function MapScreen() {
               setSelected(null);
               setSelectedPartner(pm);
             }}
-            tracksViewChanges={false}
+            tracksViewChanges={!freezeMarkers}
             zIndex={100}
           >
             <PartnerMarkerView partner={{ ...pm, _tier: pm._tier }} />
           </MarkerComponent>
         )) : null}
-        {filter !== 'partners' ? clusters.map(cluster => {
+
+        {filter !== 'all' ? clusters.map(cluster => {
           if (cluster.isCluster) {
             // Cluster marker
             const typeCounts: Record<string, number> = {};
@@ -1660,7 +1697,7 @@ export default function MapScreen() {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleClusterPress(cluster)}
-                tracksViewChanges={false}
+                tracksViewChanges={!freezeMarkers}
               >
                 <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
               </MarkerComponent>
@@ -1676,7 +1713,7 @@ export default function MapScreen() {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
-                tracksViewChanges={false}
+                tracksViewChanges={!freezeMarkers}
               >
                 <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)} />
               </MarkerComponent>
