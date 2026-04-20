@@ -1088,7 +1088,6 @@ export default function AdminPartnersScreen() {
                 >
                   <Text style={{ fontSize: 11, fontWeight: '700', color: bulkMode ? '#FFF' : theme.textSecondary }}>{fr ? 'Selection multiple' : 'Multi-select'}</Text>
                 </Pressable>
-                </View>
               </View>
             ) : null}
 

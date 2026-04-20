@@ -198,6 +198,12 @@ const FeedMatchResultCard = React.memo(({ data, lang, index, goldPlayerIds }: { 
   return (
     <Animated.View entering={index < 15 ? FadeInDown.duration(200).delay(Math.min(index * 30, 200)) : undefined}>
       <Pressable style={[fs.card, { borderLeftWidth: 3, borderLeftColor: data.won ? '#22C55E' : '#EF4444' }, isGoldPartner && fs.goldHighlightCard]} onPress={() => { Haptics.selectionAsync(); router.push(`/player/${data.playerId}` as any); }}>
+        {isGoldPartner ? (
+          <View style={{ position: 'absolute', top: 6, right: 8, flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#D4A01715', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#D4A01725' }}>
+            <MaterialIcons name="star" size={9} color="#D4A017" />
+            <Text style={{ fontSize: 8, fontWeight: '800', color: '#D4A017', letterSpacing: 0.3 }}>GOLD</Text>
+          </View>
+        ) : null}
         <View style={fs.cardHeader}>
           {data.playerAvatar ? (
             <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
@@ -1181,6 +1187,8 @@ const fs = StyleSheet.create({
     backgroundColor: '#FFFDF5',
     borderColor: '#D4A01730',
     borderWidth: 1.5,
+    borderTopWidth: 3,
+    borderTopColor: '#D4A01750',
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 38, height: 38, borderRadius: 12 },
