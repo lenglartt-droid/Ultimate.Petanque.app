@@ -190,13 +190,14 @@ const EventCarouselItem = React.memo(({ item, lang }: { item: any; lang: string 
 // ============================================
 // FEED ITEM COMPONENTS
 // ============================================
-const FeedMatchResultCard = React.memo(({ data, lang, index }: { data: FeedMatchResult; lang: string; index: number }) => {
+const FeedMatchResultCard = React.memo(({ data, lang, index, goldPlayerIds }: { data: FeedMatchResult; lang: string; index: number; goldPlayerIds?: Set<string> }) => {
+  const isGoldPartner = goldPlayerIds ? goldPlayerIds.has(data.playerId) : false;
   const rank = getEloRank(data.eloAfter);
   const deltaColor = data.eloDelta > 0 ? '#22C55E' : '#EF4444';
   const deltaSign = data.eloDelta > 0 ? '+' : '';
   return (
     <Animated.View entering={index < 15 ? FadeInDown.duration(200).delay(Math.min(index * 30, 200)) : undefined}>
-      <Pressable style={[fs.card, { borderLeftWidth: 3, borderLeftColor: data.won ? '#22C55E' : '#EF4444' }]} onPress={() => { Haptics.selectionAsync(); router.push(`/player/${data.playerId}` as any); }}>
+      <Pressable style={[fs.card, { borderLeftWidth: 3, borderLeftColor: data.won ? '#22C55E' : '#EF4444' }, isGoldPartner && fs.goldHighlightCard]} onPress={() => { Haptics.selectionAsync(); router.push(`/player/${data.playerId}` as any); }}>
         <View style={fs.cardHeader}>
           {data.playerAvatar ? (
             <Image source={{ uri: data.playerAvatar }} style={fs.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
@@ -742,6 +743,15 @@ export default function ActivityFeedScreen() {
   }, [user?.id]);
 
   // Render feed item
+  // Compute gold partner player IDs from carousel ambassadors
+  const goldPlayerIds = useMemo(() => {
+    const ids = new Set<string>();
+    carouselAmbassadors.forEach((a: any) => {
+      if (a.badge_type === 'gold_sponsor' && a.player_id) ids.add(a.player_id);
+    });
+    return ids;
+  }, [carouselAmbassadors]);
+
   const renderItem = useCallback(({ item, index }: { item: FeedItem; index: number }) => {
     const timestampLabel = timeAgo(item.timestamp, lang);
     const itemReactions = reactionsMap.get(item.id);
@@ -758,7 +768,7 @@ export default function ActivityFeedScreen() {
 
     switch (item.type) {
       case 'match_result':
-        return wrapper(<FeedMatchResultCard data={item.data as FeedMatchResult} lang={lang} index={index} />);
+        return wrapper(<FeedMatchResultCard data={item.data as FeedMatchResult} lang={lang} index={index} goldPlayerIds={goldPlayerIds} />);
       case 'badge_unlock':
         return wrapper(<FeedBadgeCard data={item.data as FeedBadgeUnlock} lang={lang} index={index} />);
       case 'elo_milestone':
@@ -778,7 +788,7 @@ export default function ActivityFeedScreen() {
       default:
         return null;
     }
-  }, [lang, reactionsMap, handleReaction]);
+  }, [lang, reactionsMap, handleReaction, goldPlayerIds]);
 
   const keyExtractor = useCallback((item: FeedItem) => item.id, []);
 
@@ -1166,6 +1176,11 @@ const fs = StyleSheet.create({
   },
   milestoneCard: {
     backgroundColor: '#FFFBF0',
+  },
+  goldHighlightCard: {
+    backgroundColor: '#FFFDF5',
+    borderColor: '#D4A01730',
+    borderWidth: 1.5,
   },
   cardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   avatar: { width: 38, height: 38, borderRadius: 12 },
