@@ -22,7 +22,8 @@ import * as ImagePicker from '@/services/imagePicker';
 import { decode } from '@/services/base64';
 import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
-import { invalidateAmbassadorCache as refreshAmbCache } from '@/services/ambassadorService';
+import SponsorProposalSection from '@/components/feature/SponsorProposalSection';
+import PartnerExpirationAlert from '@/components/feature/PartnerExpirationAlert';
 
 function Sparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (!data || data.length < 2) return null;
@@ -626,30 +627,9 @@ export default function SponsorPortalScreen() {
     loadDigestHtml();
   }, [sponsor?.id]);
 
-  // Load saved goals
   useEffect(() => {
     if (!sponsor?.id || goalsLoaded) return;
-    const loadGoals = async () => {
-      try {
-        const { data } = await supabase
-          .from('ambassador_analytics')
-          .select('source_page')
-          .eq('ambassador_id', sponsor.id)
-          .eq('event_type', 'sponsor_goals')
-          .order('created_at', { ascending: false })
-          .limit(1);
-        if (data && data.length > 0) {
-          try {
-            const goals = JSON.parse(data[0].source_page || '{}');
-            if (goals.impressions) setGoalImpressions(goals.impressions.toString());
-            if (goals.clicks) setGoalClicks(goals.clicks.toString());
-            if (goals.ctr) setGoalCtr(goals.ctr.toString());
-          } catch { /* parse error */ }
-        }
-        setGoalsLoaded(true);
-      } catch { setGoalsLoaded(true); }
-    };
-    loadGoals();
+    supabase.from('ambassador_analytics').select('source_page').eq('ambassador_id',sponsor.id).eq('event_type','sponsor_goals').order('created_at',{ascending:false}).limit(1).then(({data})=>{if(data&&data.length>0){try{const g=JSON.parse(data[0].source_page||'{}');if(g.impressions)setGoalImpressions(g.impressions.toString());if(g.clicks)setGoalClicks(g.clicks.toString());if(g.ctr)setGoalCtr(g.ctr.toString());}catch{}}setGoalsLoaded(true);}).catch(()=>setGoalsLoaded(true));
   }, [sponsor?.id, goalsLoaded]);
 
   // Check goal achievements
@@ -1433,6 +1413,7 @@ export default function SponsorPortalScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={tierColor} />}
       >
+        <PartnerExpirationAlert expiresAt={sponsor.expires_at} fr={fr} />
         {!(checklistComplete && checklistXpClaimed) ? (
           <View style={st.checklistCard}>
             <View style={st.checklistHeader}>
@@ -2024,10 +2005,9 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
-        {/* ====== PLACEMENT SECTION ====== */}
         {activeSection === 'placement' ? (
           <>
-            {/* Impressions by Page */}
+            <SponsorProposalSection sponsorId={sponsor.id} sponsorName={sponsor.display_name} isSilverPlus={isSilverPlus} tierColor={tierColor} fr={fr} />
             <View style={st.placementCard}>
               <Text style={st.placementTitle}>{fr ? 'Vos emplacements' : 'Your placements'}</Text>
               <Text style={st.placementDesc}>
@@ -2096,7 +2076,6 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
-        {/* ====== BRANDING SECTION ====== */}
         {activeSection === 'branding' ? (
           <>
             {/* Photo Upload */}
@@ -2247,7 +2226,7 @@ export default function SponsorPortalScreen() {
                       .update({ brand_color: brandColor, updated_at: new Date().toISOString() })
                       .eq('id', sponsor.id);
                     invalidateAmbassadorCache();
-                    refreshAmbCache();
+                    invalidateAmbassadorCache();
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                     showAlert(fr ? 'Branding mis a jour' : 'Branding updated');
                   } catch (e: any) { showAlert(fr ? 'Erreur' : 'Error', e.message); }
@@ -2282,7 +2261,6 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
-        {/* ====== PUSH SECTION ====== */}
         {activeSection === 'push' ? (
           <>
             {/* Quota Display */}
@@ -3332,7 +3310,6 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
-        {/* ====== EVENTS SECTION ====== */}
         {activeSection === 'events' ? (
           <>
             <View style={st.eventsHeader}>
@@ -3383,7 +3360,6 @@ export default function SponsorPortalScreen() {
           </>
         ) : null}
 
-        {/* ====== CRM SECTION ====== */}
         {activeSection === 'crm' ? (
           <>
             <View style={st.ctrCard}>
