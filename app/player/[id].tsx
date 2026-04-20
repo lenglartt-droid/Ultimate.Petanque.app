@@ -143,7 +143,7 @@ export default function PlayerDetailScreen() {
   const isReadOnly = sharedPermission === 'read';
   // Prevent editing another real user's player profile — only own players or locally created ones
   const isOtherRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
-  const canEdit = !isReadOnly && !isOtherRealUser;
+  const canEdit = !isReadOnly && (isSelf || (playerUserId === user?.id));
 
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
@@ -712,9 +712,9 @@ export default function PlayerDetailScreen() {
                             <MaterialIcons name="storefront" size={16} color={ptColor} />
                             <Text style={[s.ambPageBtnText, { color: ptColor }]}>{language === 'fr' ? 'Ma page' : 'My Page'}</Text>
                           </Pressable>
-                          <Pressable style={[s.ambPageBtn, { flex: 1, backgroundColor: '#6366F110', borderColor: '#6366F125' }]} onPress={() => { Haptics.selectionAsync(); router.push('/sponsor-portal' as any); }}>
-                            <MaterialIcons name="dashboard" size={16} color="#6366F1" />
-                            <Text style={[s.ambPageBtnText, { color: '#6366F1' }]}>{language === 'fr' ? 'Portail Partenaire' : 'Partner Portal'}</Text>
+                          <Pressable style={[s.ambPageBtn, { flex: 1, backgroundColor: '#6366F110', borderColor: '#6366F125' }]} onPress={() => { Haptics.selectionAsync(); router.push(`/partner/${ambassadorData.id}` as any); }}>
+                            <MaterialIcons name="visibility" size={16} color="#6366F1" />
+                            <Text style={[s.ambPageBtnText, { color: '#6366F1' }]}>{language === 'fr' ? 'Voir le profil' : 'View Profile'}</Text>
                           </Pressable>
                         </View>
                       );

@@ -2036,19 +2036,7 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={async () => {
-                Haptics.selectionAsync();
-                await AsyncStorage.removeItem('hasSeenOnboarding');
-                router.replace('/onboarding');
-              }}>
-                <View style={[styles.compactMenuIcon, { backgroundColor: '#8B5CF6' + '15' }]}><MaterialIcons name="replay" size={16} color="#8B5CF6" /></View>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.compactMenuText}>{language === 'fr' ? 'Revoir l\'onboarding' : 'Replay Onboarding'}</Text>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{language === 'fr' ? 'Redecouvrir l\'experience de bienvenue' : 'Rediscover the welcome experience'}</Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
-              </Pressable>
-              <View style={styles.compactMenuDivider} />
+
               <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/privacy-policy'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="policy" size={16} color={theme.warning} /></View>
                 <Text style={styles.compactMenuText}>{t('privacy', 'title')}</Text>
