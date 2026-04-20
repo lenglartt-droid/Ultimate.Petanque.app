@@ -10,7 +10,7 @@ import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import * as Linking from 'expo-linking';
 
 interface SponsoredItemBannerProps {
-  /** The sponsor_id from the terrain/club/tournament record */
+  /** The sponsor_id from the terrain/club/tournament/player record */
   sponsorId: string | null | undefined;
   /** Page context for analytics tracking */
   page?: string;

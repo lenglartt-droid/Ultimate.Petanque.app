@@ -53,6 +53,7 @@ export interface Player {
   handedness?: 'right' | 'left' | 'ambidextrous';
   isPublic?: boolean;
   showContactPublic?: boolean;
+  sponsorId?: string;
   eloRating?: number;
   eloTireur?: number;
   eloPointeur?: number;
