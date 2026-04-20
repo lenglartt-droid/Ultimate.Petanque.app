@@ -63,9 +63,10 @@ export default function PartnerBanner({ style, page = 'detail', minTier = 'spons
 
       let match: Ambassador | undefined;
       if (ownerUserId) {
+        // Only show banner if the owner is explicitly a partner — no fallback to featured partners
         match = activeAmbassadors.find(a => a.userId === ownerUserId && validTiers.includes(a.badgeType));
-      }
-      if (!match) {
+      } else {
+        // No ownerUserId provided — show a featured partner (generic pages only)
         match = activeAmbassadors.find(a => a.badgeType === 'gold_sponsor' && a.isFeatured);
         if (!match) match = activeAmbassadors.find(a => validTiers.includes(a.badgeType) && a.isFeatured);
       }
