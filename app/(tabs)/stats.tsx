@@ -16,7 +16,7 @@ import { useAppData, useAppActions } from '@/contexts/AppContext';
 
 import { router, useLocalSearchParams } from 'expo-router';
 import { useLanguage } from '@/hooks/useLanguage';
-import SponsorBanner from '@/components/ui/SponsorBanner';
+
 import AdBanner from '@/components/ui/AdBanner';
 
 import { filterByTime } from '@/hooks/useFilteredStats';
@@ -196,7 +196,7 @@ export default function StatsScreen() {
       </View>
 
       <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }, isTablet && styles.scrollContentTablet]} showsVerticalScrollIndicator={false}>
-        <SponsorBanner page="stats" />
+
         {!hasData ? (
           <View style={styles.emptyState}>
             <Image source={require('@/assets/images/empty-stats.png')} style={styles.emptyImage} contentFit="contain" />

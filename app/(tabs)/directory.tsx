@@ -27,7 +27,7 @@ import { TerrainType } from '@/constants/config';
 import { useLanguage } from '@/hooks/useLanguage';
 import { SharedOverlayBadge } from '@/components/ui/SharedBadge';
 import AdBanner from '@/components/ui/AdBanner';
-import SponsorBanner from '@/components/ui/SponsorBanner';
+
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
@@ -211,7 +211,10 @@ export default function DirectoryScreen() {
         const map = new Map<string, { tier: string; name: string }>();
         ambassadors.forEach(a => {
           if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
-            map.set(a.userId, { tier: a.badgeType, name: a.displayName });
+            const info = { tier: a.badgeType, name: a.displayName };
+            map.set(a.userId, info);
+            // Also key by playerId so player cards can look up by player.id
+            if (a.playerId) map.set(a.playerId, info);
           }
         });
         setPartnerUserIds(map);
@@ -1746,7 +1749,7 @@ export default function DirectoryScreen() {
         </View>
       ) : null}
 
-      <SponsorBanner style={{ marginTop: 10 }} page="directory" />
+
 
       {/* Results Count - only when searching */}
       {searchQuery ? (
@@ -2479,6 +2482,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
+  // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
   return (
     <Pressable
@@ -2522,10 +2526,10 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
         </View>
         <View style={styles.itemTags}>
           {partnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : partnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+            <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : partnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: partnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : partnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
               <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
               <Text style={[styles.tagText, { color: partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {partnerInfo.tier === 'gold_sponsor' ? 'Or' : partnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+                {language === 'fr' ? (partnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : partnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (partnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : partnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
               </Text>
             </View>
           ) : null}
@@ -2586,7 +2590,7 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const isFavorite = favoriteClubIds.includes(item.id);
-  const clubPartnerInfo = partnerUserIds.get((item as any).userId || '');
+  const clubPartnerInfo: { tier: string; name: string } | undefined = undefined; // Partner badges only shown on players with explicit playerId link
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/club/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
@@ -2614,10 +2618,10 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
         </View>
         <View style={styles.itemTags}>
           {clubPartnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : clubPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : clubPartnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : clubPartnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
               <MaterialIcons name={clubPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
               <Text style={[styles.tagText, { color: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {clubPartnerInfo.tier === 'gold_sponsor' ? 'Or' : clubPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+                {language === 'fr' ? (clubPartnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : clubPartnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (clubPartnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : clubPartnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
               </Text>
             </View>
           ) : null}
@@ -2641,7 +2645,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const terrainPartnerInfo = partnerUserIds.get((item as any).userId || '');
+  const terrainPartnerInfo: { tier: string; name: string } | undefined = undefined; // Partner badges only shown on players with explicit playerId link
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
@@ -2660,10 +2664,10 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
         </View>
         <View style={styles.itemTags}>
           {terrainPartnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#F59E0B15' : terrainPartnerInfo.tier === 'sponsor' ? '#90A4AE15' : '#A1887F15' }]}>
+            <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
               <MaterialIcons name={terrainPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
               <Text style={[styles.tagText, { color: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {terrainPartnerInfo.tier === 'gold_sponsor' ? 'Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Argent' : 'Bronze'}
+                {language === 'fr' ? (terrainPartnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (terrainPartnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : terrainPartnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
               </Text>
             </View>
           ) : null}

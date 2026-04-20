@@ -58,6 +58,7 @@ export function mapClubFromDb(c: any): Club {
     facebookUrl: c.facebook_url || undefined,
     instagramHandle: c.instagram_handle || undefined,
     isVerified: c.is_verified ?? false,
+    sponsorId: c.sponsor_id || undefined,
   };
 }
 
@@ -70,6 +71,7 @@ export function mapTerrainFromDb(t: any): Terrain {
     publicAccess: t.public_access ?? true, courtsCount: t.courts_count || 1,
     lighting: t.lighting ?? false, covered: t.covered ?? false, parking: t.parking ?? false, toilets: t.toilets ?? false,
     environment: t.environment || 'outdoor', createdAt: t.created_at,
+    sponsorId: t.sponsor_id || undefined,
   };
 }
 
@@ -88,6 +90,7 @@ export function mapTournamentFromDb(t: any): Tournament {
     prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
     finalResult: t.final_result, isPublic: t.is_public ?? false,
     posterUrl: t.poster_url || undefined,
+    sponsorId: t.sponsor_id || undefined,
   };
 }
 
