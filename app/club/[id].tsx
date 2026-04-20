@@ -46,6 +46,7 @@ import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, 
 import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
 import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
 import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
+import PartnerBanner from '@/components/ui/PartnerBanner';
 
 
 export default function ClubDetailScreen() {
@@ -762,6 +763,9 @@ export default function ClubDetailScreen() {
             </View>
           ) : null}
         </Animated.View>
+
+        {/* Partner Banner — Silver+ partners get banner on their club page */}
+        <PartnerBanner page="club-detail" minTier="sponsor" ownerUserId={(club as any).userId} />
 
         {/* Club Card - right after main card */}
         {clubCardUrl ? (
