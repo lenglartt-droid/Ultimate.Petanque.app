@@ -239,6 +239,7 @@ export interface Tournament {
   prizeWon?: number;
   finalResult?: string;
   isPublic?: boolean;
+  posterUrl?: string;
 }
 
 // ============================================

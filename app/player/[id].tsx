@@ -141,7 +141,9 @@ export default function PlayerDetailScreen() {
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  const canEdit = !isReadOnly;
+  // Prevent editing another real user's player profile — only own players or locally created ones
+  const isOtherRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
+  const canEdit = !isReadOnly && !isOtherRealUser;
 
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);

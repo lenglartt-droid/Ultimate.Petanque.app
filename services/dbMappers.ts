@@ -87,6 +87,7 @@ export function mapTournamentFromDb(t: any): Tournament {
     registrationCost: t.registration_cost ? parseFloat(t.registration_cost) : undefined,
     prizeWon: t.prize_won ? parseFloat(t.prize_won) : undefined,
     finalResult: t.final_result, isPublic: t.is_public ?? false,
+    posterUrl: t.poster_url || undefined,
   };
 }
 
