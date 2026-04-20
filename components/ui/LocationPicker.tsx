@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Modal,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   Alert,
   Keyboard,

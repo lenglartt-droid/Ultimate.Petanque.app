@@ -536,6 +536,7 @@ export default function NewTournamentScreen() {
               <MaterialIcons name="add" size={14} color={theme.primary} /><Text style={styles.addNewItemBtnText}>{t('tournament', 'terrainBtn')}</Text>
             </Pressable>
           </View>
+          <View style={{ flex: 1 }}>
           <Pressable style={[styles.modalPickerItem, !terrainId && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(undefined); setShowTerrainPicker(false); }}>
             <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="edit-location" size={20} color={theme.textMuted} /></View>
             <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{t('tournament', 'otherLocation')}</Text><Text style={styles.modalPickerItemSub}>{t('tournament', 'manualAddressEntry')}</Text></View>
@@ -551,6 +552,7 @@ export default function NewTournamentScreen() {
               </Pressable>
             );
           }} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="landscape" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('tournament', 'noTerrainsRegistered')}</Text></View>} />
+          </View>
         </SafeAreaView>
       </Modal>
 
