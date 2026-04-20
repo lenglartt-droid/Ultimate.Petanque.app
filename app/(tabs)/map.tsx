@@ -37,7 +37,7 @@ import {
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
-import SponsorBanner from '@/components/ui/SponsorBanner';
+
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { Image } from 'expo-image';
@@ -2119,7 +2119,7 @@ export default function MapScreen() {
           </Animated.View>
         ) : null}
 
-        <SponsorBanner style={{ marginHorizontal: 12, marginTop: 4, marginBottom: 0 }} page="map" />
+
 
         {/* Category filters */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>

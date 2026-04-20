@@ -33,6 +33,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import ShareModal from '@/components/ui/ShareModal';
+import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
@@ -46,7 +47,7 @@ import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, 
 import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
 import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
 import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
-import PartnerBanner from '@/components/ui/PartnerBanner';
+
 
 
 export default function ClubDetailScreen() {
@@ -764,8 +765,14 @@ export default function ClubDetailScreen() {
           ) : null}
         </Animated.View>
 
-        {/* Partner Banner — Silver+ partners get banner on their club page */}
-        <PartnerBanner page="club-detail" minTier="sponsor" ownerUserId={(club as any).userId} />
+
+
+        {/* Sponsor Banner — only when sponsor_id is explicitly set */}
+        {(club as any).sponsorId ? (
+          <SponsoredItemBanner sponsorId={(club as any).sponsorId} page="club-detail" />
+        ) : null}
+
+
 
         {/* Club Card - right after main card */}
         {clubCardUrl ? (
