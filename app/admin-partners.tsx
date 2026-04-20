@@ -23,7 +23,8 @@ const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: 
     label: 'Or', labelEn: 'Gold', color: '#D4A017', icon: 'star',
     advantages: [
       { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain', en: 'Sponsor banner on club/terrain pages' },
+      { fr: 'Banniere sponsor sur pages club/terrain/tournoi', en: 'Sponsor banner on club/terrain/tournament pages' },
+      { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
       { fr: 'Mise en avant dans le fil d\'activite', en: 'Highlighted in activity feed' },
       { fr: 'Position prioritaire dans resultats annuaire', en: 'Priority position in directory results' },
     ],
@@ -32,7 +33,8 @@ const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: 
     label: 'Argent', labelEn: 'Silver', color: '#78909C', icon: 'workspace-premium',
     advantages: [
       { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain', en: 'Sponsor banner on club/terrain pages' },
+      { fr: 'Banniere sponsor sur pages club/terrain/tournoi', en: 'Sponsor banner on club/terrain/tournament pages' },
+      { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
     ],
   },
   partner: {
@@ -136,6 +138,39 @@ export default function AdminPartnersScreen() {
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [historyPartnerId, setHistoryPartnerId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // Sponsor proposals (partner self-service)
+  const [pendingProposals, setPendingProposals] = useState<any[]>([]);
+  const [processingProposal, setProcessingProposal] = useState<string | null>(null);
+
+  // Load pending proposals
+  useEffect(() => {
+    const loadProposals = async () => {
+      const { data } = await supabase.from('sponsor_proposals').select('*').eq('status', 'pending').order('created_at', { ascending: false });
+      setPendingProposals(data || []);
+    };
+    loadProposals();
+  }, [supabase]);
+
+  const handleApproveProposal = useCallback(async (proposal: any) => {
+    setProcessingProposal(proposal.id);
+    // Set sponsor_id on the item
+    const { error: linkErr } = await supabase.from(proposal.item_type === 'terrain' ? 'terrains' : proposal.item_type === 'club' ? 'clubs' : 'tournaments').update({ sponsor_id: proposal.ambassador_id }).eq('id', proposal.item_id);
+    if (linkErr) { Alert.alert('Error', linkErr.message); setProcessingProposal(null); return; }
+    // Update proposal status
+    await supabase.from('sponsor_proposals').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', proposal.id);
+    setPendingProposals(prev => prev.filter(p => p.id !== proposal.id));
+    setProcessingProposal(null);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [supabase]);
+
+  const handleRejectProposal = useCallback(async (proposal: any) => {
+    setProcessingProposal(proposal.id);
+    await supabase.from('sponsor_proposals').update({ status: 'rejected', updated_at: new Date().toISOString() }).eq('id', proposal.id);
+    setPendingProposals(prev => prev.filter(p => p.id !== proposal.id));
+    setProcessingProposal(null);
+    Haptics.selectionAsync();
+  }, [supabase]);
 
   // Sponsor assignment modal
   const [showAssignModal, setShowAssignModal] = useState(false);
@@ -491,6 +526,52 @@ export default function AdminPartnersScreen() {
         <TextInput style={s.searchInput} value={searchQuery} onChangeText={setSearchQuery} placeholder={fr ? 'Rechercher...' : 'Search...'} placeholderTextColor={theme.textMuted} />
         {searchQuery ? <Pressable onPress={() => setSearchQuery('')} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable> : null}
       </View>
+
+      {/* Pending Sponsor Proposals from Partners */}
+      {pendingProposals.length > 0 ? (
+        <View style={[s.advantagesCard, { borderWidth: 1.5, borderColor: '#F59E0B30' }]}> 
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+              <MaterialIcons name="pending-actions" size={18} color="#F59E0B" />
+            </View>
+            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', flex: 1 }}>{fr ? 'DEMANDES DE SPONSORING' : 'SPONSORSHIP REQUESTS'}</Text>
+            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+              <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFF' }}>{pendingProposals.length}</Text>
+            </View>
+          </View>
+          {pendingProposals.map(p => {
+            const typeIcon = p.item_type === 'terrain' ? 'sports-soccer' : p.item_type === 'club' ? 'home' : 'emoji-events';
+            const typeColor = p.item_type === 'terrain' ? theme.success : p.item_type === 'club' ? theme.accent : theme.carreauColor;
+            return (
+              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.border }}>
+                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: typeColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name={typeIcon as any} size={18} color={typeColor} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{p.item_name}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{fr ? 'Par' : 'By'} {p.ambassador_name} • {p.item_type}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6 }}>
+                  <Pressable
+                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.error + '10', alignItems: 'center', justifyContent: 'center' }}
+                    onPress={() => handleRejectProposal(p)}
+                    disabled={processingProposal === p.id}
+                  >
+                    <MaterialIcons name="close" size={16} color={theme.error} />
+                  </Pressable>
+                  <Pressable
+                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.success, alignItems: 'center', justifyContent: 'center' }}
+                    onPress={() => handleApproveProposal(p)}
+                    disabled={processingProposal === p.id}
+                  >
+                    {processingProposal === p.id ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="check" size={16} color="#FFF" />}
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      ) : null}
 
       {/* Advantages Summary Card */}
       <View style={s.advantagesCard}>
