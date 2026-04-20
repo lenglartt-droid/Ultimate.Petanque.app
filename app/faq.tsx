@@ -976,6 +976,27 @@ function getPartnerFaq(fr: boolean): FAQCategory[] {
             ? 'Or uniquement. Chaque lundi, un recap resume vos performances : impressions, clics, CTR, push envoyes, comparaison avec la semaine precedente. Exportable en PDF.'
             : 'Gold only. Every Monday, a recap summarizes performance: impressions, clicks, CTR, pushes sent, comparison with previous week. Exportable as PDF.',
         },
+        {
+          id: 'pl4',
+          q: fr ? 'Comment fonctionne le drill-down par item sponsorise ?' : 'How does per-item drill-down work?',
+          a: fr
+            ? 'Dans le portail partenaire (onglet ROI), la section "Performance par item" affiche chaque terrain, club, tournoi et joueur sponsorise avec ses metriques propres (impressions, clics, CTR). Appuyez sur un item pour voir le detail elargi avec les KPI isoles. Les metriques sont estimees a partir de la repartition page par page de vos impressions globales.'
+            : 'In the partner portal (ROI tab), the "Per-item Performance" section shows each sponsored terrain, club, tournament and player with their own metrics (impressions, clicks, CTR). Tap an item to see expanded detail with isolated KPIs. Metrics are estimated from the page-by-page breakdown of your global impressions.',
+        },
+        {
+          id: 'pl5',
+          q: fr ? 'Comment les joueurs sponsorises apparaissent-ils sur la carte ?' : 'How do sponsored players appear on the map?',
+          a: fr
+            ? 'Les joueurs publics ayant un sponsor_id sont affiches sur la carte avec un marqueur special : bordure aux couleurs de votre marque (brand_color) et un badge "S" distinctif. Cela permet aux joueurs de reperer visuellement vos joueurs sponsorises. Les partenaires Or et Argent beneficient egalement de marqueurs partenaires dedies sur la carte.'
+            : 'Public players with a sponsor_id are displayed on the map with a special marker: border in your brand color (brand_color) and a distinctive "S" badge. This allows players to visually spot your sponsored players. Gold and Silver partners also benefit from dedicated partner markers on the map.',
+        },
+        {
+          id: 'pl6',
+          q: fr ? 'Comment voir l\'historique des assignations sponsor ?' : 'How do I see sponsor assignment history?',
+          a: fr
+            ? 'Dans la page admin partenaires, ouvrez la modale "Associer un sponsor" pour un partenaire. Deux onglets sont disponibles : "Items" (vue actuelle des items sponsorises) et "Historique" (log chronologique de toutes les associations et desassociations avec date, type d\'item et nom). Chaque association ou desassociation est tracee automatiquement.'
+            : 'In the admin partners page, open the "Assign Sponsor" modal for a partner. Two tabs are available: "Items" (current view of sponsored items) and "History" (chronological log of all associations and unassociations with date, item type and name). Each association or unassociation is tracked automatically.',
+        },
       ],
     },
   ];

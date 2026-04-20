@@ -23,18 +23,27 @@ const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: 
     label: 'Or', labelEn: 'Gold', color: '#D4A017', icon: 'star',
     advantages: [
       { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain/tournoi', en: 'Sponsor banner on club/terrain/tournament pages' },
+      { fr: 'Banniere sponsor sur pages club/terrain/tournoi/joueur', en: 'Sponsor banner on club/terrain/tournament/player pages' },
       { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
+      { fr: 'Sponsoring de joueurs avec bordure brand_color', en: 'Player sponsoring with brand_color border' },
       { fr: 'Mise en avant dans le fil d\'activite', en: 'Highlighted in activity feed' },
       { fr: 'Position prioritaire dans resultats annuaire', en: 'Priority position in directory results' },
+      { fr: 'Badge anime (pulse dore) dans l\'annuaire', en: 'Animated badge (gold pulse) in directory' },
+      { fr: 'Marqueur carte avec bordure marque + badge S', en: 'Map marker with brand border + S badge' },
+      { fr: 'Metriques par item sponsorise (drill-down)', en: 'Per-item sponsored metrics (drill-down)' },
+      { fr: 'Historique assignations sponsor', en: 'Sponsor assignment history' },
     ],
   },
   sponsor: {
     label: 'Argent', labelEn: 'Silver', color: '#78909C', icon: 'workspace-premium',
     advantages: [
       { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain/tournoi', en: 'Sponsor banner on club/terrain/tournament pages' },
+      { fr: 'Banniere sponsor sur pages club/terrain/tournoi/joueur', en: 'Sponsor banner on club/terrain/tournament/player pages' },
       { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
+      { fr: 'Sponsoring de joueurs avec bordure brand_color', en: 'Player sponsoring with brand_color border' },
+      { fr: 'Propositions de sponsoring self-service', en: 'Self-service sponsorship proposals' },
+      { fr: 'Marqueur carte avec bordure marque + badge S', en: 'Map marker with brand border + S badge' },
+      { fr: 'Metriques par item sponsorise', en: 'Per-item sponsored metrics' },
     ],
   },
   partner: {
@@ -186,6 +195,8 @@ export default function AdminPartnersScreen() {
   const [assignSaving, setAssignSaving] = useState<string | null>(null);
   const [assignedItems, setAssignedItems] = useState<any[]>([]);
   const [loadingAssigned, setLoadingAssigned] = useState(false);
+  const [assignHistory, setAssignHistory] = useState<any[]>([]);
+  const [showAssignHistory, setShowAssignHistory] = useState(false);
   const assignSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const openAssignSponsor = useCallback(async (item: any) => {
@@ -243,6 +254,8 @@ export default function AdminPartnersScreen() {
     const icon = assignItemType === 'terrains' ? 'sports-soccer' : assignItemType === 'clubs' ? 'home' : 'emoji-events';
     const color = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : theme.carreauColor;
     setAssignedItems(prev => [...prev, { id: itemId, name: itemName, _table: assignItemType, _icon: icon, _color: color }]);
+    // Track assignment in analytics
+    supabase.from('ambassador_analytics').insert({ ambassador_id: assignPartnerId, event_type: 'sponsor_assign', source_page: `${assignItemType}|${itemId}|${itemName}|assign` }).catch(() => {});
     // Update search results to show new state
     setAssignSearchResults(prev => prev.map(r => r.id === itemId ? { ...r, sponsor_id: assignPartnerId } : r));
     setBulkSelected(prev => { const n = new Set(prev); n.delete(itemId); return n; });
@@ -258,6 +271,8 @@ export default function AdminPartnersScreen() {
     if (error) { Alert.alert('Error', error.message); return; }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setAssignedItems(prev => prev.filter(r => r.id !== itemId));
+    // Track unassignment in analytics
+    if (assignPartnerId) supabase.from('ambassador_analytics').insert({ ambassador_id: assignPartnerId, event_type: 'sponsor_assign', source_page: `${table}|${itemId}||unassign` }).catch(() => {});
     setAssignSearchResults(prev => prev.map(r => r.id === itemId ? { ...r, sponsor_id: null } : r));
   }, [supabase]);
 
@@ -1091,8 +1106,62 @@ export default function AdminPartnersScreen() {
               </View>
             ) : null}
 
+            {/* Assignment History Toggle */}
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <Pressable style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 }, !showAssignHistory ? { backgroundColor: '#2563EB', borderColor: '#2563EB' } : { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={() => setShowAssignHistory(false)}>
+                <MaterialIcons name="link" size={16} color={!showAssignHistory ? '#FFF' : theme.textSecondary} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: !showAssignHistory ? '#FFF' : theme.textSecondary }}>{fr ? 'Items' : 'Items'}</Text>
+              </Pressable>
+              <Pressable style={[{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 12, borderWidth: 1.5 }, showAssignHistory ? { backgroundColor: '#6366F1', borderColor: '#6366F1' } : { backgroundColor: theme.surface, borderColor: theme.border }]} onPress={async () => { setShowAssignHistory(true); if (assignPartnerId) { const { data } = await supabase.from('ambassador_analytics').select('created_at, source_page').eq('ambassador_id', assignPartnerId).eq('event_type', 'sponsor_assign').order('created_at', { ascending: false }).limit(30); setAssignHistory(data || []); } }}>
+                <MaterialIcons name="history" size={16} color={showAssignHistory ? '#FFF' : theme.textSecondary} />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: showAssignHistory ? '#FFF' : theme.textSecondary }}>{fr ? 'Historique' : 'History'}</Text>
+              </Pressable>
+            </View>
+
+            {/* Assignment History */}
+            {showAssignHistory ? (
+              <View style={{ gap: 6 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                  {fr ? 'HISTORIQUE DES ASSIGNATIONS' : 'ASSIGNMENT HISTORY'} ({assignHistory.length})
+                </Text>
+                {assignHistory.length === 0 ? (
+                  <View style={{ alignItems: 'center', paddingVertical: 20, backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border }}>
+                    <MaterialIcons name="history" size={32} color={theme.textMuted} />
+                    <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>{fr ? 'Aucun historique' : 'No history'}</Text>
+                  </View>
+                ) : assignHistory.map((h: any, i: number) => {
+                  const parts = (h.source_page || '').split('|');
+                  const hTable = parts[0] || '';
+                  const hName = parts[2] || '';
+                  const hAction = parts[3] || 'assign';
+                  const isAssign = hAction === 'assign';
+                  const hIcon = hTable === 'terrains' ? 'sports-soccer' : hTable === 'clubs' ? 'home' : hTable === 'players' ? 'person' : 'emoji-events';
+                  const hColor = isAssign ? theme.success : theme.error;
+                  return (
+                    <View key={h.created_at + i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: hColor + '20' }}>
+                      <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: hColor + '12', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={isAssign ? 'link' : 'link-off'} size={16} color={hColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <MaterialIcons name={hIcon as any} size={12} color={theme.textMuted} />
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{hName || hTable}</Text>
+                        </View>
+                        <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                          {new Date(h.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: hColor + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 9, fontWeight: '800', color: hColor }}>{isAssign ? (fr ? 'LIE' : 'LINKED') : (fr ? 'DELIE' : 'UNLINKED')}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ) : null}
+
             {/* Currently assigned items */}
-            <View style={{ gap: 8 }}>
+            {!showAssignHistory ? <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 {fr ? 'ITEMS SPONSORISES' : 'SPONSORED ITEMS'} ({assignedItems.length})
               </Text>
@@ -1125,8 +1194,10 @@ export default function AdminPartnersScreen() {
               )}
             </View>
 
+            </View> : null}
+
             {/* Item type selector */}
-            <View style={{ gap: 8 }}>
+            {!showAssignHistory ? <View style={{ gap: 8 }}>
               <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 {fr ? 'AJOUTER UNE ASSOCIATION' : 'ADD ASSOCIATION'}
               </Text>
@@ -1191,8 +1262,10 @@ export default function AdminPartnersScreen() {
               {assignSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
             </View>
 
+            </View> : null}
+
             {/* Search results */}
-            {assignSearchResults.length > 0 ? (
+            {!showAssignHistory && assignSearchResults.length > 0 ? (
               <View style={{ gap: 6 }}>
                 {assignSearchResults.map((item: any) => {
                   const isAlreadyAssigned = item.sponsor_id === assignPartnerId;
@@ -1239,7 +1312,7 @@ export default function AdminPartnersScreen() {
                   );
                 })}
               </View>
-            ) : assignSearchQuery.trim().length >= 2 && !assignSearching ? (
+            ) : !showAssignHistory && assignSearchQuery.trim().length >= 2 && !assignSearching ? (
               <View style={{ alignItems: 'center', paddingVertical: 20 }}>
                 <MaterialIcons name="search-off" size={32} color={theme.textMuted} />
                 <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>{fr ? 'Aucun resultat' : 'No results'}</Text>

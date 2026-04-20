@@ -696,13 +696,53 @@ export default function HomeScreen() {
           </View>
         ) : null;
 
-      // ===== SPONSOR BANNER =====
+      // ===== GOLD PARTNER BANNER =====
       case 'sponsor':
-        return (
-          <View style={[st.section, isTablet && st.sectionTablet]}>
-
-          </View>
-        );
+        return featuredAmbassadors.length > 0 ? (() => {
+          const goldPartner = featuredAmbassadors.find(a => a.badgeType === 'gold_sponsor' && a.isActive);
+          if (!goldPartner) return null;
+          const brandColor = goldPartner.brandColor || '#D4A017';
+          return (
+            <View style={[st.section, isTablet && st.sectionTablet]}>
+              <Pressable
+                style={({ pressed }) => [st.goldBanner, { borderColor: brandColor + '40' }, pressed && { opacity: 0.9, transform: [{ scale: 0.985 }] }]}
+                onPress={() => { Haptics.selectionAsync(); trackAmbassadorEvent(goldPartner.id, 'banner_click', undefined, { sourcePage: 'home' }); router.push(`/partner/${goldPartner.id}` as any); }}
+              >
+                <View style={[st.goldBannerStripe, { backgroundColor: brandColor }]} />
+                <View style={st.goldBannerContent}>
+                  {goldPartner.photo ? (
+                    <View style={[st.goldBannerPhoto, { borderColor: brandColor + '50' }]}>
+                      <Image source={{ uri: goldPartner.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                    </View>
+                  ) : (
+                    <View style={[st.goldBannerPhoto, st.goldBannerPhotoFallback, { borderColor: brandColor + '50', backgroundColor: brandColor + '15' }]}>
+                      <MaterialIcons name="star" size={22} color={brandColor} />
+                    </View>
+                  )}
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                      <View style={[st.goldBannerTierLabel, { backgroundColor: brandColor }]}>
+                        <MaterialIcons name="star" size={8} color="#FFF" />
+                        <Text style={st.goldBannerTierText}>{language === 'fr' ? 'PARTENAIRE OR' : 'GOLD PARTNER'}</Text>
+                      </View>
+                      <View style={st.goldBannerSponsorChip}>
+                        <MaterialIcons name="handshake" size={8} color="#2563EB" />
+                        <Text style={st.goldBannerSponsorText}>SPONSOR</Text>
+                      </View>
+                    </View>
+                    <Text style={st.goldBannerName} numberOfLines={1}>{goldPartner.displayName}</Text>
+                    {goldPartner.bio ? <Text style={st.goldBannerBio} numberOfLines={1}>{goldPartner.bio}</Text> : null}
+                  </View>
+                  <View style={[st.goldBannerCta, { backgroundColor: brandColor + '18' }]}>
+                    <MaterialIcons name="chevron-right" size={20} color={brandColor} />
+                  </View>
+                </View>
+                <View style={[st.goldBannerCornerTL, { borderColor: brandColor + '20' }]} />
+                <View style={[st.goldBannerCornerBR, { borderColor: brandColor + '20' }]} />
+              </Pressable>
+            </View>
+          );
+        })() : null;
 
       // Season summary moved to History page
       case 'seasonSummary':
@@ -1098,4 +1138,20 @@ const st = StyleSheet.create({
   eloDecayProgressFill: { height: '100%' as const, borderRadius: 3 },
   eloDecayCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12 },
   eloDecayCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
+
+  // GOLD PARTNER BANNER
+  goldBanner: { backgroundColor: '#FFFDF5', borderRadius: 16, borderWidth: 2, overflow: 'hidden' as const, position: 'relative' as const, ...Platform.select({ ios: { shadowColor: '#D4A017', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },
+  goldBannerStripe: { position: 'absolute' as const, top: 0, left: 0, right: 0, height: 3, borderTopLeftRadius: 15, borderTopRightRadius: 15 },
+  goldBannerContent: { flexDirection: 'row' as const, alignItems: 'center' as const, padding: 14, paddingTop: 16, gap: 12 },
+  goldBannerPhoto: { width: 52, height: 52, borderRadius: 16, overflow: 'hidden' as const, borderWidth: 2 },
+  goldBannerPhotoFallback: { alignItems: 'center' as const, justifyContent: 'center' as const },
+  goldBannerTierLabel: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  goldBannerTierText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF', letterSpacing: 0.8 },
+  goldBannerSponsorChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 6, backgroundColor: '#2563EB12' },
+  goldBannerSponsorText: { fontSize: 7, fontWeight: '800' as const, color: '#2563EB', letterSpacing: 0.5 },
+  goldBannerName: { fontSize: 15, fontWeight: '700' as const, color: '#78350F' },
+  goldBannerBio: { fontSize: 12, color: '#92400E', marginTop: 2 },
+  goldBannerCta: { width: 34, height: 34, borderRadius: 17, alignItems: 'center' as const, justifyContent: 'center' as const },
+  goldBannerCornerTL: { position: 'absolute' as const, top: 3, left: 3, width: 16, height: 16, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderTopLeftRadius: 6 },
+  goldBannerCornerBR: { position: 'absolute' as const, bottom: 3, right: 3, width: 16, height: 16, borderBottomWidth: 1.5, borderRightWidth: 1.5, borderBottomRightRadius: 6 },
 });
