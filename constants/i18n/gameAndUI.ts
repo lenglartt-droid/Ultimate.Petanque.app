@@ -155,7 +155,7 @@ export const gameAndUITranslations = {
     featureDeepLinking: { fr: 'Scanner QR universel et liens profonds', en: 'Universal QR scanner and deep links' },
     featureCaching: { fr: 'Cache intelligent et mode hors-ligne', en: 'Smart caching and offline mode' },
     featureTrustScore: { fr: 'Score de confiance et anti-triche', en: 'Trust score and anti-cheat' },
-    featureBadges: { fr: '10 badges, XP et serie quotidienne', en: '10 badges, XP and daily streak' },
+    featureBadges: { fr: '13 badges, XP et serie quotidienne', en: '13 badges, XP and daily streak' },
     featureAmbassador: { fr: 'Programme ambassadeur 3 niveaux', en: '3-level ambassador program' },
     featurePartner: { fr: 'Programme partenaire avec portail', en: 'Partner program with portal' },
     featurePush: { fr: 'Push ciblees avec A/B testing', en: 'Targeted push with A/B testing' },

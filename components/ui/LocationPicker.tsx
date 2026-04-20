@@ -801,78 +801,6 @@ export default function LocationPicker({
             ) : null}
           </View>
 
-          {/* Manual GPS Toggle */}
-          <Pressable
-            style={styles.manualGpsToggle}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setShowManualGps(!showManualGps);
-            }}
-          >
-            <MaterialIcons
-              name={showManualGps ? 'keyboard-arrow-up' : 'pin-drop'}
-              size={18}
-              color={showManualGps ? theme.primary : theme.textSecondary}
-            />
-            <Text style={[styles.manualGpsToggleText, showManualGps && { color: theme.primary }]}>
-              {t('locationPicker', showManualGps ? 'manualGps' : 'orManualGps')}
-            </Text>
-            {!showManualGps ? (
-              <MaterialIcons name="keyboard-arrow-down" size={18} color={theme.textMuted} />
-            ) : null}
-          </Pressable>
-
-          {/* Manual GPS Input */}
-          {showManualGps ? (
-            <Animated.View entering={FadeInDown.duration(250)} style={styles.manualGpsContainer}>
-              <View style={styles.manualGpsRow}>
-                <View style={styles.manualGpsField}>
-                  <Text style={styles.manualGpsLabel}>{t('locationPicker', 'latitude')}</Text>
-                  <TextInput
-                    style={styles.manualGpsInput}
-                    value={manualLat}
-                    onChangeText={setManualLat}
-                    placeholder="48.8566"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="numeric"
-                    returnKeyType="next"
-                  />
-                  <Text style={styles.manualGpsHint}>-90 ... 90</Text>
-                </View>
-                <View style={styles.manualGpsField}>
-                  <Text style={styles.manualGpsLabel}>{t('locationPicker', 'longitude')}</Text>
-                  <TextInput
-                    style={styles.manualGpsInput}
-                    value={manualLng}
-                    onChangeText={setManualLng}
-                    placeholder="2.3522"
-                    placeholderTextColor={theme.textMuted}
-                    keyboardType="numeric"
-                    returnKeyType="done"
-                  />
-                  <Text style={styles.manualGpsHint}>-180 ... 180</Text>
-                </View>
-              </View>
-              <Pressable
-                style={[
-                  styles.manualGpsApplyBtn,
-                  (!manualLat.trim() || !manualLng.trim()) && styles.manualGpsApplyBtnDisabled,
-                ]}
-                onPress={handleApplyManualGps}
-                disabled={!manualLat.trim() || !manualLng.trim() || isApplyingManual}
-              >
-                {isApplyingManual ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <MaterialIcons name="check-circle" size={18} color="#FFF" />
-                    <Text style={styles.manualGpsApplyText}>{t('locationPicker', 'applyCoordinates')}</Text>
-                  </>
-                )}
-              </Pressable>
-            </Animated.View>
-          ) : null}
-
           {/* Search Results / Recent / Loading */}
           <View style={styles.resultsContainer}>
             {isSearching ? (
@@ -904,10 +832,82 @@ export default function LocationPicker({
                 <Text style={styles.emptyHint}>{t('locationPicker', 'tryDifferentAddress')}</Text>
               </View>
             ) : (
-              <View style={styles.hintsContainer}>
+              <ScrollView style={styles.hintsScrollView} contentContainerStyle={styles.hintsContainer} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+                {/* Manual GPS Toggle */}
+                <Pressable
+                  style={styles.manualGpsToggle}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowManualGps(!showManualGps);
+                  }}
+                >
+                  <MaterialIcons
+                    name={showManualGps ? 'keyboard-arrow-up' : 'pin-drop'}
+                    size={18}
+                    color={showManualGps ? theme.primary : theme.textSecondary}
+                  />
+                  <Text style={[styles.manualGpsToggleText, showManualGps && { color: theme.primary }]}>
+                    {t('locationPicker', showManualGps ? 'manualGps' : 'orManualGps')}
+                  </Text>
+                  {!showManualGps ? (
+                    <MaterialIcons name="keyboard-arrow-down" size={18} color={theme.textMuted} />
+                  ) : null}
+                </Pressable>
+
+                {/* Manual GPS Input */}
+                {showManualGps ? (
+                  <Animated.View entering={FadeInDown.duration(250)} style={styles.manualGpsContainer}>
+                    <View style={styles.manualGpsRow}>
+                      <View style={styles.manualGpsField}>
+                        <Text style={styles.manualGpsLabel}>{t('locationPicker', 'latitude')}</Text>
+                        <TextInput
+                          style={styles.manualGpsInput}
+                          value={manualLat}
+                          onChangeText={setManualLat}
+                          placeholder="48.8566"
+                          placeholderTextColor={theme.textMuted}
+                          keyboardType="numeric"
+                          returnKeyType="next"
+                        />
+                        <Text style={styles.manualGpsHint}>-90 ... 90</Text>
+                      </View>
+                      <View style={styles.manualGpsField}>
+                        <Text style={styles.manualGpsLabel}>{t('locationPicker', 'longitude')}</Text>
+                        <TextInput
+                          style={styles.manualGpsInput}
+                          value={manualLng}
+                          onChangeText={setManualLng}
+                          placeholder="2.3522"
+                          placeholderTextColor={theme.textMuted}
+                          keyboardType="numeric"
+                          returnKeyType="done"
+                        />
+                        <Text style={styles.manualGpsHint}>-180 ... 180</Text>
+                      </View>
+                    </View>
+                    <Pressable
+                      style={[
+                        styles.manualGpsApplyBtn,
+                        (!manualLat.trim() || !manualLng.trim()) && styles.manualGpsApplyBtnDisabled,
+                      ]}
+                      onPress={handleApplyManualGps}
+                      disabled={!manualLat.trim() || !manualLng.trim() || isApplyingManual}
+                    >
+                      {isApplyingManual ? (
+                        <ActivityIndicator size="small" color="#FFF" />
+                      ) : (
+                        <>
+                          <MaterialIcons name="check-circle" size={18} color="#FFF" />
+                          <Text style={styles.manualGpsApplyText}>{t('locationPicker', 'applyCoordinates')}</Text>
+                        </>
+                      )}
+                    </Pressable>
+                  </Animated.View>
+                ) : null}
+
                 {/* Recent searches */}
                 {recentSearches.length > 0 ? (
-                  <Animated.View entering={FadeInDown.duration(300)}>
+                  <View style={styles.recentSection}>
                     <View style={styles.recentHeader}>
                       <Text style={styles.hintsSectionTitle}>{t('locationPicker', 'recentSearches')}</Text>
                       <Pressable
@@ -918,35 +918,34 @@ export default function LocationPicker({
                         }}
                         hitSlop={8}
                       >
-                        <MaterialIcons name="delete-sweep" size={16} color={theme.textMuted} />
+                        <MaterialIcons name="delete-sweep" size={14} color={theme.textMuted} />
                         <Text style={styles.clearAllText}>{t('locationPicker', 'clearAll')}</Text>
                       </Pressable>
                     </View>
-                    {recentSearches.map((result) => (
-                      <View key={result.id} style={styles.recentItem}>
-                        <Pressable
-                          style={styles.recentItemContent}
-                          onPress={() => handleSelectResult(result)}
-                        >
-                          <MaterialIcons name="history" size={20} color={theme.textMuted} />
-                          <View style={styles.recentContent}>
-                            <Text style={styles.recentAddress} numberOfLines={1}>{result.address || result.city}</Text>
-                            <Text style={styles.recentCity} numberOfLines={1}>{result.formattedAddress || result.city}</Text>
-                          </View>
-                        </Pressable>
+                    {recentSearches.map((result, index) => (
+                      <Pressable
+                        key={result.id}
+                        style={[styles.recentItem, index < recentSearches.length - 1 && styles.recentItemBorder]}
+                        onPress={() => handleSelectResult(result)}
+                      >
+                        <MaterialIcons name="history" size={16} color={theme.textMuted} />
+                        <View style={styles.recentContent}>
+                          <Text style={styles.recentAddress} numberOfLines={1}>{result.address || result.city}</Text>
+                          <Text style={styles.recentCity} numberOfLines={1}>{result.formattedAddress || result.city}</Text>
+                        </View>
                         <Pressable
                           style={styles.recentDeleteBtn}
                           onPress={() => {
                             Haptics.selectionAsync();
                             setRecentSearches(prev => prev.filter(r => r.id !== result.id));
                           }}
-                          hitSlop={6}
+                          hitSlop={8}
                         >
-                          <MaterialIcons name="close" size={16} color={theme.textMuted} />
+                          <MaterialIcons name="close" size={14} color={theme.textMuted} />
                         </Pressable>
-                      </View>
+                      </Pressable>
                     ))}
-                  </Animated.View>
+                  </View>
                 ) : null}
 
                 {/* Hints */}
@@ -959,7 +958,7 @@ export default function LocationPicker({
                     </Text>
                   </View>
                 </View>
-              </View>
+              </ScrollView>
             )}
           </View>
         </SafeAreaView>
@@ -1098,9 +1097,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
-    marginHorizontal: 16,
-    marginTop: 10,
-    paddingVertical: 8,
+    paddingVertical: 10,
+    marginBottom: 4,
   },
   manualGpsToggleText: {
     fontSize: 13,
@@ -1108,11 +1106,11 @@ const styles = StyleSheet.create({
     color: theme.textSecondary,
   },
   manualGpsContainer: {
-    marginHorizontal: 16,
     backgroundColor: theme.surface,
     borderRadius: theme.borderRadius.md,
     padding: 14,
     gap: 12,
+    marginBottom: 12,
     ...theme.shadows.card,
   },
   manualGpsRow: {
@@ -1254,31 +1252,40 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 8,
   },
+  hintsScrollView: {
+    flex: 1,
+  },
   hintsContainer: {
     paddingHorizontal: 16,
+    paddingBottom: 24,
   },
   hintsSectionTitle: {
-    fontSize: 12,
-    fontWeight: '600',
+    fontSize: 11,
+    fontWeight: '700',
     color: theme.textSecondary,
     letterSpacing: 0.5,
-    marginBottom: 12,
     textTransform: 'uppercase',
+  },
+  recentSection: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.md,
+    marginBottom: 12,
+    overflow: 'hidden',
   },
   recentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 6,
   },
   clearAllBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    backgroundColor: theme.error + '10',
-    borderRadius: theme.borderRadius.sm,
+    gap: 3,
+    paddingVertical: 3,
+    paddingHorizontal: 6,
   },
   clearAllText: {
     fontSize: 11,
@@ -1288,40 +1295,33 @@ const styles = StyleSheet.create({
   recentItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 8,
-    overflow: 'hidden',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    gap: 10,
   },
-  recentItemContent: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    gap: 12,
+  recentItemBorder: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: theme.border,
   },
   recentDeleteBtn: {
-    width: 40,
-    height: '100%',
+    width: 28,
+    height: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderLeftWidth: 1,
-    borderLeftColor: theme.border,
-    paddingVertical: 12,
+    borderRadius: 14,
   },
   recentContent: {
     flex: 1,
   },
   recentAddress: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '500',
     color: theme.textPrimary,
   },
   recentCity: {
-    fontSize: 12,
+    fontSize: 11,
     color: theme.textMuted,
-    marginTop: 2,
+    marginTop: 1,
   },
   hintsCard: {
     flexDirection: 'row',
