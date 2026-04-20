@@ -541,7 +541,7 @@ export default function NewTournamentScreen() {
             <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{t('tournament', 'otherLocation')}</Text><Text style={styles.modalPickerItemSub}>{t('tournament', 'manualAddressEntry')}</Text></View>
             {!terrainId ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
           </Pressable>
-          <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: tr }) => {
+          <FlatList data={filteredTerrains} keyExtractor={(item) => item.id} style={{ flex: 1 }} contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 32 }} renderItem={({ item: tr }) => {
             const tc = config.terrainTypes.find(t => t.id === tr.type);
             return (
               <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, terrainId === tr.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setTerrainId(tr.id); setShowTerrainPicker(false); }}>
