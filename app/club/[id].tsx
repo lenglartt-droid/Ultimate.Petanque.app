@@ -21,7 +21,7 @@ import * as Haptics from '@/services/haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+// Animations removed for layout stability
 import { Image } from 'expo-image';
 import * as ImagePicker from '@/services/imagePicker';
 // expo-document-picker and expo-file-system loaded dynamically to avoid web bundler issues
@@ -592,7 +592,7 @@ export default function ClubDetailScreen() {
         }
       >
         {/* Club Card */}
-        <Animated.View entering={FadeInDown.duration(400)} style={[styles.clubCard, isTablet && styles.clubCardTablet]}>
+        <View style={[styles.clubCard, isTablet && styles.clubCardTablet]}>
           <Pressable style={styles.clubIconPressable} onPress={handleUploadLogo} disabled={!canEdit || isSharedItem || uploadingLogo}>
             {uploadingLogo ? (
               <View style={styles.clubIcon}>
@@ -763,20 +763,20 @@ export default function ClubDetailScreen() {
               ) : null}
             </View>
           ) : null}
-        </Animated.View>
 
-
-
-        {/* Sponsor Banner — only when sponsor_id is explicitly set */}
-        {(club as any).sponsorId ? (
-          <SponsoredItemBanner sponsorId={(club as any).sponsorId} page="club-detail" />
-        ) : null}
+          {/* Sponsor Banner — inside Hero Card, only when sponsor_id is explicitly set */}
+          {(club as any).sponsorId ? (
+            <View style={{ alignSelf: 'stretch', marginTop: 12 }}>
+              <SponsoredItemBanner sponsorId={(club as any).sponsorId} page="club-detail" style={{ marginBottom: 0 }} />
+            </View>
+          ) : null}
+        </View>
 
 
 
         {/* Club Card - right after main card */}
         {clubCardUrl ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
             <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, overflow: 'hidden', ...theme.shadows.card }}>
               <Pressable style={{ position: 'relative', minHeight: 180 }} onPress={() => clubCardType === 'pdf' ? Linking.openURL(clubCardUrl) : setShowCardFullscreen(true)}>
@@ -802,9 +802,9 @@ export default function ClubDetailScreen() {
                 </View>
               ) : null}
             </View>
-          </Animated.View>
+          </View>
         ) : canEdit && !isSharedItem ? (
-          <Animated.View entering={FadeInDown.duration(400).delay(50)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'clubCardLabel')}</Text>
             <Pressable style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.primary + '25', borderStyle: 'dashed', ...theme.shadows.card }} onPress={showClubCardUploadOptions}>
               <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
@@ -813,14 +813,14 @@ export default function ClubDetailScreen() {
               <Text style={{ fontSize: 16, fontWeight: '600', color: theme.primary, marginBottom: 6 }}>{t('club', 'addClubCard')}</Text>
               <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>{t('club', 'clubCardDesc')}</Text>
             </Pressable>
-          </Animated.View>
+          </View>
         ) : null}
 
 
 
         <View style={isTablet ? styles.tabletRow : undefined}>
         {/* Location */}
-        <Animated.View entering={FadeInDown.duration(400).delay(200)} style={[styles.section, isTablet && styles.tabletHalf]}>
+        <View style={[styles.section, isTablet && styles.tabletHalf]}>
           <Text style={styles.sectionTitle}>{t('club', 'locationLabel')}</Text>
           <View style={styles.locationCard}>
             <View style={styles.locationInfo}>
@@ -843,14 +843,14 @@ export default function ClubDetailScreen() {
               <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>
             </Pressable>
           </View>
-        </Animated.View>
+        </View>
 
         {/* Main Terrain */}
         {club.terrainId ? (() => {
           const mainTerrain = allTerrains.find(t => t.id === club.terrainId);
           if (!mainTerrain) return null;
           return (
-            <Animated.View entering={FadeInDown.duration(400).delay(250)} style={[styles.section, isTablet && styles.tabletHalf]}>
+            <View style={[styles.section, isTablet && styles.tabletHalf]}>
               <Text style={styles.sectionTitle}>{t('club', 'mainTerrainLabel')}</Text>
               <Pressable
                 style={styles.locationCard}
@@ -867,7 +867,7 @@ export default function ClubDetailScreen() {
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </View>
               </Pressable>
-            </Animated.View>
+            </View>
           );
         })() : null}
 
@@ -876,7 +876,7 @@ export default function ClubDetailScreen() {
         {/* Members + Invite Section */}
         <View style={isTablet ? styles.tabletRow : undefined}>
         {clubPlayers.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} ({clubPlayers.length})</Text>
               {canEdit && !isSharedItem ? (
@@ -962,9 +962,9 @@ export default function ClubDetailScreen() {
                 </View>
               </Pressable>
             ))}
-          </Animated.View>
+          </View>
         ) : canEdit && !isSharedItem ? (
-          <Animated.View entering={FadeIn.duration(400).delay(400)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>{t('club', 'membersCount')} (0)</Text>
               <Pressable
@@ -979,12 +979,12 @@ export default function ClubDetailScreen() {
               <MaterialIcons name="people-outline" size={40} color={theme.textMuted} />
               <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>{language === 'fr' ? 'Aucun membre' : 'No members'}</Text>
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Tournaments */}
         {clubTournaments.length > 0 && (
-          <Animated.View entering={FadeIn.duration(400).delay(450)} style={[styles.section, isTablet && styles.tabletHalf]}>
+          <View style={[styles.section, isTablet && styles.tabletHalf]}>
             <Text style={styles.sectionTitle}>{t('club', 'organizedTournaments')}</Text>
             {clubTournaments.map(tournament => (
               <Pressable
@@ -1019,23 +1019,23 @@ export default function ClubDetailScreen() {
                 </View>
               </Pressable>
             ))}
-          </Animated.View>
+          </View>
         )}
         </View>
 
         {/* Upload in progress overlay */}
         {uploadingCard ? (
-          <Animated.View entering={FadeInDown.duration(400)} style={styles.section}>
+          <View style={styles.section}>
             <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card }}>
               <ActivityIndicator size="large" color={theme.primary} />
               <Text style={{ fontSize: 14, color: theme.textSecondary }}>{t('club', 'uploadingClubCard')}</Text>
             </View>
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Pending Claims - only for owner */}
         {canEdit && !isSharedItem && pendingClaims.length > 0 ? (
-          <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{t('club', 'pendingClaims').toUpperCase()}</Text>
             {pendingClaims.map(claim => (
               <View key={claim.id} style={styles.claimCard}>
@@ -1139,7 +1139,7 @@ export default function ClubDetailScreen() {
                 </View>
               </View>
             ))}
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Verification Checklist — for owner of unverified club */}
@@ -1158,7 +1158,7 @@ export default function ClubDetailScreen() {
           const allInfoMet = criteria.filter(c => c.key !== 'proof').every(c => c.met);
           const proofSent = claimStatus === 'pending' || claimStatus === 'accepted';
           return (
-            <Animated.View entering={FadeIn.duration(400).delay(500)} style={styles.section}>
+            <View style={styles.section}>
               <View style={{ backgroundColor: theme.surface, borderRadius: 20, padding: 18, borderWidth: 1.5, borderColor: '#F59E0B30', ...theme.shadows.card }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 }}>
                   <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
@@ -1228,13 +1228,13 @@ export default function ClubDetailScreen() {
                   </View>
                 </View>
               </View>
-            </Animated.View>
+            </View>
           );
         })() : null}
 
         {/* ===== SIMPLIFIED VISIBILITY SECTION (bottom of page) ===== */}
         {canEdit && !isSharedItem ? (
-          <Animated.View entering={FadeIn.duration(400).delay(700)} style={styles.section}>
+          <View style={styles.section}>
             <Text style={styles.sectionTitle}>{language === 'fr' ? 'VISIBILITE' : 'VISIBILITY'}</Text>
             <Pressable
               style={styles.visibilityCard}
@@ -1294,12 +1294,12 @@ export default function ClubDetailScreen() {
                 </View>
               </Pressable>
             ) : null}
-          </Animated.View>
+          </View>
         ) : null}
 
         {/* Claim Club Button - for non-owners (sends to admin) */}
         {user?.id && club.userId && club.userId !== user.id && !isSharedItem ? (
-          <Animated.View entering={FadeIn.duration(400).delay(600)} style={styles.section}>
+          <View style={styles.section}>
             {claimStatus === 'pending' ? (
               <View style={styles.claimStatusCard}>
                 <View style={[styles.claimStatusIcon, { backgroundColor: '#F59E0B15' }]}>
@@ -1333,7 +1333,7 @@ export default function ClubDetailScreen() {
                 </View>
               </Pressable>
             )}
-          </Animated.View>
+          </View>
         ) : null}
       </ScrollView>
 

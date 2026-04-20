@@ -80,11 +80,11 @@ export default function SponsoredItemBanner({ sponsorId, page = 'detail', style 
   const hasSocials = sponsor.instagramHandle || sponsor.tiktokUrl || sponsor.youtubeUrl || sponsor.websiteUrl;
 
   return (
-    <Animated.View entering={FadeInDown.duration(400).delay(100)} style={[styles.container, style]}>
+    <View style={[styles.container, style]}>
       <Pressable
         style={({ pressed }) => [
           styles.banner,
-          { backgroundColor: brandColor + (isGold ? '14' : '0A'), borderColor: brandColor + (isGold ? '40' : '25') },
+          { backgroundColor: isGold ? brandColor + '20' : brandColor + '12', borderColor: brandColor + (isGold ? '50' : '30') },
           isGold && styles.bannerGold,
           pressed && { opacity: 0.9, transform: [{ scale: 0.985 }] },
         ]}
@@ -171,32 +171,22 @@ export default function SponsoredItemBanner({ sponsorId, page = 'detail', style 
           </>
         ) : null}
       </Pressable>
-    </Animated.View>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { marginBottom: 16 },
   banner: {
-    borderRadius: 18,
-    overflow: 'hidden',
+    borderRadius: 16,
+    overflow: 'visible',
     borderWidth: 1.5,
     position: 'relative',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.08, shadowRadius: 10 },
-      android: { elevation: 3 },
-      default: {},
-    }),
   },
   bannerGold: {
     borderWidth: 2,
-    ...Platform.select({
-      ios: { shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 12 },
-      android: { elevation: 4 },
-      default: {},
-    }),
   },
-  topStripe: { position: 'absolute', top: 0, left: 0, right: 0 },
+  topStripe: { position: 'absolute', top: 0, left: 0, right: 0, borderTopLeftRadius: 15, borderTopRightRadius: 15, overflow: 'hidden' },
   content: { flexDirection: 'row', alignItems: 'center', padding: 14, paddingTop: 16, gap: 12 },
   avatarSection: { position: 'relative' },
   photoWrap: { width: 48, height: 48, borderRadius: 14, overflow: 'hidden', borderWidth: 2 },
