@@ -3,7 +3,7 @@
  * Shows impressions, clicks and CTR for each terrain/club/tournament/player sponsored.
  */
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ActivityIndicator, StyleSheet, Platform, Pressable } from 'react-native';
+import { View, Text, ActivityIndicator, StyleSheet, Platform, Pressable, Share } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { getSupabaseClient } from '@/template';
 import { BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
@@ -192,6 +192,32 @@ export default function SponsorItemMetrics({ sponsorId, bannerData, totalImp, pe
         </View>
       ))}
 
+      {/* Export CSV */}
+      <Pressable
+        style={st.exportRow}
+        onPress={async () => {
+          try {
+            let csv = 'Name,Type,Impressions,Clicks,CTR\n';
+            items.forEach(m => { csv += `"${m.name}",${m.type},${m.impressions},${m.clicks},${m.ctr}%\n`; });
+            csv += `\nTotal,${items.length},${items.reduce((s, m) => s + m.impressions, 0)},${items.reduce((s, m) => s + m.clicks, 0)},${totalImp > 0 ? Math.round((items.reduce((s, m) => s + m.clicks, 0) / Math.max(items.reduce((s, m) => s + m.impressions, 0), 1)) * 1000) / 10 : 0}%\n`;
+            if (Platform.OS === 'web') {
+              try {
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url; a.download = `sponsor_items_${period}d.csv`; a.click();
+                URL.revokeObjectURL(url);
+              } catch { /* silent */ }
+            } else {
+              await Share.share({ message: csv, title: 'Sponsor Items CSV' });
+            }
+          } catch { /* silent */ }
+        }}
+      >
+        <MaterialIcons name="download" size={14} color={tierColor} />
+        <Text style={[st.exportText, { color: tierColor }]}>{fr ? 'Exporter CSV' : 'Export CSV'}</Text>
+      </Pressable>
+
       {/* Legend */}
       <View style={st.legend}>
         <View style={st.legendItem}><MaterialIcons name="visibility" size={10} color="#3B82F6" /><Text style={st.legendText}>Imp.</Text></View>
@@ -233,6 +259,8 @@ const st = StyleSheet.create({
   legend: { flexDirection: 'row', justifyContent: 'center', gap: 16, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   legendText: { fontSize: 9, fontWeight: '600', color: '#94A3B8' },
+  exportRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 8, borderTopWidth: 1, borderTopColor: '#F1F5F9', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  exportText: { fontSize: 12, fontWeight: '700' },
   drillDown: { marginTop: 8, gap: 6 },
   drillDownRow: { flexDirection: 'row', gap: 6 },
   drillDownKpi: { flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 8, borderWidth: 1 },

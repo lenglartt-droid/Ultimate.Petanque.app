@@ -78,6 +78,8 @@ export default function PartnerDetailScreen() {
   const [events, setEvents] = useState<SponsoredEvent[]>([]);
   const [recentActivity, setRecentActivity] = useState<{ type: string; date: string; detail: string }[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [sponsoredPlayers, setSponsoredPlayers] = useState<any[]>([]);
+  const [loadingSponsoredPlayers, setLoadingSponsoredPlayers] = useState(false);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -99,6 +101,12 @@ export default function PartnerDetailScreen() {
 
       if (data) {
         trackAmbassadorEvent(data.id, 'profile_view', undefined, { sourcePage: 'partner_detail' });
+
+        // Load sponsored players
+        setLoadingSponsoredPlayers(true);
+        supabase.from('players').select('id, name, avatar, city, elo_rating, role, stats').eq('sponsor_id', data.id).eq('is_public', true).limit(20)
+          .then(({ data: plData }) => { setSponsoredPlayers(plData || []); setLoadingSponsoredPlayers(false); })
+          .catch(() => setLoadingSponsoredPlayers(false));
 
         // Load analytics + banner data in parallel
         const [{ stats }, bannerRes, evtsRes, activityRes] = await Promise.all([
@@ -596,6 +604,59 @@ export default function PartnerDetailScreen() {
               </Text>
             </View>
           </Animated.View> : null}
+
+          {/* ====== SPONSORED PLAYERS ====== */}
+          {sponsoredPlayers.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(380)} style={st.card}>
+              <View style={st.cardHeader}>
+                <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                  <MaterialIcons name="people" size={18} color={tierColor} />
+                </View>
+                <Text style={st.cardTitle}>{fr ? 'Joueurs sponsorises' : 'Sponsored players'}</Text>
+                <View style={[st.eventCountBadge, { backgroundColor: tierColor + '12' }]}>
+                  <Text style={[st.eventCountText, { color: tierColor }]}>{sponsoredPlayers.length}</Text>
+                </View>
+              </View>
+              {sponsoredPlayers.map((pl: any) => {
+                const eloVal = pl.elo_rating || 1000;
+                const winR = pl.stats?.winRate || 0;
+                return (
+                  <Pressable
+                    key={pl.id}
+                    style={({ pressed }) => [st.eventItem, pressed && { opacity: 0.85, backgroundColor: '#F8FAFC' }]}
+                    onPress={() => router.push(`/player/${pl.id}` as any)}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 13, overflow: 'hidden', borderWidth: 2, borderColor: tierColor + '50' }}>
+                      {pl.avatar ? (
+                        <Image source={{ uri: pl.avatar }} style={{ width: 36, height: 36, borderRadius: 11 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: tierColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: tierColor }}>{(pl.name || '?').charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.eventTitle} numberOfLines={1}>{pl.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: tierColor }}>{eloVal} ELO</Text>
+                        {pl.city ? (
+                          <>
+                            <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                            <Text style={st.eventDate}>{pl.city}</Text>
+                          </>
+                        ) : null}
+                        <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                        <Text style={st.eventDate}>{winR}%</Text>
+                      </View>
+                    </View>
+                    <View style={[st.eventStatusBadge, { backgroundColor: tierColor + '12' }]}>
+                      <MaterialIcons name="handshake" size={10} color={tierColor} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </Animated.View>
+          ) : null}
 
           {/* ====== WEBSITE CTA ====== */}
           {partner.website_url ? (
