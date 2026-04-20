@@ -42,7 +42,9 @@ import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
-type SortOption = 'default' | 'elo_desc' | 'elo_asc' | 'name_asc' | 'win_rate_desc' | 'members_desc' | 'activity_desc' | 'courts_desc' | 'participants_desc' | 'date_desc' | 'date_asc';
+type SortField = 'elo' | 'name' | 'win_rate' | 'members' | 'activity' | 'courts' | 'participants' | 'date' | 'city' | 'club' | 'country';
+type SortDirection = 'asc' | 'desc';
+type SortCriterion = { field: SortField; direction: SortDirection };
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
@@ -149,7 +151,7 @@ export default function DirectoryScreen() {
   const numColumns = isTablet ? 2 : 1;
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [sortCriteria, setSortCriteria] = useState<SortCriterion[]>([]);
   const [showSortModal, setShowSortModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
@@ -310,11 +312,11 @@ export default function DirectoryScreen() {
   // Reset pagination when tab or filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter, sortBy]);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter, sortCriteria]);
 
   // Reset sort when tab changes
   useEffect(() => {
-    setSortBy('default');
+    setSortCriteria([]);
   }, [activeTab]);
 
   // Levenshtein-based duplicate detection — debounced for performance
@@ -468,7 +470,7 @@ export default function DirectoryScreen() {
   }, [terrains, filters, distanceFilter, userLocation, haversineDistance]);
 
   const getTournamentBaseFiltered = useCallback((excludeFilter?: string) => {
-    return tournaments.filter(tr => {
+    const result = tournaments.filter(tr => {
       if (excludeFilter !== 'tournamentStatus' && filters.tournamentStatus !== 'all' && tr.status !== filters.tournamentStatus) return false;
       if (excludeFilter !== 'tournamentFormat' && filters.tournamentFormat !== 'all' && tr.format !== filters.tournamentFormat) return false;
       if (excludeFilter !== 'tournamentLevel' && filters.tournamentLevel !== 'all' && tr.tournamentLevel !== filters.tournamentLevel) return false;
@@ -488,6 +490,7 @@ export default function DirectoryScreen() {
       }
       return true;
     });
+    return result;
   }, [tournaments, filters, distanceFilter, userLocation, haversineDistance]);
 
   // Cascading unique values with counts
@@ -607,6 +610,43 @@ export default function DirectoryScreen() {
     return map[activeTab];
   };
 
+  // Multi-criteria sort comparator — must be defined BEFORE filtered data memos
+  const getCompareValue = useCallback((item: any, field: SortField): any => {
+    switch (field) {
+      case 'elo': return item.eloRating || ELO_INITIAL;
+      case 'name': return (item.name || '').toLowerCase();
+      case 'win_rate': return item.stats?.winRate || 0;
+      case 'members': return item.membersCount || 0;
+      case 'activity': return terrainActivityMap.get(item.id)?.score || 0;
+      case 'courts': return item.courtsCount || 1;
+      case 'participants': return item.participants || 0;
+      case 'date': return new Date(item.date || item.startTime || 0).getTime();
+      case 'city': return (item.city || item.location?.city || '').toLowerCase();
+      case 'club': return (item.club || '').toLowerCase();
+      case 'country': return (item.country || 'France').toLowerCase();
+      default: return 0;
+    }
+  }, [terrainActivityMap]);
+
+  const applyMultiSort = useCallback((data: any[]): any[] => {
+    if (sortCriteria.length === 0) return data;
+    return [...data].sort((a, b) => {
+      for (const criterion of sortCriteria) {
+        const va = getCompareValue(a, criterion.field);
+        const vb = getCompareValue(b, criterion.field);
+        let cmp = 0;
+        if (typeof va === 'string' && typeof vb === 'string') {
+          cmp = va.localeCompare(vb);
+        } else {
+          cmp = (va as number) - (vb as number);
+        }
+        if (criterion.direction === 'desc') cmp = -cmp;
+        if (cmp !== 0) return cmp;
+      }
+      return 0;
+    });
+  }, [sortCriteria, getCompareValue]);
+
   // Filtered data
   const filteredPlayers = useMemo(() => {
     let result = players.filter(p => {
@@ -637,15 +677,9 @@ export default function DirectoryScreen() {
       return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
     });
     
-    // Apply sort
-    if (sortBy === 'elo_desc') {
-      result.sort((a, b) => (b.eloRating || ELO_INITIAL) - (a.eloRating || ELO_INITIAL));
-    } else if (sortBy === 'elo_asc') {
-      result.sort((a, b) => (a.eloRating || ELO_INITIAL) - (b.eloRating || ELO_INITIAL));
-    } else if (sortBy === 'win_rate_desc') {
-      result.sort((a, b) => (b.stats.winRate || 0) - (a.stats.winRate || 0));
-    } else if (sortBy === 'name_asc') {
-      result.sort((a, b) => a.name.localeCompare(b.name));
+    // Apply multi-criteria sort or fallback to distance sort
+    if (sortCriteria.length > 0) {
+      result = applyMultiSort(result);
     } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
@@ -654,6 +688,20 @@ export default function DirectoryScreen() {
       });
     }
     
+    // Gold partners get priority position
+    if (sortCriteria.length === 0) {
+      const goldIds = new Set<string>();
+      partnerUserIds.forEach((info, uid) => { if (info.tier === 'gold_sponsor') goldIds.add(uid); });
+      if (goldIds.size > 0) {
+        const goldPlayers: typeof result = [];
+        const rest: typeof result = [];
+        result.forEach(p => {
+          if (goldIds.has(p.id) || goldIds.has((p as any).userId || '')) goldPlayers.push(p);
+          else rest.push(p);
+        });
+        result = [...goldPlayers, ...rest];
+      }
+    }
     // Put selfPlayer at top
     if (selfPlayer) {
       const selfIndex = result.findIndex(p => p.id === selfPlayer.id);
@@ -663,7 +711,7 @@ export default function DirectoryScreen() {
       }
     }
     return result;
-  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
+  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
   const filteredClubs = useMemo(() => {
     let result = clubs.filter(c => {
@@ -685,11 +733,9 @@ export default function DirectoryScreen() {
       const matchesDist = isWithinDistance(c.location?.latitude, c.location?.longitude);
       return matchesSearch && matchesCity && matchesCountry && matchesEquipment && matchesMembersRange && matchesDist;
     });
-    // Apply sort
-    if (sortBy === 'members_desc') {
-      result.sort((a, b) => (b.membersCount || 0) - (a.membersCount || 0));
-    } else if (sortBy === 'name_asc') {
-      result.sort((a, b) => a.name.localeCompare(b.name));
+    // Apply multi-criteria sort or fallback to distance sort
+    if (sortCriteria.length > 0) {
+      result = applyMultiSort(result);
     } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
@@ -698,7 +744,7 @@ export default function DirectoryScreen() {
       });
     }
     return result;
-  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
+  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort]);
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
@@ -807,13 +853,9 @@ export default function DirectoryScreen() {
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
       return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
-    // Apply sort
-    if (sortBy === 'activity_desc') {
-      result.sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
-    } else if (sortBy === 'courts_desc') {
-      result.sort((a, b) => (b.courtsCount || 1) - (a.courtsCount || 1));
-    } else if (sortBy === 'name_asc') {
-      result.sort((a, b) => a.name.localeCompare(b.name));
+    // Apply multi-criteria sort or fallback
+    if (sortCriteria.length > 0) {
+      result = applyMultiSort(result);
     } else if (showActiveNow) {
       result = result
         .filter(tr => terrainActivityMap.has(tr.id))
@@ -826,11 +868,11 @@ export default function DirectoryScreen() {
       });
     }
     return result;
-  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
+  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
-    return tournaments.filter(tr => {
+    const result = tournaments.filter(tr => {
       const matchesSearch = tr.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         tr.location.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesStatus = filters.tournamentStatus === 'all' || tr.status === filters.tournamentStatus;
@@ -862,31 +904,26 @@ export default function DirectoryScreen() {
       })();
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
       return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity && matchesDate && matchesDist;
-    }).sort((a, b) => {
-      // Apply sort
-      if (sortBy === 'participants_desc') return (b.participants || 0) - (a.participants || 0);
-      if (sortBy === 'date_desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (sortBy === 'date_asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
-      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
-      return (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3);
     });
-  }, [tournaments, searchQuery, filters, isWithinDistance, sortBy]);
+    if (sortCriteria.length > 0) {
+      return applyMultiSort(result);
+    }
+    return result.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
+  }, [tournaments, searchQuery, filters, isWithinDistance, sortCriteria, applyMultiSort]);
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
-    return sponsoredEvents.filter(e => {
+    const filtered = sponsoredEvents.filter(e => {
       const q = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q);
       const matchesStatus = filters.eventStatus === 'all' || e.status === filters.eventStatus;
       const matchesType = filters.eventType === 'all' || e.challengeType === filters.eventType;
       const matchesAmbassador = filters.eventAmbassador === 'all' || e.ambassadorId === filters.eventAmbassador;
       return matchesSearch && matchesStatus && matchesType && matchesAmbassador;
-    }).sort((a, b) => {
-      if (sortBy === 'date_desc') return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-      if (sortBy === 'date_asc') return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
-      return 0;
     });
-  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador, sortBy]);
+    if (sortCriteria.length > 0) return applyMultiSort(filtered);
+    return filtered;
+  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador, sortCriteria, applyMultiSort]);
 
   // Get current filtered data (after all filtered arrays are defined)
   const getCurrentData = useCallback(() => {
@@ -941,44 +978,74 @@ export default function DirectoryScreen() {
     }
   }, [activeTab]);
 
-  // Sort options per tab
-  const getSortOptions = useCallback((): { value: SortOption; label: string; icon: string }[] => {
-    const base: { value: SortOption; label: string; icon: string }[] = [{ value: 'default', label: t('directory', 'sortDefault'), icon: 'sort' }];
+  // Sort fields available per tab
+  const getSortFields = useCallback((): { field: SortField; label: string; icon: string; defaultDir: SortDirection }[] => {
     switch (activeTab) {
-      case 'players': return [...base,
-        { value: 'elo_desc', label: t('directory', 'sortEloDesc'), icon: 'trending-up' },
-        { value: 'elo_asc', label: t('directory', 'sortEloAsc'), icon: 'trending-down' },
-        { value: 'win_rate_desc', label: t('directory', 'sortWinRate'), icon: 'emoji-events' },
-        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      case 'players': return [
+        { field: 'elo', label: 'ELO', icon: 'trending-up', defaultDir: 'desc' },
+        { field: 'win_rate', label: t('directory', 'sortWinRate'), icon: 'emoji-events', defaultDir: 'desc' },
+        { field: 'name', label: t('directory', 'sortName'), icon: 'sort-by-alpha', defaultDir: 'asc' },
+        { field: 'city', label: t('directory', 'sortCity'), icon: 'place', defaultDir: 'asc' },
+        { field: 'club', label: t('directory', 'sortClub'), icon: 'home', defaultDir: 'asc' },
       ];
-      case 'clubs': return [...base,
-        { value: 'members_desc', label: t('directory', 'sortMembersDesc'), icon: 'groups' },
-        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      case 'clubs': return [
+        { field: 'members', label: t('directory', 'sortMembersDesc'), icon: 'groups', defaultDir: 'desc' },
+        { field: 'name', label: t('directory', 'sortName'), icon: 'sort-by-alpha', defaultDir: 'asc' },
+        { field: 'city', label: t('directory', 'sortCity'), icon: 'place', defaultDir: 'asc' },
       ];
-      case 'terrains': return [...base,
-        { value: 'activity_desc', label: t('directory', 'sortActivityDesc'), icon: 'local-fire-department' },
-        { value: 'courts_desc', label: t('directory', 'sortCourtsDesc'), icon: 'sports-soccer' },
-        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      case 'terrains': return [
+        { field: 'activity', label: t('directory', 'sortActivityDesc'), icon: 'local-fire-department', defaultDir: 'desc' },
+        { field: 'courts', label: t('directory', 'sortCourtsDesc'), icon: 'sports-soccer', defaultDir: 'desc' },
+        { field: 'name', label: t('directory', 'sortName'), icon: 'sort-by-alpha', defaultDir: 'asc' },
+        { field: 'city', label: t('directory', 'sortCity'), icon: 'place', defaultDir: 'asc' },
       ];
-      case 'tournaments': return [...base,
-        { value: 'participants_desc', label: t('directory', 'sortParticipantsDesc'), icon: 'people' },
-        { value: 'date_desc', label: t('directory', 'sortDateDesc'), icon: 'event' },
-        { value: 'date_asc', label: t('directory', 'sortDateAsc'), icon: 'history' },
-        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      case 'tournaments': return [
+        { field: 'participants', label: t('directory', 'sortParticipantsDesc'), icon: 'people', defaultDir: 'desc' },
+        { field: 'date', label: t('directory', 'sortDateDesc'), icon: 'event', defaultDir: 'desc' },
+        { field: 'name', label: t('directory', 'sortName'), icon: 'sort-by-alpha', defaultDir: 'asc' },
+        { field: 'city', label: t('directory', 'sortCity'), icon: 'place', defaultDir: 'asc' },
       ];
-      case 'events': return [...base,
-        { value: 'date_desc', label: t('directory', 'sortDateDesc'), icon: 'event' },
-        { value: 'date_asc', label: t('directory', 'sortDateAsc'), icon: 'history' },
+      case 'events': return [
+        { field: 'date', label: t('directory', 'sortDateDesc'), icon: 'event', defaultDir: 'desc' },
       ];
-      default: return base;
+      default: return [];
     }
   }, [activeTab, t]);
 
-  const currentSortLabel = useMemo(() => {
-    if (sortBy === 'default') return null;
-    const opts = getSortOptions();
-    return opts.find(o => o.value === sortBy)?.label || null;
-  }, [sortBy, getSortOptions]);
+  const addSortCriterion = useCallback((field: SortField, defaultDir: SortDirection) => {
+    setSortCriteria(prev => {
+      if (prev.find(c => c.field === field)) return prev;
+      return [...prev, { field, direction: defaultDir }];
+    });
+  }, []);
+
+  const removeSortCriterion = useCallback((field: SortField) => {
+    setSortCriteria(prev => prev.filter(c => c.field !== field));
+  }, []);
+
+  const toggleSortDirection = useCallback((field: SortField) => {
+    setSortCriteria(prev => prev.map(c => c.field === field ? { ...c, direction: c.direction === 'asc' ? 'desc' : 'asc' } : c));
+  }, []);
+
+  const moveSortCriterion = useCallback((field: SortField, direction: 'up' | 'down') => {
+    setSortCriteria(prev => {
+      const idx = prev.findIndex(c => c.field === field);
+      if (idx < 0) return prev;
+      const newIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (newIdx < 0 || newIdx >= prev.length) return prev;
+      const arr = [...prev];
+      [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+      return arr;
+    });
+  }, []);
+
+  const sortCriteriaLabels = useMemo(() => {
+    const fields = getSortFields();
+    return sortCriteria.map(c => {
+      const f = fields.find(sf => sf.field === c.field);
+      return f ? `${f.label} ${c.direction === 'desc' ? '↓' : '↑'}` : c.field;
+    });
+  }, [sortCriteria, getSortFields]);
 
   const getTerrainTypeConfig = (type: string) => {
     return config.terrainTypes.find(tc => tc.id === type) || config.terrainTypes[0];
@@ -1448,7 +1515,7 @@ export default function DirectoryScreen() {
               </Pressable>
             ) : null}
             <Pressable
-              style={[styles.sortButton, sortBy !== 'default' && styles.sortButtonActive]}
+              style={[styles.sortButton, sortCriteria.length > 0 && styles.sortButtonActive]}
               onPress={() => {
                 Haptics.selectionAsync();
                 setShowSortModal(true);
@@ -1457,8 +1524,13 @@ export default function DirectoryScreen() {
               <MaterialIcons 
                 name="swap-vert" 
                 size={20} 
-                color={sortBy !== 'default' ? '#FFF' : 'rgba(255,255,255,0.6)'} 
+                color={sortCriteria.length > 0 ? '#FFF' : 'rgba(255,255,255,0.6)'} 
               />
+              {sortCriteria.length > 0 ? (
+                <View style={styles.filterBadge}>
+                  <Text style={styles.filterBadgeText}>{sortCriteria.length}</Text>
+                </View>
+              ) : null}
             </Pressable>
             <Pressable
               style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
@@ -1574,11 +1646,18 @@ export default function DirectoryScreen() {
       ) : null}
 
       {/* Sort Indicator */}
-      {sortBy !== 'default' ? (
+      {sortCriteria.length > 0 ? (
         <View style={styles.sortIndicator}>
           <MaterialIcons name="swap-vert" size={14} color={activeTabColor} />
-          <Text style={[styles.sortIndicatorText, { color: activeTabColor }]}>{t('directory', 'sortLabel')}: {currentSortLabel}</Text>
-          <Pressable onPress={() => setSortBy('default')} hitSlop={8} style={styles.sortIndicatorClear}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, alignItems: 'center', paddingRight: 8 }} style={{ flex: 1 }}>
+            {sortCriteriaLabels.map((label, i) => (
+              <View key={i} style={[styles.sortIndicatorChip, { backgroundColor: activeTabColor + '12', borderColor: activeTabColor + '30' }]}>
+                <Text style={{ fontSize: 10, fontWeight: '800', color: activeTabColor, marginRight: 2 }}>{i + 1}</Text>
+                <Text style={[styles.sortIndicatorChipText, { color: activeTabColor }]}>{label}</Text>
+              </View>
+            ))}
+          </ScrollView>
+          <Pressable onPress={() => setSortCriteria([])} hitSlop={8} style={styles.sortIndicatorClear}>
             <MaterialIcons name="close" size={14} color={activeTabColor} />
           </Pressable>
         </View>
@@ -2208,7 +2287,7 @@ export default function DirectoryScreen() {
         </View>
       </Modal>
 
-      {/* Sort Modal */}
+      {/* Sort Modal — Multi-criteria with reorder */}
       <Modal
         visible={showSortModal}
         animationType="fade"
@@ -2217,35 +2296,117 @@ export default function DirectoryScreen() {
       >
         <Pressable style={styles.sortOverlay} onPress={() => setShowSortModal(false)}>
           <Pressable style={styles.sortModalContent} onPress={(e) => e.stopPropagation?.()}>
+            <ScrollView showsVerticalScrollIndicator={false} bounces={false}>
             <View style={styles.sortModalHeader}>
               <View style={[styles.modalIcon, { backgroundColor: activeTabColor + '15' }]}>
                 <MaterialIcons name="swap-vert" size={20} color={activeTabColor} />
               </View>
-              <Text style={styles.sortModalTitle}>{t('directory', 'sortTitle')}</Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sortModalTitle}>{t('directory', 'sortTitle')}</Text>
+                <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{t('directory', 'sortMultiHint')}</Text>
+              </View>
               <Pressable style={styles.sortModalClose} onPress={() => setShowSortModal(false)}>
                 <MaterialIcons name="close" size={20} color={theme.textSecondary} />
               </Pressable>
             </View>
-            {getSortOptions().map(option => {
-              const isActive = sortBy === option.value;
-              return (
+
+            {/* Active criteria — ordered with reorder controls */}
+            {sortCriteria.length > 0 ? (
+              <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
+                  {t('directory', 'sortActiveCriteria')} ({sortCriteria.length})
+                </Text>
+                {sortCriteria.map((criterion, idx) => {
+                  const fieldInfo = getSortFields().find(f => f.field === criterion.field);
+                  if (!fieldInfo) return null;
+                  return (
+                    <View key={criterion.field} style={[styles.sortActiveItem, { borderColor: activeTabColor + '25' }]}> 
+                      <View style={[styles.sortPriorityBadge, { backgroundColor: activeTabColor }]}>
+                        <Text style={{ fontSize: 11, fontWeight: '900', color: '#FFF' }}>{idx + 1}</Text>
+                      </View>
+                      <View style={[styles.sortOptionIcon, { backgroundColor: activeTabColor + '15' }]}>
+                        <MaterialIcons name={fieldInfo.icon as any} size={16} color={activeTabColor} />
+                      </View>
+                      <Text style={[styles.sortOptionText, { color: activeTabColor, fontWeight: '700', flex: 1 }]} numberOfLines={1}>{fieldInfo.label}</Text>
+                      <Pressable
+                        style={[styles.sortDirToggle, { backgroundColor: criterion.direction === 'desc' ? activeTabColor + '15' : theme.backgroundSecondary }]}
+                        onPress={() => { Haptics.selectionAsync(); toggleSortDirection(criterion.field); }}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name={criterion.direction === 'desc' ? 'arrow-downward' : 'arrow-upward'} size={14} color={criterion.direction === 'desc' ? activeTabColor : theme.textSecondary} />
+                        <Text style={{ fontSize: 10, fontWeight: '700', color: criterion.direction === 'desc' ? activeTabColor : theme.textSecondary }}>
+                          {criterion.direction === 'desc' ? t('directory', 'sortDesc') : t('directory', 'sortAsc')}
+                        </Text>
+                      </Pressable>
+                      <View style={styles.sortReorderBtns}>
+                        <Pressable
+                          style={[styles.sortReorderBtn, idx === 0 && { opacity: 0.3 }]}
+                          onPress={() => { if (idx > 0) { Haptics.selectionAsync(); moveSortCriterion(criterion.field, 'up'); } }}
+                          disabled={idx === 0}
+                          hitSlop={4}
+                        >
+                          <MaterialIcons name="keyboard-arrow-up" size={18} color={theme.textSecondary} />
+                        </Pressable>
+                        <Pressable
+                          style={[styles.sortReorderBtn, idx === sortCriteria.length - 1 && { opacity: 0.3 }]}
+                          onPress={() => { if (idx < sortCriteria.length - 1) { Haptics.selectionAsync(); moveSortCriterion(criterion.field, 'down'); } }}
+                          disabled={idx === sortCriteria.length - 1}
+                          hitSlop={4}
+                        >
+                          <MaterialIcons name="keyboard-arrow-down" size={18} color={theme.textSecondary} />
+                        </Pressable>
+                      </View>
+                      <Pressable
+                        style={styles.sortRemoveBtn}
+                        onPress={() => { Haptics.selectionAsync(); removeSortCriterion(criterion.field); }}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="close" size={16} color={theme.error} />
+                      </Pressable>
+                    </View>
+                  );
+                })}
                 <Pressable
-                  key={option.value}
-                  style={[styles.sortOption, isActive && { backgroundColor: activeTabColor + '08' }]}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSortBy(option.value);
-                    setShowSortModal(false);
-                  }}
+                  style={[styles.sortClearAllBtn, { borderColor: theme.error + '30' }]}
+                  onPress={() => { Haptics.selectionAsync(); setSortCriteria([]); }}
                 >
-                  <View style={[styles.sortOptionIcon, isActive && { backgroundColor: activeTabColor + '15' }]}>
-                    <MaterialIcons name={option.icon as any} size={18} color={isActive ? activeTabColor : theme.textMuted} />
-                  </View>
-                  <Text style={[styles.sortOptionText, isActive && { color: activeTabColor, fontWeight: '700' }]}>{option.label}</Text>
-                  {isActive ? <MaterialIcons name="check-circle" size={20} color={activeTabColor} /> : <View style={styles.sortOptionRadio} />}
+                  <MaterialIcons name="clear-all" size={16} color={theme.error} />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.error }}>{t('directory', 'clearAll')}</Text>
                 </Pressable>
+              </View>
+            ) : null}
+
+            {/* Available criteria to add */}
+            {(() => {
+              const available = getSortFields().filter(f => !sortCriteria.find(c => c.field === f.field));
+              if (available.length === 0) return null;
+              return (
+                <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 12 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 10 }}>
+                    {t('directory', 'sortAddCriteria')}
+                  </Text>
+                  {available.map(fieldInfo => (
+                    <Pressable
+                      key={fieldInfo.field}
+                      style={styles.sortOption}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        addSortCriterion(fieldInfo.field, fieldInfo.defaultDir);
+                      }}
+                    >
+                      <View style={styles.sortOptionIcon}>
+                        <MaterialIcons name={fieldInfo.icon as any} size={18} color={theme.textMuted} />
+                      </View>
+                      <Text style={styles.sortOptionText}>{fieldInfo.label}</Text>
+                      <View style={[styles.sortAddBtnSmall, { borderColor: activeTabColor + '40' }]}>
+                        <MaterialIcons name="add" size={16} color={activeTabColor} />
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
               );
-            })}
+            })()}
+            </ScrollView>
           </Pressable>
         </Pressable>
       </Modal>
@@ -3924,5 +4085,82 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 2,
     borderColor: theme.border,
+  },
+  // Multi-sort specific styles
+  sortActiveItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    marginBottom: 8,
+  },
+  sortPriorityBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortDirToggle: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  sortReorderBtns: {
+    flexDirection: 'column' as const,
+    gap: 0,
+  },
+  sortReorderBtn: {
+    width: 24,
+    height: 18,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortRemoveBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.error + '08',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortClearAllBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderStyle: 'dashed' as const,
+    marginTop: 4,
+  },
+  sortAddBtnSmall: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortIndicatorChip: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  sortIndicatorChipText: {
+    fontSize: 11,
+    fontWeight: '600' as const,
   },
 });
