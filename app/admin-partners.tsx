@@ -137,6 +137,89 @@ export default function AdminPartnersScreen() {
   const [historyPartnerId, setHistoryPartnerId] = useState<string | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
 
+  // Sponsor assignment modal
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [assignPartnerId, setAssignPartnerId] = useState<string | null>(null);
+  const [assignPartnerName, setAssignPartnerName] = useState('');
+  const [assignItemType, setAssignItemType] = useState<'terrains' | 'clubs' | 'tournaments'>('terrains');
+  const [assignSearchQuery, setAssignSearchQuery] = useState('');
+  const [assignSearchResults, setAssignSearchResults] = useState<any[]>([]);
+  const [assignSearching, setAssignSearching] = useState(false);
+  const [assignSaving, setAssignSaving] = useState<string | null>(null);
+  const [assignedItems, setAssignedItems] = useState<any[]>([]);
+  const [loadingAssigned, setLoadingAssigned] = useState(false);
+  const assignSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const openAssignSponsor = useCallback(async (item: any) => {
+    Haptics.selectionAsync();
+    setAssignPartnerId(item.id);
+    setAssignPartnerName(item.display_name);
+    setAssignItemType('terrains');
+    setAssignSearchQuery('');
+    setAssignSearchResults([]);
+    setShowAssignModal(true);
+    setLoadingAssigned(true);
+    // Load items currently sponsored by this partner
+    const [t, c, to] = await Promise.all([
+      supabase.from('terrains').select('id, name, city, type').eq('sponsor_id', item.id),
+      supabase.from('clubs').select('id, name, city').eq('sponsor_id', item.id),
+      supabase.from('tournaments').select('id, name, date').eq('sponsor_id', item.id),
+    ]);
+    const assigned: any[] = [];
+    (t.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'terrains', _icon: 'sports-soccer', _color: theme.success }));
+    (c.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'clubs', _icon: 'home', _color: theme.accent }));
+    (to.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'tournaments', _icon: 'emoji-events', _color: theme.carreauColor }));
+    setAssignedItems(assigned);
+    setLoadingAssigned(false);
+  }, [supabase]);
+
+  const handleAssignSearch = useCallback((text: string) => {
+    setAssignSearchQuery(text);
+    if (assignSearchTimer.current) clearTimeout(assignSearchTimer.current);
+    if (text.trim().length < 2) { setAssignSearchResults([]); return; }
+    assignSearchTimer.current = setTimeout(async () => {
+      setAssignSearching(true);
+      const { data } = await supabase
+        .from(assignItemType)
+        .select(assignItemType === 'tournaments' ? 'id, name, date, sponsor_id' : 'id, name, city, sponsor_id')
+        .ilike('name', `%${text.trim()}%`)
+        .limit(15);
+      setAssignSearchResults(data || []);
+      setAssignSearching(false);
+    }, 300);
+  }, [supabase, assignItemType]);
+
+  const handleAssignItem = useCallback(async (itemId: string, itemName: string) => {
+    if (!assignPartnerId) return;
+    setAssignSaving(itemId);
+    const { error } = await supabase
+      .from(assignItemType)
+      .update({ sponsor_id: assignPartnerId })
+      .eq('id', itemId);
+    setAssignSaving(null);
+    if (error) { Alert.alert('Error', error.message); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    // Refresh assigned list
+    const icon = assignItemType === 'terrains' ? 'sports-soccer' : assignItemType === 'clubs' ? 'home' : 'emoji-events';
+    const color = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : theme.carreauColor;
+    setAssignedItems(prev => [...prev, { id: itemId, name: itemName, _table: assignItemType, _icon: icon, _color: color }]);
+    // Update search results to show new state
+    setAssignSearchResults(prev => prev.map(r => r.id === itemId ? { ...r, sponsor_id: assignPartnerId } : r));
+  }, [assignPartnerId, assignItemType, supabase]);
+
+  const handleUnassignItem = useCallback(async (itemId: string, table: string) => {
+    setAssignSaving(itemId);
+    const { error } = await supabase
+      .from(table)
+      .update({ sponsor_id: null })
+      .eq('id', itemId);
+    setAssignSaving(null);
+    if (error) { Alert.alert('Error', error.message); return; }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAssignedItems(prev => prev.filter(r => r.id !== itemId));
+    setAssignSearchResults(prev => prev.map(r => r.id === itemId ? { ...r, sponsor_id: null } : r));
+  }, [supabase]);
+
   // Create modal
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createUserId, setCreateUserId] = useState('');
@@ -144,6 +227,8 @@ export default function AdminPartnersScreen() {
   const [createTier, setCreateTier] = useState<PartnerTier>('partner');
   const [createBio, setCreateBio] = useState('');
   const [createPhoto, setCreatePhoto] = useState('');
+
+  const assignSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // User search for create
   const [userSearchQuery, setUserSearchQuery] = useState('');
@@ -486,6 +571,9 @@ export default function AdminPartnersScreen() {
                   </Pressable>
                   <Pressable style={[s.cardEditBtn, { backgroundColor: theme.success + '12' }]} onPress={() => openRenew(item)}>
                     <MaterialIcons name="autorenew" size={16} color={theme.success} />
+                  </Pressable>
+                  <Pressable style={[s.cardEditBtn, { backgroundColor: '#2563EB12' }]} onPress={() => openAssignSponsor(item)}>
+                    <MaterialIcons name="link" size={16} color="#2563EB" />
                   </Pressable>
                   <Pressable style={s.cardEditBtn} onPress={() => openEdit(item)}>
                     <MaterialIcons name="edit" size={16} color={theme.primary} />
@@ -860,6 +948,148 @@ export default function AdminPartnersScreen() {
               )}
             />
           )}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Sponsor Assignment Modal */}
+      <Modal visible={showAssignModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowAssignModal(false)}>
+        <SafeAreaView style={s.modalContainer}>
+          <View style={s.modalHeader}>
+            <Pressable onPress={() => setShowAssignModal(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
+            <Text style={s.modalTitle}>{fr ? 'Associer un sponsor' : 'Assign Sponsor'}</Text>
+            <View style={{ width: 60 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: insets.bottom + 40 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            {/* Partner info */}
+            {assignPartnerId ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: theme.border }}>
+                <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#2563EB15', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="handshake" size={20} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.textPrimary }}>{assignPartnerName}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Associer a des terrains, clubs ou tournois' : 'Link to terrains, clubs or tournaments'}</Text>
+                </View>
+              </View>
+            ) : null}
+
+            {/* Currently assigned items */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                {fr ? 'ITEMS SPONSORISES' : 'SPONSORED ITEMS'} ({assignedItems.length})
+              </Text>
+              {loadingAssigned ? (
+                <ActivityIndicator size="small" color={theme.primary} style={{ paddingVertical: 16 }} />
+              ) : assignedItems.length === 0 ? (
+                <View style={{ alignItems: 'center', paddingVertical: 20, backgroundColor: theme.surface, borderRadius: 14, borderWidth: 1, borderColor: theme.border }}>
+                  <MaterialIcons name="link-off" size={32} color={theme.textMuted} />
+                  <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>{fr ? 'Aucun item associe' : 'No items assigned'}</Text>
+                </View>
+              ) : (
+                assignedItems.map((ai: any) => (
+                  <View key={`${ai._table}-${ai.id}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: ai._color + '25' }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: ai._color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name={ai._icon} size={18} color={ai._color} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{ai.name}</Text>
+                      <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 1 }}>{ai.city || (ai.date ? new Date(ai.date).toLocaleDateString() : ai._table)}</Text>
+                    </View>
+                    <Pressable
+                      style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.error + '10', alignItems: 'center', justifyContent: 'center' }}
+                      onPress={() => handleUnassignItem(ai.id, ai._table)}
+                      disabled={assignSaving === ai.id}
+                    >
+                      {assignSaving === ai.id ? <ActivityIndicator size="small" color={theme.error} /> : <MaterialIcons name="link-off" size={16} color={theme.error} />}
+                    </Pressable>
+                  </View>
+                ))
+              )}
+            </View>
+
+            {/* Item type selector */}
+            <View style={{ gap: 8 }}>
+              <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                {fr ? 'AJOUTER UNE ASSOCIATION' : 'ADD ASSOCIATION'}
+              </Text>
+              <View style={s.tierSelectRow}>
+                {([{ id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: theme.success }, { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: theme.accent }, { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: theme.carreauColor }]).map(item => {
+                  const isActive = assignItemType === item.id;
+                  return (
+                    <Pressable
+                      key={item.id}
+                      style={[s.tierSelectBtn, isActive && { backgroundColor: item.color, borderColor: item.color }]}
+                      onPress={() => { setAssignItemType(item.id); setAssignSearchQuery(''); setAssignSearchResults([]); }}
+                    >
+                      <MaterialIcons name={item.icon as any} size={14} color={isActive ? '#FFF' : item.color} />
+                      <Text style={[s.tierSelectText, isActive && { color: '#FFF' }]}>{item.label}</Text>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
+
+            {/* Search items */}
+            <View style={s.searchRow}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput
+                style={s.searchInput}
+                value={assignSearchQuery}
+                onChangeText={handleAssignSearch}
+                placeholder={fr ? `Rechercher un ${assignItemType === 'terrains' ? 'terrain' : assignItemType === 'clubs' ? 'club' : 'tournoi'}...` : `Search ${assignItemType === 'tournaments' ? 'tournament' : assignItemType}...`}
+                placeholderTextColor={theme.textMuted}
+              />
+              {assignSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+            </View>
+
+            {/* Search results */}
+            {assignSearchResults.length > 0 ? (
+              <View style={{ gap: 6 }}>
+                {assignSearchResults.map((item: any) => {
+                  const isAlreadyAssigned = item.sponsor_id === assignPartnerId;
+                  const isAssignedToOther = item.sponsor_id && item.sponsor_id !== assignPartnerId;
+                  const typeColor = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : theme.carreauColor;
+                  return (
+                    <View key={item.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: isAlreadyAssigned ? typeColor + '08' : theme.surface, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: isAlreadyAssigned ? typeColor + '30' : theme.border }}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{item.name}</Text>
+                        <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{item.city || (item.date ? new Date(item.date).toLocaleDateString() : '')}</Text>
+                      </View>
+                      {isAlreadyAssigned ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: typeColor + '12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                          <MaterialIcons name="check-circle" size={14} color={typeColor} />
+                          <Text style={{ fontSize: 11, fontWeight: '700', color: typeColor }}>{fr ? 'Associe' : 'Linked'}</Text>
+                        </View>
+                      ) : isAssignedToOther ? (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#F59E0B12', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10 }}>
+                          <MaterialIcons name="warning" size={14} color="#F59E0B" />
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'Autre sponsor' : 'Other sponsor'}</Text>
+                        </View>
+                      ) : (
+                        <Pressable
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#2563EB', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
+                          onPress={() => handleAssignItem(item.id, item.name)}
+                          disabled={assignSaving === item.id}
+                        >
+                          {assignSaving === item.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                            <>
+                              <MaterialIcons name="link" size={14} color="#FFF" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Associer' : 'Link'}</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      )}
+                    </View>
+                  );
+                })}
+              </View>
+            ) : assignSearchQuery.trim().length >= 2 && !assignSearching ? (
+              <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                <MaterialIcons name="search-off" size={32} color={theme.textMuted} />
+                <Text style={{ fontSize: 13, color: theme.textMuted, marginTop: 8 }}>{fr ? 'Aucun resultat' : 'No results'}</Text>
+              </View>
+            ) : null}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
