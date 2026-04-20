@@ -1192,77 +1192,76 @@ export default function AdminPartnersScreen() {
                   </View>
                 ))
               )}
-            </View>
-
             </View> : null}
 
-            {/* Item type selector */}
-            {!showAssignHistory ? <View style={{ gap: 8 }}>
-              <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
-                {fr ? 'AJOUTER UNE ASSOCIATION' : 'ADD ASSOCIATION'}
-              </Text>
-              <View style={[s.tierSelectRow, { flexWrap: 'wrap' }]}>
-                {([{ id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: theme.success }, { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: theme.accent }, { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: theme.carreauColor }, { id: 'players' as const, label: fr ? 'Joueurs' : 'Players', icon: 'person', color: theme.primary }] as const).map(item => {
-                  const isActive = assignItemType === item.id;
-                  return (
-                    <Pressable
-                      key={item.id}
-                      style={[s.tierSelectBtn, isActive && { backgroundColor: item.color, borderColor: item.color }]}
-                      onPress={() => { setAssignItemType(item.id); setAssignSearchQuery(''); setAssignSearchResults([]); }}
-                    >
-                      <MaterialIcons name={item.icon as any} size={14} color={isActive ? '#FFF' : item.color} />
-                      <Text style={[s.tierSelectText, isActive && { color: '#FFF' }]}>{item.label}</Text>
-                    </Pressable>
-                  );
-                })}
-              </View>
-            </View>
+            {/* Item type selector + Bulk assign + Search */}
+            {!showAssignHistory ? (
+              <>
+                <View style={{ gap: 8 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
+                    {fr ? 'AJOUTER UNE ASSOCIATION' : 'ADD ASSOCIATION'}
+                  </Text>
+                  <View style={[s.tierSelectRow, { flexWrap: 'wrap' }]}>
+                    {([{ id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: theme.success }, { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: theme.accent }, { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: theme.carreauColor }, { id: 'players' as const, label: fr ? 'Joueurs' : 'Players', icon: 'person', color: theme.primary }] as const).map(item => {
+                      const isActive = assignItemType === item.id;
+                      return (
+                        <Pressable
+                          key={item.id}
+                          style={[s.tierSelectBtn, isActive && { backgroundColor: item.color, borderColor: item.color }]}
+                          onPress={() => { setAssignItemType(item.id); setAssignSearchQuery(''); setAssignSearchResults([]); }}
+                        >
+                          <MaterialIcons name={item.icon as any} size={14} color={isActive ? '#FFF' : item.color} />
+                          <Text style={[s.tierSelectText, isActive && { color: '#FFF' }]}>{item.label}</Text>
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                </View>
 
-            {/* Bulk assign button */}
-            {bulkMode && bulkSelected.size > 0 ? (
-              <Pressable
-                style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12, marginBottom: 12 }, bulkSaving && { opacity: 0.6 }]}
-                onPress={async () => {
-                  if (!assignPartnerId || bulkSelected.size === 0) return;
-                  setBulkSaving(true);
-                  for (const itemId of bulkSelected) {
-                    await supabase.from(assignItemType).update({ sponsor_id: assignPartnerId }).eq('id', itemId);
-                  }
-                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                  // Refresh assigned list
-                  const icon = assignItemType === 'terrains' ? 'sports-soccer' : assignItemType === 'clubs' ? 'home' : assignItemType === 'tournaments' ? 'emoji-events' : 'person';
-                  const color = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : assignItemType === 'tournaments' ? theme.carreauColor : theme.primary;
-                  const newAssigned = assignSearchResults.filter(r => bulkSelected.has(r.id)).map(r => ({ ...r, _table: assignItemType, _icon: icon, _color: color }));
-                  setAssignedItems(prev => [...prev, ...newAssigned]);
-                  setAssignSearchResults(prev => prev.map(r => bulkSelected.has(r.id) ? { ...r, sponsor_id: assignPartnerId } : r));
-                  setBulkSelected(new Set());
-                  setBulkSaving(false);
-                }}
-                disabled={bulkSaving}
-              >
-                {bulkSaving ? <ActivityIndicator size="small" color="#FFF" /> : (
-                  <>
-                    <MaterialIcons name="link" size={16} color="#FFF" />
-                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? `Associer ${bulkSelected.size} item(s)` : `Link ${bulkSelected.size} item(s)`}</Text>
-                  </>
-                )}
-              </Pressable>
+                {/* Bulk assign button */}
+                {bulkMode && bulkSelected.size > 0 ? (
+                  <Pressable
+                    style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12, marginBottom: 12 }, bulkSaving && { opacity: 0.6 }]}
+                    onPress={async () => {
+                      if (!assignPartnerId || bulkSelected.size === 0) return;
+                      setBulkSaving(true);
+                      for (const itemId of bulkSelected) {
+                        await supabase.from(assignItemType).update({ sponsor_id: assignPartnerId }).eq('id', itemId);
+                      }
+                      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                      const icon = assignItemType === 'terrains' ? 'sports-soccer' : assignItemType === 'clubs' ? 'home' : assignItemType === 'tournaments' ? 'emoji-events' : 'person';
+                      const color = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : assignItemType === 'tournaments' ? theme.carreauColor : theme.primary;
+                      const newAssigned = assignSearchResults.filter(r => bulkSelected.has(r.id)).map(r => ({ ...r, _table: assignItemType, _icon: icon, _color: color }));
+                      setAssignedItems(prev => [...prev, ...newAssigned]);
+                      setAssignSearchResults(prev => prev.map(r => bulkSelected.has(r.id) ? { ...r, sponsor_id: assignPartnerId } : r));
+                      setBulkSelected(new Set());
+                      setBulkSaving(false);
+                    }}
+                    disabled={bulkSaving}
+                  >
+                    {bulkSaving ? <ActivityIndicator size="small" color="#FFF" /> : (
+                      <>
+                        <MaterialIcons name="link" size={16} color="#FFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? `Associer ${bulkSelected.size} item(s)` : `Link ${bulkSelected.size} item(s)`}</Text>
+                      </>
+                    )}
+                  </Pressable>
+                ) : null}
+
+                {/* Search items */}
+                <View style={s.searchRow}>
+                  <MaterialIcons name="search" size={18} color={theme.textMuted} />
+                  <TextInput
+                    style={s.searchInput}
+                    value={assignSearchQuery}
+                    onChangeText={handleAssignSearch}
+                    placeholder={fr ? `Rechercher un ${assignItemType === 'terrains' ? 'terrain' : assignItemType === 'clubs' ? 'club' : assignItemType === 'players' ? 'joueur' : 'tournoi'}...` : `Search ${assignItemType === 'tournaments' ? 'tournament' : assignItemType === 'players' ? 'player' : assignItemType}...`}
+                    placeholderTextColor={theme.textMuted}
+                  />
+                  {assignSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
+                </View>
+              </>
             ) : null}
-
-            {/* Search items */}
-            <View style={s.searchRow}>
-              <MaterialIcons name="search" size={18} color={theme.textMuted} />
-              <TextInput
-                style={s.searchInput}
-                value={assignSearchQuery}
-                onChangeText={handleAssignSearch}
-                placeholder={fr ? `Rechercher un ${assignItemType === 'terrains' ? 'terrain' : assignItemType === 'clubs' ? 'club' : assignItemType === 'players' ? 'joueur' : 'tournoi'}...` : `Search ${assignItemType === 'tournaments' ? 'tournament' : assignItemType === 'players' ? 'player' : assignItemType}...`}
-                placeholderTextColor={theme.textMuted}
-              />
-              {assignSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
-            </View>
-
-            </View> : null}
 
             {/* Search results */}
             {!showAssignHistory && assignSearchResults.length > 0 ? (
