@@ -76,7 +76,11 @@ export default function SponsoredItemBanner({ sponsorId, page = 'detail', style 
 
   const tier = TIER_CONFIG[sponsor.badgeType] || TIER_CONFIG.partner;
   const isGold = sponsor.badgeType === 'gold_sponsor';
+  const isSilverPlus = isGold || sponsor.badgeType === 'sponsor';
   const brandColor = sponsor.brandColor || tier.color;
+
+  // Bronze partners do not get sponsor banners — Silver and Gold only
+  if (!isSilverPlus) return null;
   const hasSocials = sponsor.instagramHandle || sponsor.tiktokUrl || sponsor.youtubeUrl || sponsor.websiteUrl;
 
   return (

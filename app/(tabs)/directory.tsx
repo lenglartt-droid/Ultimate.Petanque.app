@@ -213,6 +213,8 @@ export default function DirectoryScreen() {
           if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
             const info = { tier: a.badgeType, name: a.displayName };
             map.set(a.userId, info);
+            // Key by ambassador ID (for sponsorId lookups on clubs/terrains/tournaments)
+            map.set(a.id, info);
             // Also key by playerId so player cards can look up by player.id
             if (a.playerId) map.set(a.playerId, info);
           }
@@ -746,8 +748,22 @@ export default function DirectoryScreen() {
         return da - db;
       });
     }
+    // Gold-sponsored clubs get priority position
+    if (sortCriteria.length === 0) {
+      const goldIds = new Set<string>();
+      partnerUserIds.forEach((info, uid) => { if (info.tier === 'gold_sponsor') goldIds.add(uid); });
+      if (goldIds.size > 0) {
+        const gold: typeof result = [];
+        const rest: typeof result = [];
+        result.forEach(c => {
+          if ((c as any).sponsorId && goldIds.has((c as any).sponsorId)) gold.push(c);
+          else rest.push(c);
+        });
+        result = [...gold, ...rest];
+      }
+    }
     return result;
-  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort]);
+  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
@@ -870,8 +886,22 @@ export default function DirectoryScreen() {
         return da - db;
       });
     }
+    // Gold-sponsored terrains get priority position
+    if (sortCriteria.length === 0 && !showActiveNow) {
+      const goldIds = new Set<string>();
+      partnerUserIds.forEach((info, uid) => { if (info.tier === 'gold_sponsor') goldIds.add(uid); });
+      if (goldIds.size > 0) {
+        const gold: typeof result = [];
+        const rest: typeof result = [];
+        result.forEach(tr => {
+          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          else rest.push(tr);
+        });
+        result = [...gold, ...rest];
+      }
+    }
     return result;
-  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort]);
+  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -911,8 +941,23 @@ export default function DirectoryScreen() {
     if (sortCriteria.length > 0) {
       return applyMultiSort(result);
     }
-    return result.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
-  }, [tournaments, searchQuery, filters, isWithinDistance, sortCriteria, applyMultiSort]);
+    const sorted = result.sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
+    // Gold-sponsored tournaments get priority position
+    if (sortCriteria.length === 0) {
+      const goldIds = new Set<string>();
+      partnerUserIds.forEach((info, uid) => { if (info.tier === 'gold_sponsor') goldIds.add(uid); });
+      if (goldIds.size > 0) {
+        const gold: typeof sorted = [];
+        const rest: typeof sorted = [];
+        sorted.forEach(tr => {
+          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          else rest.push(tr);
+        });
+        return [...gold, ...rest];
+      }
+    }
+    return sorted;
+  }, [tournaments, searchQuery, filters, isWithinDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
@@ -2525,14 +2570,17 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
           {item.location?.city ? <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.location.city}</Text></View> : null}
         </View>
         <View style={styles.itemTags}>
-          {partnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: partnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : partnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: partnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : partnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
-              <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-              <Text style={[styles.tagText, { color: partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {language === 'fr' ? (partnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : partnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (partnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : partnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
-              </Text>
-            </View>
-          ) : null}
+          {partnerInfo ? (() => {
+            const pColor = partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F';
+            const pLabel = language === 'fr' ? (partnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : partnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (partnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : partnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner');
+            return (
+              <View style={[styles.tag, { backgroundColor: pColor + '15', borderWidth: 1, borderColor: pColor + '30' }]}>
+                <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={pColor} />
+                <Text style={[styles.tagText, { color: pColor }]}>{pLabel}</Text>
+                {partnerInfo.tier === 'gold_sponsor' ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: pColor, marginLeft: 2 }} /> : null}
+              </View>
+            );
+          })() : null}
           {item.eloRating ? (() => { const eloRank = getEloRank(item.eloRating); return (
             <View style={[styles.tag, { backgroundColor: eloRank.color + '12', borderWidth: 1, borderColor: eloRank.color + '25' }]}>
               <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
@@ -2590,7 +2638,8 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const isFavorite = favoriteClubIds.includes(item.id);
-  const clubPartnerInfo: { tier: string; name: string } | undefined = undefined; // Partner badges only shown on players with explicit playerId link
+  // Sponsor badge: show when item has explicit sponsor_id set (Silver/Gold sponsors only get banners, but badge shows for all)
+  const hasSponsor = !!(item as any).sponsorId;
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/club/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
@@ -2611,18 +2660,21 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
               <MaterialIcons name="verified" size={14} color="#2563EB" />
             </View>
           ) : null}
+          {hasSponsor ? (
+            <View style={styles.sponsorBadge}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+            </View>
+          ) : null}
         </View>
         <View style={styles.itemMeta}>
           <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.city}, {item.country || 'France'}</Text></View>
           {item.terrainName ? <View style={styles.metaItem}><MaterialIcons name="sports-soccer" size={12} color={theme.success} /><Text style={[styles.metaText, { color: theme.success }]}>{item.terrainName}</Text></View> : null}
         </View>
         <View style={styles.itemTags}>
-          {clubPartnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : clubPartnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : clubPartnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
-              <MaterialIcons name={clubPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-              <Text style={[styles.tagText, { color: clubPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : clubPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {language === 'fr' ? (clubPartnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : clubPartnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (clubPartnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : clubPartnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
-              </Text>
+          {hasSponsor ? (
+            <View style={[styles.tag, { backgroundColor: '#2563EB12', borderWidth: 1, borderColor: '#2563EB25' }]}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+              <Text style={[styles.tagText, { color: '#2563EB' }]}>{language === 'fr' ? 'Sponsorise' : 'Sponsored'}</Text>
             </View>
           ) : null}
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><MaterialIcons name="people" size={10} color={theme.textSecondary} /><Text style={[styles.tagText, { color: theme.textSecondary }]}>{item.membersCount}</Text></View>
@@ -2645,7 +2697,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const terrainPartnerInfo: { tier: string; name: string } | undefined = undefined; // Partner badges only shown on players with explicit playerId link
+  const hasSponsor = !!(item as any).sponsorId;
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
@@ -2657,18 +2709,23 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
       </View>
       <View style={styles.itemContent}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemHeader}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {hasSponsor ? (
+            <View style={styles.sponsorBadge}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.itemMeta}>
           <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.city}</Text></View>
           {item.clubName ? <View style={styles.metaItem}><MaterialIcons name="home" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.clubName}</Text></View> : null}
         </View>
         <View style={styles.itemTags}>
-          {terrainPartnerInfo ? (
-            <View style={[styles.tag, { backgroundColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A01715' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C15' : '#A1887F15', borderWidth: 1, borderColor: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A01730' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C30' : '#A1887F30' }]}>
-              <MaterialIcons name={terrainPartnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F'} />
-              <Text style={[styles.tagText, { color: terrainPartnerInfo.tier === 'gold_sponsor' ? '#D4A017' : terrainPartnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F' }]}>
-                {language === 'fr' ? (terrainPartnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : terrainPartnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (terrainPartnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : terrainPartnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner')}
-              </Text>
+          {hasSponsor ? (
+            <View style={[styles.tag, { backgroundColor: '#2563EB12', borderWidth: 1, borderColor: '#2563EB25' }]}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+              <Text style={[styles.tagText, { color: '#2563EB' }]}>{language === 'fr' ? 'Sponsorise' : 'Sponsored'}</Text>
             </View>
           ) : null}
           <View style={[styles.tag, { backgroundColor: theme.success + '15' }]}><Text style={[styles.tagText, { color: theme.success }]}>{t('terrainTypes', item.type)}</Text></View>
@@ -2704,6 +2761,7 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
   const status = statusConfig[item.status] || statusConfig['Terminé'];
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
+  const hasSponsor = !!(item as any).sponsorId;
   return (
     <Pressable style={styles.itemCard} onPress={() => router.push(`/tournament/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
@@ -2712,12 +2770,25 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
       </View>
       <View style={styles.itemContent}>
-        <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+        <View style={styles.itemHeader}>
+          <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {hasSponsor ? (
+            <View style={styles.sponsorBadge}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+            </View>
+          ) : null}
+        </View>
         <View style={styles.itemMeta}>
           <View style={styles.metaItem}><MaterialIcons name="event" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{new Date(item.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text></View>
           <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.terrainName || item.location.city}</Text></View>
         </View>
         <View style={styles.itemTags}>
+          {hasSponsor ? (
+            <View style={[styles.tag, { backgroundColor: '#2563EB12', borderWidth: 1, borderColor: '#2563EB25' }]}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+              <Text style={[styles.tagText, { color: '#2563EB' }]}>{language === 'fr' ? 'Sponsorise' : 'Sponsored'}</Text>
+            </View>
+          ) : null}
           <View style={[styles.tag, { backgroundColor: status.bg }]}><Text style={[styles.tagText, { color: status.color }]}>{getStatusLabel(item.status)}</Text></View>
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('formats', item.format)}</Text></View>
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><Text style={[styles.tagText, { color: theme.textSecondary }]}>{t('tournamentTypes', item.type)}</Text></View>
@@ -3791,6 +3862,16 @@ const styles = StyleSheet.create({
     backgroundColor: '#2563EB10',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
+  },
+  sponsorBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#2563EB12',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    borderWidth: 1,
+    borderColor: '#2563EB25',
   },
   mapLinkBtn: {
     width: 30,

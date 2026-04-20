@@ -27,8 +27,7 @@ import LeaguePromotionModal from '@/components/ui/LeaguePromotionModal';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
-import SponsorBanner from '@/components/ui/SponsorBanner';
-import GoldSponsorBanner from '@/components/ui/GoldSponsorBanner';
+
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
 import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
@@ -701,8 +700,7 @@ export default function HomeScreen() {
       case 'sponsor':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <GoldSponsorBanner style={{ marginBottom: 12 }} page="home" userId={user?.id} />
-            <SponsorBanner style={{}} page="home" />
+
           </View>
         );
 
