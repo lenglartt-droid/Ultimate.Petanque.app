@@ -38,7 +38,8 @@ import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
-import PartnerBanner from '@/components/ui/PartnerBanner';
+import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -621,6 +622,13 @@ export default function TerrainDetailScreen() {
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
+
+            {/* Sponsor Banner — inside hero (no photos), only when sponsor_id is explicitly set */}
+            {(terrain as any).sponsorId ? (
+              <View style={{ width: '100%', marginTop: 12 }}>
+                <SponsoredItemBanner sponsorId={(terrain as any).sponsorId} page="terrain-detail" style={{ marginBottom: 0 }} />
+              </View>
+            ) : null}
           </View>
         )}
 
@@ -638,11 +646,17 @@ export default function TerrainDetailScreen() {
               <Text style={[styles.typeBadgeText, { color: colors.bg }]}>{t('terrainTypes', terrain.type)}</Text>
             </View>
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
+
+            {/* Sponsor Banner — inside name section (with photos), only when sponsor_id is explicitly set */}
+            {(terrain as any).sponsorId ? (
+              <View style={{ width: '100%', marginTop: 12 }}>
+                <SponsoredItemBanner sponsorId={(terrain as any).sponsorId} page="terrain-detail" style={{ marginBottom: 0 }} />
+              </View>
+            ) : null}
           </View>
         )}
 
-        {/* Partner Banner — Silver+ partners get banner on their terrain page */}
-        <PartnerBanner page="terrain-detail" minTier="sponsor" ownerUserId={(terrain as any).userId} />
+
 
         {/* Terrain Type Tips — moved above environment */}
         <View style={[styles.section, isTablet && styles.tabletHalf]}>
