@@ -32,6 +32,37 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.51.0',
+    date: '2026-04-20',
+    type: 'minor',
+    highlights: [
+      { icon: 'auto-awesome', text: 'Gold partner carousel with auto-rotation and fade transitions on home', color: '#D4A017' },
+      { icon: 'analytics', text: 'Per-item sponsor drill-down analytics with CSV export', color: '#2563EB' },
+      { icon: 'map', text: 'Sponsored player map markers with brand color ring and S badge', color: '#22C55E' },
+      { icon: 'history', text: 'Sponsor assignment history log in admin modal', color: '#7C3AED' },
+      { icon: 'visibility', text: 'Gold pulse badge and home banner display fixes', color: '#F59E0B' },
+      { icon: 'unfold-less', text: 'Collapsible advantages section in admin partners', color: '#64748B' },
+      { icon: 'policy', text: 'FAQ, CGU, privacy policy and changelog updated for v1.51.0', color: '#3B82F6' },
+    ],
+    details: [
+      'Gold partner carousel: auto-rotation every 5s with 350ms fade transition when multiple Gold partners are active',
+      'Pagination dots with brand_color per partner, manual navigation with timer restart',
+      'Fixed Gold partner banner on home: isActive field was not mapped in Ambassador interface causing banner to never display',
+      'Fixed GoldPulse badge in directory: added extraData={partnerUserIds} to FlatList for proper re-render after deferred partner data load',
+      'Per-item sponsor analytics drill-down: expandable KPI detail view (impressions, clicks, CTR) for each sponsored terrain/club/tournament/player',
+      'CSV export button on SponsorItemMetrics: exports item name, type, impressions, clicks, CTR in Excel-compatible format',
+      'Sponsored player map markers: brand_color border ring and distinctive S badge on public geolocated players with sponsor_id',
+      'Sponsor assignment history: chronological log tab in admin assign modal tracking all sponsor link/unlink events via ambassador_analytics',
+      'Admin partners advantages section converted to collapsible (closed by default) with compact tier summary counters',
+      'Bulk sponsor assignment mode with multi-select checkboxes and batch assignment tracking',
+      'Sponsor deactivation cascade: weekly-cron auto-nullifies sponsor_id on all linked items when partner expires',
+      'FAQ updated: Gold carousel, CSV export and assignment history questions added to Partner section',
+      'CGU updated: sponsor carousel, per-item analytics, bulk assignment and cascade deactivation mentioned in Features section',
+      'Privacy policy updated: per-item sponsor analytics tracking and brand_color map marker data mentioned',
+      'Admin changelog updated with v1.51.0',
+    ],
+  },
+  {
     version: '1.50.0',
     date: '2026-04-15',
     type: 'minor',
