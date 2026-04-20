@@ -42,6 +42,7 @@ import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
+type SortOption = 'default' | 'elo_desc' | 'elo_asc' | 'name_asc' | 'win_rate_desc' | 'members_desc' | 'activity_desc' | 'courts_desc' | 'participants_desc' | 'date_desc' | 'date_asc';
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
@@ -148,6 +149,8 @@ export default function DirectoryScreen() {
   const numColumns = isTablet ? 2 : 1;
   const [searchQuery, setSearchQuery] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [sortBy, setSortBy] = useState<SortOption>('default');
+  const [showSortModal, setShowSortModal] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
   const [showActiveNow, setShowActiveNow] = useState(false);
@@ -307,7 +310,12 @@ export default function DirectoryScreen() {
   // Reset pagination when tab or filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter]);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter, sortBy]);
+
+  // Reset sort when tab changes
+  useEffect(() => {
+    setSortBy('default');
+  }, [activeTab]);
 
   // Levenshtein-based duplicate detection — debounced for performance
   // Stable fingerprint to avoid recalculating when data hasn't changed
@@ -629,8 +637,16 @@ export default function DirectoryScreen() {
       return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
     });
     
-    // Sort by distance if distance filter active
-    if (distanceFilter !== 'all' && userLocation) {
+    // Apply sort
+    if (sortBy === 'elo_desc') {
+      result.sort((a, b) => (b.eloRating || ELO_INITIAL) - (a.eloRating || ELO_INITIAL));
+    } else if (sortBy === 'elo_asc') {
+      result.sort((a, b) => (a.eloRating || ELO_INITIAL) - (b.eloRating || ELO_INITIAL));
+    } else if (sortBy === 'win_rate_desc') {
+      result.sort((a, b) => (b.stats.winRate || 0) - (a.stats.winRate || 0));
+    } else if (sortBy === 'name_asc') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
         const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
@@ -647,7 +663,7 @@ export default function DirectoryScreen() {
       }
     }
     return result;
-  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
+  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
 
   const filteredClubs = useMemo(() => {
     let result = clubs.filter(c => {
@@ -669,7 +685,12 @@ export default function DirectoryScreen() {
       const matchesDist = isWithinDistance(c.location?.latitude, c.location?.longitude);
       return matchesSearch && matchesCity && matchesCountry && matchesEquipment && matchesMembersRange && matchesDist;
     });
-    if (distanceFilter !== 'all' && userLocation) {
+    // Apply sort
+    if (sortBy === 'members_desc') {
+      result.sort((a, b) => (b.membersCount || 0) - (a.membersCount || 0));
+    } else if (sortBy === 'name_asc') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
         const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
@@ -677,7 +698,7 @@ export default function DirectoryScreen() {
       });
     }
     return result;
-  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
+  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
@@ -786,13 +807,18 @@ export default function DirectoryScreen() {
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
       return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
-    // When "Active now" is on, filter to only terrains with activity and sort by score
-    if (showActiveNow) {
+    // Apply sort
+    if (sortBy === 'activity_desc') {
+      result.sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
+    } else if (sortBy === 'courts_desc') {
+      result.sort((a, b) => (b.courtsCount || 1) - (a.courtsCount || 1));
+    } else if (sortBy === 'name_asc') {
+      result.sort((a, b) => a.name.localeCompare(b.name));
+    } else if (showActiveNow) {
       result = result
         .filter(tr => terrainActivityMap.has(tr.id))
         .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
-    }
-    if (distanceFilter !== 'all' && userLocation && !showActiveNow) {
+    } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
         const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
@@ -800,7 +826,7 @@ export default function DirectoryScreen() {
       });
     }
     return result;
-  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
+  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortBy]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -836,8 +862,15 @@ export default function DirectoryScreen() {
       })();
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
       return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity && matchesDate && matchesDist;
-    }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
-  }, [tournaments, searchQuery, filters, isWithinDistance]);
+    }).sort((a, b) => {
+      // Apply sort
+      if (sortBy === 'participants_desc') return (b.participants || 0) - (a.participants || 0);
+      if (sortBy === 'date_desc') return new Date(b.date).getTime() - new Date(a.date).getTime();
+      if (sortBy === 'date_asc') return new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (sortBy === 'name_asc') return a.name.localeCompare(b.name);
+      return (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3);
+    });
+  }, [tournaments, searchQuery, filters, isWithinDistance, sortBy]);
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
@@ -848,8 +881,12 @@ export default function DirectoryScreen() {
       const matchesType = filters.eventType === 'all' || e.challengeType === filters.eventType;
       const matchesAmbassador = filters.eventAmbassador === 'all' || e.ambassadorId === filters.eventAmbassador;
       return matchesSearch && matchesStatus && matchesType && matchesAmbassador;
+    }).sort((a, b) => {
+      if (sortBy === 'date_desc') return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+      if (sortBy === 'date_asc') return new Date(a.startTime).getTime() - new Date(b.startTime).getTime();
+      return 0;
     });
-  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador]);
+  }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador, sortBy]);
 
   // Get current filtered data (after all filtered arrays are defined)
   const getCurrentData = useCallback(() => {
@@ -903,6 +940,45 @@ export default function DirectoryScreen() {
       setFilters(f => ({ ...f, eventStatus: 'all', eventType: 'all', eventAmbassador: 'all' }));
     }
   }, [activeTab]);
+
+  // Sort options per tab
+  const getSortOptions = useCallback((): { value: SortOption; label: string; icon: string }[] => {
+    const base: { value: SortOption; label: string; icon: string }[] = [{ value: 'default', label: t('directory', 'sortDefault'), icon: 'sort' }];
+    switch (activeTab) {
+      case 'players': return [...base,
+        { value: 'elo_desc', label: t('directory', 'sortEloDesc'), icon: 'trending-up' },
+        { value: 'elo_asc', label: t('directory', 'sortEloAsc'), icon: 'trending-down' },
+        { value: 'win_rate_desc', label: t('directory', 'sortWinRate'), icon: 'emoji-events' },
+        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      ];
+      case 'clubs': return [...base,
+        { value: 'members_desc', label: t('directory', 'sortMembersDesc'), icon: 'groups' },
+        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      ];
+      case 'terrains': return [...base,
+        { value: 'activity_desc', label: t('directory', 'sortActivityDesc'), icon: 'local-fire-department' },
+        { value: 'courts_desc', label: t('directory', 'sortCourtsDesc'), icon: 'sports-soccer' },
+        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      ];
+      case 'tournaments': return [...base,
+        { value: 'participants_desc', label: t('directory', 'sortParticipantsDesc'), icon: 'people' },
+        { value: 'date_desc', label: t('directory', 'sortDateDesc'), icon: 'event' },
+        { value: 'date_asc', label: t('directory', 'sortDateAsc'), icon: 'history' },
+        { value: 'name_asc', label: t('directory', 'sortName'), icon: 'sort-by-alpha' },
+      ];
+      case 'events': return [...base,
+        { value: 'date_desc', label: t('directory', 'sortDateDesc'), icon: 'event' },
+        { value: 'date_asc', label: t('directory', 'sortDateAsc'), icon: 'history' },
+      ];
+      default: return base;
+    }
+  }, [activeTab, t]);
+
+  const currentSortLabel = useMemo(() => {
+    if (sortBy === 'default') return null;
+    const opts = getSortOptions();
+    return opts.find(o => o.value === sortBy)?.label || null;
+  }, [sortBy, getSortOptions]);
 
   const getTerrainTypeConfig = (type: string) => {
     return config.terrainTypes.find(tc => tc.id === type) || config.terrainTypes[0];
@@ -1372,6 +1448,19 @@ export default function DirectoryScreen() {
               </Pressable>
             ) : null}
             <Pressable
+              style={[styles.sortButton, sortBy !== 'default' && styles.sortButtonActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setShowSortModal(true);
+              }}
+            >
+              <MaterialIcons 
+                name="swap-vert" 
+                size={20} 
+                color={sortBy !== 'default' ? '#FFF' : 'rgba(255,255,255,0.6)'} 
+              />
+            </Pressable>
+            <Pressable
               style={[styles.filterButton, currentFilterCount > 0 && styles.filterButtonActive]}
               onPress={() => {
                 Haptics.selectionAsync();
@@ -1480,6 +1569,17 @@ export default function DirectoryScreen() {
           </Pressable>
           <Pressable style={styles.duplicateBannerClose} onPress={() => setShowDuplicateBanner(false)} hitSlop={8}>
             <MaterialIcons name="close" size={14} color={theme.textMuted} />
+          </Pressable>
+        </View>
+      ) : null}
+
+      {/* Sort Indicator */}
+      {sortBy !== 'default' ? (
+        <View style={styles.sortIndicator}>
+          <MaterialIcons name="swap-vert" size={14} color={activeTabColor} />
+          <Text style={[styles.sortIndicatorText, { color: activeTabColor }]}>{t('directory', 'sortLabel')}: {currentSortLabel}</Text>
+          <Pressable onPress={() => setSortBy('default')} hitSlop={8} style={styles.sortIndicatorClear}>
+            <MaterialIcons name="close" size={14} color={activeTabColor} />
           </Pressable>
         </View>
       ) : null}
@@ -2108,6 +2208,48 @@ export default function DirectoryScreen() {
         </View>
       </Modal>
 
+      {/* Sort Modal */}
+      <Modal
+        visible={showSortModal}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowSortModal(false)}
+      >
+        <Pressable style={styles.sortOverlay} onPress={() => setShowSortModal(false)}>
+          <Pressable style={styles.sortModalContent} onPress={(e) => e.stopPropagation?.()}>
+            <View style={styles.sortModalHeader}>
+              <View style={[styles.modalIcon, { backgroundColor: activeTabColor + '15' }]}>
+                <MaterialIcons name="swap-vert" size={20} color={activeTabColor} />
+              </View>
+              <Text style={styles.sortModalTitle}>{t('directory', 'sortTitle')}</Text>
+              <Pressable style={styles.sortModalClose} onPress={() => setShowSortModal(false)}>
+                <MaterialIcons name="close" size={20} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            {getSortOptions().map(option => {
+              const isActive = sortBy === option.value;
+              return (
+                <Pressable
+                  key={option.value}
+                  style={[styles.sortOption, isActive && { backgroundColor: activeTabColor + '08' }]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSortBy(option.value);
+                    setShowSortModal(false);
+                  }}
+                >
+                  <View style={[styles.sortOptionIcon, isActive && { backgroundColor: activeTabColor + '15' }]}>
+                    <MaterialIcons name={option.icon as any} size={18} color={isActive ? activeTabColor : theme.textMuted} />
+                  </View>
+                  <Text style={[styles.sortOptionText, isActive && { color: activeTabColor, fontWeight: '700' }]}>{option.label}</Text>
+                  {isActive ? <MaterialIcons name="check-circle" size={20} color={activeTabColor} /> : <View style={styles.sortOptionRadio} />}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       {/* Filter Modal */}
       <Modal
         visible={showFilters}
@@ -2701,6 +2843,17 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: 15,
     color: '#FFF',
+  },
+  sortButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sortButtonActive: {
+    backgroundColor: 'rgba(255,255,255,0.3)',
   },
   filterButton: {
     width: 44,
@@ -3680,5 +3833,96 @@ const styles = StyleSheet.create({
   },
   realUserFilterTextActive: {
     color: '#FFF',
+  },
+  // Sort Indicator
+  sortIndicator: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+    marginHorizontal: 16,
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#E2E8F0',
+  },
+  sortIndicatorText: {
+    fontSize: 13,
+    fontWeight: '600' as const,
+    flex: 1,
+  },
+  sortIndicatorClear: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  // Sort Modal
+  sortOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'center' as const,
+    paddingHorizontal: 24,
+  },
+  sortModalContent: {
+    backgroundColor: theme.surface,
+    borderRadius: 24,
+    paddingVertical: 8,
+    maxHeight: 420,
+  },
+  sortModalHeader: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border,
+  },
+  sortModalTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: theme.textPrimary,
+    flex: 1,
+  },
+  sortModalClose: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortOption: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 14,
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+  },
+  sortOptionIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  sortOptionText: {
+    fontSize: 15,
+    fontWeight: '500' as const,
+    color: theme.textPrimary,
+    flex: 1,
+  },
+  sortOptionRadio: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: theme.border,
   },
 });
