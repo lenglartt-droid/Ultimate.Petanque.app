@@ -38,6 +38,10 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as ImagePicker from '@/services/imagePicker';
+import { decode } from '@/services/base64';
+import { getSupabaseClient } from '@/template';
+import { uploadImageToStorage } from '@/services/storageService';
 import {
   requestNotificationPermissions,
   areNotificationsEnabled,
@@ -228,6 +232,13 @@ export default function TournamentDetailScreen() {
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [showPublicPreview, setShowPublicPreview] = useState(false);
 
+  // Poster state
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [posterType, setPosterType] = useState<'image' | 'pdf'>('image');
+  const [uploadingPoster, setUploadingPoster] = useState(false);
+  const [showPosterFullscreen, setShowPosterFullscreen] = useState(false);
+  const supabase = getSupabaseClient();
+
   const { showAlert: showShareAlert } = useAlert();
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
@@ -252,6 +263,104 @@ export default function TournamentDetailScreen() {
   useEffect(() => {
     if (tournament) setIsPublicState(tournament.isPublic ?? false);
   }, [tournament?.isPublic]);
+
+  // Load poster
+  useEffect(() => {
+    if (tournament?.posterUrl) {
+      setPosterUrl(tournament.posterUrl);
+      setPosterType(tournament.posterUrl.toLowerCase().endsWith('.pdf') ? 'pdf' : 'image');
+    } else {
+      setPosterUrl(null);
+    }
+  }, [tournament?.posterUrl]);
+
+  const uploadPosterFile = useCallback(async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!tournament || !user) return;
+    setUploadingPoster(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/${tournament.id}_poster_${Date.now()}.${fileExt}`;
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => { const result = reader.result as string; resolve(result.split(',')[1]); };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        const FileSystem = require('expo-file-system');
+        base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      const { error: uploadError } = await supabase.storage.from('terrain-photos').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('terrain-photos').getPublicUrl(storagePath);
+      const publicUrl = urlData.publicUrl;
+      await updateTournament(tournament.id, { posterUrl: publicUrl } as any);
+      setPosterUrl(publicUrl);
+      setPosterType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: any) {
+      console.log('Error uploading poster:', error);
+      Alert.alert(t('common', 'error'), error.message || 'Upload failed');
+    } finally {
+      setUploadingPoster(false);
+    }
+  }, [tournament, user, supabase, updateTournament, t]);
+
+  const showPosterUploadOptions = useCallback(() => {
+    Alert.alert(
+      language === 'fr' ? 'Affiche du tournoi' : 'Tournament Poster',
+      language === 'fr' ? 'Ajoutez une affiche ou un document' : 'Add a poster or document',
+      [
+        { text: t('player', 'fromCamera'), onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') return;
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadPosterFile(result.assets[0].uri, `poster.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromGallery'), onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') return;
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadPosterFile(result.assets[0].uri, `poster.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromFiles'), onPress: async () => {
+          try {
+            const DocumentPicker = require('expo-document-picker');
+            const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+            if (!result.canceled && result.assets && result.assets[0]) {
+              await uploadPosterFile(result.assets[0].uri, result.assets[0].name || 'poster.pdf', result.assets[0].mimeType || 'application/pdf');
+            }
+          } catch (e) { console.log('Error picking document:', e); }
+        }},
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [t, language, uploadPosterFile]);
+
+  const handleRemovePoster = useCallback(() => {
+    Alert.alert(
+      language === 'fr' ? 'Supprimer l affiche' : 'Remove poster',
+      '',
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        { text: t('common', 'delete'), style: 'destructive', onPress: async () => {
+          if (!tournament) return;
+          await updateTournament(tournament.id, { posterUrl: undefined } as any);
+          setPosterUrl(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }},
+      ]
+    );
+  }, [tournament, updateTournament, t, language]);
 
   const handleOpenPublicPreview = useCallback(() => {
     if (!tournament || togglingPublic || isSharedItem) return;
@@ -956,6 +1065,68 @@ export default function TournamentDetailScreen() {
         </Animated.View>
 
         </View>
+
+        {/* Tournament Poster */}
+        {posterUrl ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+            <View style={styles.sectionHeaderRow}>
+              <Text style={styles.sectionTitle}>{language === 'fr' ? 'AFFICHE' : 'POSTER'}</Text>
+            </View>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, overflow: 'hidden', ...theme.shadows.cardElevated }}>
+              <Pressable style={{ position: 'relative', minHeight: 200 }} onPress={() => posterType === 'pdf' ? Linking.openURL(posterUrl) : setShowPosterFullscreen(true)}>
+                {posterType === 'image' ? (
+                  <Image source={{ uri: posterUrl }} style={{ width: '100%', height: 260 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                ) : (
+                  <View style={{ width: '100%', height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
+                    <MaterialIcons name="picture-as-pdf" size={48} color={theme.error} />
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Document PDF' : 'PDF Document'}</Text>
+                    <Text style={{ fontSize: 13, color: theme.textSecondary }}>{language === 'fr' ? 'Appuyez pour ouvrir' : 'Tap to open'}</Text>
+                  </View>
+                )}
+              </Pressable>
+              {canEdit && !isSharedItem ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 12, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
+                  <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md }} onPress={showPosterUploadOptions}>
+                    <MaterialIcons name="refresh" size={18} color={theme.primary} />
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.primary }}>{language === 'fr' ? 'Remplacer' : 'Replace'}</Text>
+                  </Pressable>
+                  <Pressable style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md }} onPress={handleRemovePoster}>
+                    <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                  </Pressable>
+                </View>
+              ) : null}
+            </View>
+          </Animated.View>
+        ) : canEdit && !isSharedItem ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(120)} style={styles.section}>
+            <Pressable style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 32, alignItems: 'center', borderWidth: 2, borderColor: theme.carreauColor + '25', borderStyle: 'dashed', ...theme.shadows.card }} onPress={showPosterUploadOptions}>
+              <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                <MaterialIcons name="image" size={32} color={theme.carreauColor} />
+              </View>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.carreauColor, marginBottom: 6 }}>{language === 'fr' ? 'Ajouter une affiche' : 'Add a poster'}</Text>
+              <Text style={{ fontSize: 13, color: theme.textSecondary, textAlign: 'center' }}>{language === 'fr' ? 'Photo ou PDF de l affiche du tournoi' : 'Photo or PDF of the tournament poster'}</Text>
+            </Pressable>
+          </Animated.View>
+        ) : null}
+
+        {uploadingPoster ? (
+          <Animated.View entering={FadeInDown.duration(300)} style={styles.section}>
+            <View style={{ backgroundColor: theme.surface, borderRadius: theme.borderRadius.xl, padding: 40, alignItems: 'center', gap: 12, ...theme.shadows.card }}>
+              <ActivityIndicator size="large" color={theme.carreauColor} />
+              <Text style={{ fontSize: 14, color: theme.textSecondary }}>{language === 'fr' ? 'Envoi en cours...' : 'Uploading...'}</Text>
+            </View>
+          </Animated.View>
+        ) : null}
+
+        {/* Poster Fullscreen Modal */}
+        <Modal visible={showPosterFullscreen} animationType="fade" transparent onRequestClose={() => setShowPosterFullscreen(false)}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
+            <Pressable style={{ position: 'absolute', top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }} onPress={() => setShowPosterFullscreen(false)}>
+              <MaterialIcons name="close" size={24} color="#FFF" />
+            </Pressable>
+            {posterUrl ? <Image source={{ uri: posterUrl }} style={{ width: '100%', height: '80%' }} contentFit="contain" transition={200} /> : null}
+          </View>
+        </Modal>
 
         {/* Match Timeline */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>

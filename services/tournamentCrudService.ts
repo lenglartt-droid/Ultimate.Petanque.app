@@ -64,6 +64,7 @@ export async function addTournamentOp(
       tournament_scope: tournament.tournamentScope,
       registration_cost: tournament.registrationCost,
       prize_won: tournament.prizeWon,
+      poster_url: tournament.posterUrl,
     }).select().single();
 
     if (error) throw error;
@@ -153,6 +154,7 @@ export async function updateTournamentOp(
     if (updates.registrationCost !== undefined) dbUpdates.registration_cost = updates.registrationCost;
     if (updates.prizeWon !== undefined) dbUpdates.prize_won = updates.prizeWon;
     if (updates.finalResult !== undefined) dbUpdates.final_result = updates.finalResult;
+    if (updates.posterUrl !== undefined) dbUpdates.poster_url = updates.posterUrl;
     dbUpdates.updated_at = new Date().toISOString();
 
     await supabase.from('tournaments').update(dbUpdates).eq('id', id);
