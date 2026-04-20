@@ -226,7 +226,8 @@ export default function PlayerDetailScreen() {
     // Only fetch ambassador data for players linked to a real user account
     if (!playerUserId2) { setAmbassadorData(null); return; }
     fetchAmbassadors().then(({ ambassadors }) => {
-      const amb = ambassadors.find(a => (playerUserId2 && a.userId === playerUserId2) || a.playerId === id);
+      // Only match by explicit playerId link — not by userId (which would flag all players owned by a partner)
+      const amb = ambassadors.find(a => a.playerId === id);
       setAmbassadorData(amb || null);
     });
   }, [id, player]);
