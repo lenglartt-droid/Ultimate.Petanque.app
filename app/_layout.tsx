@@ -740,6 +740,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="admin-partners" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="partner/[id]" 
                 options={{ 
                   presentation: 'card',

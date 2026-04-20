@@ -38,6 +38,7 @@ import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import PartnerBanner from '@/components/ui/PartnerBanner';
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -639,6 +640,9 @@ export default function TerrainDetailScreen() {
             <Text style={styles.typeDescription}>{t('terrainTypeDescs', terrain.type)}</Text>
           </View>
         )}
+
+        {/* Partner Banner — Silver+ partners get banner on their terrain page */}
+        <PartnerBanner page="terrain-detail" minTier="sponsor" ownerUserId={(terrain as any).userId} />
 
         {/* Terrain Type Tips — moved above environment */}
         <View style={[styles.section, isTablet && styles.tabletHalf]}>
