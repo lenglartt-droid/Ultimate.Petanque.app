@@ -176,9 +176,12 @@ export default function AdminPartnersScreen() {
   const [showAssignModal, setShowAssignModal] = useState(false);
   const [assignPartnerId, setAssignPartnerId] = useState<string | null>(null);
   const [assignPartnerName, setAssignPartnerName] = useState('');
-  const [assignItemType, setAssignItemType] = useState<'terrains' | 'clubs' | 'tournaments'>('terrains');
+  const [assignItemType, setAssignItemType] = useState<'terrains' | 'clubs' | 'tournaments' | 'players'>('terrains');
   const [assignSearchQuery, setAssignSearchQuery] = useState('');
   const [assignSearchResults, setAssignSearchResults] = useState<any[]>([]);
+  const [bulkMode, setBulkMode] = useState(false);
+  const [bulkSelected, setBulkSelected] = useState<Set<string>>(new Set());
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [assignSearching, setAssignSearching] = useState(false);
   const [assignSaving, setAssignSaving] = useState<string | null>(null);
   const [assignedItems, setAssignedItems] = useState<any[]>([]);
@@ -195,15 +198,17 @@ export default function AdminPartnersScreen() {
     setShowAssignModal(true);
     setLoadingAssigned(true);
     // Load items currently sponsored by this partner
-    const [t, c, to] = await Promise.all([
+    const [t, c, to, pl] = await Promise.all([
       supabase.from('terrains').select('id, name, city, type').eq('sponsor_id', item.id),
       supabase.from('clubs').select('id, name, city').eq('sponsor_id', item.id),
       supabase.from('tournaments').select('id, name, date').eq('sponsor_id', item.id),
+      supabase.from('players').select('id, name, city, avatar').eq('sponsor_id', item.id),
     ]);
     const assigned: any[] = [];
     (t.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'terrains', _icon: 'sports-soccer', _color: theme.success }));
     (c.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'clubs', _icon: 'home', _color: theme.accent }));
     (to.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'tournaments', _icon: 'emoji-events', _color: theme.carreauColor }));
+    (pl.data || []).forEach((r: any) => assigned.push({ ...r, _table: 'players', _icon: 'person', _color: theme.primary }));
     setAssignedItems(assigned);
     setLoadingAssigned(false);
   }, [supabase]);
@@ -240,6 +245,7 @@ export default function AdminPartnersScreen() {
     setAssignedItems(prev => [...prev, { id: itemId, name: itemName, _table: assignItemType, _icon: icon, _color: color }]);
     // Update search results to show new state
     setAssignSearchResults(prev => prev.map(r => r.id === itemId ? { ...r, sponsor_id: assignPartnerId } : r));
+    setBulkSelected(prev => { const n = new Set(prev); n.delete(itemId); return n; });
   }, [assignPartnerId, assignItemType, supabase]);
 
   const handleUnassignItem = useCallback(async (itemId: string, table: string) => {
@@ -527,52 +533,6 @@ export default function AdminPartnersScreen() {
         {searchQuery ? <Pressable onPress={() => setSearchQuery('')} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable> : null}
       </View>
 
-      {/* Pending Sponsor Proposals from Partners */}
-      {pendingProposals.length > 0 ? (
-        <View style={[s.advantagesCard, { borderWidth: 1.5, borderColor: '#F59E0B30' }]}> 
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-            <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
-              <MaterialIcons name="pending-actions" size={18} color="#F59E0B" />
-            </View>
-            <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', flex: 1 }}>{fr ? 'DEMANDES DE SPONSORING' : 'SPONSORSHIP REQUESTS'}</Text>
-            <View style={{ backgroundColor: '#F59E0B', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: '#FFF' }}>{pendingProposals.length}</Text>
-            </View>
-          </View>
-          {pendingProposals.map(p => {
-            const typeIcon = p.item_type === 'terrain' ? 'sports-soccer' : p.item_type === 'club' ? 'home' : 'emoji-events';
-            const typeColor = p.item_type === 'terrain' ? theme.success : p.item_type === 'club' ? theme.accent : theme.carreauColor;
-            return (
-              <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: theme.border }}>
-                <View style={{ width: 36, height: 36, borderRadius: 10, backgroundColor: typeColor + '15', alignItems: 'center', justifyContent: 'center' }}>
-                  <MaterialIcons name={typeIcon as any} size={18} color={typeColor} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{p.item_name}</Text>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>{fr ? 'Par' : 'By'} {p.ambassador_name} • {p.item_type}</Text>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 6 }}>
-                  <Pressable
-                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.error + '10', alignItems: 'center', justifyContent: 'center' }}
-                    onPress={() => handleRejectProposal(p)}
-                    disabled={processingProposal === p.id}
-                  >
-                    <MaterialIcons name="close" size={16} color={theme.error} />
-                  </Pressable>
-                  <Pressable
-                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.success, alignItems: 'center', justifyContent: 'center' }}
-                    onPress={() => handleApproveProposal(p)}
-                    disabled={processingProposal === p.id}
-                  >
-                    {processingProposal === p.id ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="check" size={16} color="#FFF" />}
-                  </Pressable>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      ) : null}
-
       {/* Advantages Summary Card */}
       <View style={s.advantagesCard}>
         <Text style={s.advantagesTitle}>{fr ? 'AVANTAGES PAR NIVEAU' : 'ADVANTAGES BY TIER'}</Text>
@@ -602,6 +562,77 @@ export default function AdminPartnersScreen() {
         data={filtered}
         keyExtractor={(item) => item.id}
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 32 }}
+        ListHeaderComponent={
+          <View style={{ marginBottom: 14 }}>
+            {/* Sponsor Proposals from Partners */}
+            <View style={[s.advantagesCard, { marginHorizontal: 0, borderWidth: 1.5, borderColor: pendingProposals.length > 0 ? '#F59E0B30' : theme.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: pendingProposals.length > 0 ? 12 : 0 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: pendingProposals.length > 0 ? '#F59E0B15' : theme.backgroundSecondary, alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="pending-actions" size={18} color={pendingProposals.length > 0 ? '#F59E0B' : theme.textMuted} />
+                </View>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A', flex: 1 }}>{fr ? 'DEMANDES DE SPONSORING' : 'SPONSORSHIP REQUESTS'}</Text>
+                <View style={{ backgroundColor: pendingProposals.length > 0 ? '#F59E0B' : theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: pendingProposals.length > 0 ? '#FFF' : theme.textMuted }}>{pendingProposals.length}</Text>
+                </View>
+              </View>
+              {pendingProposals.length > 0 ? pendingProposals.map(p => {
+                const typeIcon = p.item_type === 'terrain' ? 'sports-soccer' : p.item_type === 'club' ? 'home' : 'emoji-events';
+                const typeColor = p.item_type === 'terrain' ? theme.success : p.item_type === 'club' ? theme.accent : theme.carreauColor;
+                const partnerData = partners.find(pt => pt.id === p.ambassador_id);
+                const partnerTier = TIER_CONFIG[(partnerData?.badge_type as PartnerTier)] || TIER_CONFIG.partner;
+                return (
+                  <View key={p.id} style={{ backgroundColor: theme.backgroundSecondary, borderRadius: 14, padding: 14, marginBottom: 8, borderWidth: 1, borderColor: theme.border }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                      <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: typeColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                        <MaterialIcons name={typeIcon as any} size={20} color={typeColor} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }} numberOfLines={1}>{p.item_name}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                          <View style={[s.tierBadge, { backgroundColor: partnerTier.color }]}>
+                            <MaterialIcons name={partnerTier.icon as any} size={8} color="#FFF" />
+                            <Text style={s.tierBadgeText}>{fr ? partnerTier.label : partnerTier.labelEn}</Text>
+                          </View>
+                          <Text style={{ fontSize: 11, color: theme.textMuted }}>{p.ambassador_name}</Text>
+                        </View>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <Text style={{ fontSize: 10, color: theme.textMuted }}>{new Date(p.created_at).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.error + '10', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: theme.error + '20' }}
+                          onPress={() => handleRejectProposal(p)}
+                          disabled={processingProposal === p.id}
+                        >
+                          <MaterialIcons name="close" size={14} color={theme.error} />
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.error }}>{fr ? 'Refuser' : 'Reject'}</Text>
+                        </Pressable>
+                        <Pressable
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.success, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 }}
+                          onPress={() => handleApproveProposal(p)}
+                          disabled={processingProposal === p.id}
+                        >
+                          {processingProposal === p.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                            <>
+                              <MaterialIcons name="check" size={14} color="#FFF" />
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: '#FFF' }}>{fr ? 'Approuver' : 'Approve'}</Text>
+                            </>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  </View>
+                );
+              }) : (
+                <View style={{ alignItems: 'center', paddingVertical: 12, gap: 4 }}>
+                  <MaterialIcons name="check-circle" size={24} color={theme.textMuted} />
+                  <Text style={{ fontSize: 12, color: theme.textMuted }}>{fr ? 'Aucune demande en attente' : 'No pending requests'}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        }
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
         ListEmptyComponent={
@@ -1049,7 +1080,14 @@ export default function AdminPartnersScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.textPrimary }}>{assignPartnerName}</Text>
-                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Associer a des terrains, clubs ou tournois' : 'Link to terrains, clubs or tournaments'}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Associer a des terrains, clubs, tournois ou joueurs' : 'Link to terrains, clubs, tournaments or players'}</Text>
+                </View>
+                <Pressable
+                  style={[{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, borderWidth: 1.5 }, bulkMode ? { backgroundColor: theme.primary, borderColor: theme.primary } : { backgroundColor: theme.surface, borderColor: theme.border }]}
+                  onPress={() => { Haptics.selectionAsync(); setBulkMode(!bulkMode); setBulkSelected(new Set()); }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: bulkMode ? '#FFF' : theme.textSecondary }}>{fr ? 'Selection multiple' : 'Multi-select'}</Text>
+                </Pressable>
                 </View>
               </View>
             ) : null}
@@ -1093,8 +1131,8 @@ export default function AdminPartnersScreen() {
               <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' }}>
                 {fr ? 'AJOUTER UNE ASSOCIATION' : 'ADD ASSOCIATION'}
               </Text>
-              <View style={s.tierSelectRow}>
-                {([{ id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: theme.success }, { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: theme.accent }, { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: theme.carreauColor }]).map(item => {
+              <View style={[s.tierSelectRow, { flexWrap: 'wrap' }]}>
+                {([{ id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: theme.success }, { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: theme.accent }, { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: theme.carreauColor }, { id: 'players' as const, label: fr ? 'Joueurs' : 'Players', icon: 'person', color: theme.primary }] as const).map(item => {
                   const isActive = assignItemType === item.id;
                   return (
                     <Pressable
@@ -1110,6 +1148,37 @@ export default function AdminPartnersScreen() {
               </View>
             </View>
 
+            {/* Bulk assign button */}
+            {bulkMode && bulkSelected.size > 0 ? (
+              <Pressable
+                style={[{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12, marginBottom: 12 }, bulkSaving && { opacity: 0.6 }]}
+                onPress={async () => {
+                  if (!assignPartnerId || bulkSelected.size === 0) return;
+                  setBulkSaving(true);
+                  for (const itemId of bulkSelected) {
+                    await supabase.from(assignItemType).update({ sponsor_id: assignPartnerId }).eq('id', itemId);
+                  }
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  // Refresh assigned list
+                  const icon = assignItemType === 'terrains' ? 'sports-soccer' : assignItemType === 'clubs' ? 'home' : assignItemType === 'tournaments' ? 'emoji-events' : 'person';
+                  const color = assignItemType === 'terrains' ? theme.success : assignItemType === 'clubs' ? theme.accent : assignItemType === 'tournaments' ? theme.carreauColor : theme.primary;
+                  const newAssigned = assignSearchResults.filter(r => bulkSelected.has(r.id)).map(r => ({ ...r, _table: assignItemType, _icon: icon, _color: color }));
+                  setAssignedItems(prev => [...prev, ...newAssigned]);
+                  setAssignSearchResults(prev => prev.map(r => bulkSelected.has(r.id) ? { ...r, sponsor_id: assignPartnerId } : r));
+                  setBulkSelected(new Set());
+                  setBulkSaving(false);
+                }}
+                disabled={bulkSaving}
+              >
+                {bulkSaving ? <ActivityIndicator size="small" color="#FFF" /> : (
+                  <>
+                    <MaterialIcons name="link" size={16} color="#FFF" />
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? `Associer ${bulkSelected.size} item(s)` : `Link ${bulkSelected.size} item(s)`}</Text>
+                  </>
+                )}
+              </Pressable>
+            ) : null}
+
             {/* Search items */}
             <View style={s.searchRow}>
               <MaterialIcons name="search" size={18} color={theme.textMuted} />
@@ -1117,7 +1186,7 @@ export default function AdminPartnersScreen() {
                 style={s.searchInput}
                 value={assignSearchQuery}
                 onChangeText={handleAssignSearch}
-                placeholder={fr ? `Rechercher un ${assignItemType === 'terrains' ? 'terrain' : assignItemType === 'clubs' ? 'club' : 'tournoi'}...` : `Search ${assignItemType === 'tournaments' ? 'tournament' : assignItemType}...`}
+                placeholder={fr ? `Rechercher un ${assignItemType === 'terrains' ? 'terrain' : assignItemType === 'clubs' ? 'club' : assignItemType === 'players' ? 'joueur' : 'tournoi'}...` : `Search ${assignItemType === 'tournaments' ? 'tournament' : assignItemType === 'players' ? 'player' : assignItemType}...`}
                 placeholderTextColor={theme.textMuted}
               />
               {assignSearching ? <ActivityIndicator size="small" color={theme.primary} /> : null}
@@ -1146,6 +1215,13 @@ export default function AdminPartnersScreen() {
                           <MaterialIcons name="warning" size={14} color="#F59E0B" />
                           <Text style={{ fontSize: 10, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'Autre sponsor' : 'Other sponsor'}</Text>
                         </View>
+                      ) : bulkMode ? (
+                        <Pressable
+                          style={[{ width: 32, height: 32, borderRadius: 10, alignItems: 'center', justifyContent: 'center', borderWidth: 2 }, bulkSelected.has(item.id) ? { backgroundColor: '#2563EB', borderColor: '#2563EB' } : { backgroundColor: theme.surface, borderColor: theme.border }]}
+                          onPress={() => { Haptics.selectionAsync(); setBulkSelected(prev => { const n = new Set(prev); n.has(item.id) ? n.delete(item.id) : n.add(item.id); return n; }); }}
+                        >
+                          {bulkSelected.has(item.id) ? <MaterialIcons name="check" size={18} color="#FFF" /> : null}
+                        </Pressable>
                       ) : (
                         <Pressable
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#2563EB', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}
@@ -1265,11 +1341,11 @@ const s = StyleSheet.create({
   backBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   addBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: theme.primary, alignItems: 'center', justifyContent: 'center' },
-  filterRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 8 },
-  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
-  filterChipText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },
-  filterChipCount: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 8 },
-  filterChipCountText: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
+  filterRow: { paddingHorizontal: 16, paddingVertical: 12, gap: 10 },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
+  filterChipText: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
+  filterChipCount: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, minWidth: 28, alignItems: 'center' as any },
+  filterChipCountText: { fontSize: 12, fontWeight: '800', color: theme.textSecondary },
   searchRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginHorizontal: 16, marginBottom: 12, backgroundColor: theme.surface, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: theme.border },
   searchInput: { flex: 1, fontSize: 15, color: theme.textPrimary, padding: 0 },
   advantagesCard: { marginHorizontal: 16, marginBottom: 16, backgroundColor: theme.surface, borderRadius: 16, padding: 16, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.05, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
