@@ -34,10 +34,11 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { useScrollPrefetch } from '@/hooks/useFlatListOptimizers';
 import { getEloRank, getEloColor, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
+import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
+import { getSupabaseClient, useAuth, useAlert } from '@/template';
 import { computeQuickTrustScore, getTrustScoreColor, getLevelFromScore } from '@/services/trustScoreService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
-import { useAuth, useAlert } from '@/template';
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
@@ -49,6 +50,55 @@ export default function DirectoryScreen() {
   const { t, language } = useLanguage();
   const { user } = useAuth();
   const { showAlert } = useAlert();
+
+  // GPS / distance filter state
+  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [distanceFilter, setDistanceFilter] = useState<'all' | '5' | '10' | '25' | '50' | '100'>('all');
+  const gpsRequestedRef = useRef(false);
+
+  const requestGPS = useCallback(async () => {
+    if (gpsRequestedRef.current || userLocation) return;
+    gpsRequestedRef.current = true;
+    setGpsLoading(true);
+    try {
+      const { status } = await requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        const pos = await getCurrentPositionAsync({ accuracy: Accuracy.Balanced });
+        setUserLocation({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+      } else {
+        showAlert(t('directory', 'gpsRequired'));
+      }
+    } catch {
+      showAlert(t('directory', 'gpsError'));
+    }
+    setGpsLoading(false);
+  }, [userLocation, showAlert, t]);
+
+  // Haversine distance in km
+  const haversineDistance = useCallback((lat1: number, lon1: number, lat2: number, lon2: number): number => {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, []);
+
+  // Request GPS when distance filter is activated
+  useEffect(() => {
+    if (distanceFilter !== 'all' && !userLocation && !gpsLoading) {
+      requestGPS();
+    }
+  }, [distanceFilter, userLocation, gpsLoading, requestGPS]);
+
+  // Helper: check if item is within distance
+  const isWithinDistance = useCallback((itemLat?: number, itemLon?: number): boolean => {
+    if (distanceFilter === 'all' || !userLocation || !itemLat || !itemLon) return distanceFilter === 'all';
+    const dist = haversineDistance(userLocation.latitude, userLocation.longitude, itemLat, itemLon);
+    return dist <= Number(distanceFilter);
+  }, [distanceFilter, userLocation, haversineDistance]);
 
   // Meetup invitation state
   const [showMeetupPicker, setShowMeetupPicker] = useState(false);
@@ -210,10 +260,10 @@ export default function DirectoryScreen() {
 
   // All filters state
   const [filters, setFilters] = useState<{
-    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string; playerExperience: string;
-    clubCity: string; clubCountry: string;
+    playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string; playerExperience: string; playerTerrain: string;
+    clubCity: string; clubCountry: string; clubEquipment: string; clubMembersRange: string;
     terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string; terrainParking: string; terrainToilets: string;
-    tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string;
+    tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string; tournamentDate: string;
     eventStatus: string; eventType: string; eventAmbassador: string;
   }>({
     // Player filters
@@ -224,9 +274,12 @@ export default function DirectoryScreen() {
     playerRole: 'all',
     playerEloRank: 'all',
     playerExperience: 'all',
+    playerTerrain: 'all',
     // Club filters
     clubCity: 'all',
     clubCountry: 'all',
+    clubEquipment: 'all',
+    clubMembersRange: 'all',
     // Terrain filters
     terrainType: 'all' as TerrainType | 'all',
     terrainCity: 'all',
@@ -244,6 +297,7 @@ export default function DirectoryScreen() {
     tournamentRegistration: 'all',
     tournamentScope: 'all',
     tournamentCity: 'all',
+    tournamentDate: 'all',
     // Event filters
     eventStatus: 'all',
     eventType: 'all',
@@ -253,7 +307,7 @@ export default function DirectoryScreen() {
   // Reset pagination when tab or filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow]);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter]);
 
   // Levenshtein-based duplicate detection — debounced for performance
   // Stable fingerprint to avoid recalculating when data hasn't changed
@@ -339,32 +393,174 @@ export default function DirectoryScreen() {
     events: sponsoredEvents.length,
   }), [players.length, clubs.length, terrains.length, tournaments.length, sponsoredEvents.length]);
 
-  // Unique values for filters
-  const uniqueValues = useMemo(() => ({
-    playerClubs: ['all', ...new Set(players.map(p => p.club).filter(Boolean))] as string[],
-    playerCities: ['all', ...new Set(players.map(p => p.location?.city).filter(Boolean))] as string[],
-    playerCountries: ['all', ...new Set(players.map(p => p.country || 'France'))] as string[],
-    playerLevels: ['all', 'Débutant', 'Intermédiaire', 'Confirmé', 'Expert'],
-    playerRoles: ['all', 'Pointeur', 'Tireur', 'Milieu'],
-    clubCities: ['all', ...new Set(clubs.map(c => c.city).filter(Boolean))] as string[],
-    clubCountries: ['all', ...new Set(clubs.map(c => c.country || 'France'))] as string[],
-    terrainCities: ['all', ...new Set(terrains.map(t => t.city).filter(Boolean))] as string[],
-    tournamentFormats: ['all', ...new Set(tournaments.map(t => t.format).filter(Boolean))] as string[],
-    tournamentLevels: ['all', ...new Set(tournaments.map(t => t.tournamentLevel).filter(Boolean))] as string[],
-    tournamentCategories: ['all', ...new Set(tournaments.map(t => t.tournamentCategory).filter(Boolean))] as string[],
-    tournamentRegistrations: ['all', ...new Set(tournaments.map(t => t.registrationType).filter(Boolean))] as string[],
-    tournamentScopes: ['all', ...new Set(tournaments.map(t => t.tournamentScope).filter(Boolean))] as string[],
-    tournamentCities: ['all', ...new Set(tournaments.map(t => t.location?.city || t.terrainName).filter(Boolean))] as string[],
-  }), [players, clubs, terrains, tournaments]);
+  // === CASCADING FILTER VALUES ===
+  // Each filter's options are computed from data filtered by ALL OTHER active filters (except itself)
+  // This ensures selecting one filter narrows the options of the others.
+  
+  // Helper: apply player filters except the excluded one
+  const getPlayerBaseFiltered = useCallback((excludeFilter?: string) => {
+    return players.filter(p => {
+      if (excludeFilter !== 'playerClub' && filters.playerClub !== 'all' && p.club !== filters.playerClub) return false;
+      if (excludeFilter !== 'playerCity' && filters.playerCity !== 'all' && p.location?.city !== filters.playerCity) return false;
+      if (excludeFilter !== 'playerCountry' && filters.playerCountry !== 'all' && (p.country || 'France') !== filters.playerCountry) return false;
+      if (excludeFilter !== 'playerRole' && filters.playerRole !== 'all' && p.role !== filters.playerRole) return false;
+      if (excludeFilter !== 'playerExperience' && filters.playerExperience !== 'all' && p.experience !== filters.playerExperience) return false;
+      if (excludeFilter !== 'playerTerrain' && filters.playerTerrain !== 'all' && p.terrainName !== filters.playerTerrain) return false;
+      if (excludeFilter !== 'playerEloRank' && filters.playerEloRank !== 'all') {
+        const elo = p.eloRating || ELO_INITIAL;
+        const match = filters.playerEloRank === 'bronze' ? elo < 1100 : filters.playerEloRank === 'silver' ? (elo >= 1100 && elo < 1200) : filters.playerEloRank === 'gold' ? (elo >= 1200 && elo < 1500) : filters.playerEloRank === 'diamond' ? (elo >= 1500 && elo < 1800) : filters.playerEloRank === 'master' ? (elo >= 1800 && elo < 2000) : filters.playerEloRank === 'grand_master' ? elo >= 2000 : true;
+        if (!match) return false;
+      }
+      if (showRealUsersOnly && !(selfPlayer && p.id === selfPlayer.id) && p.isPublic !== true) return false;
+      if (distanceFilter !== 'all' && userLocation) {
+        if (!p.location?.latitude || !p.location?.longitude) return false;
+        const dist = haversineDistance(userLocation.latitude, userLocation.longitude, p.location.latitude, p.location.longitude);
+        if (dist > Number(distanceFilter)) return false;
+      }
+      return true;
+    });
+  }, [players, filters, selfPlayer, showRealUsersOnly, distanceFilter, userLocation, haversineDistance]);
 
-  // Active filter counts
-  const activeFilterCounts = useMemo(() => ({
-    players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience].filter(f => f !== 'all').length,
-    clubs: [filters.clubCity, filters.clubCountry].filter(f => f !== 'all').length,
-    terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length,
-    tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity].filter(f => f !== 'all').length,
-    events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
-  }), [filters]);
+  const getClubBaseFiltered = useCallback((excludeFilter?: string) => {
+    return clubs.filter(c => {
+      if (excludeFilter !== 'clubCity' && filters.clubCity !== 'all' && c.city !== filters.clubCity) return false;
+      if (excludeFilter !== 'clubCountry' && filters.clubCountry !== 'all' && (c.country || 'France') !== filters.clubCountry) return false;
+      if (excludeFilter !== 'clubEquipment' && filters.clubEquipment !== 'all' && !(c.facilities && c.facilities.includes(filters.clubEquipment))) return false;
+      if (excludeFilter !== 'clubMembersRange' && filters.clubMembersRange !== 'all') {
+        const count = c.membersCount || 0;
+        const match = filters.clubMembersRange === '1-10' ? (count >= 1 && count <= 10) : filters.clubMembersRange === '11-30' ? (count >= 11 && count <= 30) : filters.clubMembersRange === '31-50' ? (count >= 31 && count <= 50) : filters.clubMembersRange === '50+' ? count > 50 : true;
+        if (!match) return false;
+      }
+      if (distanceFilter !== 'all' && userLocation) {
+        if (!c.location?.latitude || !c.location?.longitude) return false;
+        const dist = haversineDistance(userLocation.latitude, userLocation.longitude, c.location.latitude, c.location.longitude);
+        if (dist > Number(distanceFilter)) return false;
+      }
+      return true;
+    });
+  }, [clubs, filters, distanceFilter, userLocation, haversineDistance]);
+
+  const getTerrainBaseFiltered = useCallback((excludeFilter?: string) => {
+    return terrains.filter(tr => {
+      if (excludeFilter !== 'terrainType' && filters.terrainType !== 'all' && tr.type !== filters.terrainType) return false;
+      if (excludeFilter !== 'terrainCity' && filters.terrainCity !== 'all' && tr.city !== filters.terrainCity) return false;
+      if (excludeFilter !== 'terrainLighting' && filters.terrainLighting !== 'all' && (filters.terrainLighting === 'yes' ? !tr.lighting : tr.lighting)) return false;
+      if (excludeFilter !== 'terrainCovered' && filters.terrainCovered !== 'all' && (filters.terrainCovered === 'yes' ? !tr.covered : tr.covered)) return false;
+      if (excludeFilter !== 'terrainEnvironment' && filters.terrainEnvironment !== 'all' && (tr.environment || 'outdoor') !== filters.terrainEnvironment) return false;
+      if (excludeFilter !== 'terrainAccess' && filters.terrainAccess !== 'all' && (filters.terrainAccess === 'public' ? (tr.publicAccess === false) : (tr.publicAccess !== false))) return false;
+      if (excludeFilter !== 'terrainParking' && filters.terrainParking !== 'all' && (filters.terrainParking === 'yes' ? !(tr as any).parking : (tr as any).parking)) return false;
+      if (excludeFilter !== 'terrainToilets' && filters.terrainToilets !== 'all' && (filters.terrainToilets === 'yes' ? !(tr as any).toilets : (tr as any).toilets)) return false;
+      if (distanceFilter !== 'all' && userLocation) {
+        if (!tr.location?.latitude || !tr.location?.longitude) return false;
+        const dist = haversineDistance(userLocation.latitude, userLocation.longitude, tr.location.latitude, tr.location.longitude);
+        if (dist > Number(distanceFilter)) return false;
+      }
+      return true;
+    });
+  }, [terrains, filters, distanceFilter, userLocation, haversineDistance]);
+
+  const getTournamentBaseFiltered = useCallback((excludeFilter?: string) => {
+    return tournaments.filter(tr => {
+      if (excludeFilter !== 'tournamentStatus' && filters.tournamentStatus !== 'all' && tr.status !== filters.tournamentStatus) return false;
+      if (excludeFilter !== 'tournamentFormat' && filters.tournamentFormat !== 'all' && tr.format !== filters.tournamentFormat) return false;
+      if (excludeFilter !== 'tournamentLevel' && filters.tournamentLevel !== 'all' && tr.tournamentLevel !== filters.tournamentLevel) return false;
+      if (excludeFilter !== 'tournamentCategory' && filters.tournamentCategory !== 'all' && tr.tournamentCategory !== filters.tournamentCategory) return false;
+      if (excludeFilter !== 'tournamentRegistration' && filters.tournamentRegistration !== 'all' && tr.registrationType !== filters.tournamentRegistration) return false;
+      if (excludeFilter !== 'tournamentScope' && filters.tournamentScope !== 'all' && tr.tournamentScope !== filters.tournamentScope) return false;
+      if (excludeFilter !== 'tournamentCity' && filters.tournamentCity !== 'all' && (tr.location?.city || tr.terrainName) !== filters.tournamentCity) return false;
+      if (excludeFilter !== 'tournamentDate' && filters.tournamentDate !== 'all') {
+        const td = new Date(tr.date); const now = new Date();
+        const match = filters.tournamentDate === 'this_month' ? (td.getFullYear() === now.getFullYear() && td.getMonth() === now.getMonth()) : filters.tournamentDate === 'next_3_months' ? (() => { const tm = new Date(); tm.setMonth(tm.getMonth() + 3); return td >= now && td <= tm; })() : filters.tournamentDate === 'this_year' ? td.getFullYear() === now.getFullYear() : filters.tournamentDate === 'past' ? td < now : true;
+        if (!match) return false;
+      }
+      if (distanceFilter !== 'all' && userLocation) {
+        if (!tr.location?.latitude || !tr.location?.longitude) return false;
+        const dist = haversineDistance(userLocation.latitude, userLocation.longitude, tr.location.latitude, tr.location.longitude);
+        if (dist > Number(distanceFilter)) return false;
+      }
+      return true;
+    });
+  }, [tournaments, filters, distanceFilter, userLocation, haversineDistance]);
+
+  // Cascading unique values with counts
+  const uniqueValues = useMemo(() => {
+    const countedOptions = (items: string[]): { value: string; count: number }[] => {
+      const map = new Map<string, number>();
+      items.forEach(v => { if (v) map.set(v, (map.get(v) || 0) + 1); });
+      return Array.from(map.entries()).map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count);
+    };
+
+    // Player cascading options
+    const pForClub = getPlayerBaseFiltered('playerClub');
+    const pForCity = getPlayerBaseFiltered('playerCity');
+    const pForCountry = getPlayerBaseFiltered('playerCountry');
+    const pForRole = getPlayerBaseFiltered('playerRole');
+    const pForExp = getPlayerBaseFiltered('playerExperience');
+    const pForTerrain = getPlayerBaseFiltered('playerTerrain');
+    const pForElo = getPlayerBaseFiltered('playerEloRank');
+
+    // Club cascading options
+    const cForCity = getClubBaseFiltered('clubCity');
+    const cForCountry = getClubBaseFiltered('clubCountry');
+    const cForEquip = getClubBaseFiltered('clubEquipment');
+    const cForMembers = getClubBaseFiltered('clubMembersRange');
+
+    // Terrain cascading options
+    const tForType = getTerrainBaseFiltered('terrainType');
+    const tForCity = getTerrainBaseFiltered('terrainCity');
+
+    // Tournament cascading options
+    const trForFormat = getTournamentBaseFiltered('tournamentFormat');
+    const trForLevel = getTournamentBaseFiltered('tournamentLevel');
+    const trForCat = getTournamentBaseFiltered('tournamentCategory');
+    const trForReg = getTournamentBaseFiltered('tournamentRegistration');
+    const trForScope = getTournamentBaseFiltered('tournamentScope');
+    const trForCity = getTournamentBaseFiltered('tournamentCity');
+
+    return {
+      playerClubs: countedOptions(pForClub.map(p => p.club).filter(Boolean) as string[]),
+      playerCities: countedOptions(pForCity.map(p => p.location?.city).filter(Boolean) as string[]),
+      playerCountries: countedOptions(pForCountry.map(p => p.country || 'France')),
+      playerRoles: ['Pointeur', 'Tireur', 'Milieu'].map(r => ({ value: r, count: pForRole.filter(p => p.role === r).length })),
+      playerExperiences: ['less_than_1', '1_to_3', '3_to_10', 'more_than_10'].map(e => ({ value: e, count: pForExp.filter(p => p.experience === e).length })),
+      playerTerrains: countedOptions(pForTerrain.map(p => p.terrainName).filter(Boolean) as string[]),
+      playerEloRanks: ['bronze', 'silver', 'gold', 'diamond', 'master', 'grand_master'].map(rank => {
+        const elos = pForElo.map(p => p.eloRating || ELO_INITIAL);
+        const count = elos.filter(elo => rank === 'bronze' ? elo < 1100 : rank === 'silver' ? (elo >= 1100 && elo < 1200) : rank === 'gold' ? (elo >= 1200 && elo < 1500) : rank === 'diamond' ? (elo >= 1500 && elo < 1800) : rank === 'master' ? (elo >= 1800 && elo < 2000) : elo >= 2000).length;
+        return { value: rank, count };
+      }),
+      clubCities: countedOptions(cForCity.map(c => c.city).filter(Boolean) as string[]),
+      clubCountries: countedOptions(cForCountry.map(c => c.country || 'France')),
+      clubEquipments: (() => {
+        const allF = new Set<string>(); cForEquip.forEach(c => (c.facilities || []).forEach(f => allF.add(f)));
+        return Array.from(allF).sort().map(f => ({ value: f, count: cForEquip.filter(c => c.facilities?.includes(f)).length }));
+      })(),
+      clubMembersRanges: ['1-10', '11-30', '31-50', '50+'].map(r => {
+        const count = cForMembers.filter(c => { const n = c.membersCount || 0; return r === '1-10' ? (n >= 1 && n <= 10) : r === '11-30' ? (n >= 11 && n <= 30) : r === '31-50' ? (n >= 31 && n <= 50) : n > 50; }).length;
+        return { value: r, count };
+      }),
+      terrainTypes: config.terrainTypes.map(tc => ({ value: tc.id, count: tForType.filter(tr => tr.type === tc.id).length })),
+      terrainCities: countedOptions(tForCity.map(tr => tr.city).filter(Boolean) as string[]),
+      tournamentFormats: countedOptions(trForFormat.map(t => t.format).filter(Boolean) as string[]),
+      tournamentLevels: countedOptions(trForLevel.map(t => t.tournamentLevel).filter(Boolean) as string[]),
+      tournamentCategories: countedOptions(trForCat.map(t => t.tournamentCategory).filter(Boolean) as string[]),
+      tournamentRegistrations: countedOptions(trForReg.map(t => t.registrationType).filter(Boolean) as string[]),
+      tournamentScopes: countedOptions(trForScope.map(t => t.tournamentScope).filter(Boolean) as string[]),
+      tournamentCities: countedOptions(trForCity.map(t => t.location?.city || t.terrainName).filter(Boolean) as string[]),
+    };
+  }, [getPlayerBaseFiltered, getClubBaseFiltered, getTerrainBaseFiltered, getTournamentBaseFiltered]);
+
+  // Active filter counts (include distance filter)
+  const activeFilterCounts = useMemo(() => {
+    const distCount = distanceFilter !== 'all' ? 1 : 0;
+    return {
+      players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience, filters.playerTerrain].filter(f => f !== 'all').length + distCount,
+      clubs: [filters.clubCity, filters.clubCountry, filters.clubEquipment, filters.clubMembersRange].filter(f => f !== 'all').length + distCount,
+      terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length + distCount,
+      tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity, filters.tournamentDate].filter(f => f !== 'all').length + distCount,
+      events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
+    };
+  }, [filters, distanceFilter]);
 
   const currentFilterCount = activeFilterCounts[activeTab];
 
@@ -427,9 +623,20 @@ export default function DirectoryScreen() {
         }
       })();
       const matchesExperience = filters.playerExperience === 'all' || p.experience === filters.playerExperience;
+      const matchesTerrain = filters.playerTerrain === 'all' || p.terrainName === filters.playerTerrain;
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesRealUser;
+      const matchesDist = isWithinDistance(p.location?.latitude, p.location?.longitude);
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
     });
+    
+    // Sort by distance if distance filter active
+    if (distanceFilter !== 'all' && userLocation) {
+      result.sort((a, b) => {
+        const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
+        const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
+        return da - db;
+      });
+    }
     
     // Put selfPlayer at top
     if (selfPlayer) {
@@ -440,17 +647,37 @@ export default function DirectoryScreen() {
       }
     }
     return result;
-  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id]);
+  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
 
   const filteredClubs = useMemo(() => {
-    return clubs.filter(c => {
+    let result = clubs.filter(c => {
       const matchesSearch = c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         c.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCity = filters.clubCity === 'all' || c.city === filters.clubCity;
       const matchesCountry = filters.clubCountry === 'all' || (c.country || 'France') === filters.clubCountry;
-      return matchesSearch && matchesCity && matchesCountry;
+      const matchesEquipment = filters.clubEquipment === 'all' || (c.facilities && c.facilities.includes(filters.clubEquipment));
+      const matchesMembersRange = filters.clubMembersRange === 'all' || (() => {
+        const count = c.membersCount || 0;
+        switch (filters.clubMembersRange) {
+          case '1-10': return count >= 1 && count <= 10;
+          case '11-30': return count >= 11 && count <= 30;
+          case '31-50': return count >= 31 && count <= 50;
+          case '50+': return count > 50;
+          default: return true;
+        }
+      })();
+      const matchesDist = isWithinDistance(c.location?.latitude, c.location?.longitude);
+      return matchesSearch && matchesCity && matchesCountry && matchesEquipment && matchesMembersRange && matchesDist;
     });
-  }, [clubs, searchQuery, filters]);
+    if (distanceFilter !== 'all' && userLocation) {
+      result.sort((a, b) => {
+        const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
+        const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
+        return da - db;
+      });
+    }
+    return result;
+  }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
@@ -556,7 +783,8 @@ export default function DirectoryScreen() {
         (filters.terrainParking === 'yes' ? (tr as any).parking : !(tr as any).parking);
       const matchesToilets = filters.terrainToilets === 'all' ||
         (filters.terrainToilets === 'yes' ? (tr as any).toilets : !(tr as any).toilets);
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets;
+      const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
+      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
     // When "Active now" is on, filter to only terrains with activity and sort by score
     if (showActiveNow) {
@@ -564,8 +792,15 @@ export default function DirectoryScreen() {
         .filter(tr => terrainActivityMap.has(tr.id))
         .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
     }
+    if (distanceFilter !== 'all' && userLocation && !showActiveNow) {
+      result.sort((a, b) => {
+        const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
+        const db = (b.location?.latitude && b.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, b.location.latitude, b.location.longitude) : 99999;
+        return da - db;
+      });
+    }
     return result;
-  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap]);
+  }, [terrains, searchQuery, filters, showActiveNow, terrainActivityMap, isWithinDistance, distanceFilter, userLocation, haversineDistance]);
 
   const filteredTournaments = useMemo(() => {
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
@@ -579,9 +814,30 @@ export default function DirectoryScreen() {
       const matchesRegistration = filters.tournamentRegistration === 'all' || tr.registrationType === filters.tournamentRegistration;
       const matchesScope = filters.tournamentScope === 'all' || tr.tournamentScope === filters.tournamentScope;
       const matchesCity = filters.tournamentCity === 'all' || (tr.location?.city || tr.terrainName) === filters.tournamentCity;
-      return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity;
+      const matchesDate = filters.tournamentDate === 'all' || (() => {
+        const td = new Date(tr.date);
+        const now = new Date();
+        switch (filters.tournamentDate) {
+          case 'this_month': {
+            return td.getFullYear() === now.getFullYear() && td.getMonth() === now.getMonth();
+          }
+          case 'next_3_months': {
+            const threeMonths = new Date(); threeMonths.setMonth(threeMonths.getMonth() + 3);
+            return td >= now && td <= threeMonths;
+          }
+          case 'this_year': {
+            return td.getFullYear() === now.getFullYear();
+          }
+          case 'past': {
+            return td < now;
+          }
+          default: return true;
+        }
+      })();
+      const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
+      return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity && matchesDate && matchesDist;
     }).sort((a, b) => (statusOrder[a.status] ?? 3) - (statusOrder[b.status] ?? 3));
-  }, [tournaments, searchQuery, filters]);
+  }, [tournaments, searchQuery, filters, isWithinDistance]);
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
@@ -634,14 +890,15 @@ export default function DirectoryScreen() {
   useEffect(() => { scrollPrefetch.setData(paginatedData); }, [paginatedData]);
 
   const clearFilters = useCallback(() => {
+    setDistanceFilter('all');
     if (activeTab === 'players') {
-      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all', playerEloRank: 'all', playerExperience: 'all' }));
+      setFilters(f => ({ ...f, playerClub: 'all', playerCity: 'all', playerCountry: 'all', playerLevel: 'all', playerRole: 'all', playerEloRank: 'all', playerExperience: 'all', playerTerrain: 'all' }));
     } else if (activeTab === 'clubs') {
-      setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all' }));
+      setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all', clubEquipment: 'all', clubMembersRange: 'all' }));
     } else if (activeTab === 'terrains') {
       setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
     } else if (activeTab === 'tournaments') {
-      setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all' }));
+      setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all', tournamentDate: 'all' }));
     } else if (activeTab === 'events') {
       setFilters(f => ({ ...f, eventStatus: 'all', eventType: 'all', eventAmbassador: 'all' }));
     }
@@ -693,12 +950,30 @@ export default function DirectoryScreen() {
     }
   };
 
+  // Distance filter section for all tabs except events
+  const renderDistanceFilter = () => {
+    if (activeTab === 'events') return null;
+    return (
+      <FilterSection
+        title={t('directory', 'distanceFilter')}
+        options={[{ value: 'all', count: -1 }, { value: '5', count: -1 }, { value: '10', count: -1 }, { value: '25', count: -1 }, { value: '50', count: -1 }, { value: '100', count: -1 }]}
+        value={distanceFilter}
+        onChange={(v) => setDistanceFilter(v as any)}
+        labels={{ all: t('directory', 'distanceAll'), '5': '5 km', '10': '10 km', '25': '25 km', '50': '50 km', '100': '100 km' }}
+        icons={{ '5': 'near-me', '10': 'near-me', '25': 'explore', '50': 'explore', '100': 'public' }}
+        allLabel={t('directory', 'distanceAll')}
+        showSearch={false}
+      />
+    );
+  };
+
   // Filter Modal Content
   const renderFilterContent = () => {
     switch (activeTab) {
-      case 'players':
+      case 'players': {
         return (
           <>
+            {renderDistanceFilter()}
             <FilterSection
               title={t('directory', 'role')}
               options={uniqueValues.playerRoles}
@@ -706,32 +981,46 @@ export default function DirectoryScreen() {
               onChange={(v) => setFilters(f => ({ ...f, playerRole: v }))}
               icons={{ 'Pointeur': 'radio-button-on', 'Tireur': 'gps-fixed', 'Milieu': 'swap-horiz' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('player', 'experienceLabel')}
-              options={['all', 'less_than_1', '1_to_3', '3_to_10', 'more_than_10']}
+              options={uniqueValues.playerExperiences}
               labels={{ all: t('directory', 'allLabel'), less_than_1: t('player', 'experienceLessThan1'), '1_to_3': t('player', 'experience1to3'), '3_to_10': t('player', 'experience3to10'), more_than_10: t('player', 'experienceMoreThan10') }}
               value={filters.playerExperience}
               onChange={(v) => setFilters(f => ({ ...f, playerExperience: v }))}
               icons={{ less_than_1: 'child-care', '1_to_3': 'school', '3_to_10': 'trending-up', more_than_10: 'emoji-events' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={language === 'fr' ? 'Rang ELO' : 'ELO Rank'}
-              options={['all', 'bronze', 'silver', 'gold', 'diamond', 'master', 'grand_master']}
-              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze (<1100)', silver: language === 'fr' ? 'Argent (1100-1199)' : 'Silver (1100-1199)', gold: language === 'fr' ? 'Or (1200-1499)' : 'Gold (1200-1499)', diamond: language === 'fr' ? 'Diamant (1500-1799)' : 'Diamond (1500-1799)', master: language === 'fr' ? 'Maitre (1800-1999)' : 'Master (1800-1999)', grand_master: language === 'fr' ? 'Grand Maitre (2000+)' : 'Grand Master (2000+)' }}
+              options={uniqueValues.playerEloRanks}
+              labels={{ all: t('directory', 'allLabel'), bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master', grand_master: language === 'fr' ? 'Grand Maitre' : 'Grand Master' }}
               value={filters.playerEloRank}
               onChange={(v) => setFilters(f => ({ ...f, playerEloRank: v }))}
               icons={{ bronze: 'shield', silver: 'workspace-premium', gold: 'emoji-events', diamond: 'diamond', master: 'military-tech', grand_master: 'auto-awesome' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
-
+            {uniqueValues.playerTerrains.length > 0 ? (
+              <FilterSection
+                title={language === 'fr' ? 'Terrain de pratique' : 'Practice terrain'}
+                options={uniqueValues.playerTerrains}
+                value={filters.playerTerrain}
+                onChange={(v) => setFilters(f => ({ ...f, playerTerrain: v }))}
+                icons={{}}
+                allLabel={t('directory', 'allLabel')}
+                searchPlaceholder={t('directory', 'searchInFilter')}
+              />
+            ) : null}
             <FilterSection
               title={t('directory', 'clubs')}
               options={uniqueValues.playerClubs}
               value={filters.playerClub}
               onChange={(v) => setFilters(f => ({ ...f, playerClub: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
             <FilterSection
               title={t('directory', 'city')}
@@ -739,6 +1028,7 @@ export default function DirectoryScreen() {
               value={filters.playerCity}
               onChange={(v) => setFilters(f => ({ ...f, playerCity: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
             <FilterSection
               title={t('directory', 'country')}
@@ -746,18 +1036,46 @@ export default function DirectoryScreen() {
               value={filters.playerCountry}
               onChange={(v) => setFilters(f => ({ ...f, playerCountry: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
           </>
         );
-      case 'clubs':
+      }
+      case 'clubs': {
+        const facilityLabels: Record<string, string> = { all: t('directory', 'allLabel') };
+        uniqueValues.clubEquipments.forEach(f => { facilityLabels[f.value] = t('facilityLabels', f.value) || f.value; });
         return (
           <>
+            {renderDistanceFilter()}
+            <FilterSection
+              title={language === 'fr' ? 'Nombre de membres' : 'Member count'}
+              options={uniqueValues.clubMembersRanges}
+              labels={{ all: t('directory', 'allLabel'), '1-10': '1-10', '11-30': '11-30', '31-50': '31-50', '50+': '50+' }}
+              value={filters.clubMembersRange}
+              onChange={(v) => setFilters(f => ({ ...f, clubMembersRange: v }))}
+              icons={{ '1-10': 'person', '11-30': 'people', '31-50': 'groups', '50+': 'diversity-3' }}
+              allLabel={t('directory', 'allLabel')}
+              showSearch={false}
+            />
+            {uniqueValues.clubEquipments.length > 0 ? (
+              <FilterSection
+                title={language === 'fr' ? 'Equipements' : 'Facilities'}
+                options={uniqueValues.clubEquipments}
+                labels={facilityLabels}
+                value={filters.clubEquipment}
+                onChange={(v) => setFilters(f => ({ ...f, clubEquipment: v }))}
+                icons={{}}
+                allLabel={t('directory', 'allLabel')}
+                searchPlaceholder={t('directory', 'searchInFilter')}
+              />
+            ) : null}
             <FilterSection
               title={t('directory', 'city')}
               options={uniqueValues.clubCities}
               value={filters.clubCity}
               onChange={(v) => setFilters(f => ({ ...f, clubCity: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
             <FilterSection
               title={t('directory', 'country')}
@@ -765,29 +1083,34 @@ export default function DirectoryScreen() {
               value={filters.clubCountry}
               onChange={(v) => setFilters(f => ({ ...f, clubCountry: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
           </>
         );
+      }
       case 'terrains':
         return (
           <>
+            {renderDistanceFilter()}
             <FilterSection
               title={t('directory', 'environmentLabel')}
-              options={['all', 'indoor', 'outdoor']}
+              options={[{ value: 'indoor', count: -1 }, { value: 'outdoor', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), indoor: t('directory', 'indoorLabel'), outdoor: t('directory', 'outdoorLabel') }}
               value={filters.terrainEnvironment}
               onChange={(v) => setFilters(f => ({ ...f, terrainEnvironment: v as 'all' | 'indoor' | 'outdoor' }))}
               icons={{ indoor: 'domain', outdoor: 'park' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('directory', 'surfaceType')}
-              options={['all', ...config.terrainTypes.map(tc => tc.id)]}
+              options={uniqueValues.terrainTypes}
               labels={{ all: t('directory', 'allLabel'), ...Object.fromEntries(config.terrainTypes.map(tc => [tc.id, t('terrainTypes', tc.id)])) }}
               value={filters.terrainType}
               onChange={(v) => setFilters(f => ({ ...f, terrainType: v as TerrainType | 'all' }))}
               icons={Object.fromEntries(config.terrainTypes.map(tc => [tc.id, tc.icon]))}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('directory', 'city')}
@@ -795,51 +1118,57 @@ export default function DirectoryScreen() {
               value={filters.terrainCity}
               onChange={(v) => setFilters(f => ({ ...f, terrainCity: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
             <FilterSection
               title={t('directory', 'lightingLabel')}
-              options={['all', 'yes', 'no']}
+              options={[{ value: 'yes', count: -1 }, { value: 'no', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'withLighting'), no: t('directory', 'withoutLighting') }}
               value={filters.terrainLighting}
               onChange={(v) => setFilters(f => ({ ...f, terrainLighting: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'lightbulb', no: 'lightbulb-outline' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('directory', 'coverLabel')}
-              options={['all', 'yes', 'no']}
+              options={[{ value: 'yes', count: -1 }, { value: 'no', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), yes: t('directory', 'coveredLabel'), no: t('directory', 'outdoorCover') }}
               value={filters.terrainCovered}
               onChange={(v) => setFilters(f => ({ ...f, terrainCovered: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'roofing', no: 'wb-sunny' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('directory', 'accessFilterLabel')}
-              options={['all', 'public', 'private']}
+              options={[{ value: 'public', count: -1 }, { value: 'private', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), public: t('directory', 'publicAccessLabel'), private: t('directory', 'privateAccessLabel') }}
               value={filters.terrainAccess}
               onChange={(v) => setFilters(f => ({ ...f, terrainAccess: v as 'all' | 'public' | 'private' }))}
               icons={{ public: 'public', private: 'lock' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('terrain', 'parking')}
-              options={['all', 'yes', 'no']}
+              options={[{ value: 'yes', count: -1 }, { value: 'no', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), yes: language === 'fr' ? 'Avec parking' : 'With parking', no: language === 'fr' ? 'Sans parking' : 'Without parking' }}
               value={filters.terrainParking}
               onChange={(v) => setFilters(f => ({ ...f, terrainParking: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'local-parking', no: 'block' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('terrain', 'toilets')}
-              options={['all', 'yes', 'no']}
+              options={[{ value: 'yes', count: -1 }, { value: 'no', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), yes: language === 'fr' ? 'Avec toilettes' : 'With restrooms', no: language === 'fr' ? 'Sans toilettes' : 'Without restrooms' }}
               value={filters.terrainToilets}
               onChange={(v) => setFilters(f => ({ ...f, terrainToilets: v as 'all' | 'yes' | 'no' }))}
               icons={{ yes: 'wc', no: 'block' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
           </>
         );
@@ -848,27 +1177,32 @@ export default function DirectoryScreen() {
           <>
             <FilterSection
               title={language === 'fr' ? 'Statut' : 'Status'}
-              options={['all', 'upcoming', 'active', 'completed', 'cancelled']}
+              options={[{ value: 'upcoming', count: -1 }, { value: 'active', count: -1 }, { value: 'completed', count: -1 }, { value: 'cancelled', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), upcoming: language === 'fr' ? 'A venir' : 'Upcoming', active: language === 'fr' ? 'En cours' : 'Active', completed: language === 'fr' ? 'Termine' : 'Completed', cancelled: language === 'fr' ? 'Annule' : 'Cancelled' }}
               value={filters.eventStatus}
               onChange={(v) => setFilters(f => ({ ...f, eventStatus: v }))}
               icons={{ upcoming: 'event', active: 'play-circle', completed: 'check-circle', cancelled: 'cancel' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={language === 'fr' ? 'Type de defi' : 'Challenge type'}
-              options={['all', '10_tirs', '10_tirs_sautee', 'precision']}
+              options={[{ value: '10_tirs', count: -1 }, { value: '10_tirs_sautee', count: -1 }, { value: 'precision', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), '10_tirs': '10 Tirs', '10_tirs_sautee': language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots', precision: language === 'fr' ? 'Precision' : 'Precision' }}
               value={filters.eventType}
               onChange={(v) => setFilters(f => ({ ...f, eventType: v }))}
               icons={{ '10_tirs': 'gps-fixed', '10_tirs_sautee': 'flight-takeoff', precision: 'stars' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             {(() => {
-              const ambOptions = ['all', ...new Set(sponsoredEvents.map(e => e.ambassadorId).filter(Boolean))] as string[];
+              const ambOptions = sponsoredEvents.reduce((acc, e) => {
+                if (e.ambassadorId && !acc.find(a => a.value === e.ambassadorId)) acc.push({ value: e.ambassadorId, count: -1 });
+                return acc;
+              }, [] as { value: string; count: number }[]);
               const ambLabels: Record<string, string> = { all: t('directory', 'allLabel') };
               sponsoredEvents.forEach(e => { if (e.ambassadorId && e.ambassadorName) ambLabels[e.ambassadorId] = e.ambassadorName; });
-              return ambOptions.length > 2 ? (
+              return ambOptions.length > 0 ? (
                 <FilterSection
                   title={language === 'fr' ? 'Ambassadeur' : 'Ambassador'}
                   options={ambOptions}
@@ -877,6 +1211,7 @@ export default function DirectoryScreen() {
                   onChange={(v) => setFilters(f => ({ ...f, eventAmbassador: v }))}
                   icons={{}}
                   allLabel={t('directory', 'allLabel')}
+                  searchPlaceholder={t('directory', 'searchInFilter')}
                 />
               ) : null;
             })()}
@@ -885,14 +1220,26 @@ export default function DirectoryScreen() {
       case 'tournaments':
         return (
           <>
+            {renderDistanceFilter()}
+            <FilterSection
+              title={language === 'fr' ? 'Periode' : 'Date Range'}
+              options={[{ value: 'this_month', count: -1 }, { value: 'next_3_months', count: -1 }, { value: 'this_year', count: -1 }, { value: 'past', count: -1 }]}
+              labels={{ all: t('directory', 'allLabel'), this_month: language === 'fr' ? 'Ce mois' : 'This month', next_3_months: language === 'fr' ? '3 prochains mois' : 'Next 3 months', this_year: language === 'fr' ? 'Cette annee' : 'This year', past: language === 'fr' ? 'Passes' : 'Past' }}
+              value={filters.tournamentDate}
+              onChange={(v) => setFilters(f => ({ ...f, tournamentDate: v }))}
+              icons={{ this_month: 'today', next_3_months: 'date-range', this_year: 'calendar-today', past: 'history' }}
+              allLabel={t('directory', 'allLabel')}
+              showSearch={false}
+            />
             <FilterSection
               title={t('directory', 'status')}
-              options={['all', 'À venir', 'En cours', 'Terminé']}
+              options={[{ value: 'À venir', count: -1 }, { value: 'En cours', count: -1 }, { value: 'Terminé', count: -1 }]}
               labels={{ all: t('directory', 'allLabel'), 'À venir': t('tournamentStatus', 'upcoming'), 'En cours': t('tournamentStatus', 'inProgress'), 'Terminé': t('tournamentStatus', 'completed') }}
               value={filters.tournamentStatus}
               onChange={(v) => setFilters(f => ({ ...f, tournamentStatus: v as TournamentStatus }))}
               icons={{ 'À venir': 'event', 'En cours': 'play-circle', 'Terminé': 'check-circle' }}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
             <FilterSection
               title={t('directory', 'locationLabel')}
@@ -900,6 +1247,7 @@ export default function DirectoryScreen() {
               value={filters.tournamentCity}
               onChange={(v) => setFilters(f => ({ ...f, tournamentCity: v }))}
               allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
             />
             <FilterSection
               title={t('directory', 'format')}
@@ -907,48 +1255,53 @@ export default function DirectoryScreen() {
               value={filters.tournamentFormat}
               onChange={(v) => setFilters(f => ({ ...f, tournamentFormat: v }))}
               allLabel={t('directory', 'allLabel')}
+              showSearch={false}
             />
-            {uniqueValues.tournamentLevels.length > 1 && (
+            {uniqueValues.tournamentLevels.length > 0 && (
               <FilterSection
                 title={t('directory', 'level')}
                 options={uniqueValues.tournamentLevels}
                 value={filters.tournamentLevel}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentLevel: v }))}
                 icons={{ 'Loisir / Amical': 'mood', 'Promotion': 'trending-up', 'Honneur': 'star', 'Élite': 'emoji-events' }}
-                labels={Object.fromEntries(uniqueValues.tournamentLevels.map(l => [l, l === 'all' ? t('directory', 'allLabel') : t('tournamentLevels', l)]))}
+                labels={Object.fromEntries(uniqueValues.tournamentLevels.map(l => [l.value, t('tournamentLevels', l.value)]))}
                 allLabel={t('directory', 'allLabel')}
+                showSearch={false}
               />
             )}
-            {uniqueValues.tournamentCategories.length > 1 && (
+            {uniqueValues.tournamentCategories.length > 0 && (
               <FilterSection
                 title={t('directory', 'tournamentType')}
                 options={uniqueValues.tournamentCategories}
-                labels={Object.fromEntries(uniqueValues.tournamentCategories.map(c => [c, c === 'all' ? t('directory', 'allLabel') : t('tournamentCategories', c)]))}
+                labels={Object.fromEntries(uniqueValues.tournamentCategories.map(c => [c.value, t('tournamentCategories', c.value)]))}
                 value={filters.tournamentCategory}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentCategory: v }))}
                 allLabel={t('directory', 'allLabel')}
+                showSearch={false}
               />
             )}
-            {uniqueValues.tournamentRegistrations.length > 1 && (
+            {uniqueValues.tournamentRegistrations.length > 0 && (
               <FilterSection
                 title={t('directory', 'registrationType')}
                 options={uniqueValues.tournamentRegistrations}
                 value={filters.tournamentRegistration}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentRegistration: v }))}
-                labels={Object.fromEntries(uniqueValues.tournamentRegistrations.map(r => [r, r === 'all' ? t('directory', 'allLabel') : t('registrationTypes', r)]))}
+                labels={Object.fromEntries(uniqueValues.tournamentRegistrations.map(r => [r.value, t('registrationTypes', r.value)]))}
                 icons={{ 'Inscription libre': 'lock-open', 'Sur invitation': 'mail', 'Réservé aux licenciés': 'verified', 'Ouvert': 'public' }}
                 allLabel={t('directory', 'allLabel')}
+                showSearch={false}
               />
             )}
-            {uniqueValues.tournamentScopes.length > 1 && (
+            {uniqueValues.tournamentScopes.length > 0 && (
               <FilterSection
                 title={t('directory', 'scopeLabel')}
                 options={uniqueValues.tournamentScopes}
                 value={filters.tournamentScope}
                 onChange={(v) => setFilters(f => ({ ...f, tournamentScope: v }))}
-                labels={Object.fromEntries(uniqueValues.tournamentScopes.map(s => [s, s === 'all' ? t('directory', 'allLabel') : t('tournamentScopes', s)]))}
+                labels={Object.fromEntries(uniqueValues.tournamentScopes.map(s => [s.value, t('tournamentScopes', s.value)]))}
                 icons={{ 'Tournoi de club': 'home', 'Championnat départemental': 'place', 'Championnat régional': 'map', 'Championnat national': 'flag', 'Championnat international': 'public' }}
                 allLabel={t('directory', 'allLabel')}
+                showSearch={false}
               />
             )}
           </>
@@ -1143,12 +1496,13 @@ export default function DirectoryScreen() {
               <MaterialIcons name="clear-all" size={16} color={theme.error} />
               <Text style={styles.clearAllText}>{t('directory', 'clearLabel')}</Text>
             </Pressable>
+            {distanceFilter !== 'all' && activeTab !== 'events' && <ActiveFilterChip label={`${distanceFilter} km`} onRemove={() => setDistanceFilter('all')} icon="near-me" />}
             {activeTab === 'players' && (
               <>
                 {filters.playerRole !== 'all' && <ActiveFilterChip label={t('roles', filters.playerRole)} onRemove={() => setFilters(f => ({ ...f, playerRole: 'all' }))} />}
                 {filters.playerEloRank !== 'all' && (() => { const eloLabels: Record<string, string> = { bronze: 'Bronze', silver: language === 'fr' ? 'Argent' : 'Silver', gold: language === 'fr' ? 'Or' : 'Gold', diamond: language === 'fr' ? 'Diamant' : 'Diamond', master: language === 'fr' ? 'Maitre' : 'Master', grand_master: language === 'fr' ? 'Grand Maitre' : 'Grand Master' }; return <ActiveFilterChip label={eloLabels[filters.playerEloRank] || filters.playerEloRank} onRemove={() => setFilters(f => ({ ...f, playerEloRank: 'all' }))} icon="diamond" />; })()}
                 {filters.playerExperience !== 'all' && <ActiveFilterChip label={t('player', filters.playerExperience === 'less_than_1' ? 'experienceLessThan1' : filters.playerExperience === '1_to_3' ? 'experience1to3' : filters.playerExperience === '3_to_10' ? 'experience3to10' : 'experienceMoreThan10')} onRemove={() => setFilters(f => ({ ...f, playerExperience: 'all' }))} icon="timeline" />}
-
+                {filters.playerTerrain !== 'all' && <ActiveFilterChip label={filters.playerTerrain} onRemove={() => setFilters(f => ({ ...f, playerTerrain: 'all' }))} icon="sports-soccer" />}
                 {filters.playerClub !== 'all' && <ActiveFilterChip label={filters.playerClub} onRemove={() => setFilters(f => ({ ...f, playerClub: 'all' }))} />}
                 {filters.playerCity !== 'all' && <ActiveFilterChip label={filters.playerCity} onRemove={() => setFilters(f => ({ ...f, playerCity: 'all' }))} />}
                 {filters.playerCountry !== 'all' && <ActiveFilterChip label={filters.playerCountry} onRemove={() => setFilters(f => ({ ...f, playerCountry: 'all' }))} />}
@@ -1156,6 +1510,8 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'clubs' && (
               <>
+                {filters.clubMembersRange !== 'all' && <ActiveFilterChip label={filters.clubMembersRange} onRemove={() => setFilters(f => ({ ...f, clubMembersRange: 'all' }))} icon="people" />}
+                {filters.clubEquipment !== 'all' && <ActiveFilterChip label={t('facilityLabels', filters.clubEquipment) || filters.clubEquipment} onRemove={() => setFilters(f => ({ ...f, clubEquipment: 'all' }))} icon="fitness-center" />}
                 {filters.clubCity !== 'all' && <ActiveFilterChip label={filters.clubCity} onRemove={() => setFilters(f => ({ ...f, clubCity: 'all' }))} />}
                 {filters.clubCountry !== 'all' && <ActiveFilterChip label={filters.clubCountry} onRemove={() => setFilters(f => ({ ...f, clubCountry: 'all' }))} />}
               </>
@@ -1181,6 +1537,7 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'tournaments' && (
               <>
+                {filters.tournamentDate !== 'all' && (() => { const dl: Record<string, string> = { this_month: language === 'fr' ? 'Ce mois' : 'This month', next_3_months: language === 'fr' ? '3 prochains mois' : 'Next 3 months', this_year: language === 'fr' ? 'Cette annee' : 'This year', past: language === 'fr' ? 'Passes' : 'Past' }; return <ActiveFilterChip label={dl[filters.tournamentDate] || filters.tournamentDate} onRemove={() => setFilters(f => ({ ...f, tournamentDate: 'all' }))} icon="date-range" />; })()}
                 {filters.tournamentStatus !== 'all' && <ActiveFilterChip label={getStatusLabel(filters.tournamentStatus)} onRemove={() => setFilters(f => ({ ...f, tournamentStatus: 'all' }))} icon="event" />}
                 {filters.tournamentCity !== 'all' && <ActiveFilterChip label={filters.tournamentCity} onRemove={() => setFilters(f => ({ ...f, tournamentCity: 'all' }))} icon="place" />}
                 {filters.tournamentFormat !== 'all' && <ActiveFilterChip label={t('formats', filters.tournamentFormat)} onRemove={() => setFilters(f => ({ ...f, tournamentFormat: 'all' }))} />}
@@ -2096,7 +2453,7 @@ const MemoizedEventCard = React.memo(({ item, language }: { item: any; language:
   );
 });
 
-// Filter Section Component
+// Filter Section Component — supports cascading counts and inline search
 function FilterSection({ 
   title, 
   options, 
@@ -2105,46 +2462,106 @@ function FilterSection({
   labels = {}, 
   icons = {},
   allLabel = 'Tous',
+  showSearch,
+  searchPlaceholder,
 }: { 
   title: string; 
-  options: string[]; 
+  options: { value: string; count: number }[]; 
   value: string; 
   onChange: (v: string) => void;
   labels?: Record<string, string>;
   icons?: Record<string, string>;
   allLabel?: string;
+  showSearch?: boolean;
+  searchPlaceholder?: string;
 }) {
+  const [filterSearch, setFilterSearch] = useState('');
+  // Auto-enable search for lists with > 6 options
+  const shouldShowSearch = showSearch !== false && (showSearch === true || searchPlaceholder !== undefined) && options.length > 6;
+
+  // Filter options by search query
+  const visibleOptions = useMemo(() => {
+    if (!filterSearch || !shouldShowSearch) return options;
+    const q = filterSearch.toLowerCase();
+    return options.filter(o => {
+      const label = labels[o.value] || o.value;
+      return label.toLowerCase().includes(q);
+    });
+  }, [options, filterSearch, shouldShowSearch, labels]);
+
   return (
     <View style={styles.filterSection}>
       <Text style={styles.filterSectionTitle}>{title}</Text>
-      <View style={styles.filterOptions}>
-        {options.map(option => {
-          const isActive = value === option;
-          const label = labels[option] || (option === 'all' ? allLabel : option);
-          const icon = icons[option];
+      {shouldShowSearch ? (
+        <View style={styles.filterSearchBar}>
+          <MaterialIcons name="search" size={16} color={theme.textMuted} />
+          <TextInput
+            style={styles.filterSearchInput}
+            placeholder={searchPlaceholder || 'Search...'}
+            placeholderTextColor={theme.textMuted}
+            value={filterSearch}
+            onChangeText={setFilterSearch}
+          />
+          {filterSearch.length > 0 ? (
+            <Pressable onPress={() => setFilterSearch('')} hitSlop={8}>
+              <MaterialIcons name="close" size={14} color={theme.textMuted} />
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterChipScroll}>
+        {/* Always show "All" option first */}
+        {(() => {
+          const isActive = value === 'all';
           return (
             <Pressable
-              key={option}
-              style={[styles.filterOption, isActive && styles.filterOptionActive]}
+              key="all"
+              style={[styles.filterChip, isActive && styles.filterChipActive]}
+              onPress={() => { Haptics.selectionAsync(); onChange('all'); }}
+            >
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive]} numberOfLines={1}>
+                {allLabel}
+              </Text>
+              {isActive ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
+            </Pressable>
+          );
+        })()}
+        {visibleOptions.map(option => {
+          const isActive = value === option.value;
+          const label = labels[option.value] || option.value;
+          const icon = icons[option.value];
+          const showCount = option.count >= 0;
+          const isDisabled = option.count === 0 && !isActive;
+          return (
+            <Pressable
+              key={option.value}
+              style={[styles.filterChip, isActive && styles.filterChipActive, isDisabled && styles.filterChipDisabled]}
               onPress={() => {
+                if (isDisabled) return;
                 Haptics.selectionAsync();
-                onChange(option);
+                onChange(option.value);
               }}
             >
-              {icon && (
+              {icon ? (
                 <MaterialIcons 
                   name={icon as any} 
-                  size={16} 
-                  color={isActive ? theme.primary : theme.textSecondary} 
+                  size={14} 
+                  color={isActive ? '#FFF' : isDisabled ? theme.textMuted : theme.textSecondary} 
                 />
-              )}
-              <Text style={[styles.filterOptionText, isActive && styles.filterOptionTextActive]}>
+              ) : null}
+              <Text style={[styles.filterChipText, isActive && styles.filterChipTextActive, isDisabled && styles.filterChipTextDisabled]} numberOfLines={1}>
                 {label}
               </Text>
+              {showCount ? (
+                <View style={[styles.filterChipCount, isActive && styles.filterChipCountActive]}>
+                  <Text style={[styles.filterChipCountText, isActive && styles.filterChipCountTextActive]}>{option.count}</Text>
+                </View>
+              ) : null}
+              {isActive ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}
             </Pressable>
           );
         })}
-      </View>
+      </ScrollView>
     </View>
   );
 }
@@ -2753,34 +3170,76 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     textTransform: 'uppercase',
   },
-  filterOptions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
+  filterChipScroll: {
+    paddingRight: 16,
     gap: 8,
   },
-  filterOption: {
+  filterChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 9,
     backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: theme.border,
   },
-  filterOptionActive: {
+  filterChipActive: {
     borderColor: theme.primary,
-    backgroundColor: theme.primary + '08',
+    backgroundColor: theme.primary,
   },
-  filterOptionText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: theme.textSecondary,
-  },
-  filterOptionTextActive: {
-    color: theme.primary,
+  filterChipText: {
+    fontSize: 13,
     fontWeight: '600',
+    color: theme.textSecondary,
+    maxWidth: 180,
+  },
+  filterChipTextActive: {
+    color: '#FFF',
+  },
+  filterChipTextDisabled: {
+    color: theme.textMuted,
+  },
+  filterChipDisabled: {
+    opacity: 0.45,
+  },
+  filterChipCount: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    paddingHorizontal: 5,
+    paddingVertical: 1,
+    borderRadius: 8,
+    minWidth: 20,
+    alignItems: 'center' as const,
+  },
+  filterChipCountActive: {
+    backgroundColor: 'rgba(255,255,255,0.25)',
+  },
+  filterChipCountText: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: theme.textMuted,
+  },
+  filterChipCountTextActive: {
+    color: '#FFF',
+  },
+  filterSearchBar: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    backgroundColor: theme.backgroundSecondary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    height: 36,
+    gap: 6,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
+  },
+  filterSearchInput: {
+    flex: 1,
+    fontSize: 13,
+    color: theme.textPrimary,
+    padding: 0,
   },
   modalFooter: {
     flexDirection: 'row',
