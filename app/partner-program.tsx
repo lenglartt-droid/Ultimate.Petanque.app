@@ -62,10 +62,12 @@ const TIERS: TierConfig[] = [
     criteriaEn: ['All Bronze criteria', 'Minimum 3-month commitment', 'Brand content (HD logo, color, description)'],
     benefitsFr: [
       'Tous les avantages Bronze',
-      'Banniere sponsor sur les pages club, terrain et tournoi',
-      'Badge "Sponsorise" sur les cartes annuaire (clubs, terrains, tournois)',
+      'Banniere sponsor sur les pages club, terrain, tournoi et joueur',
+      'Badge "Sponsorise" sur les cartes annuaire (clubs, terrains, tournois, joueurs)',
       'Push notifications (1/mois) aux joueurs cibles',
       'Propositions de sponsoring self-service (validation admin)',
+      'Marqueur carte avec bordure marque + badge S pour joueurs sponsorises',
+      'Metriques de performance par item sponsorise (drill-down)',
       'Dashboard analytique complet (ROI, CTR, portee)',
       'Templates push pre-redigees',
       'Programmation des envois push',
@@ -76,10 +78,12 @@ const TIERS: TierConfig[] = [
     ],
     benefitsEn: [
       'All Bronze benefits',
-      'Sponsor banner on club, terrain and tournament pages',
-      '"Sponsored" badge on directory cards (clubs, terrains, tournaments)',
+      'Sponsor banner on club, terrain, tournament and player pages',
+      '"Sponsored" badge on directory cards (clubs, terrains, tournaments, players)',
       'Push notifications (1/month) to targeted players',
       'Self-service sponsorship proposals (admin validation)',
+      'Map marker with brand border + S badge for sponsored players',
+      'Per-item sponsored performance metrics (drill-down)',
       'Full analytics dashboard (ROI, CTR, reach)',
       'Pre-written push templates',
       'Push scheduling',
@@ -109,6 +113,7 @@ const TIERS: TierConfig[] = [
       'CRM parrainages avec export CSV',
       'Digest hebdomadaire automatique',
       'Kit de marque exportable (PDF)',
+      'Historique des assignations sponsor (admin)',
       'Badge Or exclusif et marqueur carte premium',
     ],
     benefitsEn: [
@@ -123,6 +128,7 @@ const TIERS: TierConfig[] = [
       'Referral CRM with CSV export',
       'Automatic weekly digest',
       'Exportable brand kit (PDF)',
+      'Sponsor assignment history (admin)',
       'Exclusive Gold badge and premium map marker',
     ],
   },
@@ -161,7 +167,8 @@ export default function PartnerProgramScreen() {
     { q: fr ? 'Quelle est la difference avec le programme ambassadeur ?' : 'What is the difference with the ambassador program?', a: fr ? 'Les ambassadeurs sont des joueurs passionnes qui representent la communaute benevolement. Les partenaires sont des marques ou structures qui beneficient d\'une visibilite business avec des outils de communication et d\'analyse avances.' : 'Ambassadors are passionate players who represent the community voluntarily. Partners are brands or organizations that benefit from business visibility with advanced communication and analytics tools.' },
     { q: fr ? 'Puis-je changer de niveau ?' : 'Can I change my level?', a: fr ? 'Oui, vous pouvez passer au niveau superieur a tout moment. Le passage se fait sans interruption de service et vous conservez tout votre historique et vos donnees analytiques.' : 'Yes, you can upgrade at any time. The upgrade is seamless with no service interruption and you keep all your history and analytics data.' },
     { q: fr ? 'Comment sont mesurees les impressions ?' : 'How are impressions measured?', a: fr ? 'Chaque affichage de votre banniere, marqueur carte ou fiche partenaire est comptabilise comme une impression. Les clics sur votre profil ou lien sont egalement traces. Tout est visible dans votre dashboard analytique en temps reel.' : 'Each display of your banner, map marker or partner card counts as an impression. Clicks on your profile or link are also tracked. Everything is visible in your real-time analytics dashboard.' },
-    { q: fr ? 'Comment fonctionne le sponsoring d\'items ?' : 'How does item sponsorship work?', a: fr ? 'Les partenaires Argent et Or peuvent proposer de sponsoriser un terrain, club ou tournoi depuis leur portail. La demande est validee par un administrateur. Une fois approuvee, votre banniere sponsor apparait sur la page de l\'item.' : 'Silver and Gold partners can propose to sponsor a terrain, club or tournament from their portal. The request is validated by an administrator. Once approved, your sponsor banner appears on the item page.' },
+    { q: fr ? 'Comment fonctionne le sponsoring d\'items ?' : 'How does item sponsorship work?', a: fr ? 'Les partenaires Argent et Or peuvent proposer de sponsoriser un terrain, club, tournoi ou joueur depuis leur portail. La demande est validee par un administrateur. Une fois approuvee, votre banniere sponsor apparait sur la page de l\'item, et un badge "Sponsorise" est visible dans l\'annuaire. Pour les joueurs sponsorises, la bordure de l\'avatar prend la couleur de votre marque.' : 'Silver and Gold partners can propose to sponsor a terrain, club, tournament or player from their portal. The request is validated by an administrator. Once approved, your sponsor banner appears on the item page, and a "Sponsored" badge is visible in the directory. For sponsored players, the avatar border takes your brand color.' },
+    { q: fr ? 'Peut-on sponsoriser un joueur ?' : 'Can I sponsor a player?', a: fr ? 'Oui. Les partenaires Argent et Or peuvent proposer de sponsoriser un joueur via le portail partenaire (onglet Propositions > Joueurs). Une fois approuve par l\'admin, la fiche du joueur affiche votre banniere sponsor avec votre logo et couleur de marque. Le joueur recoit un badge "Sponsorise" visible dans l\'annuaire et sur la carte.' : 'Yes. Silver and Gold partners can propose to sponsor a player via the partner portal (Proposals tab > Players). Once approved by admin, the player card displays your sponsor banner with your logo and brand color. The player gets a "Sponsored" badge visible in the directory and on the map.' },
   ];
 
   return (
@@ -357,8 +364,9 @@ export default function PartnerProgramScreen() {
             { feature: fr ? 'Badge annuaire' : 'Directory badge', bronze: true, silver: true, gold: true },
             { feature: fr ? 'Fiche partenaire' : 'Partner card', bronze: true, silver: true, gold: true },
             { feature: fr ? 'Marqueur carte' : 'Map marker', bronze: true, silver: true, gold: true },
-            { feature: fr ? 'Banniere sponsor (club/terrain/tournoi)' : 'Sponsor banner (club/terrain/tournament)', bronze: false, silver: true, gold: true },
+            { feature: fr ? 'Banniere sponsor (club/terrain/tournoi/joueur)' : 'Sponsor banner (club/terrain/tournament/player)', bronze: false, silver: true, gold: true },
             { feature: fr ? 'Badge "Sponsorise" sur cartes' : '"Sponsored" badge on cards', bronze: false, silver: true, gold: true },
+            { feature: fr ? 'Sponsoring de joueurs' : 'Player sponsorship', bronze: false, silver: true, gold: true },
             { feature: fr ? 'Propositions sponsoring self-service' : 'Self-service sponsorship proposals', bronze: false, silver: true, gold: true },
             { feature: fr ? 'Push notifications' : 'Push notifications', bronze: false, silver: true, gold: true },
             { feature: fr ? 'Suivi budget & ROI' : 'Budget tracker & ROI', bronze: false, silver: true, gold: true },
@@ -373,6 +381,9 @@ export default function PartnerProgramScreen() {
             { feature: fr ? 'Digest hebdomadaire' : 'Weekly digest', bronze: false, silver: false, gold: true },
             { feature: fr ? 'Section onboarding' : 'Onboarding section', bronze: false, silver: false, gold: true },
             { feature: fr ? 'Kit de marque PDF' : 'Brand kit PDF', bronze: false, silver: false, gold: true },
+    { feature: fr ? 'Marqueur carte sponsorise (S)' : 'Sponsored map marker (S)', bronze: false, silver: true, gold: true },
+    { feature: fr ? 'Drill-down par item' : 'Per-item drill-down', bronze: false, silver: true, gold: true },
+    { feature: fr ? 'Historique assignations' : 'Assignment history', bronze: false, silver: false, gold: true },
           ].map((row, i) => (
             <View key={i} style={[st.compRow, i % 2 === 0 && { backgroundColor: '#F8FAFC' }]}>
               <Text style={st.compFeature}>{row.feature}</Text>
