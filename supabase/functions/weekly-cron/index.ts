@@ -46,7 +46,7 @@ Deno.serve(async (req: Request) => {
     // Parse body for specific tasks
     let body: any = {};
     try { body = await req.json(); } catch { body = {}; }
-    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'process_scheduled_announcements', 'check_push_receipts', 'ab_auto_winner', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive'];
+    const tasks = body.tasks || ['cleanup_tokens', 'cleanup_shares', 'engagement_reminders', 'cleanup_analytics', 'sponsor_digest', 'process_scheduled_pushes', 'process_scheduled_announcements', 'check_push_receipts', 'ab_auto_winner', 'elo_decay', 'elo_seasonal_reset', 'appeal_deadline_check', 'admin_weekly_report', 'weekly_digest_push', 'expire_invitations', 'invitation_reminders', 'transfer_reminders', 'transfer_escalation', 'transfer_expiration', 'transfer_urgent_reminders', 'transfer_archive', 'partner_expiration'];
 
     const results: Record<string, any> = {};
 
@@ -2259,7 +2259,144 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
-    // TASK 18: Clean up old analytics (older than 365 days)
+    // TASK 18: Partner Expiration — Deactivate expired + warn 7d before
+    // ============================================================
+    if (tasks.includes('partner_expiration')) {
+      console.log('[weekly-cron] Checking partner expirations...');
+      try {
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const sevenDaysFromNow = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+
+        // 1. Auto-deactivate expired partners
+        const { data: expiredPartners } = await supabaseAdmin
+          .from('ambassadors')
+          .select('id, user_id, display_name, badge_type, expires_at')
+          .eq('is_active', true)
+          .not('expires_at', 'is', null)
+          .lt('expires_at', nowIso)
+          .in('badge_type', ['gold_sponsor', 'sponsor', 'partner']);
+
+        let deactivated = 0;
+        if (expiredPartners && expiredPartners.length > 0) {
+          const ids = expiredPartners.map(p => p.id);
+          await supabaseAdmin
+            .from('ambassadors')
+            .update({ is_active: false, updated_at: nowIso })
+            .in('id', ids);
+          deactivated = ids.length;
+
+          // Notify each expired partner
+          for (const ep of expiredPartners) {
+            try {
+              const { data: tokens } = await supabaseAdmin
+                .from('push_tokens')
+                .select('token')
+                .eq('user_id', ep.user_id)
+                .eq('active', true);
+
+              if (tokens && tokens.length > 0) {
+                const tierLabel = ep.badge_type === 'gold_sponsor' ? 'Or' : ep.badge_type === 'sponsor' ? 'Argent' : 'Bronze';
+                const messages = tokens.map((t: any) => buildPushMessage(
+                  t.token,
+                  `\u{26A0}\u{FE0F} Partenariat expire`,
+                  `Votre partenariat ${tierLabel} "${ep.display_name}" a expire. Contactez l'equipe pour renouveler.`,
+                  { type: 'partner_expired', partnerId: ep.id },
+                  { channelId: 'sponsor-updates', priority: 'high' }
+                ));
+                await sendPushNotifications(messages);
+              }
+            } catch { /* silent */ }
+          }
+
+          // Also notify admins
+          const { data: adminUsers } = await supabaseAdmin.from('user_profiles').select('id').eq('is_admin', true);
+          if (adminUsers && adminUsers.length > 0) {
+            const adminIds = adminUsers.map((a: any) => a.id);
+            const { data: adminTokens } = await supabaseAdmin.from('push_tokens').select('token').in('user_id', adminIds).eq('active', true);
+            if (adminTokens && adminTokens.length > 0) {
+              const names = expiredPartners.slice(0, 3).map(p => p.display_name).join(', ');
+              const extra = expiredPartners.length > 3 ? ` +${expiredPartners.length - 3}` : '';
+              const adminMessages = adminTokens.map((t: any) => buildPushMessage(
+                t.token,
+                `\u{1F6A8} ${deactivated} partenaire(s) desactive(s)`,
+                `Partenariats expires et desactives : ${names}${extra}. Renouvellement requis.`,
+                { type: 'moderation_action', action: 'partner_expired' },
+                { channelId: 'tournament-reminders', priority: 'high' }
+              ));
+              await sendPushNotifications(adminMessages);
+            }
+          }
+
+          console.log(`[weekly-cron] Deactivated ${deactivated} expired partners`);
+        }
+
+        // 2. Send 7-day warning to partners expiring soon
+        const { data: expiringSoon } = await supabaseAdmin
+          .from('ambassadors')
+          .select('id, user_id, display_name, badge_type, expires_at')
+          .eq('is_active', true)
+          .not('expires_at', 'is', null)
+          .gt('expires_at', nowIso)
+          .lte('expires_at', sevenDaysFromNow)
+          .in('badge_type', ['gold_sponsor', 'sponsor', 'partner']);
+
+        let warned = 0;
+        if (expiringSoon && expiringSoon.length > 0) {
+          // Dedup: check if we already warned today
+          const todayStart = new Date();
+          todayStart.setHours(0, 0, 0, 0);
+          const { data: existingWarn } = await supabaseAdmin
+            .from('ambassador_analytics')
+            .select('id')
+            .eq('event_type', 'partner_expiry_warning')
+            .gte('created_at', todayStart.toISOString())
+            .limit(1);
+
+          if (!existingWarn || existingWarn.length === 0) {
+            for (const sp of expiringSoon) {
+              try {
+                const daysLeft = Math.ceil((new Date(sp.expires_at).getTime() - now.getTime()) / (24 * 60 * 60 * 1000));
+                const { data: tokens } = await supabaseAdmin
+                  .from('push_tokens')
+                  .select('token')
+                  .eq('user_id', sp.user_id)
+                  .eq('active', true);
+
+                if (tokens && tokens.length > 0) {
+                  const tierLabel = sp.badge_type === 'gold_sponsor' ? 'Or' : sp.badge_type === 'sponsor' ? 'Argent' : 'Bronze';
+                  const messages = tokens.map((t: any) => buildPushMessage(
+                    t.token,
+                    `\u{23F0} Partenariat expire dans ${daysLeft}j`,
+                    `Votre partenariat ${tierLabel} "${sp.display_name}" expire dans ${daysLeft} jour(s). Renouvelez pour continuer a beneficier des avantages.`,
+                    { type: 'partner_expiry_warning', partnerId: sp.id, daysLeft },
+                    { channelId: 'sponsor-updates' }
+                  ));
+                  await sendPushNotifications(messages);
+                  warned++;
+                }
+              } catch { /* silent */ }
+            }
+
+            // Track dedup
+            await supabaseAdmin.from('ambassador_analytics').insert({
+              ambassador_id: '00000000-0000-0000-0000-000000000000',
+              event_type: 'partner_expiry_warning',
+              source_page: `warned:${warned}|expiring:${expiringSoon.length}`,
+            }).catch(() => {});
+          }
+        }
+
+        console.log(`[weekly-cron] Partner expiration: ${deactivated} deactivated, ${warned} warned`);
+        results.partner_expiration = { deactivated, warned, expiringSoon: expiringSoon?.length || 0 };
+      } catch (partnerErr: any) {
+        console.error('[weekly-cron] Partner expiration error:', partnerErr.message);
+        results.partner_expiration = { error: partnerErr.message };
+      }
+    }
+
+    // ============================================================
+    // TASK 19: Clean up old analytics (older than 365 days)
     // ============================================================
     if (tasks.includes('cleanup_analytics') && !results.cleanup_analytics) {
       console.log('[weekly-cron] Cleaning up old analytics...');

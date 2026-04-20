@@ -575,12 +575,26 @@ export default function PlayerDetailScreen() {
 
               <View style={s.heroNameRow}>
                   <Text style={s.heroName}>{player.name}</Text>
-                  {ambassadorData ? (
-                    <View style={s.ambassadorBadge}>
-                      <MaterialIcons name="verified" size={12} color="#7C3AED" />
-                      <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
-                    </View>
-                  ) : isSelf && isPremium ? (
+                  {ambassadorData ? (() => {
+                    const isPartnerTier = ['partner', 'sponsor', 'gold_sponsor'].includes(ambassadorData.badgeType);
+                    const partnerTierConfig: Record<string, { label: string; labelEn: string; color: string; icon: string }> = {
+                      gold_sponsor: { label: 'Partenaire Or', labelEn: 'Gold Partner', color: '#D4A017', icon: 'star' },
+                      sponsor: { label: 'Partenaire Argent', labelEn: 'Silver Partner', color: '#78909C', icon: 'workspace-premium' },
+                      partner: { label: 'Partenaire Bronze', labelEn: 'Bronze Partner', color: '#A1887F', icon: 'workspace-premium' },
+                    };
+                    const ptc = isPartnerTier ? partnerTierConfig[ambassadorData.badgeType] : null;
+                    return ptc ? (
+                      <View style={[s.ambassadorBadge, { backgroundColor: ptc.color + '12', borderColor: ptc.color + '30' }]}>
+                        <MaterialIcons name={ptc.icon as any} size={12} color={ptc.color} />
+                        <Text style={[s.ambassadorBadgeText, { color: ptc.color }]}>{language === 'fr' ? ptc.label : ptc.labelEn}</Text>
+                      </View>
+                    ) : (
+                      <View style={s.ambassadorBadge}>
+                        <MaterialIcons name="verified" size={12} color="#7C3AED" />
+                        <Text style={s.ambassadorBadgeText}>{language === 'fr' ? 'Ambassadeur' : 'Ambassador'}</Text>
+                      </View>
+                    );
+                  })() : isSelf && isPremium ? (
                     <View style={s.premiumBadge}>
                       <MaterialIcons name="star" size={12} color="#C0C0C0" />
                       <Text style={s.premiumBadgeText}>Premium</Text>
@@ -687,13 +701,31 @@ export default function PlayerDetailScreen() {
                       {ambassadorData.websiteUrl ? (<Pressable style={[s.ambSocialBtn, { backgroundColor: theme.primary + '10' }]} onPress={() => { trackAmbassadorEvent(ambassadorData.id, 'social_click', 'website'); Linking.openURL(ambassadorData.websiteUrl!.startsWith('http') ? ambassadorData.websiteUrl! : `https://${ambassadorData.websiteUrl}`); }}><MaterialIcons name="language" size={16} color={theme.primary} /><Text style={[s.ambSocialText, { color: theme.primary }]}>Web</Text></Pressable>) : null}
                     </View>
                   ) : null}
-                  {ambassadorData ? (
-                    <Pressable style={s.ambPageBtn} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}>
-                      <MaterialIcons name="verified" size={16} color="#7C3AED" />
-                      <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
-                      <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-                    </Pressable>
-                  ) : null}
+                  {ambassadorData ? (() => {
+                    const isPartnerTier = ['partner', 'sponsor', 'gold_sponsor'].includes(ambassadorData.badgeType);
+                    if (isPartnerTier) {
+                      const ptColor = ambassadorData.badgeType === 'gold_sponsor' ? '#D4A017' : ambassadorData.badgeType === 'sponsor' ? '#78909C' : '#A1887F';
+                      return (
+                        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+                          <Pressable style={[s.ambPageBtn, { flex: 1, backgroundColor: ptColor + '10', borderColor: ptColor + '25' }]} onPress={() => { Haptics.selectionAsync(); router.push('/partners' as any); }}>
+                            <MaterialIcons name="storefront" size={16} color={ptColor} />
+                            <Text style={[s.ambPageBtnText, { color: ptColor }]}>{language === 'fr' ? 'Ma page' : 'My Page'}</Text>
+                          </Pressable>
+                          <Pressable style={[s.ambPageBtn, { flex: 1, backgroundColor: '#6366F110', borderColor: '#6366F125' }]} onPress={() => { Haptics.selectionAsync(); router.push('/sponsor-portal' as any); }}>
+                            <MaterialIcons name="dashboard" size={16} color="#6366F1" />
+                            <Text style={[s.ambPageBtnText, { color: '#6366F1' }]}>{language === 'fr' ? 'Portail Partenaire' : 'Partner Portal'}</Text>
+                          </Pressable>
+                        </View>
+                      );
+                    }
+                    return (
+                      <Pressable style={s.ambPageBtn} onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/ambassadors', params: { scrollTo: ambassadorData.id } } as any); }}>
+                        <MaterialIcons name="verified" size={16} color="#7C3AED" />
+                        <Text style={s.ambPageBtnText}>{language === 'fr' ? 'Voir la page ambassadeur' : 'View ambassador page'}</Text>
+                        <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
+                      </Pressable>
+                    );
+                  })() : null}
                   {(player.phone || player.email) && (isSharedItem ? (player.showContactPublic === true) : (player.showContactPublic !== false || !player.isPublic)) ? (
                     <View style={s.contactPillsRow}>
                       {player.phone ? (<Pressable style={s.contactPill} onPress={() => Linking.openURL(`tel:${player.phone}`)}><MaterialIcons name="phone" size={14} color={theme.primary} /><Text style={s.contactPillText}>{player.phone}</Text></Pressable>) : null}
