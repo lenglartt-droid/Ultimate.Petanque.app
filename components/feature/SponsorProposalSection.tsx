@@ -16,7 +16,7 @@ interface SponsorProposalSectionProps {
 export default function SponsorProposalSection({ sponsorId, sponsorName, isSilverPlus, tierColor, fr }: SponsorProposalSectionProps) {
   const supabase = getSupabaseClient();
   const { showAlert } = useAlert();
-  const [itemType, setItemType] = useState<'terrains' | 'clubs' | 'tournaments'>('terrains');
+  const [itemType, setItemType] = useState<'terrains' | 'clubs' | 'tournaments' | 'players'>('terrains');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
@@ -38,7 +38,7 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
       setSearching(true);
       const { data } = await supabase
         .from(itemType)
-        .select(itemType === 'tournaments' ? 'id, name, date, sponsor_id' : 'id, name, city, sponsor_id')
+        .select(itemType === 'tournaments' ? 'id, name, date, sponsor_id' : itemType === 'players' ? 'id, name, city, sponsor_id, is_public' : 'id, name, city, sponsor_id')
         .ilike('name', `%${text.trim()}%`)
         .limit(10);
       setSearchResults(data || []);
@@ -51,7 +51,7 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
     const { error } = await supabase.from('sponsor_proposals').insert({
       ambassador_id: sponsorId,
       ambassador_name: sponsorName,
-      item_type: itemType === 'terrains' ? 'terrain' : itemType === 'clubs' ? 'club' : 'tournament',
+      item_type: itemType === 'terrains' ? 'terrain' : itemType === 'clubs' ? 'club' : itemType === 'players' ? 'player' : 'tournament',
       item_id: itemId,
       item_name: itemName,
     });
@@ -102,6 +102,7 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
           { id: 'terrains' as const, label: fr ? 'Terrains' : 'Terrains', icon: 'sports-soccer', color: '#10B981' },
           { id: 'clubs' as const, label: 'Clubs', icon: 'home', color: '#D97706' },
           { id: 'tournaments' as const, label: fr ? 'Tournois' : 'Tournaments', icon: 'emoji-events', color: '#B45309' },
+          { id: 'players' as const, label: fr ? 'Joueurs' : 'Players', icon: 'person', color: '#2563EB' },
         ]).map(t => {
           const active = itemType === t.id;
           return (

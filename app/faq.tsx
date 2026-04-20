@@ -439,6 +439,13 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
             : 'From your player card, enable "Public Visibility". You will appear on the map (if geolocated) and in rankings (after 3 public matches). You can control contact visibility (email, phone) independently.',
         },
         {
+          id: 'ps2b',
+          q: fr ? 'Qu\'est-ce qu\'un joueur sponsorise ?' : 'What is a sponsored player?',
+          a: fr
+            ? 'Un joueur sponsorise est un joueur dont le profil est associe a un partenaire (Argent ou Or). La banniere du sponsor apparait sur la fiche du joueur, la bordure de son avatar prend la couleur de marque du sponsor dans l\'annuaire, et un badge "Sponsorise" est visible. L\'association est proposee par le partenaire via son portail et validee par un administrateur. Le joueur n\'a aucune action a effectuer de son cote.'
+            : 'A sponsored player is a player whose profile is linked to a partner (Silver or Gold). The sponsor banner appears on the player card, the avatar border takes the sponsor brand color in the directory, and a "Sponsored" badge is visible. The association is proposed by the partner via their portal and validated by an administrator. The player does not need to take any action.',
+        },
+        {
           id: 'ps3',
           q: fr ? 'Comment partager une fiche (joueur, club, terrain, tournoi) ?' : 'How do I share a card (player, club, terrain, tournament)?',
           a: fr
@@ -876,8 +883,8 @@ function getPartnerFaq(fr: boolean): FAQCategory[] {
           id: 'pp2',
           q: fr ? 'Quels sont les 3 niveaux ?' : 'What are the 3 levels?',
           a: fr
-            ? 'Bronze (sur devis) : fiche partenaire, badge, lien site, stats de base, marqueur carte a votre couleur de marque. Argent : + banniere rotative accueil, 1 push/mois, dashboard analytics, templates push, export CSV/PDF. Or : + banniere permanente, section onboarding, push illimites avec A/B testing, heatmap, calculateur ROI, CRM, kit de marque, digest hebdomadaire.'
-            : 'Bronze (on quote): partner card, badge, website link, basic stats, map marker in your brand color. Silver: + rotating home banner, 1 push/month, analytics dashboard, push templates, CSV/PDF export. Gold: + permanent banner, onboarding section, unlimited push with A/B testing, heatmap, ROI calculator, CRM, brand kit, weekly digest.',
+            ? 'Bronze (sur devis) : fiche partenaire, badge, lien site, stats de base, marqueur carte a votre couleur de marque. Argent : + banniere sponsor (club/terrain/tournoi/joueur), 1 push/mois, dashboard analytics, templates push, export CSV/PDF. Or : + banniere permanente accueil, section onboarding, push illimites avec A/B testing, heatmap, calculateur ROI, CRM, kit de marque, digest hebdomadaire.'
+            : 'Bronze (on quote): partner card, badge, website link, basic stats, map marker in your brand color. Silver: + sponsor banner (club/terrain/tournament/player), 1 push/month, analytics dashboard, push templates, CSV/PDF export. Gold: + permanent home banner, onboarding section, unlimited push with A/B testing, heatmap, ROI calculator, CRM, brand kit, weekly digest.',
         },
       ],
     },

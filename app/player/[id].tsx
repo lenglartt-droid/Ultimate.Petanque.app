@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import * as Haptics from '@/services/haptics';
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
@@ -33,6 +34,18 @@ import { countTransferableItems, searchRegisteredUsers, sendTransferRequest } fr
 import { isFollowingPlayer, toggleFollowPlayer, getFollowerCount, getFollowingCount } from '@/services/activityFeedService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+
+// Gold pulse dot for Gold partner badges
+const GoldPulseDot = React.memo(({ color }: { color: string }) => {
+  const opacity = useSharedValue(0.4);
+  React.useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginLeft: 3 }, style]} />;
+});
+
 import { computeQuickTrustScore, getTrustScoreColor, getTrustScoreIcon, getTrustLevelLabel, getTrustBadgeDescription, fetchTrustScore, TrustScoreData } from '@/services/trustScoreService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { fetchEloHistory, getEloRank, getEloColor, formatEloDelta, EloHistoryEntry, ELO_INITIAL, fetchPlayerRoleElos, calculateInactivityDecay } from '@/services/eloService';
@@ -588,6 +601,7 @@ export default function PlayerDetailScreen() {
                       <View style={[s.ambassadorBadge, { backgroundColor: ptc.color + '12', borderColor: ptc.color + '30' }]}>
                         <MaterialIcons name={ptc.icon as any} size={12} color={ptc.color} />
                         <Text style={[s.ambassadorBadgeText, { color: ptc.color }]}>{language === 'fr' ? ptc.label : ptc.labelEn}</Text>
+                        {ambassadorData.badgeType === 'gold_sponsor' ? <GoldPulseDot color={ptc.color} /> : null}
                       </View>
                     ) : (
                       <View style={s.ambassadorBadge}>
@@ -733,6 +747,13 @@ export default function PlayerDetailScreen() {
                       {player.email ? (<Pressable style={s.contactPill} onPress={() => Linking.openURL(`mailto:${player.email}`)}><MaterialIcons name="email" size={14} color={theme.primary} /><Text style={s.contactPillText}>{player.email}</Text></Pressable>) : null}
                     </View>
                   ) : null}
+                </View>
+              ) : null}
+
+              {/* Sponsored Player Banner */}
+              {(player as any)?.sponsorId ? (
+                <View style={{ width: '100%', marginBottom: 8 }}>
+                  <SponsoredItemBanner sponsorId={(player as any).sponsorId} page="player-detail" />
                 </View>
               ) : null}
 

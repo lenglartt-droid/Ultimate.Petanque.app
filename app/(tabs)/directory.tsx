@@ -19,7 +19,18 @@ import { router, useLocalSearchParams } from 'expo-router';
 
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
+import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, Easing } from 'react-native-reanimated';
 import theme, { blurhash } from '@/constants/theme';
+
+// Animated gold pulse dot for Gold partners in directory
+const GoldPulse = React.memo(({ color }: { color: string }) => {
+  const opacity = useSharedValue(0.4);
+  React.useEffect(() => {
+    opacity.value = withRepeat(withTiming(1, { duration: 1200, easing: Easing.inOut(Easing.ease) }), -1, true);
+  }, []);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return <Animated.View style={[{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginLeft: 2 }, style]} />;
+});
 import config from '@/constants/config';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { Terrain, Player, Club, Tournament } from '@/types/petanque';
@@ -2529,13 +2540,15 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
   const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
   // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
+  const hasSponsor = !!(item as any).sponsorId;
+  const sponsorInfo = hasSponsor ? partnerUserIds.get((item as any).sponsorId) : undefined;
   return (
     <Pressable
       style={[styles.itemCard, isSelf && styles.selfCard]}
       onPress={() => isSelf ? router.push('/player/me') : router.push(`/player/${item.id}`)}
     >
       <View style={[styles.itemAvatarOuter, isSelf && styles.selfAvatarOuter]}>
-        <View style={[styles.itemAvatar, isSelf && styles.selfAvatar]}>
+        <View style={[styles.itemAvatar, isSelf && styles.selfAvatar, sponsorInfo && { borderWidth: 2, borderColor: (sponsorInfo as any)?.brandColor || '#2563EB' }]}>
           {item.avatar ? (
             <Image source={{ uri: item.avatar }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" recyclingKey={item.id} />
           ) : (
@@ -2570,6 +2583,12 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
           {item.location?.city ? <View style={styles.metaItem}><MaterialIcons name="place" size={12} color={theme.textMuted} /><Text style={styles.metaText}>{item.location.city}</Text></View> : null}
         </View>
         <View style={styles.itemTags}>
+          {hasSponsor && sponsorInfo ? (
+            <View style={[styles.tag, { backgroundColor: '#2563EB12', borderWidth: 1, borderColor: '#2563EB25' }]}>
+              <MaterialIcons name="handshake" size={10} color="#2563EB" />
+              <Text style={[styles.tagText, { color: '#2563EB' }]}>{language === 'fr' ? 'Sponsorise' : 'Sponsored'}</Text>
+            </View>
+          ) : null}
           {partnerInfo ? (() => {
             const pColor = partnerInfo.tier === 'gold_sponsor' ? '#D4A017' : partnerInfo.tier === 'sponsor' ? '#78909C' : '#A1887F';
             const pLabel = language === 'fr' ? (partnerInfo.tier === 'gold_sponsor' ? 'Partenaire Or' : partnerInfo.tier === 'sponsor' ? 'Partenaire Argent' : 'Partenaire Bronze') : (partnerInfo.tier === 'gold_sponsor' ? 'Gold Partner' : partnerInfo.tier === 'sponsor' ? 'Silver Partner' : 'Bronze Partner');
@@ -2577,7 +2596,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
               <View style={[styles.tag, { backgroundColor: pColor + '15', borderWidth: 1, borderColor: pColor + '30' }]}>
                 <MaterialIcons name={partnerInfo.tier === 'gold_sponsor' ? 'star' : 'workspace-premium'} size={10} color={pColor} />
                 <Text style={[styles.tagText, { color: pColor }]}>{pLabel}</Text>
-                {partnerInfo.tier === 'gold_sponsor' ? <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: pColor, marginLeft: 2 }} /> : null}
+                {partnerInfo.tier === 'gold_sponsor' ? <GoldPulse color={pColor} /> : null}
               </View>
             );
           })() : null}

@@ -29,6 +29,7 @@ export function mapPlayerFromDb(p: any): Player {
     boules: p.boules, handedness: p.handedness, terrainId: p.terrain_id,
     terrainName: p.terrain_name, isPublic: p.is_public ?? false,
     showContactPublic: p.show_contact_public ?? false,
+    sponsorId: p.sponsor_id || undefined,
     eloRating: p.elo_rating || 1000,
     eloTireur: p.elo_tireur || 1000,
     eloPointeur: p.elo_pointeur || 1000,
