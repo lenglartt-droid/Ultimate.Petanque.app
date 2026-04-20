@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet,
@@ -10,6 +11,8 @@ import { Image } from 'expo-image';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 
 import * as Haptics from '@/services/haptics';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, getSupabaseClient } from '@/template';
@@ -36,6 +39,8 @@ interface PartnerStat {
   profileViews: number;
   socialClicks: number;
   referrals: number;
+  monthlyCost: number;
+  totalInvested: number;
 }
 
 interface TierSummary {
@@ -59,6 +64,8 @@ export default function PartnerAnalyticsScreen() {
   const [timeRange, setTimeRange] = useState<TimeRange>('30d');
   const [partners, setPartners] = useState<PartnerStat[]>([]);
   const [dailyData, setDailyData] = useState<{ date: string; impressions: number; views: number; clicks: number }[]>([]);
+  const [partnerGoals, setPartnerGoals] = useState<Map<string, any[]>>(new Map());
+  const [exportingInvoice, setExportingInvoice] = useState<string | null>(null);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   useEffect(() => {
@@ -71,7 +78,7 @@ export default function PartnerAnalyticsScreen() {
       // Fetch partners
       const { data: partnerRows } = await supabase
         .from('ambassadors')
-        .select('id, display_name, photo, badge_type, brand_color, is_active, expires_at, referral_count')
+        .select('id, display_name, photo, badge_type, brand_color, is_active, expires_at, referral_count, monthly_cost, total_invested')
         .in('badge_type', ['gold_sponsor', 'sponsor', 'partner'])
         .order('sort_order', { ascending: true });
 
@@ -120,10 +127,27 @@ export default function PartnerAnalyticsScreen() {
           profileViews: s.profileViews,
           socialClicks: s.socialClicks,
           referrals: p.referral_count || 0,
+          monthlyCost: parseFloat(p.monthly_cost) || 0,
+          totalInvested: parseFloat(p.total_invested) || 0,
         };
       });
 
       setPartners(result);
+
+      // Load goals for all partners
+      const { data: goalsData } = await supabase
+        .from('partner_goals')
+        .select('*')
+        .in('ambassador_id', partnerIds);
+      if (goalsData) {
+        const gMap = new Map<string, any[]>();
+        goalsData.forEach((g: any) => {
+          const arr = gMap.get(g.ambassador_id) || [];
+          arr.push(g);
+          gMap.set(g.ambassador_id, arr);
+        });
+        setPartnerGoals(gMap);
+      }
 
       // Compute daily data for mini chart
       const dayMap = new Map<string, { impressions: number; views: number; clicks: number }>();
@@ -199,6 +223,102 @@ export default function PartnerAnalyticsScreen() {
     const now = Date.now();
     return partners.filter(p => p.expiresAt && new Date(p.expiresAt).getTime() <= now);
   }, [partners]);
+
+  // Goals progress computation
+  const goalsProgress = useMemo(() => {
+    return partners.map(p => {
+      const pGoals = partnerGoals.get(p.id) || [];
+      return {
+        partnerId: p.id,
+        partnerName: p.displayName,
+        goals: pGoals.map((g: any) => {
+          let current = 0;
+          if (g.goal_type === 'impressions') current = p.impressions;
+          else if (g.goal_type === 'profile_views') current = p.profileViews;
+          else if (g.goal_type === 'social_clicks') current = p.socialClicks;
+          else if (g.goal_type === 'conversion_rate') current = p.impressions > 0 ? parseFloat(((p.profileViews / p.impressions) * 100).toFixed(1)) : 0;
+          const target = parseFloat(g.target_value) || 1;
+          const progress = Math.min(100, Math.round((current / target) * 100));
+          return { ...g, current, target, progress };
+        }),
+      };
+    }).filter(p => p.goals.length > 0);
+  }, [partners, partnerGoals]);
+
+  // Invoice export
+  const handleExportInvoice = useCallback(async (partner: PartnerStat) => {
+    setExportingInvoice(partner.id);
+    try {
+      const cfg = TIER_CONFIG[partner.badgeType] || TIER_CONFIG.partner;
+      const tierLabel = fr ? cfg.label : cfg.labelEn;
+      const rangeLabel = timeRange === '7d' ? '7 jours' : timeRange === '30d' ? '30 jours' : timeRange === '90d' ? '90 jours' : 'Total';
+      const costPerImp = partner.impressions > 0 ? (partner.totalInvested / partner.impressions).toFixed(3) : '0';
+      const costPerView = partner.profileViews > 0 ? (partner.totalInvested / partner.profileViews).toFixed(3) : '0';
+      const estimatedValue = partner.impressions * 0.01 + partner.profileViews * 0.10 + partner.socialClicks * 0.50;
+      const roi = partner.totalInvested > 0 ? ((estimatedValue - partner.totalInvested) / partner.totalInvested * 100).toFixed(1) : '0';
+      const now = new Date();
+      const invoiceNumber = `INV-${partner.id.slice(0, 8).toUpperCase()}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}`;
+
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><style>
+        body{margin:0;padding:24px;font-family:-apple-system,sans-serif;color:#0F172A;background:#FFF;}
+        .header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:32px;border-bottom:3px solid ${cfg.color};padding-bottom:16px;}
+        .logo{font-size:22px;font-weight:900;color:${cfg.color};}
+        .invoice-info{text-align:right;}
+        .invoice-num{font-size:13px;font-weight:700;color:#64748B;}
+        .invoice-date{font-size:12px;color:#94A3B8;margin-top:4px;}
+        .partner-box{background:#F8FAFC;border-radius:12px;padding:16px;margin-bottom:24px;border:1px solid #E2E8F0;}
+        .partner-name{font-size:18px;font-weight:800;color:#0F172A;}
+        .partner-tier{display:inline-block;background:${cfg.color};color:#FFF;font-size:10px;font-weight:800;padding:2px 10px;border-radius:8px;margin-top:4px;letter-spacing:0.5px;}
+        .section-title{font-size:11px;font-weight:700;color:#64748B;letter-spacing:1px;text-transform:uppercase;margin:24px 0 12px;}
+        table{width:100%;border-collapse:collapse;}
+        th{text-align:left;font-size:11px;font-weight:700;color:#64748B;padding:8px 12px;border-bottom:2px solid #E2E8F0;}
+        td{font-size:13px;padding:10px 12px;border-bottom:1px solid #F1F5F9;}
+        .val{font-weight:700;color:#0F172A;text-align:right;}
+        .highlight{background:#F0FDF4;}
+        .total-row td{font-weight:800;font-size:14px;border-top:2px solid #E2E8F0;}
+        .roi-box{background:${parseFloat(roi) >= 0 ? '#F0FDF4' : '#FEF2F2'};border-radius:12px;padding:16px;text-align:center;margin:24px 0;border:1px solid ${parseFloat(roi) >= 0 ? '#BBF7D0' : '#FECACA'};}
+        .roi-val{font-size:28px;font-weight:900;color:${parseFloat(roi) >= 0 ? '#10B981' : '#EF4444'};}
+        .roi-label{font-size:11px;color:#64748B;margin-top:4px;}
+        .footer{margin-top:32px;padding-top:16px;border-top:1px solid #E2E8F0;text-align:center;font-size:10px;color:#94A3B8;}
+      </style></head><body>
+        <div class="header">
+          <div><div class="logo">Ultimate Petanque</div><div style="font-size:12px;color:#64748B;margin-top:4px;">Partner Performance Report</div></div>
+          <div class="invoice-info"><div class="invoice-num">${invoiceNumber}</div><div class="invoice-date">${now.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' })}</div><div class="invoice-date">${fr ? 'Periode' : 'Period'}: ${rangeLabel}</div></div>
+        </div>
+        <div class="partner-box">
+          <div class="partner-name">${partner.displayName}</div>
+          <div class="partner-tier">${tierLabel.toUpperCase()}</div>
+          ${partner.expiresAt ? `<div style="font-size:11px;color:#64748B;margin-top:6px;">${fr ? 'Expire le' : 'Expires'}: ${new Date(partner.expiresAt).toLocaleDateString()}</div>` : ''}
+        </div>
+        <div class="section-title">${fr ? 'Metriques de performance' : 'Performance Metrics'}</div>
+        <table><tr><th>${fr ? 'Metrique' : 'Metric'}</th><th style="text-align:right">${fr ? 'Valeur' : 'Value'}</th></tr>
+          <tr><td>Impressions</td><td class="val">${partner.impressions.toLocaleString()}</td></tr>
+          <tr><td>${fr ? 'Vues profil' : 'Profile Views'}</td><td class="val">${partner.profileViews.toLocaleString()}</td></tr>
+          <tr><td>${fr ? 'Clics sociaux' : 'Social Clicks'}</td><td class="val">${partner.socialClicks.toLocaleString()}</td></tr>
+          <tr><td>${fr ? 'Taux conversion' : 'Conversion Rate'}</td><td class="val">${partner.impressions > 0 ? ((partner.profileViews / partner.impressions) * 100).toFixed(1) : '0'}%</td></tr>
+          <tr><td>${fr ? 'Parrainages' : 'Referrals'}</td><td class="val">${partner.referrals}</td></tr>
+        </table>
+        <div class="section-title">${fr ? 'Analyse financiere' : 'Financial Analysis'}</div>
+        <table><tr><th>${fr ? 'Element' : 'Item'}</th><th style="text-align:right">${fr ? 'Montant' : 'Amount'}</th></tr>
+          <tr><td>${fr ? 'Cout mensuel' : 'Monthly Cost'}</td><td class="val">${partner.monthlyCost.toFixed(2)} \u20AC</td></tr>
+          <tr><td>${fr ? 'Total investi' : 'Total Invested'}</td><td class="val">${partner.totalInvested.toFixed(2)} \u20AC</td></tr>
+          <tr><td>${fr ? 'Cout par impression' : 'Cost per Impression'}</td><td class="val">${costPerImp} \u20AC</td></tr>
+          <tr><td>${fr ? 'Cout par vue profil' : 'Cost per Profile View'}</td><td class="val">${costPerView} \u20AC</td></tr>
+          <tr class="highlight total-row"><td>${fr ? 'Valeur estimee generee' : 'Estimated Value Generated'}</td><td class="val">${estimatedValue.toFixed(2)} \u20AC</td></tr>
+        </table>
+        <div class="roi-box"><div class="roi-val">${parseFloat(roi) >= 0 ? '+' : ''}${roi}%</div><div class="roi-label">ROI</div></div>
+        <div class="footer"><p><strong>Ultimate Petanque</strong> &middot; ${fr ? 'Rapport automatique' : 'Automated Report'}</p><p>${fr ? 'Genere le' : 'Generated on'} ${now.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</p></div>
+      </body></html>`;
+
+      const { uri } = await Print.printToFileAsync({ html, base64: false });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: `${invoiceNumber}.pdf` });
+      }
+    } catch (e: any) {
+      console.error('[Invoice] Export error:', e);
+    }
+    setExportingInvoice(null);
+  }, [fr, timeRange]);
 
   // Mini bar chart
   const chartMaxVal = useMemo(() => Math.max(...dailyData.map(d => d.impressions + d.views + d.clicks), 1), [dailyData]);
@@ -461,14 +581,185 @@ export default function PartnerAnalyticsScreen() {
                     <Text style={st.partnerMetricItem}>{conversionRate}% conv.</Text>
                   </View>
                 </View>
-                <View style={st.partnerScore}>
-                  <Text style={st.partnerScoreVal}>{score}</Text>
-                  <Text style={st.partnerScoreLabel}>pts</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={st.partnerScore}>
+                    <Text style={st.partnerScoreVal}>{score}</Text>
+                    <Text style={st.partnerScoreLabel}>pts</Text>
+                  </View>
+                  <Pressable
+                    style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#6366F112', alignItems: 'center', justifyContent: 'center' }}
+                    onPress={() => { Haptics.selectionAsync(); handleExportInvoice(p); }}
+                    disabled={exportingInvoice === p.id}
+                  >
+                    {exportingInvoice === p.id ? (
+                      <ActivityIndicator size="small" color="#6366F1" />
+                    ) : (
+                      <MaterialIcons name="receipt-long" size={16} color="#6366F1" />
+                    )}
+                  </Pressable>
                 </View>
               </Pressable>
             );
           })}
         </Animated.View>
+
+        {/* Goals Progress */}
+        {goalsProgress.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(350)} style={st.sectionCard}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+              <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="flag" size={18} color="#F59E0B" />
+              </View>
+              <Text style={st.sectionTitle}>{fr ? 'OBJECTIFS DE PERFORMANCE' : 'PERFORMANCE GOALS'}</Text>
+            </View>
+            {goalsProgress.map(pg => (
+              <View key={pg.partnerId} style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary, marginBottom: 8 }}>{pg.partnerName}</Text>
+                {pg.goals.map((g: any) => {
+                  const goalCfg = [
+                    { id: 'impressions', label: 'Impressions', color: theme.primary },
+                    { id: 'profile_views', label: fr ? 'Vues profil' : 'Profile Views', color: '#7C3AED' },
+                    { id: 'social_clicks', label: fr ? 'Clics sociaux' : 'Social Clicks', color: theme.success },
+                    { id: 'conversion_rate', label: fr ? 'Taux conv.' : 'Conv. Rate', color: '#F59E0B' },
+                  ].find(x => x.id === g.goal_type);
+                  const barColor = g.progress >= 100 ? '#10B981' : g.progress >= 60 ? '#F59E0B' : theme.primary;
+                  const isRate = g.goal_type === 'conversion_rate';
+                  return (
+                    <View key={g.id} style={{ marginBottom: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: goalCfg?.color || theme.primary }} />
+                          <Text style={{ fontSize: 12, color: theme.textSecondary, fontWeight: '600' }}>{goalCfg?.label || g.goal_type}</Text>
+                          <View style={{ backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 9, fontWeight: '700', color: theme.textMuted }}>{g.period === 'monthly' ? (fr ? 'Mensuel' : 'Monthly') : g.period === 'quarterly' ? (fr ? 'Trim.' : 'Qtr.') : (fr ? 'Annuel' : 'Yearly')}</Text>
+                          </View>
+                        </View>
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: barColor }}>
+                          {isRate ? `${g.current}%` : g.current} / {isRate ? `${g.target}%` : g.target}
+                        </Text>
+                      </View>
+                      <View style={{ height: 8, backgroundColor: theme.backgroundSecondary, borderRadius: 4, overflow: 'hidden' }}>
+                        <View style={{ height: '100%', width: `${Math.min(100, g.progress)}%`, backgroundColor: barColor, borderRadius: 4 }} />
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 2 }}>
+                        {g.progress >= 100 ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+                            <MaterialIcons name="check-circle" size={11} color="#10B981" />
+                            <Text style={{ fontSize: 10, fontWeight: '700', color: '#10B981' }}>{fr ? 'Atteint' : 'Achieved'}</Text>
+                          </View>
+                        ) : (
+                          <Text style={{ fontSize: 10, fontWeight: '700', color: barColor }}>{g.progress}%</Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+          </Animated.View>
+        ) : null}
+
+        {/* ROI Calculator */}
+        {(() => {
+          const totalInvested = partners.reduce((s, p) => s + p.totalInvested, 0);
+          const totalMonthlyCost = partners.filter(p => p.isActive).reduce((s, p) => s + p.monthlyCost, 0);
+          const hasFinancialData = totalInvested > 0 || totalMonthlyCost > 0;
+          if (!hasFinancialData) return null;
+
+          const costPerImpression = totals.impressions > 0 ? (totalInvested / totals.impressions) : 0;
+          const costPerView = totals.views > 0 ? (totalInvested / totals.views) : 0;
+          const costPerClick = totals.clicks > 0 ? (totalInvested / totals.clicks) : 0;
+          // Estimated value: impressions * 0.01 + views * 0.10 + clicks * 0.50
+          const estimatedValue = totals.impressions * 0.01 + totals.views * 0.10 + totals.clicks * 0.50;
+          const roi = totalInvested > 0 ? ((estimatedValue - totalInvested) / totalInvested * 100) : 0;
+
+          // Per-partner ROI
+          const partnerROIs = partners
+            .filter(p => p.totalInvested > 0)
+            .map(p => {
+              const pValue = p.impressions * 0.01 + p.profileViews * 0.10 + p.socialClicks * 0.50;
+              const pRoi = p.totalInvested > 0 ? ((pValue - p.totalInvested) / p.totalInvested * 100) : 0;
+              const pCpi = p.impressions > 0 ? (p.totalInvested / p.impressions) : 0;
+              return { ...p, estimatedValue: pValue, roi: pRoi, costPerImpression: pCpi };
+            })
+            .sort((a, b) => b.roi - a.roi);
+
+          return (
+            <Animated.View entering={FadeInDown.duration(300).delay(350)} style={st.sectionCard}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#10B98115', alignItems: 'center', justifyContent: 'center' }}>
+                  <MaterialIcons name="calculate" size={18} color="#10B981" />
+                </View>
+                <Text style={st.sectionTitle}>{fr ? 'CALCULATEUR ROI' : 'ROI CALCULATOR'}</Text>
+              </View>
+
+              {/* Global metrics */}
+              <View style={{ flexDirection: 'row', gap: 8, marginBottom: 14 }}>
+                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: theme.textPrimary }}>{totalInvested.toFixed(0)}{"\u20AC"}</Text>
+                  <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Total investi' : 'Total invested'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: '#F8FAFC', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: '#E2E8F0' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: theme.primary }}>{totalMonthlyCost.toFixed(0)}{"\u20AC"}</Text>
+                  <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Cout mensuel' : 'Monthly cost'}</Text>
+                </View>
+                <View style={{ flex: 1, backgroundColor: roi >= 0 ? '#10B98108' : '#EF444408', borderRadius: 12, padding: 12, alignItems: 'center', borderWidth: 1, borderColor: roi >= 0 ? '#10B98125' : '#EF444425' }}>
+                  <Text style={{ fontSize: 18, fontWeight: '800', color: roi >= 0 ? '#10B981' : '#EF4444' }}>{roi >= 0 ? '+' : ''}{roi.toFixed(0)}%</Text>
+                  <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>ROI</Text>
+                </View>
+              </View>
+
+              {/* Cost metrics */}
+              <View style={{ gap: 8, marginBottom: 14 }}>
+                {[
+                  { label: fr ? 'Cout par impression' : 'Cost per impression', value: costPerImpression, color: theme.primary },
+                  { label: fr ? 'Cout par vue profil' : 'Cost per profile view', value: costPerView, color: '#7C3AED' },
+                  { label: fr ? 'Cout par clic social' : 'Cost per social click', value: costPerClick, color: theme.success },
+                ].map((m, i) => (
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: i < 2 ? 1 : 0, borderBottomColor: '#F1F5F9' }}>
+                    <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: m.color }} />
+                    <Text style={{ flex: 1, fontSize: 13, color: theme.textSecondary }}>{m.label}</Text>
+                    <Text style={{ fontSize: 15, fontWeight: '800', color: m.color }}>{m.value.toFixed(2)}{"\u20AC"}</Text>
+                  </View>
+                ))}
+              </View>
+
+              {/* Estimated value */}
+              <View style={{ backgroundColor: '#10B98108', borderRadius: 12, padding: 14, borderWidth: 1, borderColor: '#10B98120', marginBottom: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <View>
+                    <Text style={{ fontSize: 12, fontWeight: '600', color: theme.textSecondary }}>{fr ? 'Valeur estimee generee' : 'Estimated value generated'}</Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted, marginTop: 2 }}>{fr ? 'Imp. x 0.01 + Vues x 0.10 + Clics x 0.50' : 'Imp. x 0.01 + Views x 0.10 + Clicks x 0.50'}</Text>
+                  </View>
+                  <Text style={{ fontSize: 20, fontWeight: '900', color: '#10B981' }}>{estimatedValue.toFixed(0)}{"\u20AC"}</Text>
+                </View>
+              </View>
+
+              {/* Per-partner ROI table */}
+              {partnerROIs.length > 0 ? (
+                <View>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.3, marginBottom: 8 }}>{fr ? 'ROI PAR PARTENAIRE' : 'ROI PER PARTNER'}</Text>
+                  {partnerROIs.map((p, idx) => {
+                    const cfg = TIER_CONFIG[p.badgeType] || TIER_CONFIG.partner;
+                    return (
+                      <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 8, borderBottomWidth: idx < partnerROIs.length - 1 ? 1 : 0, borderBottomColor: '#F1F5F9' }}>
+                        <View style={[{ width: 28, height: 28, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }, { backgroundColor: cfg.color + '15' }]}>
+                          <MaterialIcons name={cfg.icon as any} size={14} color={cfg.color} />
+                        </View>
+                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{p.displayName}</Text>
+                        <Text style={{ fontSize: 11, color: theme.textMuted }}>{p.totalInvested.toFixed(0)}{"\u20AC"}</Text>
+                        <View style={{ width: 1, height: 16, backgroundColor: '#E2E8F0' }} />
+                        <Text style={{ fontSize: 12, fontWeight: '800', color: p.roi >= 0 ? '#10B981' : '#EF4444', minWidth: 50, textAlign: 'right' }}>
+                          {p.roi >= 0 ? '+' : ''}{p.roi.toFixed(0)}%
+                        </Text>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : null}
+            </Animated.View>
+          );
+        })()}
 
         {/* Conversion Funnel */}
         <Animated.View entering={FadeInDown.duration(300).delay(400)} style={st.sectionCard}>
