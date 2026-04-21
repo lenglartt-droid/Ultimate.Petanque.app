@@ -134,6 +134,9 @@ export interface Terrain {
   location: {
     latitude: number;
     longitude: number;
+    country?: string;
+    address?: string;
+    city?: string;
   };
   type: TerrainType;
   description?: string;
