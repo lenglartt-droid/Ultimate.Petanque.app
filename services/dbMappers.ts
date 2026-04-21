@@ -66,7 +66,7 @@ export function mapClubFromDb(c: any): Club {
 export function mapTerrainFromDb(t: any): Terrain {
   return {
     id: t.id, name: t.name, address: t.address, city: t.city,
-    location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
+    location: t.location || { latitude: 0, longitude: 0, country: 'France' }, type: t.type,
     description: t.description, facilities: t.facilities || [], photos: t.photos || [],
     clubId: t.club_id, clubName: t.club_name, isPublic: t.is_public ?? true,
     publicAccess: t.public_access ?? true, courtsCount: t.courts_count || 1,

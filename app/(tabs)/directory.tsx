@@ -304,6 +304,7 @@ export default function DirectoryScreen() {
     // Terrain filters
     terrainType: 'all' as TerrainType | 'all',
     terrainCity: 'all',
+    terrainCountry: 'all',
     terrainLighting: 'all' as 'all' | 'yes' | 'no',
     terrainCovered: 'all' as 'all' | 'yes' | 'no',
     terrainEnvironment: 'all' as 'all' | 'indoor' | 'outdoor',
@@ -470,6 +471,7 @@ export default function DirectoryScreen() {
     return terrains.filter(tr => {
       if (excludeFilter !== 'terrainType' && filters.terrainType !== 'all' && tr.type !== filters.terrainType) return false;
       if (excludeFilter !== 'terrainCity' && filters.terrainCity !== 'all' && tr.city !== filters.terrainCity) return false;
+      if (excludeFilter !== 'terrainCountry' && filters.terrainCountry !== 'all' && (tr.location?.country || 'France') !== filters.terrainCountry) return false;
       if (excludeFilter !== 'terrainLighting' && filters.terrainLighting !== 'all' && (filters.terrainLighting === 'yes' ? !tr.lighting : tr.lighting)) return false;
       if (excludeFilter !== 'terrainCovered' && filters.terrainCovered !== 'all' && (filters.terrainCovered === 'yes' ? !tr.covered : tr.covered)) return false;
       if (excludeFilter !== 'terrainEnvironment' && filters.terrainEnvironment !== 'all' && (tr.environment || 'outdoor') !== filters.terrainEnvironment) return false;
@@ -535,6 +537,7 @@ export default function DirectoryScreen() {
     // Terrain cascading options
     const tForType = getTerrainBaseFiltered('terrainType');
     const tForCity = getTerrainBaseFiltered('terrainCity');
+    const tForCountry = getTerrainBaseFiltered('terrainCountry');
 
     // Tournament cascading options
     const trForFormat = getTournamentBaseFiltered('tournamentFormat');
@@ -568,6 +571,7 @@ export default function DirectoryScreen() {
       }),
       terrainTypes: config.terrainTypes.map(tc => ({ value: tc.id, count: tForType.filter(tr => tr.type === tc.id).length })),
       terrainCities: countedOptions(tForCity.map(tr => tr.city).filter(Boolean) as string[]),
+      terrainCountries: countedOptions(tForCountry.map(tr => tr.location?.country || 'France')),
       tournamentFormats: countedOptions(trForFormat.map(t => t.format).filter(Boolean) as string[]),
       tournamentLevels: countedOptions(trForLevel.map(t => t.tournamentLevel).filter(Boolean) as string[]),
       tournamentCategories: countedOptions(trForCat.map(t => t.tournamentCategory).filter(Boolean) as string[]),
@@ -583,7 +587,7 @@ export default function DirectoryScreen() {
     return {
       players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience, filters.playerTerrain].filter(f => f !== 'all').length + distCount,
       clubs: [filters.clubCity, filters.clubCountry, filters.clubEquipment, filters.clubMembersRange].filter(f => f !== 'all').length + distCount,
-      terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length + distCount,
+      terrains: [filters.terrainType, filters.terrainCity, filters.terrainCountry, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length + distCount,
       tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity, filters.tournamentDate].filter(f => f !== 'all').length + distCount,
       events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
     };
@@ -808,6 +812,41 @@ export default function DirectoryScreen() {
   }, [showActiveNow]);
   // Meetups are loaded once on mount; no need to reload on toggle change
 
+  // Global terrain activity stats from ALL users (community-representative scoring)
+  const [globalTerrainStats, setGlobalTerrainStats] = useState<Map<string, { totalMatches: number; recentMatches: number; totalChallenges: number; recentChallenges: number; totalTournaments: number; recentTournaments: number; peakDow: number; peakHour: number; peakDowCount: number; peakHourCount: number }>>(new Map());
+  const globalStatsLoadRef = useRef(false);
+  useEffect(() => {
+    if (globalStatsLoadRef.current) return;
+    globalStatsLoadRef.current = true;
+    const loadGlobalStats = async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
+        if (data && !error) {
+          const map = new Map<string, { totalMatches: number; recentMatches: number; totalChallenges: number; recentChallenges: number; totalTournaments: number; recentTournaments: number; peakDow: number; peakHour: number; peakDowCount: number; peakHourCount: number }>();
+          (data as any[]).forEach((r: any) => {
+            map.set(r.terrain_id, {
+              totalMatches: Number(r.total_matches) || 0,
+              recentMatches: Number(r.recent_matches) || 0,
+              totalChallenges: Number(r.total_challenges) || 0,
+              recentChallenges: Number(r.recent_challenges) || 0,
+              totalTournaments: Number(r.total_tournaments) || 0,
+              recentTournaments: Number(r.recent_tournaments) || 0,
+              peakDow: Number(r.peak_dow) || 0,
+              peakHour: Number(r.peak_hour) || 0,
+              peakDowCount: Number(r.peak_dow_count) || 0,
+              peakHourCount: Number(r.peak_hour_count) || 0,
+            });
+          });
+          setGlobalTerrainStats(map);
+        }
+      } catch (e) {
+        console.log('[Directory] Error loading global terrain stats:', e);
+      }
+    };
+    setTimeout(loadGlobalStats, 600);
+  }, []);
+
   // Activity scores are ALWAYS computed (for sort-by-activity), but peakLabel display only appears when showActiveNow is true
   const terrainActivityMap = useMemo(() => {
     const scoreMap = new Map<string, { score: number; matchCount: number; peakLabel: string }>();
@@ -834,11 +873,20 @@ export default function DirectoryScreen() {
       const terrainMeetups = terrainMeetupsMap.get(tr.id) || [];
       const meetupsToday = terrainMeetups.filter(mt => mt.date.slice(0, 10) === todayStr);
       const meetupBonus = meetupsToday.length * 30;
-      // Score: weighted combination
+      // Global community stats (all users — from get_terrain_activity_stats RPC)
+      const gStats = globalTerrainStats.get(tr.id);
+      const globalRecentBonus = gStats ? Math.min(gStats.recentMatches, 30) * 5 : 0;
+      const globalTotalBonus = gStats ? Math.min(gStats.totalMatches, 100) : 0;
+      const globalChallengeBonus = gStats ? Math.min(gStats.recentChallenges, 20) * 4 : 0;
+      const globalChallengeTotalBonus = gStats ? Math.round(Math.min(gStats.totalChallenges, 50) * 0.5) : 0;
+      // Global tournament stats (all users)
+      const globalTournamentRecentBonus = gStats ? Math.min(gStats.recentTournaments, 10) * 8 : 0;
+      const globalTournamentTotalBonus = gStats ? Math.min(gStats.totalTournaments, 30) * 2 : 0;
+      // Score: weighted combination (user patterns + community stats)
       const hourScore = sameDayHourCount * 10;
       const dayScore = sameDayCount * 3;
       const totalScore = Math.min(terrainMatches.length, 10);
-      const rawScore = hourScore + dayScore + totalScore + tournamentBonus + meetupBonus;
+      const rawScore = hourScore + dayScore + totalScore + tournamentBonus + meetupBonus + globalRecentBonus + globalTotalBonus + globalChallengeBonus + globalChallengeTotalBonus + globalTournamentRecentBonus + globalTournamentTotalBonus;
       if (rawScore > 0) {
         const dayNames = language === 'fr' ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         let peakLabel = '';
@@ -850,16 +898,34 @@ export default function DirectoryScreen() {
           peakLabel = todayTournaments.length === 1
             ? `${language === 'fr' ? 'Tournoi aujourd\'hui' : 'Tournament today'}`
             : `${todayTournaments.length} ${language === 'fr' ? 'tournois aujourd\'hui' : 'tournaments today'}`;
+        } else if (gStats && gStats.peakDowCount > 0 && gStats.peakHourCount > 0) {
+          // Community peak hours from ALL users
+          const communityDayNames = language === 'fr' ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          peakLabel = `${language === 'fr' ? 'Pic' : 'Peak'}: ${communityDayNames[gStats.peakDow]} ~${gStats.peakHour}h (${gStats.peakHourCount})`;
         } else if (sameDayHourCount > 0) {
           peakLabel = `${sameDayHourCount} ${language === 'fr' ? 'partie(s)' : 'game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
-        } else {
+        } else if (gStats && gStats.recentMatches + (gStats.recentChallenges || 0) > 0) {
+          const recentTotal = gStats.recentMatches + (gStats.recentChallenges || 0);
+          peakLabel = `${recentTotal} ${language === 'fr' ? 'activites ce mois' : 'activities this month'}`;
+        } else if (gStats && gStats.totalMatches + (gStats.totalChallenges || 0) > 0) {
+          const allTotal = gStats.totalMatches + (gStats.totalChallenges || 0);
+          peakLabel = `${allTotal} ${language === 'fr' ? 'activites au total' : 'total activities'}`;
+        } else if (sameDayCount > 0) {
           peakLabel = `${sameDayCount} ${language === 'fr' ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
+        } else {
+          peakLabel = language === 'fr' ? 'Terrain actif' : 'Active terrain';
         }
-        scoreMap.set(tr.id, { score: rawScore, matchCount: terrainMatches.length + todayTournaments.length + meetupsToday.length, peakLabel });
+        const communityTotal = gStats ? gStats.totalMatches + gStats.totalChallenges : 0;
+        scoreMap.set(tr.id, { score: rawScore, matchCount: communityTotal + terrainMatches.length + todayTournaments.length + meetupsToday.length, peakLabel, rank: 0, recentMatches: gStats?.recentMatches || 0, recentChallenges: gStats?.recentChallenges || 0, recentTournaments: gStats?.recentTournaments || 0 });
       }
     });
+    // Compute popularity ranks
+    const sorted = [...scoreMap.entries()].sort((a, b) => b[1].score - a[1].score);
+    sorted.forEach(([id, data], index) => {
+      scoreMap.set(id, { ...data, rank: index + 1 });
+    });
     return scoreMap;
-  }, [terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language]);
+  }, [terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language, globalTerrainStats]);
 
   const filteredTerrains = useMemo(() => {
     let result = terrains.filter(tr => {
@@ -867,6 +933,7 @@ export default function DirectoryScreen() {
         tr.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = filters.terrainType === 'all' || tr.type === filters.terrainType;
       const matchesCity = filters.terrainCity === 'all' || tr.city === filters.terrainCity;
+      const matchesCountry = filters.terrainCountry === 'all' || (tr.location?.country || 'France') === filters.terrainCountry;
       const matchesLighting = filters.terrainLighting === 'all' || 
         (filters.terrainLighting === 'yes' ? tr.lighting : !tr.lighting);
       const matchesCovered = filters.terrainCovered === 'all' || 
@@ -880,7 +947,7 @@ export default function DirectoryScreen() {
       const matchesToilets = filters.terrainToilets === 'all' ||
         (filters.terrainToilets === 'yes' ? (tr as any).toilets : !(tr as any).toilets);
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
+      return matchesSearch && matchesType && matchesCity && matchesCountry && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
     // Apply multi-criteria sort or fallback
     if (sortCriteria.length > 0) {
@@ -1029,7 +1096,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all', clubEquipment: 'all', clubMembersRange: 'all' }));
     } else if (activeTab === 'terrains') {
-      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainCountry: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all', tournamentDate: 'all' }));
     } else if (activeTab === 'events') {
@@ -1130,9 +1197,9 @@ export default function DirectoryScreen() {
   }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
 
   const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
-    const activityInfo = (showActiveNow || sortCriteria.some(c => c.field === 'activity')) ? terrainActivityMap.get(item.id) : undefined;
+    const activityInfo = terrainActivityMap.get(item.id) || undefined;
     return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} />;
-  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, showActiveNow, terrainActivityMap, sortCriteria]);
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, terrainActivityMap]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
     return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
@@ -1319,6 +1386,14 @@ export default function DirectoryScreen() {
               options={uniqueValues.terrainCities}
               value={filters.terrainCity}
               onChange={(v) => setFilters(f => ({ ...f, terrainCity: v }))}
+              allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
+            />
+            <FilterSection
+              title={t('directory', 'country')}
+              options={uniqueValues.terrainCountries}
+              value={filters.terrainCountry}
+              onChange={(v) => setFilters(f => ({ ...f, terrainCountry: v }))}
               allLabel={t('directory', 'allLabel')}
               searchPlaceholder={t('directory', 'searchInFilter')}
             />
@@ -1759,6 +1834,7 @@ export default function DirectoryScreen() {
                 {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? t('directory', 'indoorShort') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
                 {filters.terrainType !== 'all' && <ActiveFilterChip label={t('terrainTypes', filters.terrainType)} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
+                {filters.terrainCountry !== 'all' && <ActiveFilterChip label={filters.terrainCountry} onRemove={() => setFilters(f => ({ ...f, terrainCountry: 'all' }))} icon="public" />}
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
                 {filters.terrainAccess !== 'all' && <ActiveFilterChip label={filters.terrainAccess === 'public' ? t('directory', 'publicAccessShort') : t('directory', 'privateAccessShort')} onRemove={() => setFilters(f => ({ ...f, terrainAccess: 'all' }))} icon={filters.terrainAccess === 'public' ? 'public' : 'lock'} />}
@@ -2712,19 +2788,27 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
-  activityInfo?: { score: number; matchCount: number; peakLabel: string };
+  activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number };
 }) => {
   const typeConfig = getTerrainTypeConfig(item.type);
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const hasSponsor = !!(item as any).sponsorId;
+  const hasMultiPhotos = item.photos && item.photos.length > 1;
+  const [photoIdx, setPhotoIdx] = React.useState(0);
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
         {item.photos && item.photos.length > 0 ? (
-          <Image source={{ uri: item.photos[0] }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.terrain }} cachePolicy="memory-disk" recyclingKey={item.id} />
+          <Image source={{ uri: item.photos[hasMultiPhotos ? photoIdx : 0] }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.terrain }} cachePolicy="memory-disk" recyclingKey={`${item.id}-${photoIdx}`} />
         ) : <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />}
+        {hasMultiPhotos ? (
+          <View style={styles.photoCountOverlay}>
+            <MaterialIcons name="photo-library" size={8} color="#FFF" />
+            <Text style={styles.photoCountText}>{item.photos!.length}</Text>
+          </View>
+        ) : null}
         {isFavorite ? <View style={styles.favoriteBadge}><MaterialIcons name="favorite" size={10} color={theme.error} /></View>
         : isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
@@ -2758,9 +2842,23 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {(item as any).toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
         </View>
         {activityInfo ? (
-          <View style={styles.activityScoreBadge}>
-            <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
-            <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+          <View style={styles.activityScoreRow}>
+            {activityInfo.rank && activityInfo.rank <= 10 ? (
+              <View style={[styles.activityRankBadge, activityInfo.rank === 1 ? { backgroundColor: '#D4A017' } : activityInfo.rank <= 3 ? { backgroundColor: '#78909C' } : { backgroundColor: '#A1887F' }]}>
+                <Text style={styles.activityRankText}>#{activityInfo.rank}</Text>
+              </View>
+            ) : null}
+            <View style={styles.activityScoreBadge}>
+              <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
+              <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+            </View>
+            {(activityInfo.recentMatches || activityInfo.recentChallenges || activityInfo.recentTournaments) ? (
+              <View style={styles.activityBreakdown}>
+                {activityInfo.recentMatches ? <View style={styles.activityBreakdownItem}><MaterialIcons name="sports" size={9} color="#3B82F6" /><Text style={styles.activityBreakdownText}>{activityInfo.recentMatches}</Text></View> : null}
+                {activityInfo.recentChallenges ? <View style={styles.activityBreakdownItem}><MaterialIcons name="gps-fixed" size={9} color="#7C3AED" /><Text style={styles.activityBreakdownText}>{activityInfo.recentChallenges}</Text></View> : null}
+                {activityInfo.recentTournaments ? <View style={styles.activityBreakdownItem}><MaterialIcons name="emoji-events" size={9} color="#F59E0B" /><Text style={styles.activityBreakdownText}>{activityInfo.recentTournaments}</Text></View> : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -3937,6 +4035,26 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  activityScoreRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flexWrap: 'wrap' as const,
+    gap: 5,
+    marginTop: 6,
+  },
+  activityRankBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    minWidth: 28,
+    alignItems: 'center' as const,
+  },
+  activityRankText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
   activityScoreBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -3947,13 +4065,47 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    marginTop: 6,
-    alignSelf: 'flex-start' as const,
   },
   activityScoreText: {
     fontSize: 10,
     fontWeight: '700' as const,
     color: '#16A34A',
+  },
+  activityBreakdown: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  activityBreakdownItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  activityBreakdownText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#64748B',
+  },
+  photoCountOverlay: {
+    position: 'absolute' as const,
+    top: 3,
+    right: 3,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  photoCountText: {
+    fontSize: 8,
+    fontWeight: '800' as const,
+    color: '#FFF',
   },
   // Meetup Invitation Picker
   meetupOverlay: {
