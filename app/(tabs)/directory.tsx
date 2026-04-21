@@ -778,11 +778,11 @@ export default function DirectoryScreen() {
 
   // Compute terrain activity scores from match patterns + meetups + tournaments
   const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
-  // Meetups loaded from Supabase for activity scoring
+  // Meetups loaded from Supabase for activity scoring (loaded once, used by both showActiveNow and sort-by-activity)
   const [terrainMeetupsMap, setTerrainMeetupsMap] = useState<Map<string, { date: string }[]>>(new Map());
   const meetupLoadRef = useRef(false);
   useEffect(() => {
-    if (!showActiveNow || meetupLoadRef.current) return;
+    if (meetupLoadRef.current) return;
     meetupLoadRef.current = true;
     const loadMeetups = async () => {
       try {
@@ -806,12 +806,11 @@ export default function DirectoryScreen() {
     };
     loadMeetups();
   }, [showActiveNow]);
-  // Reset meetup load flag when filter is toggled off
-  useEffect(() => { if (!showActiveNow) meetupLoadRef.current = false; }, [showActiveNow]);
+  // Meetups are loaded once on mount; no need to reload on toggle change
 
+  // Activity scores are ALWAYS computed (for sort-by-activity), but peakLabel display only appears when showActiveNow is true
   const terrainActivityMap = useMemo(() => {
     const scoreMap = new Map<string, { score: number; matchCount: number; peakLabel: string }>();
-    if (!showActiveNow) return scoreMap;
     const now = new Date();
     const currentDow = now.getDay();
     const currentHour = now.getHours();
@@ -860,7 +859,7 @@ export default function DirectoryScreen() {
       }
     });
     return scoreMap;
-  }, [showActiveNow, terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language]);
+  }, [terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language]);
 
   const filteredTerrains = useMemo(() => {
     let result = terrains.filter(tr => {
@@ -887,6 +886,7 @@ export default function DirectoryScreen() {
     if (sortCriteria.length > 0) {
       result = applyMultiSort(result);
     } else if (showActiveNow) {
+      // When "Active Now" toggle is on, only show terrains with activity
       result = result
         .filter(tr => terrainActivityMap.has(tr.id))
         .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
@@ -1130,9 +1130,9 @@ export default function DirectoryScreen() {
   }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
 
   const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
-    const activityInfo = showActiveNow ? terrainActivityMap.get(item.id) : undefined;
+    const activityInfo = (showActiveNow || sortCriteria.some(c => c.field === 'activity')) ? terrainActivityMap.get(item.id) : undefined;
     return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} />;
-  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, showActiveNow, terrainActivityMap]);
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, showActiveNow, terrainActivityMap, sortCriteria]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
     return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
