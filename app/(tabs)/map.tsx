@@ -14,7 +14,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { PROVIDER_GOOGLE } from 'react-native-maps';
+// react-native-maps is loaded dynamically below (Platform !== 'web')
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -52,6 +52,7 @@ type MapMode = 'all' | 'public';
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
 let CircleComponent: React.ComponentType<any> | null = null;
+let PROVIDER_GOOGLE: any = undefined;
 
 if (Platform.OS !== 'web') {
   const Maps = require('react-native-maps');
@@ -59,6 +60,7 @@ if (Platform.OS !== 'web') {
   MapViewComponent = Maps.default;
   MarkerComponent = Maps.Marker;
   CircleComponent = Maps.Circle;
+  PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
 }
 
 // ============================================

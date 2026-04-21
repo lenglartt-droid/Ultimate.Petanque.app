@@ -121,13 +121,7 @@
           "cameraPermission": "Ultimate Petanque utilise la camera pour scanner les QR codes."
         }
       ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "SelfOwner",
-          "project": "react-native"
-        }
-      ]
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
