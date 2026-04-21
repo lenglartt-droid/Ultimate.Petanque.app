@@ -32,6 +32,9 @@ interface Props {
   bestPerformance?: string; // e.g. "13-2 vs Team Alpha"
   clubName?: string;
   geoRank?: GeoRankInfo | null;
+  isGoldPartner?: boolean;
+  goldPartnerName?: string;
+  goldBrandColor?: string;
   language?: 'fr' | 'en';
   colorTheme?: CardColorTheme;
   format?: ShareCardFormat;
@@ -77,6 +80,7 @@ export default function ShareCardWeeklyDigest({
   matchesPlayed, wins, winRate, eloDelta, currentElo, leagueTier,
   tirRate, carreauCount, bestPerformance,
   clubName, geoRank,
+  isGoldPartner, goldPartnerName, goldBrandColor,
   language = 'fr', colorTheme = 'dark', format = 'square',
 }: Props) {
   const fr = language === 'fr';
@@ -219,6 +223,14 @@ export default function ShareCardWeeklyDigest({
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 8 : 6, backgroundColor: '#F59E0B10', borderRadius: 10, paddingHorizontal: isStory ? 12 : 8, paddingVertical: isStory ? 8 : 6, marginBottom: isStory ? 10 : 6, borderWidth: 1, borderColor: '#F59E0B15' }}>
             <MaterialIcons name="star" size={isStory ? 14 : 11} color="#F59E0B" />
             <Text style={{ fontSize: isStory ? 11 : 9, fontWeight: '700', color: '#F59E0B', flex: 1 }} numberOfLines={1}>{bestPerformance}</Text>
+          </View>
+        ) : null}
+
+        {/* Gold Partner Highlight */}
+        {isGoldPartner && goldPartnerName ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 8 : 6, backgroundColor: (goldBrandColor || '#D4A017') + '18', borderRadius: 10, paddingHorizontal: isStory ? 12 : 8, paddingVertical: isStory ? 8 : 6, marginBottom: isStory ? 10 : 6, borderWidth: 1.5, borderColor: (goldBrandColor || '#D4A017') + '30' }}>
+            <MaterialIcons name="star" size={isStory ? 14 : 11} color={goldBrandColor || '#D4A017'} />
+            <Text style={{ fontSize: isStory ? 11 : 9, fontWeight: '800', color: goldBrandColor || '#D4A017', flex: 1 }}>{fr ? 'PARTENAIRE OR' : 'GOLD PARTNER'} {goldPartnerName}</Text>
           </View>
         ) : null}
 

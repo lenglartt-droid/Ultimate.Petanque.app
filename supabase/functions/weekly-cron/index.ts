@@ -2328,7 +2328,20 @@ Deno.serve(async (req: Request) => {
             }
           }
 
-          console.log(`[weekly-cron] Deactivated ${deactivated} expired partners`);
+          // CASCADE: Remove sponsor_id from all linked items
+          for (const ep of expiredPartners) {
+            try {
+              await supabaseAdmin.from('terrains').update({ sponsor_id: null }).eq('sponsor_id', ep.id);
+              await supabaseAdmin.from('clubs').update({ sponsor_id: null }).eq('sponsor_id', ep.id);
+              await supabaseAdmin.from('tournaments').update({ sponsor_id: null }).eq('sponsor_id', ep.id);
+              await supabaseAdmin.from('players').update({ sponsor_id: null }).eq('sponsor_id', ep.id);
+              console.log(`[weekly-cron] Cascade: removed sponsor_id from items for ${ep.display_name}`);
+            } catch (cascadeErr: any) {
+              console.error(`[weekly-cron] Cascade error for ${ep.display_name}:`, cascadeErr.message);
+            }
+          }
+
+          console.log(`[weekly-cron] Deactivated ${deactivated} expired partners (with cascade)`);
         }
 
         // 2. Send 7-day warning to partners expiring soon

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, Linking, Dimensions,
   ActivityIndicator, Platform, Share,
@@ -8,15 +8,14 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, { FadeInDown, FadeIn, FadeInUp, useSharedValue, useAnimatedStyle, withTiming, withDelay, Easing } from 'react-native-reanimated';
-import Svg, { Circle as SvgCircle } from 'react-native-svg';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import QRCode from 'react-native-qrcode-svg';
 import * as Haptics from '@/services/haptics';
 import theme, { blurhash } from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
-import { trackAmbassadorEvent, fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
+import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { SponsoredEvent } from '@/services/sponsoredEventService';
 
 const SOCIAL_CONFIG: Record<string, { icon: string; color: string; label: string; bg: string }> = {
@@ -26,42 +25,6 @@ const SOCIAL_CONFIG: Record<string, { icon: string; color: string; label: string
   twitter: { icon: 'alternate-email', color: '#1DA1F2', bg: '#1DA1F208', label: 'X / Twitter' },
   website: { icon: 'language', color: '#6366F1', bg: '#6366F108', label: 'Site web' },
 };
-
-// Animated counter component
-function AnimatedCounter({ value, color, suffix }: { value: number; color: string; suffix?: string }) {
-  const [displayVal, setDisplayVal] = useState(0);
-  useEffect(() => {
-    if (value === 0) { setDisplayVal(0); return; }
-    const duration = 1200;
-    const steps = 30;
-    const stepTime = duration / steps;
-    let current = 0;
-    const increment = value / steps;
-    const timer = setInterval(() => {
-      current += increment;
-      if (current >= value) {
-        clearInterval(timer);
-        setDisplayVal(value);
-      } else {
-        setDisplayVal(Math.round(current));
-      }
-    }, stepTime);
-    return () => clearInterval(timer);
-  }, [value]);
-  return <Text style={{ fontSize: 26, fontWeight: '900', color }}>{displayVal}{suffix || ''}</Text>;
-}
-
-// Mini activity dot indicator
-function ActivityPulse({ color }: { color: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }}>
-        <View style={{ position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: color, opacity: 0.4 }} />
-      </View>
-      <Text style={{ fontSize: 10, fontWeight: '700', color }}>ACTIF</Text>
-    </View>
-  );
-}
 
 export default function PartnerDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -73,11 +36,13 @@ export default function PartnerDetailScreen() {
 
   const [loading, setLoading] = useState(true);
   const [partner, setPartner] = useState<any | null>(null);
-  const [analytics, setAnalytics] = useState<AmbassadorAnalytics | null>(null);
-  const [bannerData, setBannerData] = useState<BannerDetailedAnalytics | null>(null);
   const [events, setEvents] = useState<SponsoredEvent[]>([]);
-  const [recentActivity, setRecentActivity] = useState<{ type: string; date: string; detail: string }[]>([]);
   const [codeCopied, setCodeCopied] = useState(false);
+  const [sponsoredPlayers, setSponsoredPlayers] = useState<any[]>([]);
+  const [loadingSponsoredPlayers, setLoadingSponsoredPlayers] = useState(false);
+  const [sponsoredTerrains, setSponsoredTerrains] = useState<any[]>([]);
+  const [sponsoredClubs, setSponsoredClubs] = useState<any[]>([]);
+  const [sponsoredTournaments, setSponsoredTournaments] = useState<any[]>([]);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -100,17 +65,20 @@ export default function PartnerDetailScreen() {
       if (data) {
         trackAmbassadorEvent(data.id, 'profile_view', undefined, { sourcePage: 'partner_detail' });
 
-        // Load analytics + banner data in parallel
-        const [{ stats }, bannerRes, evtsRes, activityRes] = await Promise.all([
-          fetchAmbassadorAnalytics('30d'),
-          fetchDetailedBannerAnalytics(data.id, 30),
+        // Load sponsored items in parallel
+        setLoadingSponsoredPlayers(true);
+        const [plRes, tRes, cRes, toRes, evtsRes] = await Promise.all([
+          supabase.from('players').select('id, name, avatar, city, elo_rating, role, stats').eq('sponsor_id', data.id).eq('is_public', true).limit(20),
+          supabase.from('terrains').select('id, name, city, type, is_public').eq('sponsor_id', data.id).limit(20),
+          supabase.from('clubs').select('id, name, city, logo, members_count, is_public').eq('sponsor_id', data.id).limit(20),
+          supabase.from('tournaments').select('id, name, date, format, status, is_public').eq('sponsor_id', data.id).order('date', { ascending: false }).limit(20),
           supabase.from('sponsored_events').select('*').eq('ambassador_id', data.id).order('event_date', { ascending: false }).limit(5),
-          supabase.from('ambassador_analytics').select('event_type, created_at, source_page').eq('ambassador_id', data.id).order('created_at', { ascending: false }).limit(10),
         ]);
-
-        const ambStats = stats.get(data.id);
-        if (ambStats) setAnalytics(ambStats);
-        if (bannerRes.data) setBannerData(bannerRes.data);
+        setSponsoredPlayers(plRes.data || []);
+        setSponsoredTerrains(tRes.data || []);
+        setSponsoredClubs(cRes.data || []);
+        setSponsoredTournaments(toRes.data || []);
+        setLoadingSponsoredPlayers(false);
 
         if (evtsRes.data) {
           setEvents(evtsRes.data.map((e: any) => ({
@@ -122,17 +90,6 @@ export default function PartnerDetailScreen() {
             minWitnesses: e.min_witnesses, status: e.status, shareCode: e.share_code,
             resultsPublished: e.results_published,
           })));
-        }
-
-        // Build recent activity feed
-        if (activityRes.data) {
-          const activities: { type: string; date: string; detail: string }[] = [];
-          (activityRes.data as any[]).forEach((a: any) => {
-            if (a.event_type === 'sponsor_push') activities.push({ type: 'push', date: a.created_at, detail: (a.source_page || '').split('|')[0] || 'Notification' });
-            else if (a.event_type === 'banner_impression') activities.push({ type: 'impression', date: a.created_at, detail: fr ? 'Impression banniere' : 'Banner impression' });
-            else if (a.event_type === 'referral') activities.push({ type: 'referral', date: a.created_at, detail: fr ? 'Nouveau parrainage' : 'New referral' });
-          });
-          setRecentActivity(activities.slice(0, 5));
         }
       }
     } catch { /* silent */ }
@@ -202,10 +159,25 @@ export default function PartnerDetailScreen() {
   const tierGradient: [string, string] = isGold ? ['#78350F', '#D4A017'] : isSilver ? ['#334155', '#78909C'] : ['#44403C', '#A1887F'];
   const tierIcon = isGold ? 'emoji-events' : isSilver ? 'workspace-premium' : 'military-tech';
 
-  const totalImp = bannerData?.totalImpressions || analytics?.bannerImpressions || 0;
-  const totalClk = (analytics?.profileViews || 0) + (analytics?.socialClicks || 0);
-  const ctr = totalImp > 0 ? Math.round((totalClk / totalImp) * 1000) / 10 : 0;
-  const reach = bannerData?.uniqueViewers || 0;
+  const totalSponsoredItems = sponsoredTerrains.length + sponsoredClubs.length + sponsoredTournaments.length + sponsoredPlayers.length;
+
+  // Tier advantages for public display
+  const tierAdvantages: { icon: string; text: string }[] = isGold ? [
+    { icon: 'star', text: fr ? 'Banniere sponsor sur les fiches' : 'Sponsor banner on detail pages' },
+    { icon: 'people', text: fr ? 'Sponsoring de joueurs' : 'Player sponsoring' },
+    { icon: 'map', text: fr ? 'Marqueurs carte distinctifs' : 'Distinctive map markers' },
+    { icon: 'event', text: fr ? 'Organisation d evenements sponsorises' : 'Sponsored event hosting' },
+    { icon: 'auto-awesome', text: fr ? 'Mise en avant prioritaire' : 'Priority placement' },
+    { icon: 'home-filled', text: fr ? 'Carousel rotatif sur l accueil' : 'Rotating home page carousel' },
+  ] : isSilver ? [
+    { icon: 'star', text: fr ? 'Banniere sponsor sur les fiches' : 'Sponsor banner on detail pages' },
+    { icon: 'people', text: fr ? 'Sponsoring de joueurs' : 'Player sponsoring' },
+    { icon: 'map', text: fr ? 'Marqueurs carte distinctifs' : 'Distinctive map markers' },
+    { icon: 'event', text: fr ? 'Organisation d evenements sponsorises' : 'Sponsored event hosting' },
+  ] : [
+    { icon: 'verified', text: fr ? 'Profil partenaire verifie' : 'Verified partner profile' },
+    { icon: 'badge', text: fr ? 'Badge visible dans l annuaire' : 'Badge visible in directory' },
+  ];
 
   const socialLinks: { platform: string; url: string; label: string }[] = [];
   if (partner.youtube_url) socialLinks.push({ platform: 'youtube', url: partner.youtube_url, label: 'YouTube' });
@@ -288,20 +260,18 @@ export default function PartnerDetailScreen() {
                 </Text>
               ) : null}
 
-              {/* Quick stat pills in hero */}
+              {/* Public stats pills in hero */}
               <View style={st.heroStatsRow}>
-                <View style={st.heroStatPill}>
-                  <MaterialIcons name="visibility" size={13} color="rgba(255,255,255,0.9)" />
-                  <Text style={st.heroStatValue}>{totalImp}</Text>
-                </View>
-                <View style={st.heroStatPill}>
-                  <MaterialIcons name="touch-app" size={13} color="rgba(255,255,255,0.9)" />
-                  <Text style={st.heroStatValue}>{totalClk}</Text>
-                </View>
-                {partner.referral_count > 0 ? (
+                {totalSponsoredItems > 0 ? (
                   <View style={st.heroStatPill}>
-                    <MaterialIcons name="card-giftcard" size={13} color="rgba(255,255,255,0.9)" />
-                    <Text style={st.heroStatValue}>{partner.referral_count}</Text>
+                    <MaterialIcons name="handshake" size={13} color="rgba(255,255,255,0.9)" />
+                    <Text style={st.heroStatValue}>{totalSponsoredItems} {fr ? 'sponsorises' : 'sponsored'}</Text>
+                  </View>
+                ) : null}
+                {events.length > 0 ? (
+                  <View style={st.heroStatPill}>
+                    <MaterialIcons name="event" size={13} color="rgba(255,255,255,0.9)" />
+                    <Text style={st.heroStatValue}>{events.length} {fr ? 'evenement(s)' : 'event(s)'}</Text>
                   </View>
                 ) : null}
               </View>
@@ -310,44 +280,36 @@ export default function PartnerDetailScreen() {
         </Animated.View>
 
         <View style={st.contentWrap}>
-          {/* ====== ANIMATED STATS COUNTERS (owner only) ====== */}
-          {isOwner ? <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.statsCard}>
-            <View style={st.statsCardHeader}>
-              <MaterialIcons name="insights" size={18} color={tierColor} />
-              <Text style={st.statsCardTitle}>{fr ? 'Visibilite (30j)' : 'Visibility (30d)'}</Text>
-              {totalImp > 10 ? <ActivityPulse color="#22C55E" /> : null}
-            </View>
-            <View style={st.statsGrid}>
-              <View style={[st.statBox, { borderColor: '#3B82F615' }]}>
-                <View style={[st.statIconBg, { backgroundColor: '#3B82F610' }]}>
-                  <MaterialIcons name="visibility" size={18} color="#3B82F6" />
-                </View>
-                <AnimatedCounter value={totalImp} color="#3B82F6" />
-                <Text style={st.statLabel}>Impressions</Text>
+          {/* ====== TIER ADVANTAGES (public) ====== */}
+          <Animated.View entering={FadeInDown.duration(400).delay(100)} style={st.card}>
+            <View style={st.cardHeader}>
+              <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                <MaterialIcons name={tierIcon as any} size={18} color={tierColor} />
               </View>
-              <View style={[st.statBox, { borderColor: '#10B98115' }]}>
-                <View style={[st.statIconBg, { backgroundColor: '#10B98110' }]}>
-                  <MaterialIcons name="touch-app" size={18} color="#10B981" />
-                </View>
-                <AnimatedCounter value={totalClk} color="#10B981" />
-                <Text style={st.statLabel}>{fr ? 'Clics' : 'Clicks'}</Text>
-              </View>
-              <View style={[st.statBox, { borderColor: tierColor + '15' }]}>
-                <View style={[st.statIconBg, { backgroundColor: tierColor + '10' }]}>
-                  <MaterialIcons name="trending-up" size={18} color={tierColor} />
-                </View>
-                <AnimatedCounter value={ctr} color={tierColor} suffix="%" />
-                <Text style={st.statLabel}>CTR</Text>
-              </View>
-              <View style={[st.statBox, { borderColor: '#7C3AED15' }]}>
-                <View style={[st.statIconBg, { backgroundColor: '#7C3AED10' }]}>
-                  <MaterialIcons name="people" size={18} color="#7C3AED" />
-                </View>
-                <AnimatedCounter value={reach} color="#7C3AED" />
-                <Text style={st.statLabel}>{fr ? 'Portee' : 'Reach'}</Text>
+              <Text style={st.cardTitle}>{fr ? 'Avantages partenaire' : 'Partner benefits'}</Text>
+              <View style={[st.eventCountBadge, { backgroundColor: tierColor + '12' }]}>
+                <Text style={[st.eventCountText, { color: tierColor }]}>{tierLabel.split(' ')[tierLabel.split(' ').length - 1] || tierLabel}</Text>
               </View>
             </View>
-          </Animated.View> : null}
+            <View style={{ gap: 10 }}>
+              {tierAdvantages.map((adv, i) => (
+                <View key={i} style={st.advantageRow}>
+                  <View style={[st.advantageIconBg, { backgroundColor: tierColor + '10' }]}>
+                    <MaterialIcons name={adv.icon as any} size={16} color={tierColor} />
+                  </View>
+                  <Text style={st.advantageText}>{adv.text}</Text>
+                </View>
+              ))}
+            </View>
+            {!isGold ? (
+              <View style={[st.upgradeBanner, { backgroundColor: '#D4A01708', borderColor: '#D4A01720' }]}>
+                <MaterialIcons name="arrow-upward" size={14} color="#D4A017" />
+                <Text style={st.upgradeBannerText}>
+                  {fr ? 'Niveaux superieurs disponibles avec plus d avantages' : 'Higher tiers available with more benefits'}
+                </Text>
+              </View>
+            ) : null}
+          </Animated.View>
 
           {/* ====== BIO ====== */}
           {partner.bio ? (
@@ -362,40 +324,101 @@ export default function PartnerDetailScreen() {
             </Animated.View>
           ) : null}
 
-          {/* ====== RECENT ACTIVITY (Social proof) ====== */}
-          {recentActivity.length > 0 ? (
+          {/* ====== SPONSORED ITEMS (Terrains, Clubs, Tournaments) ====== */}
+          {(sponsoredTerrains.length > 0 || sponsoredClubs.length > 0 || sponsoredTournaments.length > 0) ? (
             <Animated.View entering={FadeInDown.duration(400).delay(200)} style={st.card}>
               <View style={st.cardHeader}>
-                <View style={[st.cardIconBg, { backgroundColor: '#22C55E10' }]}>
-                  <MaterialIcons name="bolt" size={18} color="#22C55E" />
+                <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                  <MaterialIcons name="location-city" size={18} color={tierColor} />
                 </View>
-                <Text style={st.cardTitle}>{fr ? 'Activite recente' : 'Recent activity'}</Text>
+                <Text style={st.cardTitle}>{fr ? 'Lieux & Competitions sponsorises' : 'Sponsored venues & competitions'}</Text>
+                <View style={[st.eventCountBadge, { backgroundColor: tierColor + '12' }]}>
+                  <Text style={[st.eventCountText, { color: tierColor }]}>{sponsoredTerrains.length + sponsoredClubs.length + sponsoredTournaments.length}</Text>
+                </View>
               </View>
-              {recentActivity.map((act, i) => {
-                const actIcon = act.type === 'push' ? 'notifications' : act.type === 'referral' ? 'person-add' : 'visibility';
-                const actColor = act.type === 'push' ? '#3B82F6' : act.type === 'referral' ? '#10B981' : '#94A3B8';
-                const timeAgo = (() => {
-                  const diff = Date.now() - new Date(act.date).getTime();
-                  const mins = Math.floor(diff / 60000);
-                  if (mins < 60) return fr ? `${mins}min` : `${mins}m`;
-                  const hrs = Math.floor(mins / 60);
-                  if (hrs < 24) return `${hrs}h`;
-                  const days = Math.floor(hrs / 24);
-                  return `${days}${fr ? 'j' : 'd'}`;
-                })();
-                return (
-                  <Animated.View key={i} entering={FadeIn.duration(300).delay(200 + i * 60)} style={st.activityRow}>
-                    <View style={[st.activityDot, { backgroundColor: actColor + '15' }]}>
-                      <MaterialIcons name={actIcon as any} size={14} color={actColor} />
+              {/* Terrains */}
+              {sponsoredTerrains.map((t: any) => (
+                <Pressable
+                  key={`t-${t.id}`}
+                  style={({ pressed }) => [st.eventItem, pressed && { opacity: 0.85, backgroundColor: '#F8FAFC' }]}
+                  onPress={() => router.push(`/terrain/${t.id}` as any)}
+                >
+                  <View style={[st.eventIconBg, { backgroundColor: '#22C55E12' }]}>
+                    <MaterialIcons name="sports-soccer" size={16} color="#22C55E" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.eventTitle} numberOfLines={1}>{t.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                      {t.city ? <Text style={st.eventDate}>{t.city}</Text> : null}
+                      {t.type ? (
+                        <>
+                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                          <Text style={st.eventDate}>{t.type}</Text>
+                        </>
+                      ) : null}
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={st.activityText} numberOfLines={1}>{act.detail}</Text>
+                  </View>
+                  <View style={[st.sponsoredTypeBadge, { backgroundColor: '#22C55E12' }]}>
+                    <Text style={[st.sponsoredTypeText, { color: '#22C55E' }]}>{fr ? 'Terrain' : 'Court'}</Text>
+                  </View>
+                </Pressable>
+              ))}
+              {/* Clubs */}
+              {sponsoredClubs.map((c: any) => (
+                <Pressable
+                  key={`c-${c.id}`}
+                  style={({ pressed }) => [st.eventItem, pressed && { opacity: 0.85, backgroundColor: '#F8FAFC' }]}
+                  onPress={() => router.push(`/club/${c.id}` as any)}
+                >
+                  <View style={[st.eventIconBg, { backgroundColor: '#7C3AED12' }]}>
+                    <MaterialIcons name="home" size={16} color="#7C3AED" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.eventTitle} numberOfLines={1}>{c.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                      {c.city ? <Text style={st.eventDate}>{c.city}</Text> : null}
+                      {c.members_count > 0 ? (
+                        <>
+                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                          <Text style={st.eventDate}>{c.members_count} {fr ? 'membres' : 'members'}</Text>
+                        </>
+                      ) : null}
                     </View>
-                    <Text style={st.activityTime}>{timeAgo}</Text>
-                    {i < recentActivity.length - 1 ? <View style={st.activityTimeline} /> : null}
-                  </Animated.View>
-                );
-              })}
+                  </View>
+                  <View style={[st.sponsoredTypeBadge, { backgroundColor: '#7C3AED12' }]}>
+                    <Text style={[st.sponsoredTypeText, { color: '#7C3AED' }]}>Club</Text>
+                  </View>
+                </Pressable>
+              ))}
+              {/* Tournaments */}
+              {sponsoredTournaments.map((to: any) => (
+                <Pressable
+                  key={`to-${to.id}`}
+                  style={({ pressed }) => [st.eventItem, pressed && { opacity: 0.85, backgroundColor: '#F8FAFC' }]}
+                  onPress={() => router.push(`/tournament/${to.id}` as any)}
+                >
+                  <View style={[st.eventIconBg, { backgroundColor: '#F59E0B12' }]}>
+                    <MaterialIcons name="emoji-events" size={16} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.eventTitle} numberOfLines={1}>{to.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                      <Text style={st.eventDate}>
+                        {new Date(to.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                      </Text>
+                      {to.format ? (
+                        <>
+                          <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                          <Text style={st.eventDate}>{to.format}</Text>
+                        </>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={[st.sponsoredTypeBadge, { backgroundColor: '#F59E0B12' }]}>
+                    <Text style={[st.sponsoredTypeText, { color: '#F59E0B' }]}>{fr ? 'Tournoi' : 'Tournament'}</Text>
+                  </View>
+                </Pressable>
+              ))}
             </Animated.View>
           ) : null}
 
@@ -597,6 +620,59 @@ export default function PartnerDetailScreen() {
             </View>
           </Animated.View> : null}
 
+          {/* ====== SPONSORED PLAYERS ====== */}
+          {sponsoredPlayers.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(380)} style={st.card}>
+              <View style={st.cardHeader}>
+                <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                  <MaterialIcons name="people" size={18} color={tierColor} />
+                </View>
+                <Text style={st.cardTitle}>{fr ? 'Joueurs sponsorises' : 'Sponsored players'}</Text>
+                <View style={[st.eventCountBadge, { backgroundColor: tierColor + '12' }]}>
+                  <Text style={[st.eventCountText, { color: tierColor }]}>{sponsoredPlayers.length}</Text>
+                </View>
+              </View>
+              {sponsoredPlayers.map((pl: any) => {
+                const eloVal = pl.elo_rating || 1000;
+                const winR = pl.stats?.winRate || 0;
+                return (
+                  <Pressable
+                    key={pl.id}
+                    style={({ pressed }) => [st.eventItem, pressed && { opacity: 0.85, backgroundColor: '#F8FAFC' }]}
+                    onPress={() => router.push(`/player/${pl.id}` as any)}
+                  >
+                    <View style={{ width: 40, height: 40, borderRadius: 13, overflow: 'hidden', borderWidth: 2, borderColor: tierColor + '50' }}>
+                      {pl.avatar ? (
+                        <Image source={{ uri: pl.avatar }} style={{ width: 36, height: 36, borderRadius: 11 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: tierColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ fontSize: 14, fontWeight: '700', color: tierColor }}>{(pl.name || '?').charAt(0).toUpperCase()}</Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={st.eventTitle} numberOfLines={1}>{pl.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: tierColor }}>{eloVal} ELO</Text>
+                        {pl.city ? (
+                          <>
+                            <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                            <Text style={st.eventDate}>{pl.city}</Text>
+                          </>
+                        ) : null}
+                        <View style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#CBD5E1' }} />
+                        <Text style={st.eventDate}>{winR}%</Text>
+                      </View>
+                    </View>
+                    <View style={[st.eventStatusBadge, { backgroundColor: tierColor + '12' }]}>
+                      <MaterialIcons name="handshake" size={10} color={tierColor} />
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </Animated.View>
+          ) : null}
+
           {/* ====== WEBSITE CTA ====== */}
           {partner.website_url ? (
             <Animated.View entering={FadeInDown.duration(400).delay(400)}>
@@ -684,26 +760,16 @@ const st = StyleSheet.create({
   },
   heroStatValue: { fontSize: 13, fontWeight: '800', color: '#FFF' },
 
-  // ====== STATS ======
-  statsCard: {
-    backgroundColor: '#FFF', borderRadius: 20, padding: 18, marginBottom: 14,
-    borderWidth: 1, borderColor: '#E2E8F0',
-    ...Platform.select({
-      ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.04, shadowRadius: 8 },
-      android: { elevation: 2 },
-      default: {},
-    }),
-  },
-  statsCardHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14 },
-  statsCardTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A' },
-  statsGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 10 },
-  statBox: {
-    width: '47%' as any, flexGrow: 1, alignItems: 'center' as const, gap: 6,
-    backgroundColor: '#FAFBFC', borderRadius: 16, paddingVertical: 16, paddingHorizontal: 8,
-    borderWidth: 1,
-  },
-  statIconBg: { width: 36, height: 36, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
-  statLabel: { fontSize: 10, fontWeight: '600', color: '#94A3B8', textTransform: 'uppercase' as const, letterSpacing: 0.5 },
+  // ====== ADVANTAGES ======
+  advantageRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
+  advantageIconBg: { width: 36, height: 36, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  advantageText: { flex: 1, fontSize: 14, fontWeight: '500', color: '#475569', lineHeight: 20 },
+  upgradeBanner: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 14, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 12, borderWidth: 1 },
+  upgradeBannerText: { flex: 1, fontSize: 12, fontWeight: '600', color: '#D4A017' },
+
+  // ====== SPONSORED TYPE BADGE ======
+  sponsoredTypeBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  sponsoredTypeText: { fontSize: 9, fontWeight: '800', letterSpacing: 0.3 },
 
   // ====== CARDS ======
   card: {
@@ -719,19 +785,6 @@ const st = StyleSheet.create({
   cardIconBg: { width: 36, height: 36, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
   cardTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: '#0F172A' },
   bioText: { fontSize: 15, color: '#475569', lineHeight: 24 },
-
-  // ====== ACTIVITY ======
-  activityRow: {
-    flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12,
-    paddingVertical: 10, position: 'relative' as const,
-  },
-  activityDot: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
-  activityText: { fontSize: 13, fontWeight: '500', color: '#334155' },
-  activityTime: { fontSize: 11, fontWeight: '600', color: '#94A3B8' },
-  activityTimeline: {
-    position: 'absolute' as const, left: 15, top: 42, width: 2, height: 16,
-    backgroundColor: '#F1F5F9', borderRadius: 1,
-  },
 
   // ====== SOCIAL ======
   socialGrid: { gap: 8 },

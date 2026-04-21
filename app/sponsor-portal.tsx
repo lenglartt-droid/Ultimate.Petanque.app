@@ -23,6 +23,7 @@ import { decode } from '@/services/base64';
 import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 import SponsorProposalSection from '@/components/feature/SponsorProposalSection';
+import SponsorItemMetrics from '@/components/feature/SponsorItemMetrics';
 import PartnerExpirationAlert from '@/components/feature/PartnerExpirationAlert';
 
 function Sparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
@@ -1471,6 +1472,9 @@ export default function SponsorPortalScreen() {
                 </View>
               ))}
             </View>
+
+            {/* Per-Item Performance Metrics */}
+            {isSilverPlus && sponsor ? <SponsorItemMetrics sponsorId={sponsor.id} bannerData={bannerData} totalImp={totalImp} period={period} tierColor={tierColor} fr={fr} /> : null}
 
             {/* Sparkline Charts */}
             <View style={st.chartCard}>

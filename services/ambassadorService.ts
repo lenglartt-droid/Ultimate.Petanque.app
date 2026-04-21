@@ -15,6 +15,7 @@ export interface Ambassador {
   twitterHandle?: string;
   websiteUrl?: string;
   isFeatured: boolean;
+  isActive: boolean;
   badgeType: string;
   ambassadorLevel: AmbassadorLevel;
   referralCode?: string;
@@ -121,6 +122,7 @@ export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; e
         twitterHandle: a.twitter_handle || undefined,
         websiteUrl: a.website_url || undefined,
         isFeatured: a.is_featured,
+        isActive: a.is_active !== false,
         badgeType: a.badge_type || 'ambassador',
         ambassadorLevel: (a.ambassador_level || 'decouverte') as AmbassadorLevel,
         referralCode: a.referral_code || undefined,

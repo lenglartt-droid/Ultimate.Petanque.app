@@ -331,8 +331,8 @@
         <div class="section-title" lang="fr">Modifications</div>
         <div class="section-title" lang="en">Changes</div>
       </div>
-      <div class="section-content" lang="fr">Nous pouvons modifier cette politique. Les changements seront notifiés dans l'application. La dernière mise à jour (v1.50.0) intègre les sections sur la vérification de livraison push, l'empreinte d'appareil anti-triche, et les données des tests A/B, en plus des sections existantes sur le programme ambassadeur/partenaire, les événements sponsorisés, le score de confiance, les badges, les notifications push ciblées, le portail partenaires, la publicité, les achats intégrés, les codes promo et l'export de données.</div>
-      <div class="section-content" lang="en">We may modify this policy. Changes will be notified in the app. The latest update (v1.50.0) includes sections on push delivery verification, anti-cheat device fingerprinting, and A/B test data, in addition to existing sections on the ambassador/partner program, sponsored events, trust score, badges, targeted push notifications, partner portal, advertising, in-app purchases, promo codes and data export.</div>
+      <div class="section-content" lang="fr">Nous pouvons modifier cette politique. Les changements seront notifiés dans l'application. La dernière mise à jour (v1.51.0) intègre les sections sur le suivi analytique par item sponsorisé (impressions, clics, CTR par terrain/club/tournoi/joueur), les marqueurs sponsorisés sur la carte (brand_color, badge S), l'historique des assignations sponsor, et l'export CSV des métriques, en plus des sections existantes sur la vérification de livraison push, l'empreinte d'appareil, les tests A/B, le programme ambassadeur/partenaire, les événements sponsorisés, le score de confiance, les badges, les notifications push ciblées, le portail partenaires, la publicité, les achats intégrés, les codes promo et l'export de données.</div>
+      <div class="section-content" lang="en">We may modify this policy. Changes will be notified in the app. The latest update (v1.51.0) includes sections on per-item sponsor analytics tracking (impressions, clicks, CTR per terrain/club/tournament/player), sponsored map markers (brand_color, S badge), sponsor assignment history, and CSV metrics export, in addition to existing sections on push delivery verification, device fingerprinting, A/B test data, ambassador/partner program, sponsored events, trust score, badges, targeted push notifications, partner portal, advertising, in-app purchases, promo codes and data export.</div>
     </div>
 
     <!-- Ambassador Program -->
@@ -432,7 +432,29 @@
       <div class="section-content" lang="en">A/B announcement tests record aggregate metrics (send count, errors, delivery rate per variant). A/B distribution is random (even/odd token index). No personal data is associated with variants. Results are used solely to optimize future communications.</div>
     </div>
 
-    <div class="footer">Ultimate Petanque v1.50.0 — April 15, 2026 — Updated April 15, 2026</div>
+        <!-- Per-item Sponsor Analytics -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(37,99,235,0.1)">📊</div>
+        <div class="section-title" lang="fr">Analytique par item sponsorisé</div>
+        <div class="section-title" lang="en">Per-item Sponsor Analytics</div>
+      </div>
+      <div class="section-content" lang="fr">Les partenaires Argent et Or bénéficient d'un suivi analytique par item sponsorisé : chaque terrain, club, tournoi et joueur associé à un sponsor_id génère des métriques d'impressions, clics et CTR estimées proportionnellement à partir des données globales de la page. Ces métriques sont visibles dans le portail partenaire et exportables en CSV. Les données sont anonymisées et agrégées — aucune information personnelle des visiteurs n'est collectée au-delà des compteurs d'événements.</div>
+      <div class="section-content" lang="en">Silver and Gold partners benefit from per-item sponsor analytics tracking: each terrain, club, tournament and player linked via sponsor_id generates impression, click and CTR metrics estimated proportionally from global page data. These metrics are visible in the partner portal and exportable as CSV. Data is anonymized and aggregated — no visitor personal information is collected beyond event counters.</div>
+    </div>
+
+    <!-- Sponsored Map Markers -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(34,197,94,0.1)">📍</div>
+        <div class="section-title" lang="fr">Marqueurs sponsorisés sur la carte</div>
+        <div class="section-title" lang="en">Sponsored Map Markers</div>
+      </div>
+      <div class="section-content" lang="fr">Les joueurs publics associés à un partenaire via sponsor_id sont affichés sur la carte avec un marqueur distinctif : bordure aux couleurs de la marque (brand_color) et badge "S". La couleur de marque est définie par le partenaire dans son portail. Aucune donnée de localisation supplémentaire n'est collectée — seule la position déjà renseignée par le joueur est utilisée.</div>
+      <div class="section-content" lang="en">Public players linked to a partner via sponsor_id are displayed on the map with a distinctive marker: brand color (brand_color) border and "S" badge. The brand color is set by the partner in their portal. No additional location data is collected — only the position already provided by the player is used.</div>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.51.0 — April 20, 2026 — Updated April 20, 2026</div>
   </div>
 
   <script>

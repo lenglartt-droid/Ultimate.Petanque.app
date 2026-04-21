@@ -1843,6 +1843,7 @@ export default function DirectoryScreen() {
             windowSize={5}
             maxToRenderPerBatch={10}
             initialNumToRender={10}
+            extraData={partnerUserIds}
             onViewableItemsChanged={scrollPrefetch.onViewableItemsChanged}
             viewabilityConfig={scrollPrefetch.viewabilityConfig}
             refreshControl={
@@ -1891,6 +1892,7 @@ export default function DirectoryScreen() {
             windowSize={5}
             maxToRenderPerBatch={10}
             initialNumToRender={15}
+            extraData={partnerUserIds}
             onViewableItemsChanged={scrollPrefetch.onViewableItemsChanged}
             viewabilityConfig={scrollPrefetch.viewabilityConfig}
             refreshControl={

@@ -336,13 +336,17 @@ const ActiveNowPulse = React.memo(() => {
   );
 });
 
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean }) => (
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; sponsorColor?: string | null }) => (
   <View style={styles.markerWrapper}>
     {isActiveNow ? <ActiveNowPulse /> : null}
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, isActiveNow && { borderColor: '#22C55E', borderWidth: 3, width: 36, height: 36, borderRadius: 18 }]}>
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, isActiveNow && { borderColor: '#22C55E', borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null]}>
       <MaterialIcons name={icon as any} size={isActiveNow ? 16 : 14} color="#FFF" />
     </View>
-    {isVerified ? (
+    {sponsorColor ? (
+      <View style={[styles.sponsorBadge, { backgroundColor: sponsorColor }]}>
+        <Text style={styles.sponsorBadgeText}>S</Text>
+      </View>
+    ) : isVerified ? (
       <View style={styles.verifiedBadge}>
         <MaterialIcons name="verified" size={9} color="#FFF" />
       </View>
@@ -877,7 +881,7 @@ export default function MapScreen() {
 
       const supabase = getSupabaseClient();
 
-      // ✅ GOLD / SILVER
+        // ✅ GOLD / SILVER
       let goldMarkers = await Promise.all(
         goldSilver.map(async (amb) => {
           const { data } = await supabase
@@ -931,6 +935,7 @@ export default function MapScreen() {
           
       setPartnerMarkers(goldMarkers);
       setPlayerMarkers(playerMarkers1);
+
       } catch (e) {
         console.log('[Map] Error loading partner markers:', e);
       }
@@ -1081,10 +1086,15 @@ export default function MapScreen() {
     }
     if (filter === 'all' || filter === 'players') {
       const filterPlayers = (arr: any[]) => (eloRankFilter || eloRangeFilter || trustFilter || playerRoleFilter) ? arr.filter(matchPlayerSubFilters) : arr;
-      // if (showOwn) addItems(filterPlayers(ownData.players), 'players', false);
-      // if (showPublic) addItems(filterPlayers(pubData.players), 'players', true);
+            // Build sponsor brand color lookup from partner markers
+      const sponsorColorMap = new Map<string, string>();
+      partnerMarkers.forEach(pm => { if (pm.brandColor) sponsorColorMap.set(pm.id, pm.brandColor); });
+      const enrichWithSponsorColor = (arr: any[]) => arr.map(p => {
+        if (p.sponsorId && sponsorColorMap.has(p.sponsorId)) return { ...p, sponsorBrandColor: sponsorColorMap.get(p.sponsorId) };
+        return p;
+      });
 
-       addItems(filterPlayers(playerMarkers), 'players', true)
+      addItems(enrichWithSponsorColor(filterPlayers(playerMarkers)), 'players', true)
     }
     if (filter === 'all' || filter === 'events') {
       // Skip events when partner filter active
@@ -1751,10 +1761,11 @@ export default function MapScreen() {
                 {(item.itemType === 'partners' || item.itemType === 'players') ? (
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }} />
                 ) : (
-                  <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)} />
+                  <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)}  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
+              </MarkerComponent> />
 
                 )}
-                              </MarkerComponent>
+              </MarkerComponent>
             );
           }
         }) : null}
@@ -2697,6 +2708,8 @@ const styles = StyleSheet.create({
   verifiedBadge: { position: 'absolute', bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   // Fallback badge for players with terrain/club location
   fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  sponsorBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  sponsorBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF' },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
   activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' },
   // Cluster markers
