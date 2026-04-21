@@ -875,9 +875,7 @@ export default function MapScreen() {
         a => a.badgeType !== 'gold_sponsor' && a.badgeType !== 'silver_sponsor'
       );
 
-      console.log("####ambassadors#####")
-      console.log(ambassadors);
-      console.log(realPlayer);
+
 
       const supabase = getSupabaseClient();
 
@@ -911,8 +909,7 @@ export default function MapScreen() {
             .eq('id', amb.playerId)
             .single();
 
-          console.log("#####data111######");
-          console.log(data);  
+
 
           if (!data?.location) return null;
 
@@ -930,8 +927,7 @@ export default function MapScreen() {
       goldMarkers = goldMarkers.filter(Boolean);
       playerMarkers1 = playerMarkers1.filter(Boolean);
 
-      console.log("#####playerMarkers111######");
-      console.log(playerMarkers1);
+
           
       setPartnerMarkers(goldMarkers);
       setPlayerMarkers(playerMarkers1);
@@ -1176,8 +1172,7 @@ export default function MapScreen() {
 
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
-    console.log("#######countType########");
-    console.log(countType('partners'));
+
     return {
       terrains: countType('terrains'),
       clubs: countType('clubs'),
@@ -1436,9 +1431,9 @@ export default function MapScreen() {
 
   const [freezeMarkers, setFreezeMarkers] = useState(false);
   useEffect(() => {
-  const t = setTimeout(() => setFreezeMarkers(true), 20000000000000);
-  return () => clearTimeout(t);
-}, []);
+    const t = setTimeout(() => setFreezeMarkers(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
 
   // Player density heatmap
@@ -1762,8 +1757,6 @@ export default function MapScreen() {
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }} />
                 ) : (
                   <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)}  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
-              </MarkerComponent> />
-
                 )}
               </MarkerComponent>
             );
