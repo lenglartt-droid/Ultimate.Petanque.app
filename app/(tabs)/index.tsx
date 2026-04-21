@@ -10,6 +10,7 @@ import {
   FlatList,
   SectionList,
   Platform,
+  Animated as RNAnimated,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -20,6 +21,7 @@ import theme, { blurhash } from '@/constants/theme';
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
+import * as Haptics from '@/services/haptics';
 import { preloadInterstitial } from '@/services/adService';
 import MiniRankingWidget from '@/components/feature/MiniRankingWidget';
 import MiniGeoRankingWidget from '@/components/feature/MiniGeoRankingWidget';
@@ -142,6 +144,31 @@ export default function HomeScreen() {
   const [leaguePromotion, setLeaguePromotion] = useState<{ type: 'promotion' | 'relegation'; newTier: LeagueTier; previousTier: LeagueTier; elo: number } | null>(null);
   const prevTierRef = React.useRef<string | null>(null);
 
+  // Gold partners for carousel
+  const goldPartners = useMemo(() => {
+    return featuredAmbassadors.filter(a => a.badgeType === 'gold_sponsor' && a.isActive);
+  }, [featuredAmbassadors]);
+
+  // Gold carousel auto-rotation with fade
+  useEffect(() => {
+    if (goldPartners.length <= 1) {
+      if (goldCarouselTimer.current) { clearInterval(goldCarouselTimer.current); goldCarouselTimer.current = null; }
+      return;
+    }
+    goldCarouselTimer.current = setInterval(() => {
+      RNAnimated.timing(goldFadeAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+        setGoldCarouselIndex(prev => (prev + 1) % goldPartners.length);
+        RNAnimated.timing(goldFadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+      });
+    }, 5000);
+    return () => { if (goldCarouselTimer.current) { clearInterval(goldCarouselTimer.current); goldCarouselTimer.current = null; } };
+  }, [goldPartners.length]);
+
+  // Reset carousel index if gold partners change
+  useEffect(() => {
+    if (goldCarouselIndex >= goldPartners.length) setGoldCarouselIndex(0);
+  }, [goldPartners.length]);
+
   // Detect league tier changes
   useEffect(() => {
     if (!selfPlayer) return;
@@ -189,6 +216,11 @@ export default function HomeScreen() {
   const [nearbyTerrains, setNearbyTerrains] = useState<NearbyActiveTerrain[]>([]);
   const [proximityDismissed, setProximityDismissed] = useState(false);
   const proximityLoadedRef = React.useRef(false);
+
+  // Gold partner carousel
+  const [goldCarouselIndex, setGoldCarouselIndex] = useState(0);
+  const goldFadeAnim = React.useRef(new RNAnimated.Value(1)).current;
+  const goldCarouselTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Countdown
   const [now, setNow] = useState(Date.now());
@@ -696,23 +728,24 @@ export default function HomeScreen() {
           </View>
         ) : null;
 
-      // ===== GOLD PARTNER BANNER =====
+      // ===== GOLD PARTNER BANNER / CAROUSEL =====
       case 'sponsor':
-        return featuredAmbassadors.length > 0 ? (() => {
-          const goldPartner = featuredAmbassadors.find(a => a.badgeType === 'gold_sponsor' && a.isActive);
-          if (!goldPartner) return null;
-          const brandColor = goldPartner.brandColor || '#D4A017';
-          return (
-            <View style={[st.section, isTablet && st.sectionTablet]}>
+        if (goldPartners.length === 0) return null;
+        const currentGold = goldPartners[goldCarouselIndex % goldPartners.length];
+        if (!currentGold) return null;
+        const brandColor = currentGold.brandColor || '#D4A017';
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <RNAnimated.View style={{ opacity: goldFadeAnim }}>
               <Pressable
                 style={({ pressed }) => [st.goldBanner, { borderColor: brandColor + '40' }, pressed && { opacity: 0.9, transform: [{ scale: 0.985 }] }]}
-                onPress={() => { Haptics.selectionAsync(); trackAmbassadorEvent(goldPartner.id, 'banner_click', undefined, { sourcePage: 'home' }); router.push(`/partner/${goldPartner.id}` as any); }}
+                onPress={() => { Haptics.selectionAsync(); trackAmbassadorEvent(currentGold.id, 'banner_click', undefined, { sourcePage: 'home' }); router.push(`/partner/${currentGold.id}` as any); }}
               >
                 <View style={[st.goldBannerStripe, { backgroundColor: brandColor }]} />
                 <View style={st.goldBannerContent}>
-                  {goldPartner.photo ? (
+                  {currentGold.photo ? (
                     <View style={[st.goldBannerPhoto, { borderColor: brandColor + '50' }]}>
-                      <Image source={{ uri: goldPartner.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      <Image source={{ uri: currentGold.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                     </View>
                   ) : (
                     <View style={[st.goldBannerPhoto, st.goldBannerPhotoFallback, { borderColor: brandColor + '50', backgroundColor: brandColor + '15' }]}>
@@ -730,8 +763,8 @@ export default function HomeScreen() {
                         <Text style={st.goldBannerSponsorText}>SPONSOR</Text>
                       </View>
                     </View>
-                    <Text style={st.goldBannerName} numberOfLines={1}>{goldPartner.displayName}</Text>
-                    {goldPartner.bio ? <Text style={st.goldBannerBio} numberOfLines={1}>{goldPartner.bio}</Text> : null}
+                    <Text style={st.goldBannerName} numberOfLines={1}>{currentGold.displayName}</Text>
+                    {currentGold.bio ? <Text style={st.goldBannerBio} numberOfLines={1}>{currentGold.bio}</Text> : null}
                   </View>
                   <View style={[st.goldBannerCta, { backgroundColor: brandColor + '18' }]}>
                     <MaterialIcons name="chevron-right" size={20} color={brandColor} />
@@ -740,9 +773,40 @@ export default function HomeScreen() {
                 <View style={[st.goldBannerCornerTL, { borderColor: brandColor + '20' }]} />
                 <View style={[st.goldBannerCornerBR, { borderColor: brandColor + '20' }]} />
               </Pressable>
-            </View>
-          );
-        })() : null;
+            </RNAnimated.View>
+            {goldPartners.length > 1 ? (
+              <View style={st.goldCarouselDots}>
+                {goldPartners.map((gp, i) => {
+                  const dotColor = gp.brandColor || '#D4A017';
+                  const isActive = i === (goldCarouselIndex % goldPartners.length);
+                  return (
+                    <Pressable
+                      key={gp.id}
+                      style={[st.goldCarouselDot, isActive && { backgroundColor: dotColor, width: 18, borderColor: dotColor }]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        // Manual navigation: reset timer, fade transition
+                        if (goldCarouselTimer.current) { clearInterval(goldCarouselTimer.current); goldCarouselTimer.current = null; }
+                        RNAnimated.timing(goldFadeAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start(() => {
+                          setGoldCarouselIndex(i);
+                          RNAnimated.timing(goldFadeAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start();
+                        });
+                        // Restart auto-rotation
+                        goldCarouselTimer.current = setInterval(() => {
+                          RNAnimated.timing(goldFadeAnim, { toValue: 0, duration: 350, useNativeDriver: true }).start(() => {
+                            setGoldCarouselIndex(prev => (prev + 1) % goldPartners.length);
+                            RNAnimated.timing(goldFadeAnim, { toValue: 1, duration: 350, useNativeDriver: true }).start();
+                          });
+                        }, 5000);
+                      }}
+                      hitSlop={6}
+                    />
+                  );
+                })}
+              </View>
+            ) : null}
+          </View>
+        );
 
       // Season summary moved to History page
       case 'seasonSummary':
@@ -878,7 +942,7 @@ export default function HomeScreen() {
   }, [
     isTablet, greeting, displayName, selfPlayer, pendingInviteCount, eventNotifCount, pendingWitnessMatchCount,
     totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t, eloDecayWarning, placementInfo,
-    witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors,
+    witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors, goldPartners, goldCarouselIndex,
     now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
   ]);
 
@@ -1154,4 +1218,6 @@ const st = StyleSheet.create({
   goldBannerCta: { width: 34, height: 34, borderRadius: 17, alignItems: 'center' as const, justifyContent: 'center' as const },
   goldBannerCornerTL: { position: 'absolute' as const, top: 3, left: 3, width: 16, height: 16, borderTopWidth: 1.5, borderLeftWidth: 1.5, borderTopLeftRadius: 6 },
   goldBannerCornerBR: { position: 'absolute' as const, bottom: 3, right: 3, width: 16, height: 16, borderBottomWidth: 1.5, borderRightWidth: 1.5, borderBottomRightRadius: 6 },
+  goldCarouselDots: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, marginTop: 10 },
+  goldCarouselDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#CBD5E1', borderWidth: 1.5, borderColor: '#E2E8F0' },
 });
