@@ -25,46 +25,21 @@ import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pus
 import SponsorProposalSection from '@/components/feature/SponsorProposalSection';
 import SponsorItemMetrics from '@/components/feature/SponsorItemMetrics';
 import PartnerExpirationAlert from '@/components/feature/PartnerExpirationAlert';
+import PartnerGalleryManager from '@/components/feature/PartnerGalleryManager';
 
 function Sparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
   if (!data || data.length < 2) return null;
-  const max = Math.max(...data, 1);
-  const pad = 4;
-  const w = width - pad * 2;
-  const h = height - pad * 2;
+  const max = Math.max(...data, 1); const pad = 4; const w = width - pad * 2; const h = height - pad * 2;
   const points = data.map((v, i) => `${pad + (i / (data.length - 1)) * w},${pad + h - (v / max) * h}`).join(' ');
-  const lastIdx = data.length - 1;
-  const lastX = pad + (lastIdx / (data.length - 1)) * w;
-  const lastY = pad + h - (data[lastIdx] / max) * h;
-  return (
-    <Svg width={width} height={height}>
-      <Polyline points={points} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" />
-      <SvgCircle cx={lastX} cy={lastY} r={4} fill={color} />
-    </Svg>
-  );
+  const li = data.length - 1; const lx = pad + (li / (data.length - 1)) * w; const ly = pad + h - (data[li] / max) * h;
+  return (<Svg width={width} height={height}><Polyline points={points} fill="none" stroke={color} strokeWidth={2.5} strokeLinejoin="round" strokeLinecap="round" /><SvgCircle cx={lx} cy={ly} r={4} fill={color} /></Svg>);
 }
 
 function PushBarChart({ data, width, height, color }: { data: { month: string; count: number }[]; width: number; height: number; color: string }) {
   if (!data || data.length === 0) return null;
-  const max = Math.max(...data.map(d => d.count), 1);
-  const pad = 4;
-  const barGap = 6;
-  const usableW = width - pad * 2;
-  const barW = Math.max(8, (usableW - barGap * (data.length - 1)) / data.length);
-  return (
-    <Svg width={width} height={height}>
-      {data.map((d, i) => {
-        const barH = Math.max(4, (d.count / max) * (height - pad * 2));
-        const x = pad + i * (barW + barGap);
-        const y = height - pad - barH;
-        return (
-          <React.Fragment key={i}>
-            <SvgRect x={x} y={y} width={barW} height={barH} rx={4} ry={4} fill={color} opacity={0.8 + (i / data.length) * 0.2} />
-          </React.Fragment>
-        );
-      })}
-    </Svg>
-  );
+  const max = Math.max(...data.map(d => d.count), 1); const pad = 4; const barGap = 6;
+  const usableW = width - pad * 2; const barW = Math.max(8, (usableW - barGap * (data.length - 1)) / data.length);
+  return (<Svg width={width} height={height}>{data.map((d, i) => { const barH = Math.max(4, (d.count / max) * (height - pad * 2)); const x = pad + i * (barW + barGap); const y = height - pad - barH; return (<React.Fragment key={i}><SvgRect x={x} y={y} width={barW} height={barH} rx={4} ry={4} fill={color} opacity={0.8 + (i / data.length) * 0.2} /></React.Fragment>); })}</Svg>);
 }
 
 const PAGE_LABELS: Record<string, { label: { fr: string; en: string }; icon: string; color: string }> = {
@@ -96,6 +71,7 @@ export default function SponsorPortalScreen() {
 
   // Branding state
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
   const [brandColor, setBrandColor] = useState<string>('#F59E0B');
   const [savingBrand, setSavingBrand] = useState(false);
   const [brandColorDirty, setBrandColorDirty] = useState(false);
@@ -205,6 +181,7 @@ export default function SponsorPortalScreen() {
     const data = rows && rows.length > 0 ? rows[0] : null;
     setSponsor(data);
     if (data?.brand_color && !brandColorDirty) setBrandColor(data.brand_color);
+    if (data?.gallery_photos) setGalleryPhotos((data.gallery_photos||[]).filter((p:string)=>p?.startsWith('http')));
     return data;
   }, [user?.id, supabase, brandColorDirty]);
 
@@ -413,30 +390,19 @@ export default function SponsorPortalScreen() {
     if (sponsor?.id) loadCalendarEvents(sponsor.id);
   }, [calendarMonth, sponsor?.id]);
 
-  // Compute heatmap data from push analytics
+  // Compute heatmap data
   useEffect(() => {
     if (pushAnalytics.totalSent < 1) { setHeatmapData([]); return; }
-    const dayNames = fr ? ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'] : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const slotNames = fr ? ['Matin', 'Apres-midi', 'Soiree', 'Nuit'] : ['Morning', 'Afternoon', 'Evening', 'Night'];
-    // Generate realistic heatmap based on day patterns
-    const hmap: number[][] = dayNames.map((_, di) => {
-      return slotNames.map((_, si) => {
-        // Weighted: weekends + evening better, night worst
-        let base = 30 + Math.random() * 40;
-        if (di >= 4) base += 10; // Fri-Sun
-        if (si === 2) base += 15; // Evening
-        if (si === 1) base += 8; // Afternoon
-        if (si === 3) base -= 20; // Night
-        return Math.round(Math.min(98, Math.max(5, base)));
-      });
-    });
-    setHeatmapData(hmap);
-    // Find best cell
-    let bestScore = 0; let bestDay = ''; let bestSlot = '';
-    hmap.forEach((row, di) => row.forEach((val, si) => {
-      if (val > bestScore) { bestScore = val; bestDay = dayNames[di]; bestSlot = slotNames[si]; }
+    const dN = fr ? ['Lun','Mar','Mer','Jeu','Ven','Sam','Dim'] : ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+    const sN = fr ? ['Matin','Apres-midi','Soiree','Nuit'] : ['Morning','Afternoon','Evening','Night'];
+    const hmap: number[][] = dN.map((_, di) => sN.map((_, si) => {
+      let b = 30 + Math.random() * 40; if (di >= 4) b += 10; if (si === 2) b += 15; if (si === 1) b += 8; if (si === 3) b -= 20;
+      return Math.round(Math.min(98, Math.max(5, b)));
     }));
-    setBestSendTime({ day: bestDay, slot: bestSlot, score: bestScore });
+    setHeatmapData(hmap);
+    let bs = 0; let bd = ''; let bsl = '';
+    hmap.forEach((row, di) => row.forEach((val, si) => { if (val > bs) { bs = val; bd = dN[di]; bsl = sN[si]; } }));
+    setBestSendTime({ day: bd, slot: bsl, score: bs });
   }, [pushAnalytics.totalSent, fr]);
 
   // === COMPUTED VALUES (must be before all useEffects that reference them and before early returns) ===
@@ -2217,6 +2183,8 @@ export default function SponsorPortalScreen() {
                 {fr ? 'La banniere utilise votre photo et couleur de marque.' : 'The banner uses your photo and brand color.'}
               </Text>
             </View>
+
+            <PartnerGalleryManager sponsorId={sponsor.id} userId={user?.id||''} galleryPhotos={galleryPhotos} setGalleryPhotos={setGalleryPhotos} tierColor={tierColor} fr={fr} showAlert={showAlert} />
 
             {/* Save Branding + Brand Kit Export */}
             <View style={{ gap: 10 }}>
