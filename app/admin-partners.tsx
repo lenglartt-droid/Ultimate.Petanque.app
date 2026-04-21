@@ -68,6 +68,9 @@ export default function AdminPartnersScreen() {
   const [filterTier, setFilterTier] = useState<'all' | PartnerTier>('all');
   const [saving, setSaving] = useState(false);
 
+  // Advantages section collapsed
+  const [showAdvantages, setShowAdvantages] = useState(false);
+
   // Edit modal
   const [editItem, setEditItem] = useState<any | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -548,13 +551,16 @@ export default function AdminPartnersScreen() {
         {searchQuery ? <Pressable onPress={() => setSearchQuery('')} hitSlop={8}><MaterialIcons name="close" size={18} color={theme.textMuted} /></Pressable> : null}
       </View>
 
-      {/* Advantages Summary Card */}
-      <View style={s.advantagesCard}>
-        <Text style={s.advantagesTitle}>{fr ? 'AVANTAGES PAR NIVEAU' : 'ADVANTAGES BY TIER'}</Text>
-        {(['gold_sponsor', 'sponsor', 'partner'] as PartnerTier[]).map(tier => {
+      {/* Advantages Summary Card (collapsible) */}
+      <Pressable style={s.advantagesCard} onPress={() => { Haptics.selectionAsync(); setShowAdvantages(v => !v); }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Text style={s.advantagesTitle}>{fr ? 'AVANTAGES PAR NIVEAU' : 'ADVANTAGES BY TIER'}</Text>
+          <MaterialIcons name={showAdvantages ? 'expand-less' : 'expand-more'} size={20} color={theme.textMuted} />
+        </View>
+        {showAdvantages ? (['gold_sponsor', 'sponsor', 'partner'] as PartnerTier[]).map(tier => {
           const cfg = TIER_CONFIG[tier];
           return (
-            <View key={tier} style={s.advantageTier}>
+            <View key={tier} style={[s.advantageTier, { marginTop: tier === 'gold_sponsor' ? 12 : 0 }]}>
               <View style={[s.advantageTierIcon, { backgroundColor: cfg.color + '15' }]}>
                 <MaterialIcons name={cfg.icon as any} size={16} color={cfg.color} />
               </View>
@@ -569,8 +575,21 @@ export default function AdminPartnersScreen() {
               </View>
             </View>
           );
-        })}
-      </View>
+        }) : (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+            {(['gold_sponsor', 'sponsor', 'partner'] as PartnerTier[]).map(tier => {
+              const cfg = TIER_CONFIG[tier];
+              return (
+                <View key={tier} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: cfg.color + '10', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
+                  <MaterialIcons name={cfg.icon as any} size={12} color={cfg.color} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: cfg.color }}>{fr ? cfg.label : cfg.labelEn}</Text>
+                  <Text style={{ fontSize: 10, color: cfg.color + '90' }}>{cfg.advantages.length}</Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+      </Pressable>
 
       {/* Partner List */}
       <FlatList
