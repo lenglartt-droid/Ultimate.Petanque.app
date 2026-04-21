@@ -350,7 +350,7 @@ export default function TerrainActivityScreen() {
                 <>
                   {/* Matches */}
                   {selectedDayData.matches.map((m) => (
-                    <Pressable key={m.id} style={s.dayItem} onPress={() => router.push(`/match/${m.id}` as any)}>
+                    <Pressable key={m.id} style={s.dayItem} onPress={() => router.push(`/match-detail/${m.id}` as any)}>
                       <View style={[s.dayItemIcon, { backgroundColor: '#3B82F615' }]}>
                         <MaterialIcons name="sports" size={16} color="#3B82F6" />
                       </View>

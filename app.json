@@ -4,7 +4,7 @@
     "slug": "ppss-petanque-scorer",
     "version": "1.15.0",
     "orientation": "portrait",
-    "icon": "./assets/images/home_logo.png",
+    "icon": "./assets/images/app-logo.png",
     "scheme": "onspaceapp",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
@@ -21,10 +21,10 @@
         "aps-environment": "production"
       },
       "infoPlist": {
-        "NSCameraUsageDescription": "Ultimate Petanque utilise la caméra pour prendre des photos de profil, de boules et de terrains.",
-        "NSPhotoLibraryUsageDescription": "Ultimate Petanque accède à vos photos pour ajouter des images de profil, de boules et de terrains.",
-        "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs à proximité sur la carte.",
-        "NSUserTrackingUsageDescription": "Ultimate Petanque utilise cet identifiant pour vous proposer des publicités pertinentes et améliorer votre expérience.",
+        "NSCameraUsageDescription": "Ultimate Petanque utilise la camera pour prendre des photos de profil, de boules et de terrains.",
+        "NSPhotoLibraryUsageDescription": "Ultimate Petanque accede a vos photos pour ajouter des images de profil, de boules et de terrains.",
+        "NSLocationWhenInUseUsageDescription": "Ultimate Petanque utilise votre position pour afficher les terrains et joueurs a proximite sur la carte.",
+        "NSUserTrackingUsageDescription": "Ultimate Petanque utilise cet identifiant pour vous proposer des publicites pertinentes et ameliorer votre experience.",
         "UIBackgroundModes": [
           "remote-notification"
         ]
@@ -32,7 +32,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/home_logo.png",
+        "foregroundImage": "./assets/images/app-logo.png",
         "backgroundColor": "#ffffff"
       },
       "config": {
@@ -109,7 +109,7 @@
       [
         "expo-notifications",
         {
-          "icon": "./assets/images/home_logo.png",
+          "icon": "./assets/images/app-logo.png",
           "color": "#2563EB",
           "sounds": [],
           "mode": "production"
@@ -118,16 +118,10 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
+          "cameraPermission": "Ultimate Petanque utilise la camera pour scanner les QR codes."
         }
       ],
-      [
-        "@sentry/react-native/expo",
-        {
-          "organization": "SelfOwner",
-          "project": "react-native"
-        }
-      ]
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true

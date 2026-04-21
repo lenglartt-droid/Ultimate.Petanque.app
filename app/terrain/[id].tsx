@@ -40,6 +40,22 @@ import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
 
+// Community stats type for terrain detail
+interface TerrainCommunityStats {
+  totalMatches: number;
+  recentMatches: number;
+  totalChallenges: number;
+  recentChallenges: number;
+  totalTournaments: number;
+  recentTournaments: number;
+  peakDow: number;
+  peakHour: number;
+  peakDowCount: number;
+  peakHourCount: number;
+  popularityRank?: number;
+  popularityScore?: number;
+}
+
 
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -400,6 +416,48 @@ export default function TerrainDetailScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
   }, [terrain, user, reviewRating, reviewComment, submittingReview, showAlert, language, allPlayers]);
+
+  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
+  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
+
+  // Load community stats for this terrain
+  useEffect(() => {
+    if (!terrain?.id) return;
+    const loadCommunityStats = async () => {
+      setCommunityStatsLoading(true);
+      try {
+        const supabase = getSupabaseClient();
+        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
+        if (data && !error) {
+          const allStats = (data as any[]);
+          const scored = allStats.map((r: any) => {
+            const recentM = Number(r.recent_matches) || 0;
+            const recentC = Number(r.recent_challenges) || 0;
+            const recentT = Number(r.recent_tournaments) || 0;
+            const totalM = Number(r.total_matches) || 0;
+            const totalC = Number(r.total_challenges) || 0;
+            const totalT = Number(r.total_tournaments) || 0;
+            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
+            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
+          }).sort((a: any, b: any) => b.score - a.score);
+          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
+          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
+          if (myStats) {
+            setCommunityStats({
+              totalMatches: myStats.totalM, recentMatches: myStats.recentM,
+              totalChallenges: myStats.totalC, recentChallenges: myStats.recentC,
+              totalTournaments: myStats.totalT, recentTournaments: myStats.recentT,
+              peakDow: myStats.peakDow, peakHour: myStats.peakHour,
+              peakDowCount: myStats.peakDowCount, peakHourCount: myStats.peakHourCount,
+              popularityRank: rank + 1, popularityScore: myStats.score,
+            });
+          } else { setCommunityStats(null); }
+        }
+      } catch (e) { console.log('[TerrainDetail] Error loading community stats:', e); }
+      setCommunityStatsLoading(false);
+    };
+    loadCommunityStats();
+  }, [terrain?.id]);
 
   useEffect(() => {
     if (terrain?.id) {
@@ -1028,6 +1086,81 @@ export default function TerrainDetailScreen() {
           </View>
         ) : null;
         })()}
+
+        {/* Community Stats Section */}
+        {communityStats ? (() => {
+          const dayNames = language === 'fr' ? ['Dim', 'Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+          const totalRecent = communityStats.recentMatches + communityStats.recentChallenges + communityStats.recentTournaments;
+          const totalAll = communityStats.totalMatches + communityStats.totalChallenges + communityStats.totalTournaments;
+          return (
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>{language === 'fr' ? 'STATISTIQUES COMMUNAUTAIRES' : 'COMMUNITY STATS'}</Text>
+              <View style={{ backgroundColor: theme.surface, borderRadius: 20, padding: 16, ...theme.shadows.card, gap: 14 }}>
+                {/* Popularity + Rank Row */}
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {communityStats.popularityRank ? (
+                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: communityStats.popularityRank <= 3 ? '#D4A01712' : communityStats.popularityRank <= 10 ? '#78909C12' : '#F1F5F9', borderRadius: 14, paddingVertical: 14, borderWidth: 1, borderColor: communityStats.popularityRank <= 3 ? '#D4A01725' : communityStats.popularityRank <= 10 ? '#78909C20' : theme.border }}>
+                      <Text style={{ fontSize: 28, fontWeight: '900', color: communityStats.popularityRank <= 3 ? '#D4A017' : communityStats.popularityRank <= 10 ? '#78909C' : theme.textSecondary }}>#{communityStats.popularityRank}</Text>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{language === 'fr' ? 'Classement' : 'Ranking'}</Text>
+                    </View>
+                  ) : null}
+                  <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#22C55E12', borderRadius: 14, paddingVertical: 14, borderWidth: 1, borderColor: '#22C55E25' }}>
+                    <Text style={{ fontSize: 28, fontWeight: '900', color: '#22C55E' }}>{totalRecent}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{language === 'fr' ? 'Ce mois' : 'This month'}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#3B82F612', borderRadius: 14, paddingVertical: 14, borderWidth: 1, borderColor: '#3B82F625' }}>
+                    <Text style={{ fontSize: 28, fontWeight: '900', color: '#3B82F6' }}>{totalAll}</Text>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: theme.textMuted, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>{language === 'fr' ? 'Total' : 'Total'}</Text>
+                  </View>
+                </View>
+
+                {/* Activity breakdown */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#3B82F608', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#3B82F615' }}>
+                    <MaterialIcons name="sports" size={16} color="#3B82F6" />
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#3B82F6' }}>{communityStats.totalMatches}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{language === 'fr' ? 'Matchs' : 'Matches'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#7C3AED08', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#7C3AED15' }}>
+                    <MaterialIcons name="gps-fixed" size={16} color="#7C3AED" />
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#7C3AED' }}>{communityStats.totalChallenges}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{language === 'fr' ? 'Defis' : 'Challenges'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F59E0B08', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#F59E0B15' }}>
+                    <MaterialIcons name="emoji-events" size={16} color="#F59E0B" />
+                    <View>
+                      <Text style={{ fontSize: 15, fontWeight: '800', color: '#F59E0B' }}>{communityStats.totalTournaments}</Text>
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted }}>{language === 'fr' ? 'Tournois' : 'Tournaments'}</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Community peak hours */}
+                {communityStats.peakDowCount > 0 && communityStats.peakHourCount > 0 ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: '#6366F108', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#6366F118' }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' }}>
+                      <MaterialIcons name="schedule" size={20} color="#6366F1" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }}>{language === 'fr' ? 'Pic communautaire' : 'Community Peak'}</Text>
+                      <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 2 }}>
+                        {dayNames[communityStats.peakDow]} ~{communityStats.peakHour}h ({communityStats.peakHourCount} {language === 'fr' ? 'parties' : 'games'})
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </View>
+            </View>
+          );
+        })() : communityStatsLoading ? (
+          <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+            <ActivityIndicator size="small" color={theme.primary} />
+          </View>
+        ) : null}
 
         {/* Activity History Button */}
         <Pressable

@@ -16,7 +16,9 @@ function getTrackingModule(): any {
   if (moduleChecked) return trackingModule;
   moduleChecked = true;
   try {
-    trackingModule = require('expo-tracking-transparency');
+    // Dynamic require to prevent web bundler from resolving this module
+    const modName = 'expo-tracking-transparency';
+    trackingModule = require(modName);
   } catch {
     trackingModule = null;
   }

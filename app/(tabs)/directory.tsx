@@ -44,6 +44,7 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 
 import MergePickerModal from '@/components/ui/MergePickerModal';
 import { useScrollPrefetch } from '@/hooks/useFlatListOptimizers';
+import { useTerrainActivity } from '@/hooks/useTerrainActivity';
 import { getEloRank, getEloColor, ELO_INITIAL, ELO_RANKS } from '@/services/eloService';
 import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
 import { getSupabaseClient, useAuth, useAlert } from '@/template';
@@ -304,6 +305,7 @@ export default function DirectoryScreen() {
     // Terrain filters
     terrainType: 'all' as TerrainType | 'all',
     terrainCity: 'all',
+    terrainCountry: 'all',
     terrainLighting: 'all' as 'all' | 'yes' | 'no',
     terrainCovered: 'all' as 'all' | 'yes' | 'no',
     terrainEnvironment: 'all' as 'all' | 'indoor' | 'outdoor',
@@ -470,12 +472,13 @@ export default function DirectoryScreen() {
     return terrains.filter(tr => {
       if (excludeFilter !== 'terrainType' && filters.terrainType !== 'all' && tr.type !== filters.terrainType) return false;
       if (excludeFilter !== 'terrainCity' && filters.terrainCity !== 'all' && tr.city !== filters.terrainCity) return false;
+      if (excludeFilter !== 'terrainCountry' && filters.terrainCountry !== 'all' && (tr.location?.country || 'France') !== filters.terrainCountry) return false;
       if (excludeFilter !== 'terrainLighting' && filters.terrainLighting !== 'all' && (filters.terrainLighting === 'yes' ? !tr.lighting : tr.lighting)) return false;
       if (excludeFilter !== 'terrainCovered' && filters.terrainCovered !== 'all' && (filters.terrainCovered === 'yes' ? !tr.covered : tr.covered)) return false;
       if (excludeFilter !== 'terrainEnvironment' && filters.terrainEnvironment !== 'all' && (tr.environment || 'outdoor') !== filters.terrainEnvironment) return false;
       if (excludeFilter !== 'terrainAccess' && filters.terrainAccess !== 'all' && (filters.terrainAccess === 'public' ? (tr.publicAccess === false) : (tr.publicAccess !== false))) return false;
-      if (excludeFilter !== 'terrainParking' && filters.terrainParking !== 'all' && (filters.terrainParking === 'yes' ? !(tr as any).parking : (tr as any).parking)) return false;
-      if (excludeFilter !== 'terrainToilets' && filters.terrainToilets !== 'all' && (filters.terrainToilets === 'yes' ? !(tr as any).toilets : (tr as any).toilets)) return false;
+      if (excludeFilter !== 'terrainParking' && filters.terrainParking !== 'all' && (filters.terrainParking === 'yes' ? !tr.parking : tr.parking)) return false;
+      if (excludeFilter !== 'terrainToilets' && filters.terrainToilets !== 'all' && (filters.terrainToilets === 'yes' ? !tr.toilets : tr.toilets)) return false;
       if (distanceFilter !== 'all' && userLocation) {
         if (!tr.location?.latitude || !tr.location?.longitude) return false;
         const dist = haversineDistance(userLocation.latitude, userLocation.longitude, tr.location.latitude, tr.location.longitude);
@@ -535,6 +538,7 @@ export default function DirectoryScreen() {
     // Terrain cascading options
     const tForType = getTerrainBaseFiltered('terrainType');
     const tForCity = getTerrainBaseFiltered('terrainCity');
+    const tForCountry = getTerrainBaseFiltered('terrainCountry');
 
     // Tournament cascading options
     const trForFormat = getTournamentBaseFiltered('tournamentFormat');
@@ -568,6 +572,7 @@ export default function DirectoryScreen() {
       }),
       terrainTypes: config.terrainTypes.map(tc => ({ value: tc.id, count: tForType.filter(tr => tr.type === tc.id).length })),
       terrainCities: countedOptions(tForCity.map(tr => tr.city).filter(Boolean) as string[]),
+      terrainCountries: countedOptions(tForCountry.map(tr => tr.location?.country || 'France')),
       tournamentFormats: countedOptions(trForFormat.map(t => t.format).filter(Boolean) as string[]),
       tournamentLevels: countedOptions(trForLevel.map(t => t.tournamentLevel).filter(Boolean) as string[]),
       tournamentCategories: countedOptions(trForCat.map(t => t.tournamentCategory).filter(Boolean) as string[]),
@@ -583,7 +588,7 @@ export default function DirectoryScreen() {
     return {
       players: [filters.playerClub, filters.playerCity, filters.playerCountry, filters.playerLevel, filters.playerRole, filters.playerEloRank, filters.playerExperience, filters.playerTerrain].filter(f => f !== 'all').length + distCount,
       clubs: [filters.clubCity, filters.clubCountry, filters.clubEquipment, filters.clubMembersRange].filter(f => f !== 'all').length + distCount,
-      terrains: [filters.terrainType, filters.terrainCity, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length + distCount,
+      terrains: [filters.terrainType, filters.terrainCity, filters.terrainCountry, filters.terrainLighting, filters.terrainCovered, filters.terrainEnvironment, filters.terrainAccess, filters.terrainParking, filters.terrainToilets].filter(f => f !== 'all').length + distCount,
       tournaments: [filters.tournamentStatus, filters.tournamentFormat, filters.tournamentLevel, filters.tournamentCategory, filters.tournamentRegistration, filters.tournamentScope, filters.tournamentCity, filters.tournamentDate].filter(f => f !== 'all').length + distCount,
       events: [filters.eventStatus, filters.eventType, filters.eventAmbassador].filter(f => f !== 'all').length,
     };
@@ -626,7 +631,10 @@ export default function DirectoryScreen() {
     return map[activeTab];
   };
 
-  // Multi-criteria sort comparator — must be defined BEFORE filtered data memos
+  // Terrain activity scores (extracted to dedicated hook for correct declaration order + reduced re-renders)
+  const terrainActivityMap = useTerrainActivity();
+
+  // Multi-criteria sort comparator
   const getCompareValue = useCallback((item: any, field: SortField): any => {
     switch (field) {
       case 'elo': return item.eloRating || ELO_INITIAL;
@@ -767,7 +775,7 @@ export default function DirectoryScreen() {
         const gold: typeof result = [];
         const rest: typeof result = [];
         result.forEach(c => {
-          if ((c as any).sponsorId && goldIds.has((c as any).sponsorId)) gold.push(c);
+          if ((c as any).sponsorId && goldIds.has((c as any).sponsorId as string)) gold.push(c);
           else rest.push(c);
         });
         result = [...gold, ...rest];
@@ -776,91 +784,9 @@ export default function DirectoryScreen() {
     return result;
   }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
-  // Compute terrain activity scores from match patterns + meetups + tournaments
-  const { matches: allAppMatches, tournaments: allAppTournaments } = useAppData();
-  // Meetups loaded from Supabase for activity scoring
-  const [terrainMeetupsMap, setTerrainMeetupsMap] = useState<Map<string, { date: string }[]>>(new Map());
-  const meetupLoadRef = useRef(false);
-  useEffect(() => {
-    if (!showActiveNow || meetupLoadRef.current) return;
-    meetupLoadRef.current = true;
-    const loadMeetups = async () => {
-      try {
-        const supabase = getSupabaseClient();
-        const today = new Date().toISOString().slice(0, 10);
-        const { data } = await supabase
-          .from('terrain_meetups')
-          .select('terrain_id, date')
-          .eq('status', 'active')
-          .gte('date', today);
-        if (data) {
-          const map = new Map<string, { date: string }[]>();
-          data.forEach((r: any) => {
-            const arr = map.get(r.terrain_id) || [];
-            arr.push({ date: r.date });
-            map.set(r.terrain_id, arr);
-          });
-          setTerrainMeetupsMap(map);
-        }
-      } catch { /* silent */ }
-    };
-    loadMeetups();
-  }, [showActiveNow]);
-  // Reset meetup load flag when filter is toggled off
-  useEffect(() => { if (!showActiveNow) meetupLoadRef.current = false; }, [showActiveNow]);
+  // terrainMeetupsMap, globalTerrainStats, and terrainActivityMap are now in useTerrainActivity hook
 
-  const terrainActivityMap = useMemo(() => {
-    const scoreMap = new Map<string, { score: number; matchCount: number; peakLabel: string }>();
-    if (!showActiveNow) return scoreMap;
-    const now = new Date();
-    const currentDow = now.getDay();
-    const currentHour = now.getHours();
-    const todayStr = now.toISOString().slice(0, 10);
-    terrains.forEach(tr => {
-      const terrainMatches = allAppMatches.filter(m => m.terrainId === tr.id);
-      let sameDayHourCount = 0;
-      let sameDayCount = 0;
-      terrainMatches.forEach(m => {
-        const d = new Date(m.date);
-        if (d.getDay() === currentDow) {
-          sameDayCount++;
-          const h = d.getHours();
-          if (Math.abs(h - currentHour) <= 2) sameDayHourCount++;
-        }
-      });
-      // Bonus: tournaments happening today at this terrain
-      const todayTournaments = allAppTournaments.filter(t => t.terrainId === tr.id && (t.status === 'En cours' || (t.status === 'À venir' && t.date && t.date.slice(0, 10) === todayStr)));
-      const tournamentBonus = todayTournaments.length * 25;
-      // Bonus: meetups scheduled today at this terrain (from Supabase)
-      const terrainMeetups = terrainMeetupsMap.get(tr.id) || [];
-      const meetupsToday = terrainMeetups.filter(mt => mt.date.slice(0, 10) === todayStr);
-      const meetupBonus = meetupsToday.length * 30;
-      // Score: weighted combination
-      const hourScore = sameDayHourCount * 10;
-      const dayScore = sameDayCount * 3;
-      const totalScore = Math.min(terrainMatches.length, 10);
-      const rawScore = hourScore + dayScore + totalScore + tournamentBonus + meetupBonus;
-      if (rawScore > 0) {
-        const dayNames = language === 'fr' ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam'] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-        let peakLabel = '';
-        if (meetupsToday.length > 0) {
-          peakLabel = meetupsToday.length === 1
-            ? `${language === 'fr' ? 'RDV prevu aujourd\'hui' : 'Meetup today'}`
-            : `${meetupsToday.length} ${language === 'fr' ? 'RDV aujourd\'hui' : 'meetups today'}`;
-        } else if (todayTournaments.length > 0) {
-          peakLabel = todayTournaments.length === 1
-            ? `${language === 'fr' ? 'Tournoi aujourd\'hui' : 'Tournament today'}`
-            : `${todayTournaments.length} ${language === 'fr' ? 'tournois aujourd\'hui' : 'tournaments today'}`;
-        } else if (sameDayHourCount > 0) {
-          peakLabel = `${sameDayHourCount} ${language === 'fr' ? 'partie(s)' : 'game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
-        } else {
-          peakLabel = `${sameDayCount} ${language === 'fr' ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
-        }
-        scoreMap.set(tr.id, { score: rawScore, matchCount: terrainMatches.length + todayTournaments.length + meetupsToday.length, peakLabel });
-      }
-    });
-    return scoreMap;
-  }, [showActiveNow, terrains, allAppMatches, allAppTournaments, terrainMeetupsMap, language]);
+
 
   const filteredTerrains = useMemo(() => {
     let result = terrains.filter(tr => {
@@ -868,6 +794,7 @@ export default function DirectoryScreen() {
         tr.city.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesType = filters.terrainType === 'all' || tr.type === filters.terrainType;
       const matchesCity = filters.terrainCity === 'all' || tr.city === filters.terrainCity;
+      const matchesCountry = filters.terrainCountry === 'all' || (tr.location?.country || 'France') === filters.terrainCountry;
       const matchesLighting = filters.terrainLighting === 'all' || 
         (filters.terrainLighting === 'yes' ? tr.lighting : !tr.lighting);
       const matchesCovered = filters.terrainCovered === 'all' || 
@@ -877,16 +804,17 @@ export default function DirectoryScreen() {
       const matchesAccess = filters.terrainAccess === 'all' ||
         (filters.terrainAccess === 'public' ? (tr.publicAccess !== false) : (tr.publicAccess === false));
       const matchesParking = filters.terrainParking === 'all' ||
-        (filters.terrainParking === 'yes' ? (tr as any).parking : !(tr as any).parking);
+        (filters.terrainParking === 'yes' ? tr.parking : !tr.parking);
       const matchesToilets = filters.terrainToilets === 'all' ||
-        (filters.terrainToilets === 'yes' ? (tr as any).toilets : !(tr as any).toilets);
+        (filters.terrainToilets === 'yes' ? tr.toilets : !tr.toilets);
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
-      return matchesSearch && matchesType && matchesCity && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
+      return matchesSearch && matchesType && matchesCity && matchesCountry && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
     // Apply multi-criteria sort or fallback
     if (sortCriteria.length > 0) {
       result = applyMultiSort(result);
     } else if (showActiveNow) {
+      // When "Active Now" toggle is on, only show terrains with activity
       result = result
         .filter(tr => terrainActivityMap.has(tr.id))
         .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
@@ -905,7 +833,7 @@ export default function DirectoryScreen() {
         const gold: typeof result = [];
         const rest: typeof result = [];
         result.forEach(tr => {
-          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          if (tr.sponsorId && goldIds.has(tr.sponsorId)) gold.push(tr);
           else rest.push(tr);
         });
         result = [...gold, ...rest];
@@ -961,7 +889,7 @@ export default function DirectoryScreen() {
         const gold: typeof sorted = [];
         const rest: typeof sorted = [];
         sorted.forEach(tr => {
-          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId as string)) gold.push(tr);
           else rest.push(tr);
         });
         return [...gold, ...rest];
@@ -1029,7 +957,7 @@ export default function DirectoryScreen() {
     } else if (activeTab === 'clubs') {
       setFilters(f => ({ ...f, clubCity: 'all', clubCountry: 'all', clubEquipment: 'all', clubMembersRange: 'all' }));
     } else if (activeTab === 'terrains') {
-      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
+      setFilters(f => ({ ...f, terrainType: 'all', terrainCity: 'all', terrainCountry: 'all', terrainLighting: 'all', terrainCovered: 'all', terrainEnvironment: 'all', terrainAccess: 'all', terrainParking: 'all', terrainToilets: 'all' }));
     } else if (activeTab === 'tournaments') {
       setFilters(f => ({ ...f, tournamentStatus: 'all', tournamentFormat: 'all', tournamentLevel: 'all', tournamentCategory: 'all', tournamentRegistration: 'all', tournamentScope: 'all', tournamentCity: 'all', tournamentDate: 'all' }));
     } else if (activeTab === 'events') {
@@ -1130,9 +1058,9 @@ export default function DirectoryScreen() {
   }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
 
   const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
-    const activityInfo = showActiveNow ? terrainActivityMap.get(item.id) : undefined;
+    const activityInfo = terrainActivityMap.get(item.id) || undefined;
     return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} />;
-  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, showActiveNow, terrainActivityMap]);
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, terrainActivityMap]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
     return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
@@ -1319,6 +1247,14 @@ export default function DirectoryScreen() {
               options={uniqueValues.terrainCities}
               value={filters.terrainCity}
               onChange={(v) => setFilters(f => ({ ...f, terrainCity: v }))}
+              allLabel={t('directory', 'allLabel')}
+              searchPlaceholder={t('directory', 'searchInFilter')}
+            />
+            <FilterSection
+              title={t('directory', 'country')}
+              options={uniqueValues.terrainCountries}
+              value={filters.terrainCountry}
+              onChange={(v) => setFilters(f => ({ ...f, terrainCountry: v }))}
               allLabel={t('directory', 'allLabel')}
               searchPlaceholder={t('directory', 'searchInFilter')}
             />
@@ -1759,6 +1695,7 @@ export default function DirectoryScreen() {
                 {filters.terrainEnvironment !== 'all' && <ActiveFilterChip label={filters.terrainEnvironment === 'indoor' ? t('directory', 'indoorShort') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainEnvironment: 'all' }))} icon={filters.terrainEnvironment === 'indoor' ? 'domain' : 'park'} />}
                 {filters.terrainType !== 'all' && <ActiveFilterChip label={t('terrainTypes', filters.terrainType)} onRemove={() => setFilters(f => ({ ...f, terrainType: 'all' }))} />}
                 {filters.terrainCity !== 'all' && <ActiveFilterChip label={filters.terrainCity} onRemove={() => setFilters(f => ({ ...f, terrainCity: 'all' }))} />}
+                {filters.terrainCountry !== 'all' && <ActiveFilterChip label={filters.terrainCountry} onRemove={() => setFilters(f => ({ ...f, terrainCountry: 'all' }))} icon="public" />}
                 {filters.terrainLighting !== 'all' && <ActiveFilterChip label={filters.terrainLighting === 'yes' ? t('directory', 'litLabel') : t('directory', 'notLitLabel')} onRemove={() => setFilters(f => ({ ...f, terrainLighting: 'all' }))} icon="lightbulb" />}
                 {filters.terrainCovered !== 'all' && <ActiveFilterChip label={filters.terrainCovered === 'yes' ? t('directory', 'coveredLabel') : t('directory', 'outdoorShort')} onRemove={() => setFilters(f => ({ ...f, terrainCovered: 'all' }))} icon="roofing" />}
                 {filters.terrainAccess !== 'all' && <ActiveFilterChip label={filters.terrainAccess === 'public' ? t('directory', 'publicAccessShort') : t('directory', 'privateAccessShort')} onRemove={() => setFilters(f => ({ ...f, terrainAccess: 'all' }))} icon={filters.terrainAccess === 'public' ? 'public' : 'lock'} />}
@@ -2542,8 +2479,8 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
   const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
   // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
-  const hasSponsor = !!(item as any).sponsorId;
-  const sponsorInfo = hasSponsor ? partnerUserIds.get((item as any).sponsorId) : undefined;
+  const hasSponsor = !!item.sponsorId;
+  const sponsorInfo = hasSponsor ? partnerUserIds.get(item.sponsorId!) : undefined;
   return (
     <Pressable
       style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -2712,19 +2649,27 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
-  activityInfo?: { score: number; matchCount: number; peakLabel: string };
+  activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number };
 }) => {
   const typeConfig = getTerrainTypeConfig(item.type);
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const hasSponsor = !!(item as any).sponsorId;
+  const hasSponsor = !!item.sponsorId;
+  const hasMultiPhotos = item.photos && item.photos.length > 1;
+  const [photoIdx, setPhotoIdx] = React.useState(0);
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
         {item.photos && item.photos.length > 0 ? (
-          <Image source={{ uri: item.photos[0] }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.terrain }} cachePolicy="memory-disk" recyclingKey={item.id} />
+          <Image source={{ uri: item.photos[hasMultiPhotos ? photoIdx : 0] }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.terrain }} cachePolicy="memory-disk" recyclingKey={`${item.id}-${photoIdx}`} />
         ) : <MaterialIcons name={typeConfig.icon as any} size={24} color="#FFF" />}
+        {hasMultiPhotos ? (
+          <View style={styles.photoCountOverlay}>
+            <MaterialIcons name="photo-library" size={8} color="#FFF" />
+            <Text style={styles.photoCountText}>{item.photos!.length}</Text>
+          </View>
+        ) : null}
         {isFavorite ? <View style={styles.favoriteBadge}><MaterialIcons name="favorite" size={10} color={theme.error} /></View>
         : isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
@@ -2754,13 +2699,27 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.lighting ? <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="lightbulb" size={10} color={theme.warning} /></View> : null}
           {item.covered ? <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="roofing" size={10} color={theme.primary} /></View> : null}
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
-          {(item as any).parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
-          {(item as any).toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
+          {item.parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
+          {item.toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
         </View>
         {activityInfo ? (
-          <View style={styles.activityScoreBadge}>
-            <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
-            <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+          <View style={styles.activityScoreRow}>
+            {activityInfo.rank && activityInfo.rank <= 10 ? (
+              <View style={[styles.activityRankBadge, activityInfo.rank === 1 ? { backgroundColor: '#D4A017' } : activityInfo.rank <= 3 ? { backgroundColor: '#78909C' } : { backgroundColor: '#A1887F' }]}>
+                <Text style={styles.activityRankText}>#{activityInfo.rank}</Text>
+              </View>
+            ) : null}
+            <View style={styles.activityScoreBadge}>
+              <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
+              <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+            </View>
+            {(activityInfo.recentMatches || activityInfo.recentChallenges || activityInfo.recentTournaments) ? (
+              <View style={styles.activityBreakdown}>
+                {activityInfo.recentMatches ? <View style={styles.activityBreakdownItem}><MaterialIcons name="sports" size={9} color="#3B82F6" /><Text style={styles.activityBreakdownText}>{activityInfo.recentMatches}</Text></View> : null}
+                {activityInfo.recentChallenges ? <View style={styles.activityBreakdownItem}><MaterialIcons name="gps-fixed" size={9} color="#7C3AED" /><Text style={styles.activityBreakdownText}>{activityInfo.recentChallenges}</Text></View> : null}
+                {activityInfo.recentTournaments ? <View style={styles.activityBreakdownItem}><MaterialIcons name="emoji-events" size={9} color="#F59E0B" /><Text style={styles.activityBreakdownText}>{activityInfo.recentTournaments}</Text></View> : null}
+              </View>
+            ) : null}
           </View>
         ) : null}
       </View>
@@ -3937,6 +3896,26 @@ const styles = StyleSheet.create({
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
   },
+  activityScoreRow: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    flexWrap: 'wrap' as const,
+    gap: 5,
+    marginTop: 6,
+  },
+  activityRankBadge: {
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    minWidth: 28,
+    alignItems: 'center' as const,
+  },
+  activityRankText: {
+    fontSize: 10,
+    fontWeight: '900' as const,
+    color: '#FFF',
+    letterSpacing: 0.3,
+  },
   activityScoreBadge: {
     flexDirection: 'row' as const,
     alignItems: 'center' as const,
@@ -3947,13 +3926,47 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#BBF7D0',
-    marginTop: 6,
-    alignSelf: 'flex-start' as const,
   },
   activityScoreText: {
     fontSize: 10,
     fontWeight: '700' as const,
     color: '#16A34A',
+  },
+  activityBreakdown: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 6,
+  },
+  activityBreakdownItem: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: '#F1F5F9',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 5,
+  },
+  activityBreakdownText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: '#64748B',
+  },
+  photoCountOverlay: {
+    position: 'absolute' as const,
+    top: 3,
+    right: 3,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 2,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  photoCountText: {
+    fontSize: 8,
+    fontWeight: '800' as const,
+    color: '#FFF',
   },
   // Meetup Invitation Picker
   meetupOverlay: {

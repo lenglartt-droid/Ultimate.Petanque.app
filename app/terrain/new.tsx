@@ -165,7 +165,7 @@ export default function NewTerrainScreen() {
       const sc = clubs.find(c => c.id === clubId);
       await addTerrain({
         name: name.trim(), address: location.address.trim(), city: location.city.trim(),
-        location: { latitude: location.latitude, longitude: location.longitude },
+        location: { latitude: location.latitude, longitude: location.longitude, country: location.country || 'France' },
         type, description: description.trim() || undefined, facilities: [], parking, toilets,
         clubId, clubName: sc?.name, isPublic: false, publicAccess,
         courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,

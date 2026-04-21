@@ -293,7 +293,7 @@ export default function EditTerrainScreen() {
       const sc = clubs.find(c => c.id === clubId);
       await updateTerrain(terrain.id, {
         name: name.trim(), address: address.trim(), city: city.trim(),
-        location: { latitude, longitude }, type,
+        location: { latitude, longitude, country: terrain?.location?.country || 'France' }, type,
         description: description.trim() || undefined,
         clubId, clubName: sc?.name, publicAccess,
         courtsCount: parseInt(courtsCount) || 1, lighting, covered, parking, toilets, environment, photos: uploadedPhotos,

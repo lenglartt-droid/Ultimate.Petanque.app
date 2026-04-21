@@ -14,7 +14,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
-import { PROVIDER_GOOGLE } from 'react-native-maps';
+// react-native-maps is loaded dynamically below (Platform !== 'web')
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -52,6 +52,7 @@ type MapMode = 'all' | 'public';
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
 let CircleComponent: React.ComponentType<any> | null = null;
+let PROVIDER_GOOGLE: any = undefined;
 
 if (Platform.OS !== 'web') {
   const Maps = require('react-native-maps');
@@ -59,6 +60,7 @@ if (Platform.OS !== 'web') {
   MapViewComponent = Maps.default;
   MarkerComponent = Maps.Marker;
   CircleComponent = Maps.Circle;
+  PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
 }
 
 // ============================================
@@ -875,9 +877,7 @@ export default function MapScreen() {
         a => a.badgeType !== 'gold_sponsor' && a.badgeType !== 'silver_sponsor'
       );
 
-      console.log("####ambassadors#####")
-      console.log(ambassadors);
-      console.log(realPlayer);
+
 
       const supabase = getSupabaseClient();
 
@@ -911,8 +911,7 @@ export default function MapScreen() {
             .eq('id', amb.playerId)
             .single();
 
-          console.log("#####data111######");
-          console.log(data);  
+
 
           if (!data?.location) return null;
 
@@ -930,8 +929,7 @@ export default function MapScreen() {
       goldMarkers = goldMarkers.filter(Boolean);
       playerMarkers1 = playerMarkers1.filter(Boolean);
 
-      console.log("#####playerMarkers111######");
-      console.log(playerMarkers1);
+
           
       setPartnerMarkers(goldMarkers);
       setPlayerMarkers(playerMarkers1);
@@ -1176,8 +1174,7 @@ export default function MapScreen() {
 
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
-    console.log("#######countType########");
-    console.log(countType('partners'));
+
     return {
       terrains: countType('terrains'),
       clubs: countType('clubs'),
@@ -1436,9 +1433,9 @@ export default function MapScreen() {
 
   const [freezeMarkers, setFreezeMarkers] = useState(false);
   useEffect(() => {
-  const t = setTimeout(() => setFreezeMarkers(true), 20000000000000);
-  return () => clearTimeout(t);
-}, []);
+    const t = setTimeout(() => setFreezeMarkers(true), 5000);
+    return () => clearTimeout(t);
+  }, []);
 
 
   // Player density heatmap
