@@ -64,59 +64,6 @@ export default function TerrainDetailScreen() {
   const { getTerrainById, deleteTerrain, updateTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
-  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
-  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
-
-  // Load community stats for this terrain
-  useEffect(() => {
-    if (!terrain?.id) return;
-    const loadCommunityStats = async () => {
-      setCommunityStatsLoading(true);
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
-        if (data && !error) {
-          const allStats = (data as any[]);
-          // Sort by a score to compute rank
-          const scored = allStats.map((r: any) => {
-            const recentM = Number(r.recent_matches) || 0;
-            const recentC = Number(r.recent_challenges) || 0;
-            const recentT = Number(r.recent_tournaments) || 0;
-            const totalM = Number(r.total_matches) || 0;
-            const totalC = Number(r.total_challenges) || 0;
-            const totalT = Number(r.total_tournaments) || 0;
-            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
-            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
-          }).sort((a: any, b: any) => b.score - a.score);
-          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
-          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
-          if (myStats) {
-            setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
-            });
-          } else {
-            setCommunityStats(null);
-          }
-        }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
-      setCommunityStatsLoading(false);
-    };
-    loadCommunityStats();
-  }, [terrain?.id]);
-
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
     return () => sub?.remove();
@@ -149,117 +96,11 @@ export default function TerrainDetailScreen() {
 
   const terrain = getTerrainById(id || '');
 
-  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
-  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
-
-  // Load community stats for this terrain
-  useEffect(() => {
-    if (!terrain?.id) return;
-    const loadCommunityStats = async () => {
-      setCommunityStatsLoading(true);
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
-        if (data && !error) {
-          const allStats = (data as any[]);
-          // Sort by a score to compute rank
-          const scored = allStats.map((r: any) => {
-            const recentM = Number(r.recent_matches) || 0;
-            const recentC = Number(r.recent_challenges) || 0;
-            const recentT = Number(r.recent_tournaments) || 0;
-            const totalM = Number(r.total_matches) || 0;
-            const totalC = Number(r.total_challenges) || 0;
-            const totalT = Number(r.total_tournaments) || 0;
-            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
-            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
-          }).sort((a: any, b: any) => b.score - a.score);
-          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
-          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
-          if (myStats) {
-            setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
-            });
-          } else {
-            setCommunityStats(null);
-          }
-        }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
-      setCommunityStatsLoading(false);
-    };
-    loadCommunityStats();
-  }, [terrain?.id]);
-
   useEffect(() => {
     if (id) {
       isSharedWithMe('terrain', id).then(shared => { setIsShared(shared); if (shared) recordShareView('terrain', id, 'terrain-detail'); });
     }
   }, [id]);
-
-  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
-  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
-
-  // Load community stats for this terrain
-  useEffect(() => {
-    if (!terrain?.id) return;
-    const loadCommunityStats = async () => {
-      setCommunityStatsLoading(true);
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
-        if (data && !error) {
-          const allStats = (data as any[]);
-          // Sort by a score to compute rank
-          const scored = allStats.map((r: any) => {
-            const recentM = Number(r.recent_matches) || 0;
-            const recentC = Number(r.recent_challenges) || 0;
-            const recentT = Number(r.recent_tournaments) || 0;
-            const totalM = Number(r.total_matches) || 0;
-            const totalC = Number(r.total_challenges) || 0;
-            const totalT = Number(r.total_tournaments) || 0;
-            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
-            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
-          }).sort((a: any, b: any) => b.score - a.score);
-          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
-          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
-          if (myStats) {
-            setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
-            });
-          } else {
-            setCommunityStats(null);
-          }
-        }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
-      setCommunityStatsLoading(false);
-    };
-    loadCommunityStats();
-  }, [terrain?.id]);
 
   useEffect(() => {
     if (terrain) setIsPublicState(terrain.isPublic ?? false);
@@ -412,59 +253,6 @@ export default function TerrainDetailScreen() {
     return 'winter';
   };
 
-  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
-  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
-
-  // Load community stats for this terrain
-  useEffect(() => {
-    if (!terrain?.id) return;
-    const loadCommunityStats = async () => {
-      setCommunityStatsLoading(true);
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
-        if (data && !error) {
-          const allStats = (data as any[]);
-          // Sort by a score to compute rank
-          const scored = allStats.map((r: any) => {
-            const recentM = Number(r.recent_matches) || 0;
-            const recentC = Number(r.recent_challenges) || 0;
-            const recentT = Number(r.recent_tournaments) || 0;
-            const totalM = Number(r.total_matches) || 0;
-            const totalC = Number(r.total_challenges) || 0;
-            const totalT = Number(r.total_tournaments) || 0;
-            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
-            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
-          }).sort((a: any, b: any) => b.score - a.score);
-          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
-          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
-          if (myStats) {
-            setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
-            });
-          } else {
-            setCommunityStats(null);
-          }
-        }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
-      setCommunityStatsLoading(false);
-    };
-    loadCommunityStats();
-  }, [terrain?.id]);
-
   useEffect(() => {
     if (!terrain?.id) return;
     // Count matches at this terrain
@@ -517,59 +305,6 @@ export default function TerrainDetailScreen() {
   }, [terrain?.id, allMatches.length, meetups.length, peakSeason]);
 
   // Fetch terrain reviews + votes
-  const [communityStats, setCommunityStats] = useState<TerrainCommunityStats | null>(null);
-  const [communityStatsLoading, setCommunityStatsLoading] = useState(true);
-
-  // Load community stats for this terrain
-  useEffect(() => {
-    if (!terrain?.id) return;
-    const loadCommunityStats = async () => {
-      setCommunityStatsLoading(true);
-      try {
-        const supabase = getSupabaseClient();
-        const { data, error } = await supabase.rpc('get_terrain_activity_stats');
-        if (data && !error) {
-          const allStats = (data as any[]);
-          // Sort by a score to compute rank
-          const scored = allStats.map((r: any) => {
-            const recentM = Number(r.recent_matches) || 0;
-            const recentC = Number(r.recent_challenges) || 0;
-            const recentT = Number(r.recent_tournaments) || 0;
-            const totalM = Number(r.total_matches) || 0;
-            const totalC = Number(r.total_challenges) || 0;
-            const totalT = Number(r.total_tournaments) || 0;
-            const score = recentM * 5 + recentC * 4 + recentT * 8 + totalM + Math.round(totalC * 0.5) + totalT * 2;
-            return { terrainId: r.terrain_id, score, recentM, recentC, recentT, totalM, totalC, totalT, peakDow: Number(r.peak_dow) || 0, peakHour: Number(r.peak_hour) || 0, peakDowCount: Number(r.peak_dow_count) || 0, peakHourCount: Number(r.peak_hour_count) || 0 };
-          }).sort((a: any, b: any) => b.score - a.score);
-          const rank = scored.findIndex((s: any) => s.terrainId === terrain.id);
-          const myStats = scored.find((s: any) => s.terrainId === terrain.id);
-          if (myStats) {
-            setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
-            });
-          } else {
-            setCommunityStats(null);
-          }
-        }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
-      setCommunityStatsLoading(false);
-    };
-    loadCommunityStats();
-  }, [terrain?.id]);
-
   useEffect(() => {
     if (!terrain?.id) return;
     fetchTerrainReviews(terrain.id).then(({ reviews: revs }) => {
@@ -695,7 +430,6 @@ export default function TerrainDetailScreen() {
         const { data, error } = await supabase.rpc('get_terrain_activity_stats');
         if (data && !error) {
           const allStats = (data as any[]);
-          // Sort by a score to compute rank
           const scored = allStats.map((r: any) => {
             const recentM = Number(r.recent_matches) || 0;
             const recentC = Number(r.recent_challenges) || 0;
@@ -710,26 +444,16 @@ export default function TerrainDetailScreen() {
           const myStats = scored.find((s: any) => s.terrainId === terrain.id);
           if (myStats) {
             setCommunityStats({
-              totalMatches: myStats.totalM,
-              recentMatches: myStats.recentM,
-              totalChallenges: myStats.totalC,
-              recentChallenges: myStats.recentC,
-              totalTournaments: myStats.totalT,
-              recentTournaments: myStats.recentT,
-              peakDow: myStats.peakDow,
-              peakHour: myStats.peakHour,
-              peakDowCount: myStats.peakDowCount,
-              peakHourCount: myStats.peakHourCount,
-              popularityRank: rank + 1,
-              popularityScore: myStats.score,
+              totalMatches: myStats.totalM, recentMatches: myStats.recentM,
+              totalChallenges: myStats.totalC, recentChallenges: myStats.recentC,
+              totalTournaments: myStats.totalT, recentTournaments: myStats.recentT,
+              peakDow: myStats.peakDow, peakHour: myStats.peakHour,
+              peakDowCount: myStats.peakDowCount, peakHourCount: myStats.peakHourCount,
+              popularityRank: rank + 1, popularityScore: myStats.score,
             });
-          } else {
-            setCommunityStats(null);
-          }
+          } else { setCommunityStats(null); }
         }
-      } catch (e) {
-        console.log('[TerrainDetail] Error loading community stats:', e);
-      }
+      } catch (e) { console.log('[TerrainDetail] Error loading community stats:', e); }
       setCommunityStatsLoading(false);
     };
     loadCommunityStats();
