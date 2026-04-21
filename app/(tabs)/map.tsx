@@ -223,7 +223,7 @@ const PartnerMarkerView = React.memo(
                 width: size - 6,
                 height: size - 6,
                 borderRadius: (size - 6) / 2,
-                backgroundColor: "#000",
+                backgroundColor: "#fff",
               }}
               contentFit="cover"
               cachePolicy="memory-disk"
@@ -1762,8 +1762,6 @@ export default function MapScreen() {
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }} />
                 ) : (
                   <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)}  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
-              </MarkerComponent> />
-
                 )}
               </MarkerComponent>
             );
@@ -2371,7 +2369,7 @@ export default function MapScreen() {
             {/* Header */}
             <View style={styles.partnerPopupHeader}>
               {selectedPartner.photo ? (
-                <Image source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: tierCfg.border }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                <Image source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: selectedPartner.brandColor?selectedPartner.brandColor : tierCfg.border }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
               ) : (
                 <View style={[styles.partnerPopupAvatarFallback, { backgroundColor: tierCfg.bg, borderColor: tierCfg.border }]}>
                   <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={24} color={tierCfg.primary} />
