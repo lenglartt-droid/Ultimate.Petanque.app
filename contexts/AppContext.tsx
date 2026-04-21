@@ -717,6 +717,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('user_profiles').select('*').eq('id', user.id).single(),
       ]);
 
+      // Log errors from primary data loading
+      if (playersRes.error) console.log('[AppContext] Error loading players:', playersRes.error.message);
+      if (clubsRes.error) console.log('[AppContext] Error loading clubs:', clubsRes.error.message);
+      if (tournamentsRes.error) console.log('[AppContext] Error loading tournaments:', tournamentsRes.error.message);
+      if (matchesRes.error) console.log('[AppContext] Error loading matches:', matchesRes.error.message);
+      if (challengesRes.error) console.log('[AppContext] Error loading challenges:', challengesRes.error.message);
+      if (terrainsRes.error) console.log('[AppContext] Error loading terrains:', terrainsRes.error.message);
+      if (profileRes.error && profileRes.error.code !== 'PGRST116') console.log('[AppContext] Error loading profile:', profileRes.error.message);
+
       if (profileRes.data) {
         setIsPremiumState(profileRes.data.is_premium ?? false);
         setIsAdmin(profileRes.data.is_admin ?? false);
@@ -835,6 +844,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
         supabase.from('terrains').select(DELTA_SELECT.terrains).gt('updated_at', lastSync),
         supabase.from('soft_deletes').select('table_name, item_id').gt('deleted_at', lastSync),
       ]);
+
+      // Log delta sync errors
+      if (playersRes.error) console.log('[DeltaSync] Error loading players:', playersRes.error.message);
+      if (clubsRes.error) console.log('[DeltaSync] Error loading clubs:', clubsRes.error.message);
+      if (tournamentsRes.error) console.log('[DeltaSync] Error loading tournaments:', tournamentsRes.error.message);
+      if (matchesRes.error) console.log('[DeltaSync] Error loading matches:', matchesRes.error.message);
+      if (challengesRes.error) console.log('[DeltaSync] Error loading challenges:', challengesRes.error.message);
+      if (terrainsRes.error) console.log('[DeltaSync] Error loading terrains:', terrainsRes.error.message);
+      if (softDeletesRes.error) console.log('[DeltaSync] Error loading soft_deletes:', softDeletesRes.error.message);
 
       const totalChanges =
         (playersRes.data?.length || 0) + (clubsRes.data?.length || 0) +
