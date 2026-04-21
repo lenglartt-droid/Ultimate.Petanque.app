@@ -476,8 +476,8 @@ export default function DirectoryScreen() {
       if (excludeFilter !== 'terrainCovered' && filters.terrainCovered !== 'all' && (filters.terrainCovered === 'yes' ? !tr.covered : tr.covered)) return false;
       if (excludeFilter !== 'terrainEnvironment' && filters.terrainEnvironment !== 'all' && (tr.environment || 'outdoor') !== filters.terrainEnvironment) return false;
       if (excludeFilter !== 'terrainAccess' && filters.terrainAccess !== 'all' && (filters.terrainAccess === 'public' ? (tr.publicAccess === false) : (tr.publicAccess !== false))) return false;
-      if (excludeFilter !== 'terrainParking' && filters.terrainParking !== 'all' && (filters.terrainParking === 'yes' ? !(tr as any).parking : (tr as any).parking)) return false;
-      if (excludeFilter !== 'terrainToilets' && filters.terrainToilets !== 'all' && (filters.terrainToilets === 'yes' ? !(tr as any).toilets : (tr as any).toilets)) return false;
+      if (excludeFilter !== 'terrainParking' && filters.terrainParking !== 'all' && (filters.terrainParking === 'yes' ? !tr.parking : tr.parking)) return false;
+      if (excludeFilter !== 'terrainToilets' && filters.terrainToilets !== 'all' && (filters.terrainToilets === 'yes' ? !tr.toilets : tr.toilets)) return false;
       if (distanceFilter !== 'all' && userLocation) {
         if (!tr.location?.latitude || !tr.location?.longitude) return false;
         const dist = haversineDistance(userLocation.latitude, userLocation.longitude, tr.location.latitude, tr.location.longitude);
@@ -771,7 +771,7 @@ export default function DirectoryScreen() {
         const gold: typeof result = [];
         const rest: typeof result = [];
         result.forEach(c => {
-          if ((c as any).sponsorId && goldIds.has((c as any).sponsorId)) gold.push(c);
+          if ((c as any).sponsorId && goldIds.has((c as any).sponsorId as string)) gold.push(c);
           else rest.push(c);
         });
         result = [...gold, ...rest];
@@ -943,9 +943,9 @@ export default function DirectoryScreen() {
       const matchesAccess = filters.terrainAccess === 'all' ||
         (filters.terrainAccess === 'public' ? (tr.publicAccess !== false) : (tr.publicAccess === false));
       const matchesParking = filters.terrainParking === 'all' ||
-        (filters.terrainParking === 'yes' ? (tr as any).parking : !(tr as any).parking);
+        (filters.terrainParking === 'yes' ? tr.parking : !tr.parking);
       const matchesToilets = filters.terrainToilets === 'all' ||
-        (filters.terrainToilets === 'yes' ? (tr as any).toilets : !(tr as any).toilets);
+        (filters.terrainToilets === 'yes' ? tr.toilets : !tr.toilets);
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
       return matchesSearch && matchesType && matchesCity && matchesCountry && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
     });
@@ -972,7 +972,7 @@ export default function DirectoryScreen() {
         const gold: typeof result = [];
         const rest: typeof result = [];
         result.forEach(tr => {
-          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          if (tr.sponsorId && goldIds.has(tr.sponsorId)) gold.push(tr);
           else rest.push(tr);
         });
         result = [...gold, ...rest];
@@ -1028,7 +1028,7 @@ export default function DirectoryScreen() {
         const gold: typeof sorted = [];
         const rest: typeof sorted = [];
         sorted.forEach(tr => {
-          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId)) gold.push(tr);
+          if ((tr as any).sponsorId && goldIds.has((tr as any).sponsorId as string)) gold.push(tr);
           else rest.push(tr);
         });
         return [...gold, ...rest];
@@ -2618,8 +2618,8 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
   const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
   // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
-  const hasSponsor = !!(item as any).sponsorId;
-  const sponsorInfo = hasSponsor ? partnerUserIds.get((item as any).sponsorId) : undefined;
+  const hasSponsor = !!item.sponsorId;
+  const sponsorInfo = hasSponsor ? partnerUserIds.get(item.sponsorId!) : undefined;
   return (
     <Pressable
       style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -2794,7 +2794,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const hasSponsor = !!(item as any).sponsorId;
+  const hasSponsor = !!item.sponsorId;
   const hasMultiPhotos = item.photos && item.photos.length > 1;
   const [photoIdx, setPhotoIdx] = React.useState(0);
   return (
@@ -2838,8 +2838,8 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.lighting ? <View style={[styles.tag, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="lightbulb" size={10} color={theme.warning} /></View> : null}
           {item.covered ? <View style={[styles.tag, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="roofing" size={10} color={theme.primary} /></View> : null}
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
-          {(item as any).parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
-          {(item as any).toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
+          {item.parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
+          {item.toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
         </View>
         {activityInfo ? (
           <View style={styles.activityScoreRow}>
