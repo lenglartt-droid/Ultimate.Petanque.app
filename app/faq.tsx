@@ -997,6 +997,20 @@ function getPartnerFaq(fr: boolean): FAQCategory[] {
             ? 'Dans la page admin partenaires, ouvrez la modale "Associer un sponsor" pour un partenaire. Deux onglets sont disponibles : "Items" (vue actuelle des items sponsorises) et "Historique" (log chronologique de toutes les associations et desassociations avec date, type d\'item et nom). Chaque association ou desassociation est tracee automatiquement.'
             : 'In the admin partners page, open the "Assign Sponsor" modal for a partner. Two tabs are available: "Items" (current view of sponsored items) and "History" (chronological log of all associations and unassociations with date, item type and name). Each association or unassociation is tracked automatically.',
         },
+        {
+          id: 'pl7',
+          q: fr ? 'Comment fonctionne le carousel partenaire Or sur la page d\'accueil ?' : 'How does the Gold partner carousel on the home page work?',
+          a: fr
+            ? 'Quand plusieurs partenaires Or sont actifs, la banniere sur la page d\'accueil se transforme en carousel automatique. La rotation se fait toutes les 5 secondes avec une transition fade de 350ms. Des indicateurs de pagination (points) en bas de la banniere montrent le partenaire actif, colores avec la brand_color de chaque partenaire. Vous pouvez aussi naviguer manuellement en appuyant sur les points. Le timer se relance automatiquement apres une navigation manuelle. Si un seul partenaire Or est actif, la banniere s\'affiche normalement sans carousel.'
+            : 'When multiple Gold partners are active, the home page banner becomes an automatic carousel. Rotation occurs every 5 seconds with a 350ms fade transition. Pagination indicators (dots) below the banner show the active partner, colored with each partner\'s brand_color. You can also navigate manually by tapping the dots. The timer restarts automatically after manual navigation. If only one Gold partner is active, the banner displays normally without carousel.',
+        },
+        {
+          id: 'pl8',
+          q: fr ? 'Comment exporter les metriques sponsor en CSV ?' : 'How do I export sponsor metrics as CSV?',
+          a: fr
+            ? 'Dans le portail partenaire (onglet ROI) ou la page admin analytique, la section "Performance par item" affiche un bouton "Exporter CSV". Le fichier genere contient le nom de chaque item sponsorise, son type (terrain, club, tournoi, joueur), le nombre d\'impressions, de clics et le CTR. Le CSV est compatible Excel et Google Sheets. Sur mobile, le fichier est partage via le systeme natif ; sur web, il est telecharge directement.'
+            : 'In the partner portal (ROI tab) or admin analytics page, the "Per-item Performance" section has an "Export CSV" button. The generated file contains each sponsored item name, type (terrain, club, tournament, player), impression count, clicks and CTR. The CSV is compatible with Excel and Google Sheets. On mobile, the file is shared via the native system; on web, it downloads directly.',
+        },
       ],
     },
   ];
