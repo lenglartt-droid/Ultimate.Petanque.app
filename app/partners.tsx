@@ -23,9 +23,18 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { fetchDetailedBannerAnalytics, BannerDetailedAnalytics, fetchAmbassadorAnalytics, AmbassadorAnalytics } from '@/services/ambassadorAnalyticsService';
 import { fetchSponsorsOnly, Ambassador, isUserSponsor } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import Svg, { Polyline, Circle as SvgCircle } from 'react-native-svg';
+
+// Sponsored items count per partner
+interface PartnerPublicStats {
+  sponsoredTerrains: number;
+  sponsoredClubs: number;
+  sponsoredTournaments: number;
+  sponsoredPlayers: number;
+}
 
 // Partner slot types
 interface PartnerSlot {
@@ -78,20 +87,7 @@ function MiniSparkline({ data, width, height, color }: { data: number[]; width: 
   );
 }
 
-// Card Sparkline for partner cards (7-day impression mini chart)
-function CardSparkline({ data, width, height, color }: { data: number[]; width: number; height: number; color: string }) {
-  if (!data || data.length < 2) return null;
-  const max = Math.max(...data, 1);
-  const pad = 1;
-  const w = width - pad * 2;
-  const h = height - pad * 2;
-  const points = data.map((v, i) => `${pad + (i / (data.length - 1)) * w},${pad + h - (v / max) * h}`).join(' ');
-  return (
-    <Svg width={width} height={height}>
-      <Polyline points={points} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.7} />
-    </Svg>
-  );
-}
+
 
 export default function PartnersScreen() {
   const insets = useSafeAreaInsets();
@@ -101,7 +97,7 @@ export default function PartnersScreen() {
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
   // Real partners from ambassadors table
-  const [partners, setPartners] = useState<(Ambassador & { analytics?: AmbassadorAnalytics })[]>([]);
+  const [partners, setPartners] = useState<(Ambassador & { analytics?: AmbassadorAnalytics; publicStats?: PartnerPublicStats })[]>([]);
   const [partnersLoading, setPartnersLoading] = useState(true);
 
   // ROI view state for sponsors/partners
@@ -113,8 +109,7 @@ export default function PartnersScreen() {
 
   const [isSponsor, setIsSponsor] = useState(false);
 
-  // 7-day impression data per partner for sparklines
-  const [partnerDailyData, setPartnerDailyData] = useState<Map<string, number[]>>(new Map());
+
 
   // Comparison state
   const [compareMode, setCompareMode] = useState(false);
@@ -126,42 +121,33 @@ export default function PartnersScreen() {
     isUserSponsor(user.id).then(setIsSponsor);
   }, [user?.id]);
 
-  // Load real partners and their analytics
+  // Load real partners and their public stats (sponsored items count)
   const loadPartners = useCallback(async () => {
     setPartnersLoading(true);
     try {
-      const [{ ambassadors: sponsorPartners }, { stats }] = await Promise.all([
-        fetchSponsorsOnly(),
-        fetchAmbassadorAnalytics('30d'),
-      ]);
-      const withAnalytics = sponsorPartners.map(p => ({
-        ...p,
-        analytics: stats.get(p.id) || { profileViews: 0, socialClicks: 0, bannerImpressions: 0, socialBreakdown: {} },
-      }));
-      setPartners(withAnalytics);
-
-      // Load 7-day daily impressions for sparklines
+      const { ambassadors: sponsorPartners } = await fetchSponsorsOnly();
+      // Load public stats: count sponsored items per partner
       const supabase = getSupabaseClient();
-      const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
       const ids = sponsorPartners.map(p => p.id);
+      const statsMap = new Map<string, PartnerPublicStats>();
       if (ids.length > 0) {
-        const { data: dailyEvents } = await supabase
-          .from('ambassador_analytics')
-          .select('ambassador_id, created_at')
-          .in('ambassador_id', ids)
-          .eq('event_type', 'banner_impression')
-          .gte('created_at', sevenDaysAgo);
-        if (dailyEvents) {
-          const map = new Map<string, number[]>();
-          ids.forEach(id => map.set(id, [0, 0, 0, 0, 0, 0, 0]));
-          dailyEvents.forEach((ev: any) => {
-            const dayIdx = Math.min(6, Math.floor((Date.now() - new Date(ev.created_at).getTime()) / (24 * 60 * 60 * 1000)));
-            const arr = map.get(ev.ambassador_id);
-            if (arr) arr[6 - dayIdx] = (arr[6 - dayIdx] || 0) + 1;
-          });
-          setPartnerDailyData(map);
-        }
+        const [tRes, cRes, toRes, plRes] = await Promise.all([
+          supabase.from('terrains').select('sponsor_id').in('sponsor_id', ids),
+          supabase.from('clubs').select('sponsor_id').in('sponsor_id', ids),
+          supabase.from('tournaments').select('sponsor_id').in('sponsor_id', ids),
+          supabase.from('players').select('sponsor_id').in('sponsor_id', ids).eq('is_public', true),
+        ]);
+        ids.forEach(id => statsMap.set(id, { sponsoredTerrains: 0, sponsoredClubs: 0, sponsoredTournaments: 0, sponsoredPlayers: 0 }));
+        (tRes.data || []).forEach((r: any) => { const s = statsMap.get(r.sponsor_id); if (s) s.sponsoredTerrains++; });
+        (cRes.data || []).forEach((r: any) => { const s = statsMap.get(r.sponsor_id); if (s) s.sponsoredClubs++; });
+        (toRes.data || []).forEach((r: any) => { const s = statsMap.get(r.sponsor_id); if (s) s.sponsoredTournaments++; });
+        (plRes.data || []).forEach((r: any) => { const s = statsMap.get(r.sponsor_id); if (s) s.sponsoredPlayers++; });
       }
+      const withStats = sponsorPartners.map(p => ({
+        ...p,
+        publicStats: statsMap.get(p.id) || { sponsoredTerrains: 0, sponsoredClubs: 0, sponsoredTournaments: 0, sponsoredPlayers: 0 },
+      }));
+      setPartners(withStats);
     } catch { /* silent */ }
     setPartnersLoading(false);
   }, []);
@@ -248,9 +234,9 @@ export default function PartnersScreen() {
         <View style={[styles.partnerSlotsGrid, isGold && styles.partnerSlotsGridGold]}>
           {filledPartners.map((partner, idx) => {
             const brandCol = partner.brandColor || cfg.color;
-            const totalClicks = (partner.analytics?.profileViews || 0) + (partner.analytics?.socialClicks || 0);
-            const impCount = partner.analytics?.bannerImpressions || 0;
-            const partnerCtr = impCount > 0 ? Math.round((totalClicks / impCount) * 1000) / 10 : 0;
+            const ps = partner.publicStats;
+            const totalSponsored = (ps?.sponsoredTerrains || 0) + (ps?.sponsoredClubs || 0) + (ps?.sponsoredTournaments || 0) + (ps?.sponsoredPlayers || 0);
+            const memberSince = partner.createdAt ? new Date(partner.createdAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short', year: 'numeric' }) : null;
             return (
             <Animated.View
               key={partner.id}
@@ -293,49 +279,57 @@ export default function PartnersScreen() {
                   <MaterialIcons name={cfg.icon} size={8} color="#FFF" />
                   <Text style={styles.partnerTierBadgeText}>{cfg.label[language].toUpperCase()}</Text>
                 </View>
-                {/* Enhanced Stats */}
-                {partner.analytics ? (
-                  <View style={{ width: '100%', marginTop: 4, marginBottom: 4 }}>
+                {/* Public stats: sponsored items + member since */}
+                <View style={{ width: '100%', marginTop: 4, marginBottom: 4, gap: 4 }}>
+                  {totalSponsored > 0 ? (
                     <View style={[styles.partnerStatsRow, { justifyContent: 'center' }]}>
-                      <View style={[styles.partnerStatChip, { backgroundColor: '#3B82F608', borderWidth: 1, borderColor: '#3B82F615' }]}>
-                        <MaterialIcons name="visibility" size={10} color="#3B82F6" />
-                        <Text style={styles.partnerStatText}>{impCount}</Text>
-                      </View>
-                      <View style={[styles.partnerStatChip, { backgroundColor: '#10B98108', borderWidth: 1, borderColor: '#10B98115' }]}>
-                        <MaterialIcons name="touch-app" size={10} color="#10B981" />
-                        <Text style={styles.partnerStatText}>{totalClicks}</Text>
-                      </View>
-                    </View>
-                    {/* CTR indicator */}
-                    {partnerCtr > 0 ? (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, marginTop: 4 }}>
-                        <View style={{ flex: 1, height: 4, backgroundColor: '#F1F5F9', borderRadius: 2, overflow: 'hidden' }}>
-                          <View style={{ height: '100%', width: `${Math.min(partnerCtr * 2, 100)}%`, backgroundColor: brandCol, borderRadius: 2 }} />
+                      {(ps?.sponsoredTerrains || 0) > 0 ? (
+                        <View style={[styles.partnerStatChip, { backgroundColor: '#22C55E08', borderWidth: 1, borderColor: '#22C55E15' }]}>
+                          <MaterialIcons name="sports-soccer" size={10} color="#22C55E" />
+                          <Text style={styles.partnerStatText}>{ps!.sponsoredTerrains}</Text>
                         </View>
-                        <Text style={{ fontSize: 9, fontWeight: '700', color: brandCol }}>{partnerCtr}%</Text>
-                      </View>
-                    ) : null}
+                      ) : null}
+                      {(ps?.sponsoredClubs || 0) > 0 ? (
+                        <View style={[styles.partnerStatChip, { backgroundColor: '#7C3AED08', borderWidth: 1, borderColor: '#7C3AED15' }]}>
+                          <MaterialIcons name="home" size={10} color="#7C3AED" />
+                          <Text style={styles.partnerStatText}>{ps!.sponsoredClubs}</Text>
+                        </View>
+                      ) : null}
+                      {(ps?.sponsoredTournaments || 0) > 0 ? (
+                        <View style={[styles.partnerStatChip, { backgroundColor: '#F59E0B08', borderWidth: 1, borderColor: '#F59E0B15' }]}>
+                          <MaterialIcons name="emoji-events" size={10} color="#F59E0B" />
+                          <Text style={styles.partnerStatText}>{ps!.sponsoredTournaments}</Text>
+                        </View>
+                      ) : null}
+                      {(ps?.sponsoredPlayers || 0) > 0 ? (
+                        <View style={[styles.partnerStatChip, { backgroundColor: '#3B82F608', borderWidth: 1, borderColor: '#3B82F615' }]}>
+                          <MaterialIcons name="person" size={10} color="#3B82F6" />
+                          <Text style={styles.partnerStatText}>{ps!.sponsoredPlayers}</Text>
+                        </View>
+                      ) : null}
+                    </View>
+                  ) : null}
+                  {memberSince ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+                      <MaterialIcons name="verified" size={10} color={brandCol} />
+                      <Text style={{ fontSize: 9, fontWeight: '600', color: brandCol }}>{language === 'fr' ? 'Depuis' : 'Since'} {memberSince}</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {/* Bio preview */}
+                {partner.bio ? (
+                  <Text style={{ fontSize: 11, color: theme.textSecondary, textAlign: 'center', lineHeight: 16, marginBottom: 4, paddingHorizontal: 4 }} numberOfLines={2}>{partner.bio}</Text>
+                ) : null}
+                {/* Social icons row */}
+                {(partner.youtubeUrl || partner.instagramHandle || partner.tiktokUrl || partner.twitterHandle || partner.websiteUrl) ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginBottom: 4 }}>
+                    {partner.youtubeUrl ? <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#FF000008', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="play-arrow" size={12} color="#FF0000" /></View> : null}
+                    {partner.instagramHandle ? <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#E4405F08', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="camera-alt" size={12} color="#E4405F" /></View> : null}
+                    {partner.tiktokUrl ? <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#01010106', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="music-note" size={12} color="#010101" /></View> : null}
+                    {partner.twitterHandle ? <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#1DA1F208', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="alternate-email" size={12} color="#1DA1F2" /></View> : null}
+                    {partner.websiteUrl ? <View style={{ width: 22, height: 22, borderRadius: 6, backgroundColor: '#6366F108', alignItems: 'center', justifyContent: 'center' }}><MaterialIcons name="language" size={12} color="#6366F1" /></View> : null}
                   </View>
                 ) : null}
-                {/* 7-day sparkline trend */}
-                {(() => {
-                  const dailyData = partnerDailyData.get(partner.id);
-                  const hasData = dailyData && dailyData.some(v => v > 0);
-                  return hasData ? (
-                    <View style={{ width: '100%', alignItems: 'center', marginBottom: 4 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                        <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' }} />
-                        <Text style={{ fontSize: 8, fontWeight: '700', color: '#22C55E' }}>7{language === 'fr' ? 'j' : 'd'}</Text>
-                      </View>
-                      <CardSparkline data={dailyData!} width={isGold ? 100 : 80} height={20} color={brandCol} />
-                    </View>
-                  ) : impCount > 5 ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 6 }}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' }} />
-                      <Text style={{ fontSize: 9, fontWeight: '600', color: '#22C55E' }}>{language === 'fr' ? 'Actif' : 'Active'}</Text>
-                    </View>
-                  ) : null;
-                })()}
                 {/* Action buttons */}
                 <View style={{ flexDirection: 'row', gap: 6, marginTop: 2 }}>
                   {partner.websiteUrl ? (
@@ -350,32 +344,15 @@ export default function PartnersScreen() {
                     </Pressable>
                   ) : null}
                   <Pressable
-                    style={({ pressed }) => [styles.partnerSlotBtn, { borderColor: '#3B82F640' }, pressed && { opacity: 0.7 }]}
-                    onPress={async (e) => {
+                    style={({ pressed }) => [styles.partnerSlotBtn, { borderColor: brandCol + '40' }, pressed && { opacity: 0.7 }]}
+                    onPress={(e) => {
                       e.stopPropagation();
                       Haptics.selectionAsync();
-                      try {
-                        const { data: ba } = await fetchDetailedBannerAnalytics(partner.id, 30);
-                        if (!ba) return;
-                        const totalI = ba.totalImpressions;
-                        const totalC = ba.totalClicks;
-                        const ctrV = totalI > 0 ? ((totalC / totalI) * 100).toFixed(1) : '0';
-                        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>body{font-family:-apple-system,sans-serif;max-width:600px;margin:0 auto;padding:32px;color:#0F172A}.h{display:flex;align-items:center;gap:14px;margin-bottom:24px;padding-bottom:16px;border-bottom:3px solid ${brandCol}}.logo{width:48px;height:48px;border-radius:14px;object-fit:cover;border:2px solid ${brandCol}}.t{font-size:20px;font-weight:800}.s{font-size:12px;color:#64748B;margin-top:3px}.kr{display:flex;gap:10px;margin-bottom:24px}.k{flex:1;background:#F8FAFC;border-radius:12px;padding:16px;text-align:center;border:1px solid #E2E8F0}.kv{font-size:24px;font-weight:900}.kl{font-size:9px;color:#94A3B8;margin-top:4px;text-transform:uppercase}.f{margin-top:24px;text-align:center;font-size:10px;color:#94A3B8;border-top:1px solid #E2E8F0;padding-top:12px}</style></head><body><div class="h">${partner.photo ? `<img src="${partner.photo}" class="logo"/>` : ''}<div><div class="t">${partner.displayName}</div><div class="s">${cfg.label[language]} - 30 ${language === 'fr' ? 'jours' : 'days'}</div></div></div><div class="kr"><div class="k"><div class="kv">${totalI}</div><div class="kl">Impressions</div></div><div class="k"><div class="kv">${totalC}</div><div class="kl">${language === 'fr' ? 'Clics' : 'Clicks'}</div></div><div class="k"><div class="kv" style="color:${brandCol}">${ctrV}%</div><div class="kl">CTR</div></div><div class="k"><div class="kv" style="color:#7C3AED">${ba.uniqueViewers}</div><div class="kl">${language === 'fr' ? 'Portee' : 'Reach'}</div></div></div><div class="f">Ultimate Petanque &middot; ${new Date().toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</div></body></html>`;
-                        if (Platform.OS === 'web') {
-                          const win = window.open('', '_blank');
-                          if (win) { win.document.write(html); win.document.close(); setTimeout(() => win.print(), 500); }
-                        } else {
-                          const Print = require('expo-print');
-                          const SharingModule = require('expo-sharing');
-                          const { uri } = await Print.printToFileAsync({ html, base64: false });
-                          const canShare = await SharingModule.isAvailableAsync();
-                          if (canShare) await SharingModule.shareAsync(uri, { mimeType: 'application/pdf' });
-                        }
-                      } catch { /* silent */ }
+                      router.push(`/partner/${partner.id}` as any);
                     }}
                   >
-                    <MaterialIcons name="download" size={12} color="#3B82F6" />
-                    <Text style={[styles.partnerSlotBtnText, { color: '#3B82F6' }]}>PDF</Text>
+                    <MaterialIcons name="info-outline" size={12} color={brandCol} />
+                    <Text style={[styles.partnerSlotBtnText, { color: brandCol }]}>{language === 'fr' ? 'Profil' : 'Profile'}</Text>
                   </Pressable>
                 </View>
                 {compareMode ? (
