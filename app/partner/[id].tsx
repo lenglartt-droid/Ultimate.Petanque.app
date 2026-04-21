@@ -18,6 +18,8 @@ import { useAuth } from '@/template';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { SponsoredEvent } from '@/services/sponsoredEventService';
 
+const GALLERY_PLACEHOLDER_HEIGHT = 220;
+
 const SOCIAL_CONFIG: Record<string, { icon: string; color: string; label: string; bg: string }> = {
   youtube: { icon: 'play-arrow', color: '#FF0000', bg: '#FF000008', label: 'YouTube' },
   tiktok: { icon: 'music-note', color: '#010101', bg: '#01010106', label: 'TikTok' },
@@ -43,6 +45,8 @@ export default function PartnerDetailScreen() {
   const [sponsoredTerrains, setSponsoredTerrains] = useState<any[]>([]);
   const [sponsoredClubs, setSponsoredClubs] = useState<any[]>([]);
   const [sponsoredTournaments, setSponsoredTournaments] = useState<any[]>([]);
+  const [galleryPhotos, setGalleryPhotos] = useState<string[]>([]);
+  const [activeGalleryIndex, setActiveGalleryIndex] = useState(0);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -64,6 +68,11 @@ export default function PartnerDetailScreen() {
 
       if (data) {
         trackAmbassadorEvent(data.id, 'profile_view', undefined, { sourcePage: 'partner_detail' });
+
+        // Set gallery photos
+        if (data.gallery_photos && Array.isArray(data.gallery_photos) && data.gallery_photos.length > 0) {
+          setGalleryPhotos(data.gallery_photos.filter((p: string) => p && p.startsWith('http')));
+        }
 
         // Load sponsored items in parallel
         setLoadingSponsoredPlayers(true);
@@ -311,16 +320,88 @@ export default function PartnerDetailScreen() {
             ) : null}
           </Animated.View>
 
-          {/* ====== BIO ====== */}
+          {/* ====== TESTIMONIAL / BIO QUOTE ====== */}
           {partner.bio ? (
-            <Animated.View entering={FadeInDown.duration(400).delay(150)} style={st.card}>
+            <Animated.View entering={FadeInDown.duration(400).delay(150)} style={[st.card, { borderLeftWidth: 4, borderLeftColor: tierColor + '60' }]}>
               <View style={st.cardHeader}>
                 <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
-                  <MaterialIcons name="info-outline" size={18} color={tierColor} />
+                  <MaterialIcons name="format-quote" size={18} color={tierColor} />
                 </View>
-                <Text style={st.cardTitle}>{fr ? 'A propos' : 'About'}</Text>
+                <Text style={st.cardTitle}>{fr ? 'Mot du partenaire' : 'Partner message'}</Text>
               </View>
-              <Text style={st.bioText}>{partner.bio}</Text>
+              <View style={{ position: 'relative', paddingLeft: 8 }}>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: tierColor + '15', position: 'absolute', top: -8, left: -4 }}>"</Text>
+                <Text style={[st.bioText, { fontStyle: 'italic', lineHeight: 26 }]}>{partner.bio}</Text>
+                <Text style={{ fontSize: 28, fontWeight: '900', color: tierColor + '15', textAlign: 'right', marginTop: -8 }}>"</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
+                {partner.photo ? (
+                  <Image source={{ uri: partner.photo }} style={{ width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, borderColor: tierColor + '30' }} contentFit="cover" transition={200} />
+                ) : (
+                  <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: tierColor + '15', alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name={tierIcon as any} size={16} color={tierColor} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: '#334155' }}>{partner.display_name}</Text>
+                  <Text style={{ fontSize: 11, color: '#94A3B8' }}>{tierLabel}</Text>
+                </View>
+              </View>
+            </Animated.View>
+          ) : null}
+
+          {/* ====== PHOTO GALLERY ====== */}
+          {galleryPhotos.length > 0 ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(175)} style={st.card}>
+              <View style={st.cardHeader}>
+                <View style={[st.cardIconBg, { backgroundColor: tierColor + '10' }]}>
+                  <MaterialIcons name="photo-library" size={18} color={tierColor} />
+                </View>
+                <Text style={st.cardTitle}>{fr ? 'Galerie' : 'Gallery'}</Text>
+                <View style={[st.eventCountBadge, { backgroundColor: tierColor + '12' }]}>
+                  <Text style={[st.eventCountText, { color: tierColor }]}>{galleryPhotos.length}</Text>
+                </View>
+              </View>
+              <View style={{ borderRadius: 16, overflow: 'hidden', marginBottom: 8 }}>
+                <ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  onMomentumScrollEnd={(e) => {
+                    const idx = Math.round(e.nativeEvent.contentOffset.x / (screenWidth - 68));
+                    setActiveGalleryIndex(Math.max(0, Math.min(idx, galleryPhotos.length - 1)));
+                  }}
+                  decelerationRate="fast"
+                >
+                  {galleryPhotos.map((photoUri, idx) => (
+                    <View key={idx} style={{ width: screenWidth - 68, height: GALLERY_PLACEHOLDER_HEIGHT }}>
+                      <Image
+                        source={{ uri: photoUri }}
+                        style={{ width: '100%', height: '100%', borderRadius: 14 }}
+                        contentFit="cover"
+                        transition={300}
+                        cachePolicy="memory-disk"
+                      />
+                    </View>
+                  ))}
+                </ScrollView>
+              </View>
+              {/* Pagination dots */}
+              {galleryPhotos.length > 1 ? (
+                <View style={st.galleryDotsRow}>
+                  {galleryPhotos.map((_, idx) => (
+                    <View
+                      key={idx}
+                      style={[
+                        st.galleryDot,
+                        idx === activeGalleryIndex
+                          ? { backgroundColor: tierColor, width: 20 }
+                          : { backgroundColor: tierColor + '30' },
+                      ]}
+                    />
+                  ))}
+                </View>
+              ) : null}
             </Animated.View>
           ) : null}
 
@@ -687,6 +768,43 @@ export default function PartnerDetailScreen() {
             </Animated.View>
           ) : null}
 
+          {/* ====== BECOME A PARTNER CTA (non-owners) ====== */}
+          {!isOwner ? (
+            <Animated.View entering={FadeInDown.duration(400).delay(420)}>
+              <LinearGradient
+                colors={['#1E3A8A08', '#2563EB12']}
+                style={st.becomePartnerCard}
+              >
+                <View style={st.becomePartnerIcon}>
+                  <MaterialIcons name="handshake" size={28} color="#2563EB" />
+                </View>
+                <Text style={st.becomePartnerTitle}>
+                  {fr ? 'Devenez partenaire' : 'Become a partner'}
+                </Text>
+                <Text style={st.becomePartnerDesc}>
+                  {fr
+                    ? 'Rejoignez le programme partenaire et gagnez en visibilite aupres de la communaute petanque.'
+                    : 'Join the partner program and gain visibility within the petanque community.'}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 8, width: '100%' }}>
+                  <Pressable
+                    style={({ pressed }) => [st.becomePartnerBtn, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }]}
+                    onPress={() => { Haptics.selectionAsync(); router.push('/partner-program' as any); }}
+                  >
+                    <MaterialIcons name="info-outline" size={16} color="#FFF" />
+                    <Text style={st.becomePartnerBtnText}>{fr ? 'Decouvrir le programme' : 'Discover the program'}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={({ pressed }) => [st.becomePartnerBtnSecondary, pressed && { opacity: 0.8 }]}
+                    onPress={() => { Haptics.selectionAsync(); Linking.openURL('mailto:ultimate.petanque.app@gmail.com?subject=Partenariat%20Ultimate%20Petanque'); }}
+                  >
+                    <MaterialIcons name="email" size={16} color="#2563EB" />
+                  </Pressable>
+                </View>
+              </LinearGradient>
+            </Animated.View>
+          ) : null}
+
           {/* ====== PARTNER FOOTER ====== */}
           <Animated.View entering={FadeIn.duration(300).delay(450)} style={st.footerCard}>
             <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
@@ -855,6 +973,38 @@ const st = StyleSheet.create({
     borderTopWidth: 1, borderTopColor: '#F1F5F9', marginTop: 4,
   },
   footerText: { fontSize: 12, fontWeight: '600' },
+
+  // ====== GALLERY ======
+  galleryDotsRow: {
+    flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
+    gap: 6, marginTop: 4,
+  },
+  galleryDot: {
+    height: 6, width: 6, borderRadius: 3,
+  },
+
+  // ====== BECOME PARTNER CTA ======
+  becomePartnerCard: {
+    borderRadius: 20, padding: 24, marginBottom: 14, alignItems: 'center' as const,
+    borderWidth: 1.5, borderColor: '#2563EB18',
+  },
+  becomePartnerIcon: {
+    width: 56, height: 56, borderRadius: 18,
+    backgroundColor: '#2563EB12', alignItems: 'center' as const, justifyContent: 'center' as const,
+    marginBottom: 14, borderWidth: 1, borderColor: '#2563EB15',
+  },
+  becomePartnerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', marginBottom: 8, textAlign: 'center' as const },
+  becomePartnerDesc: { fontSize: 13, color: '#64748B', textAlign: 'center' as const, lineHeight: 20, marginBottom: 18, maxWidth: 300 },
+  becomePartnerBtn: {
+    flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const,
+    gap: 8, backgroundColor: '#2563EB', paddingVertical: 14, borderRadius: 14,
+  },
+  becomePartnerBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  becomePartnerBtnSecondary: {
+    width: 48, height: 48, borderRadius: 14,
+    backgroundColor: '#2563EB10', alignItems: 'center' as const, justifyContent: 'center' as const,
+    borderWidth: 1.5, borderColor: '#2563EB20',
+  },
 
   // ====== QR CODE ======
   qrContainer: { alignItems: 'center' as const, marginBottom: 16 },
