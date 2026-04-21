@@ -14,6 +14,7 @@ import {
   Alert,
   Dimensions,
 } from 'react-native';
+import { PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
@@ -222,6 +223,7 @@ const PartnerMarkerView = React.memo(
                 width: size - 6,
                 height: size - 6,
                 borderRadius: (size - 6) / 2,
+                backgroundColor: "#000",
               }}
               contentFit="cover"
               cachePolicy="memory-disk"
@@ -751,6 +753,10 @@ export default function MapScreen() {
   // Partner markers state (Gold/Silver ambassadors linked to terrains/clubs)
   const [partnerMarkers, setPartnerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
   const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
+
+  const [playerMarkers, setPlayerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
+
+
   const [selectedPartner, setSelectedPartner] = useState<(typeof partnerMarkers)[0] | null>(null);
 
   // Compute top 3 most frequent cities from user data for quick search chips
@@ -854,44 +860,77 @@ export default function MapScreen() {
   useEffect(() => {
     if (partnerMarkersLoaded) return;
     const loadPartnerMarkers = async () => {
-      try {
-        const { ambassadors } = await fetchAmbassadors();
-        const goldSilver = ambassadors.filter(a => a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor');
-        if (goldSilver.length === 0) { setPartnerMarkersLoaded(true); return; }
+    try {
+      const { ambassadors } = await fetchAmbassadors();
 
-        const partnerUserIds = goldSilver.map(a => a.userId);
-        const supabase = getSupabaseClient();
+      const goldSilver = ambassadors.filter(
+        a => a.badgeType === 'gold_sponsor' || a.badgeType === 'silver_sponsor'
+      );
 
-        // Fetch terrains owned by partners
-        const { data: partnerTerrains } = await supabase
-          .from('terrains')
-          .select('id, user_id, name, city, location, type')
-          .in('user_id', partnerUserIds);
+      const realPlayer = ambassadors.filter(
+        a => a.badgeType !== 'gold_sponsor' && a.badgeType !== 'silver_sponsor'
+      );
 
-        // Fetch clubs owned by partners
-        const { data: partnerClubs } = await supabase
-          .from('clubs')
-          .select('id, user_id, name, city, location')
-          .in('user_id', partnerUserIds);
+      console.log("####ambassadors#####")
+      console.log(ambassadors);
+      console.log(realPlayer);
 
-        const markers: (Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[] = [];
-        const ambByUserId = new Map(goldSilver.map(a => [a.userId, a]));
+      const supabase = getSupabaseClient();
 
-        (partnerTerrains || []).forEach((t: any) => {
-          if (!t.location?.latitude && !t.location?.longitude) return;
-          const amb = ambByUserId.get(t.user_id);
-          if (!amb) return;
-          markers.push({ ...amb, _tier: amb.badgeType, _itemType: 'terrains', _itemId: t.id, location: t.location });
-        });
+      // ✅ GOLD / SILVER
+      let goldMarkers = await Promise.all(
+        goldSilver.map(async (amb) => {
+          const { data } = await supabase
+            .from('players')
+            .select('id, location')
+            .eq('id', amb.playerId)
+            .single(); // 👈 important
 
-        (partnerClubs || []).forEach((c: any) => {
-          if (!c.location?.latitude && !c.location?.longitude) return;
-          const amb = ambByUserId.get(c.user_id);
-          if (!amb) return;
-          markers.push({ ...amb, _tier: amb.badgeType, _itemType: 'clubs', _itemId: c.id, location: c.location });
-        });
+          if (!data?.location) return null;
 
-        setPartnerMarkers(markers);
+          return {
+            ...amb,
+            _tier: amb.badgeType,
+            _itemType: 'partners',
+            _itemId: amb.id,
+            location: data.location,
+          };
+        })
+      );
+
+      // ✅ REAL PLAYERS
+      let playerMarkers1 = await Promise.all(
+        realPlayer.map(async (amb) => {
+          const { data } = await supabase
+            .from('players')
+            .select('id, location')
+            .eq('id', amb.playerId)
+            .single();
+
+          console.log("#####data111######");
+          console.log(data);  
+
+          if (!data?.location) return null;
+
+          return {
+            ...amb,
+            _tier: amb.badgeType,
+            _itemType: 'players',
+            _itemId: amb.id,
+            location: data.location,
+          };
+        })
+      );
+
+          // ✅ remove nulls
+      goldMarkers = goldMarkers.filter(Boolean);
+      playerMarkers1 = playerMarkers1.filter(Boolean);
+
+      console.log("#####playerMarkers111######");
+      console.log(playerMarkers1);
+          
+      setPartnerMarkers(goldMarkers);
+      setPlayerMarkers(playerMarkers1);
       } catch (e) {
         console.log('[Map] Error loading partner markers:', e);
       }
@@ -1042,8 +1081,10 @@ export default function MapScreen() {
     }
     if (filter === 'all' || filter === 'players') {
       const filterPlayers = (arr: any[]) => (eloRankFilter || eloRangeFilter || trustFilter || playerRoleFilter) ? arr.filter(matchPlayerSubFilters) : arr;
-      if (showOwn) addItems(filterPlayers(ownData.players), 'players', false);
-      if (showPublic) addItems(filterPlayers(pubData.players), 'players', true);
+      // if (showOwn) addItems(filterPlayers(ownData.players), 'players', false);
+      // if (showPublic) addItems(filterPlayers(pubData.players), 'players', true);
+
+       addItems(filterPlayers(playerMarkers), 'players', true)
     }
     if (filter === 'all' || filter === 'events') {
       // Skip events when partner filter active
@@ -1057,7 +1098,7 @@ export default function MapScreen() {
     }
 
     // Partner filter: add partner markers as results for list view
-    if (filter === 'partners') {
+    if (filter === 'all' || filter === 'partners') {
       partnerMarkers.forEach(pm => {
         if (pm.location && (pm.location.latitude || pm.location.longitude)) {
           items.push({ ...pm, name: pm.displayName, itemType: 'partners', _isPublic: true });
@@ -1073,7 +1114,7 @@ export default function MapScreen() {
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter, playerMarkers, partnerMarkers]);
 
   // Compute clusters with debounced region to avoid expensive re-clustering on every pan
   const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1141,7 +1182,15 @@ export default function MapScreen() {
 
   const handleSelect = useCallback((item: any, type: string) => {
     Haptics.selectionAsync();
-    setSelected({ ...item, itemType: type });
+    if(type === 'partners' || type === 'players'){
+      trackAmbassadorEvent(item.id, 'profile_view', undefined, { sourcePage: 'map' });
+      setSelected(null);
+      setSelectedPartner(item);
+    }else{
+      setSelected({ ...item, itemType: type });      
+    }
+
+
   }, []);
 
   const handleClusterPress = useCallback((cluster: Cluster) => {
@@ -1660,6 +1709,7 @@ export default function MapScreen() {
     return (
       <MapViewComponent
         ref={mapRef}
+        provider={PROVIDER_GOOGLE}
         zoomControlEnabled={true}
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
@@ -1667,25 +1717,8 @@ export default function MapScreen() {
         onPress={() => { setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
       >
-        {/* Partner markers (Gold/Silver) — rendered with higher zIndex, always visible or when partners filter active */}
-        {(filter === 'all') ? partnerMarkers.map((pm, idx) => (
-          <MarkerComponent
-            key={`partner-${pm.id}-${pm._itemType}-${pm._itemId}-${idx}`}
-            coordinate={{ latitude: pm.location.latitude, longitude: pm.location.longitude }}
-            onPress={() => {
-              Haptics.selectionAsync();
-              trackAmbassadorEvent(pm.id, 'profile_view', undefined, { sourcePage: 'map' });
-              setSelected(null);
-              setSelectedPartner(pm);
-            }}
-            tracksViewChanges={!freezeMarkers}
-            zIndex={100}
-          >
-            <PartnerMarkerView partner={{ ...pm, _tier: pm._tier }} />
-          </MarkerComponent>
-        )) : null}
 
-        {filter !== 'all' ? clusters.map(cluster => {
+        {(filter !== '' )? clusters.map(cluster => {
           if (cluster.isCluster) {
             // Cluster marker
             const typeCounts: Record<string, number> = {};
@@ -1715,8 +1748,13 @@ export default function MapScreen() {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={!freezeMarkers}
               >
-                <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)} />
-              </MarkerComponent>
+                {(item.itemType === 'partners' || item.itemType === 'players') ? (
+                  <PartnerMarkerView partner={{ ...item, _tier: item._tier }} />
+                ) : (
+                  <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)} />
+
+                )}
+                              </MarkerComponent>
             );
           }
         }) : null}
@@ -2310,8 +2348,10 @@ export default function MapScreen() {
       {/* Partner Detail Popup */}
       {selectedPartner ? (() => {
         const tierCfg = TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
+        const isPartner = selectedPartner._itemType === 'partners';
         const isGold = selectedPartner._tier === 'gold_sponsor';
-        const tierLabel = isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner');
+        const tierLabel = isPartner ? (isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner')) : (selectedPartner._tier);
+        
         return (
           <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 155 }]}>
             <Pressable style={styles.partnerPopupClose} onPress={() => setSelectedPartner(null)} hitSlop={8}>
@@ -2380,7 +2420,7 @@ export default function MapScreen() {
               ) : null}
               <Pressable
                 style={({ pressed }) => [styles.partnerPopupProfileBtn, pressed && { opacity: 0.85 }]}
-                onPress={() => { setSelectedPartner(null); router.push('/partners' as any); }}
+                onPress={() => { setSelectedPartner(null); if(isPartner) {router.push('/partners' as any);}}}
               >
                 <MaterialIcons name="arrow-forward" size={16} color={theme.primary} />
               </Pressable>

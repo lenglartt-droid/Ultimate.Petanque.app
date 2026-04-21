@@ -2365,7 +2365,7 @@ export default function AdminDashboardScreen() {
                 <>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="funnel-chart" size={16} color="#3B82F6" />
+                      <MaterialIcons name="filter-list" size={16} color="#3B82F6" />
                       <Text style={{ fontSize: 13, fontWeight: '700', color: '#0F172A' }}>{fr ? 'Entonnoir par etape' : 'Step Funnel'}</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -2442,7 +2442,7 @@ export default function AdminDashboardScreen() {
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="funnel-chart" size={14} color="#3B82F6" />
+                      <MaterialIcons name="filter-list" size={14} color="#3B82F6" />
                       <Text style={{ fontSize: 12, fontWeight: '600', color: '#64748B' }}>{fr ? 'Taux de completion' : 'Completion rate'}</Text>
                     </View>
                     <View style={{ backgroundColor: onboardingStats.conversionRate >= 70 ? '#DCFCE7' : onboardingStats.conversionRate >= 40 ? '#FEF3C7' : '#FEF2F2', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>

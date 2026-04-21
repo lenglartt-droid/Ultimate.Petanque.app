@@ -36,8 +36,8 @@
         "backgroundColor": "#ffffff"
       },
       "config": {
-        "googlemaps": {
-          "apikey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo111"
+        "googleMaps": {
+          "apiKey": "AIzaSyAGXmO6mX-9GrCvg_z4ZxXK4siw_Q7lbFo"
         }
       },
       "edgeToEdgeEnabled": false,
@@ -119,6 +119,13 @@
         "expo-camera",
         {
           "cameraPermission": "Ultimate Petanque utilise la caméra pour scanner les QR codes."
+        }
+      ],
+      [
+        "@sentry/react-native/expo",
+        {
+          "organization": "SelfOwner",
+          "project": "react-native"
         }
       ]
     ],
