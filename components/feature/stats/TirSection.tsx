@@ -160,7 +160,7 @@ export function TirSection({ t, isTablet, tirStats, terrainTypeStats, precisionW
                     <View style={[ss.precisionWorkshopIcon, { backgroundColor: color + '15' }]}><MaterialIcons name="gps-fixed" size={16} color={color} /></View>
                     <View style={ss.precisionWorkshopInfo}>
                       <Text style={ss.precisionWorkshopName} numberOfLines={1}>{t('precisionWorkshops', atelier)}</Text>
-                      <Text style={ss.precisionWorkshopMeta}>{data.totalShots} {t('stats', 'shotsUnit')} \u2022 {data.sessions} {t('stats', 'precisionSessionsLabel')}</Text>
+                      <Text style={ss.precisionWorkshopMeta}>{data.totalShots} {t('stats', 'shotsUnit')} • {data.sessions} {t('stats', 'precisionSessionsLabel')}</Text>
                     </View>
                   </View>
                   <View style={ss.precisionWorkshopStats}>

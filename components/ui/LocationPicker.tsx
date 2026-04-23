@@ -708,7 +708,7 @@ export default function LocationPicker({
       ) : null}
 
       {/* Miniature Map Preview */}
-      {value?.latitude && value?.longitude && value.latitude !== 0 && value.longitude !== 0 ? (
+      {false && value?.latitude && value?.longitude && value.latitude !== 0 && value.longitude !== 0 ? (
         <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.miniMapContainer}>
           <Image
             source={{ uri: getStaticMapUrl(value.latitude, value.longitude) }}
@@ -955,7 +955,7 @@ export default function LocationPicker({
                   <View style={styles.hintsContent}>
                     <Text style={styles.hintsTitle}>{t('locationPicker', 'searchTips')}</Text>
                     <Text style={styles.hintsText}>
-                      {`\u2022 ${t('locationPicker', 'tipMinChars')}\n\u2022 ${t('locationPicker', 'tipIncludeCity')}\n\u2022 ${t('locationPicker', 'tipPostalCode')}\n\u2022 ${t('locationPicker', 'tipExample')}`}
+                      {`• ${t('locationPicker', 'tipMinChars')}\n• ${t('locationPicker', 'tipIncludeCity')}\n• ${t('locationPicker', 'tipPostalCode')}\n• ${t('locationPicker', 'tipExample')}`}
                     </Text>
                   </View>
                 </View>
@@ -971,6 +971,7 @@ export default function LocationPicker({
 const styles = StyleSheet.create({
   container: {
     marginBottom: 16,
+    flex: 1,
   },
   label: {
     fontSize: 12,

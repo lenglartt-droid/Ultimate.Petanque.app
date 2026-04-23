@@ -499,7 +499,7 @@ export default function EditClubScreen() {
                     <View style={[styles.duplicateIcon, { backgroundColor: theme.accent }]}><MaterialIcons name="home" size={16} color="#FFF" /></View>
                     <View style={styles.duplicateCardInfo}>
                       <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
-                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city}{dup.country ? `, ${dup.country}` : ''} {dup.address ? `\u2022 ${dup.address}` : ''}</Text>
+                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city}{dup.country ? `, ${dup.country}` : ''} {dup.address ? `• ${dup.address}` : ''}</Text>
                     </View>
                     <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
                       <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'exact' ? t('map', 'nameMatch') : t('map', 'cityMatch')}</Text>
@@ -563,7 +563,7 @@ export default function EditClubScreen() {
                   <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
                   <View style={styles.pickerSelectedInfo}>
                     <Text style={styles.pickerSelectedName}>{selectedTerrain.name}</Text>
-                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'\u2022'} {t('terrainTypes', selectedTerrain.type)}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'•'} {t('terrainTypes', selectedTerrain.type)}</Text>
                   </View>
                   <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
                     <MaterialIcons name="close" size={18} color={theme.textMuted} />
@@ -706,7 +706,7 @@ export default function EditClubScreen() {
             renderItem={({ item: terrain }) => (
               <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, selectedTerrainId === terrain.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(terrain.id); setShowTerrainPicker(false); }}>
                 <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="sports-soccer" size={20} color={theme.primary} /></View>
-                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{terrain.name}</Text><Text style={styles.modalPickerItemSub}>{terrain.city} {'\u2022'} {t('terrainTypes', terrain.type)}</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{terrain.name}</Text><Text style={styles.modalPickerItemSub}>{terrain.city} {'•'} {t('terrainTypes', terrain.type)}</Text></View>
                 {selectedTerrainId === terrain.id ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
               </Pressable>
             )}

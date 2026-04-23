@@ -563,7 +563,7 @@ export default function NotificationsHubScreen() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={s.cardTitle}>{isMatch ? (fr ? 'Match partage' : 'Shared match') : (fr ? 'Defi partage' : 'Shared challenge')}</Text>
-                            <Text style={s.cardMeta}>{req.senderName || (fr ? 'Joueur' : 'Player')} {req.itemSummary ? `\u2022 ${req.itemSummary}` : ''}</Text>
+                            <Text style={s.cardMeta}>{req.senderName || (fr ? 'Joueur' : 'Player')} {req.itemSummary ? `• ${req.itemSummary}` : ''}</Text>
                           </View>
                           <View style={[s.permChip, { backgroundColor: (req.permission === 'write' ? theme.accent : theme.primary) + '12' }]}>
                             <MaterialIcons name={req.permission === 'write' ? 'edit' : 'visibility'} size={10} color={req.permission === 'write' ? theme.accent : theme.primary} />
@@ -613,8 +613,8 @@ export default function NotificationsHubScreen() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={s.cardTitle} numberOfLines={1}>{inv.title}</Text>
-                            <Text style={s.cardMeta}>{mDate.toLocaleTimeString(fr ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })} {inv.terrainName ? `\u2022 ${inv.terrainName}` : ''}</Text>
-                            <Text style={s.cardMetaSub}>{fr ? 'Par' : 'By'} {inv.creatorName || '?'} \u2022 {inv.acceptedCount}/{inv.maxParticipants}</Text>
+                            <Text style={s.cardMeta}>{mDate.toLocaleTimeString(fr ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })} {inv.terrainName ? `• ${inv.terrainName}` : ''}</Text>
+                            <Text style={s.cardMetaSub}>{fr ? 'Par' : 'By'} {inv.creatorName || '?'} • {inv.acceptedCount}/{inv.maxParticipants}</Text>
                           </View>
                           <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
                         </Pressable>
@@ -887,7 +887,7 @@ export default function NotificationsHubScreen() {
                           <View style={[s.cardIconBg, { backgroundColor: color + '10' }]}><MaterialIcons name={req.status === 'accepted' ? 'check-circle' : 'cancel'} size={20} color={color} /></View>
                           <View style={{ flex: 1 }}>
                             <Text style={s.cardTitle} numberOfLines={1}>{req.playerName}</Text>
-                            <Text style={s.cardMeta}>{fr ? 'De' : 'From'} {req.senderName || '?'} {"\u2022"} {req.matchCount} {fr ? 'matchs' : 'matches'}</Text>
+                            <Text style={s.cardMeta}>{fr ? 'De' : 'From'} {req.senderName || '?'} {"•"} {req.matchCount} {fr ? 'matchs' : 'matches'}</Text>
                           </View>
                           <View style={[s.statusChip, { backgroundColor: color + '12' }]}><Text style={[s.statusChipText, { color }]}>{req.status === 'accepted' ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Refuse' : 'Declined')}</Text></View>
                         </View>
@@ -1050,7 +1050,7 @@ export default function NotificationsHubScreen() {
                             <View style={[s.cardIconBg, { backgroundColor: theme.carreauColor + '12' }]}><MaterialIcons name="emoji-events" size={20} color={isPast ? theme.textMuted : theme.carreauColor} /></View>
                             <View style={{ flex: 1 }}>
                               <Text style={s.cardTitle} numberOfLines={1}>{tournament.name}</Text>
-                              <Text style={s.cardMeta}>{new Date(tournament.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })} {!isPast ? `\u2022 ${daysUntil === 0 ? (fr ? "Aujourd'hui" : 'Today') : `${daysUntil}${fr ? 'j' : 'd'}`}` : ''}</Text>
+                              <Text style={s.cardMeta}>{new Date(tournament.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })} {!isPast ? `• ${daysUntil === 0 ? (fr ? "Aujourd'hui" : 'Today') : `${daysUntil}${fr ? 'j' : 'd'}`}` : ''}</Text>
                             </View>
                             <Pressable style={s.iconBtn} onPress={() => handleDisableTournamentNotif(tournament.id, tournament.name)} hitSlop={8}>
                               <MaterialIcons name="notifications-off" size={16} color={theme.error} />

@@ -530,7 +530,7 @@ export default function EditMatchScreen() {
         parts.push(t('notation', pqMap[shot.pointQuality] || shot.pointQuality));
       }
     }
-    return parts.join(' \u2022 ');
+    return parts.join(' • ');
   }, [t]);
 
   const handleDeleteShot = useCallback((playerId: string, shotId: string, shotLabel: string) => {
@@ -1263,7 +1263,7 @@ export default function EditMatchScreen() {
                   <View style={styles.pickerSelectedInfo}>
                     <Text style={styles.pickerSelectedName}>{matchBoulesSet.name}</Text>
                     <Text style={styles.pickerSelectedSub}>
-                      {[matchBoulesSet.brand, matchBoulesSet.diameter ? `${matchBoulesSet.diameter} mm` : '', matchBoulesSet.weight ? `${matchBoulesSet.weight} g` : ''].filter(Boolean).join(' \u2022 ')}
+                      {[matchBoulesSet.brand, matchBoulesSet.diameter ? `${matchBoulesSet.diameter} mm` : '', matchBoulesSet.weight ? `${matchBoulesSet.weight} g` : ''].filter(Boolean).join(' • ')}
                     </Text>
                   </View>
                 </View>
@@ -1634,7 +1634,7 @@ export default function EditMatchScreen() {
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.terrainPickerItemSub}>{t('terrainTypes', terrain.type)} \u2022 {terrain.city}</Text>
+                    <Text style={styles.terrainPickerItemSub}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
                   </View>
                   {selectedTerrainId === terrain.id ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}
                 </Pressable>

@@ -12,10 +12,9 @@ import {
   Platform,
   Animated as RNAnimated,
 } from 'react-native';
-import * as Haptics from '@/services/haptics';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image } from 'expo-image';
+import { Image as RNImage } from 'react-native'; // 👈 use RN Image, not expo-image
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
@@ -118,6 +117,7 @@ export default function HomeScreen() {
   const { t, language } = useLanguage();
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+
 
   // Initial load
   const [initialLoading, setInitialLoading] = useState(true);
@@ -517,7 +517,7 @@ export default function HomeScreen() {
                 ) : null}
                 <Pressable testID="profile-avatar" style={st.heroAvatarBtn} onPress={() => router.push('/profile')}>
                   {selfPlayer?.avatar ? (
-                    <Image source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                    <RNImage source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <LinearGradient colors={['#3B82F6', '#60A5FA']} style={st.heroAvatarFallback}>
                       <Text style={st.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
@@ -746,7 +746,7 @@ export default function HomeScreen() {
                 <View style={st.goldBannerContent}>
                   {currentGold.photo ? (
                     <View style={[st.goldBannerPhoto, { borderColor: brandColor + '50' }]}>
-                      <Image source={{ uri: currentGold.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      <RNImage source={{ uri: currentGold.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                     </View>
                   ) : (
                     <View style={[st.goldBannerPhoto, st.goldBannerPhotoFallback, { borderColor: brandColor + '50', backgroundColor: brandColor + '15' }]}>
@@ -889,7 +889,7 @@ export default function HomeScreen() {
       case 'frBanner':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <Image
+            <RNImage
               source={require('@/assets/images/banner-home-fr.png')}
               style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
@@ -902,7 +902,7 @@ export default function HomeScreen() {
       case 'enBanner':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <Image
+            <RNImage
               source={require('@/assets/images/banner-home-en.png')}
               style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
@@ -917,7 +917,7 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             {(matches.length === 0 && challenges.length === 0) ? (
               <View style={st.emptyCard}>
-                <Image source={require('@/assets/images/empty-home.png')} style={st.emptyImage} contentFit="contain" transition={300} />
+                <RnImage source={require('@/assets/images/empty-home.png')} style={st.emptyImage} contentFit="contain" transition={300} />
                 <Text style={st.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
                 <Text style={st.emptyText}>{t('home', 'welcomeText')}</Text>
                 <View style={st.emptyActionsRow}>

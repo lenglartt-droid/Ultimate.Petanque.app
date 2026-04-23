@@ -266,7 +266,7 @@ export default function NewMeetupScreen() {
                             </Text>
                           </View>
                         </View>
-                        {u.club || u.role ? <Text style={styles.inviteeSub}>{[u.club, u.role].filter(Boolean).join(' \u2022 ')}</Text> : null}
+                        {u.club || u.role ? <Text style={styles.inviteeSub}>{[u.club, u.role].filter(Boolean).join(' • ')}</Text> : null}
                       </View>
                       <View style={[styles.inviteeCheck, isSelected && styles.inviteeCheckSelected]}>
                         {isSelected ? <MaterialIcons name="check" size={16} color="#FFF" /> : null}
@@ -340,7 +340,7 @@ export default function NewMeetupScreen() {
               <MaterialIcons name="place" size={20} color={selectedTerrain ? theme.primary : theme.textMuted} />
             </View>
             <Text style={[styles.pickerText, !selectedTerrain && styles.pickerPlaceholder]} numberOfLines={1}>
-              {selectedTerrain ? `${selectedTerrain.name} \u2022 ${selectedTerrain.city}` : t('match', 'chooseTerrain')}
+              {selectedTerrain ? `${selectedTerrain.name} • ${selectedTerrain.city}` : t('match', 'chooseTerrain')}
             </Text>
             <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
           </Pressable>
@@ -515,7 +515,7 @@ export default function NewMeetupScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalItemName}>{tr.name}</Text>
-                  <Text style={styles.modalItemSub}>{tr.city} \u2022 {tr.type}</Text>
+                  <Text style={styles.modalItemSub}>{tr.city} • {tr.type}</Text>
                 </View>
                 {selectedTerrainId === tr.id ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
               </Pressable>

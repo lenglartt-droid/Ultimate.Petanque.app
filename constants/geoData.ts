@@ -86,13 +86,13 @@ const COUNTRY_FLAGS: Record<string, string> = {
   'Bresil': '🇧🇷', 'Brazil': '🇧🇷', 'Argentine': '🇦🇷', 'Argentina': '🇦🇷',
   'Chili': '🇨🇱', 'Chile': '🇨🇱', 'Colombie': '🇨🇴', 'Colombia': '🇨🇴',
   'Thailande': '🇹🇭', 'Thailand': '🇹🇭', 'Japon': '🇯🇵', 'Japan': '🇯🇵',
-  'Chine': '🇨🇳', 'China': '🇨🇳', 'Vietnam': '🇻🇳',
+  'Chine': '🇨🇳', 'China': '🇨🇳', 'Vietnam': '🇻🇳', 'Viêt Nam': '🇻🇳',
   'Cambodge': '🇰🇭', 'Cambodia': '🇰🇭', 'Laos': '🇱🇦',
   'Inde': '🇮🇳', 'India': '🇮🇳', 'Coree du Sud': '🇰🇷', 'South Korea': '🇰🇷',
   'Liban': '🇱🇧', 'Lebanon': '🇱🇧', 'Israel': '🇮🇱',
   'Australie': '🇦🇺', 'Australia': '🇦🇺', 'Nouvelle-Zelande': '🇳🇿', 'New Zealand': '🇳🇿',
   'Nouvelle-Caledonie': '🇳🇨', 'Polynesie': '🇵🇫', 'Tahiti': '🇵🇫',
-  'Wallis-et-Futuna': '🇼🇫',
+  'Wallis-et-Futuna': '🇼🇫'
 };
 
 /** Get flag emoji for a country name. Returns empty string if not found. */

@@ -410,7 +410,7 @@ export default function MeetupDetailScreen() {
           {terrain ? (
             <Pressable style={styles.terrainRow} onPress={() => router.push(`/terrain/${terrain.id}`)}>
               <MaterialIcons name="place" size={16} color={theme.primary} />
-              <Text style={styles.terrainRowText}>{terrain.name} \u2022 {terrain.city}</Text>
+              <Text style={styles.terrainRowText}>{terrain.name} • {terrain.city}</Text>
               <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
             </Pressable>
           ) : null}
@@ -635,7 +635,7 @@ export default function MeetupDetailScreen() {
                             </Text>
                           </View>
                         </View>
-                        {u.club || u.role ? <Text style={styles.inviteeSub}>{[u.club, u.role].filter(Boolean).join(' \u2022 ')}</Text> : null}
+                        {u.club || u.role ? <Text style={styles.inviteeSub}>{[u.club, u.role].filter(Boolean).join(' • ')}</Text> : null}
                       </View>
                       <View style={[styles.inviteeCheckbox, isSelected && styles.inviteeCheckboxSelected]}>
                         {isSelected ? <MaterialIcons name="check" size={14} color="#FFF" /> : null}

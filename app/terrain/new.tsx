@@ -281,7 +281,7 @@ export default function NewTerrainScreen() {
                     <View style={[styles.duplicateIcon, { backgroundColor: theme.success }]}><MaterialIcons name="sports-soccer" size={16} color="#FFF" /></View>
                     <View style={styles.duplicateCardInfo}>
                       <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
-                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city} {dup.address ? `\u2022 ${dup.address}` : ''}</Text>
+                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city} {dup.address ? `• ${dup.address}` : ''}</Text>
                     </View>
                     <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
                       <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'exact' ? t('map', 'exactMatch') : t('map', 'cityMatch')}</Text>

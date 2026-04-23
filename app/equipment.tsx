@@ -454,9 +454,9 @@ export default function EquipmentScreen() {
                     <View style={styles.setInfo}>
                       <Text style={styles.setName}>{set.name}</Text>
                       <Text style={styles.setMeta}>
-                        {[set.brand, set.diameter ? `${set.diameter} mm` : '', set.weight ? `${set.weight} g` : '', set.hardness].filter(Boolean).join(' \u2022 ')}
+                        {[set.brand, set.diameter ? `${set.diameter} mm` : '', set.weight ? `${set.weight} g` : '', set.hardness].filter(Boolean).join(' • ')}
                       </Text>
-                      {(() => { const dbM = set.brand ? BOULES_DATABASE.find(b => b.brand === set.brand && set.name.toUpperCase().includes(b.model.toUpperCase())) : null; return dbM ? <Text style={{ fontSize: 11, color: theme.accent, fontWeight: '500', marginTop: 2 }}>{dbM.targetUsage} {"\u2022"} {dbM.particularities}</Text> : null; })()}
+                      {(() => { const dbM = set.brand ? BOULES_DATABASE.find(b => b.brand === set.brand && set.name.toUpperCase().includes(b.model.toUpperCase())) : null; return dbM ? <Text style={{ fontSize: 11, color: theme.accent, fontWeight: '500', marginTop: 2 }}>{dbM.targetUsage} {"•"} {dbM.particularities}</Text> : null; })()}
                     </View>
                     <View style={styles.setActions}>
                       {!set.isPrimary ? (
@@ -530,7 +530,7 @@ export default function EquipmentScreen() {
                       <View style={styles.perfHeader}>
                         <MaterialIcons name="analytics" size={14} color={theme.textSecondary} />
                         <Text style={styles.perfTitle}>{t('equipment', 'performance')}</Text>
-                        <Text style={styles.perfMatchCount}>{stats.matches} {t('equipment', 'matchesLabel')}{stats.challenges > 0 ? ` \u2022 ${stats.challenges} ${t('equipment', 'challengesLabel')}` : ''}</Text>
+                        <Text style={styles.perfMatchCount}>{stats.matches} {t('equipment', 'matchesLabel')}{stats.challenges > 0 ? ` • ${stats.challenges} ${t('equipment', 'challengesLabel')}` : ''}</Text>
                       </View>
                       <View style={styles.perfBars}>
                         {[

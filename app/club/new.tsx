@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn, LinearTransition } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import * as ImagePicker from '@/services/imagePicker';
 import { Image } from 'expo-image';
@@ -57,7 +57,8 @@ function SectionCard({ children, title, subtitle, icon, color, delay = 0, requir
   required?: boolean;
 }) {
   return (
-    <Animated.View entering={FadeInDown.duration(350).delay(delay)} style={styles.sectionCard}>
+    <Animated.View entering={FadeInDown.duration(350).delay(delay)} layout={LinearTransition.duration(250)} >
+      <View style={styles.sectionCard}>
       <View style={styles.sectionCardHeader}>
         <View style={[styles.sectionCardIcon, { backgroundColor: color + '15' }]}>
           <MaterialIcons name={icon as any} size={18} color={color} />
@@ -71,6 +72,7 @@ function SectionCard({ children, title, subtitle, icon, color, delay = 0, requir
         </View>
       </View>
       {children}
+      </View>
     </Animated.View>
   );
 }
@@ -348,7 +350,7 @@ export default function NewClubScreen() {
                     <View style={[styles.duplicateIcon, { backgroundColor: theme.accent }]}><MaterialIcons name="home" size={16} color="#FFF" /></View>
                     <View style={styles.duplicateCardInfo}>
                       <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
-                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city}{dup.country ? `, ${dup.country}` : ''} {dup.address ? `\u2022 ${dup.address}` : ''}</Text>
+                      <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city}{dup.country ? `, ${dup.country}` : ''} {dup.address ? `• ${dup.address}` : ''}</Text>
                     </View>
                     <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
                       <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'exact' ? t('map', 'nameMatch') : t('map', 'cityMatch')}</Text>
@@ -412,7 +414,7 @@ export default function NewClubScreen() {
                   <MaterialIcons name="sports-soccer" size={20} color={theme.primary} />
                   <View style={styles.pickerSelectedInfo}>
                     <Text style={styles.pickerSelectedName}>{selectedTerrain.name}</Text>
-                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'\u2022'} {t('terrainTypes', selectedTerrain.type)}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'•'} {t('terrainTypes', selectedTerrain.type)}</Text>
                   </View>
                   <Pressable onPress={(e) => { e.stopPropagation(); setSelectedTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
                     <MaterialIcons name="close" size={18} color={theme.textMuted} />
@@ -515,7 +517,7 @@ export default function NewClubScreen() {
             renderItem={({ item: terrain }) => (
               <Pressable style={[styles.modalPickerItem, { marginHorizontal: 0 }, selectedTerrainId === terrain.id && styles.modalPickerItemActive]} onPress={() => { Haptics.selectionAsync(); setSelectedTerrainId(terrain.id); setShowTerrainPicker(false); }}>
                 <View style={[styles.modalPickerItemIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="sports-soccer" size={20} color={theme.primary} /></View>
-                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{terrain.name}</Text><Text style={styles.modalPickerItemSub}>{terrain.city} {'\u2022'} {t('terrainTypes', terrain.type)}</Text></View>
+                <View style={{ flex: 1 }}><Text style={styles.modalPickerItemName}>{terrain.name}</Text><Text style={styles.modalPickerItemSub}>{terrain.city} {'•'} {t('terrainTypes', terrain.type)}</Text></View>
                 {selectedTerrainId === terrain.id ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
               </Pressable>
             )}
@@ -552,7 +554,7 @@ const styles = StyleSheet.create({
   clubLogoEditBadge: { position: 'absolute' as const, bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 2, borderColor: '#FFF' },
 
   // SectionCard
-  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionCard: { flex:1, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
   sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   sectionCardIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionCardTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
@@ -600,7 +602,7 @@ const styles = StyleSheet.create({
   modalPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
   modalPickerItemActive: { borderWidth: 2, borderColor: theme.primary },
   modalPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  modalPickerItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   modalPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   modalEmpty: { alignItems: 'center', paddingVertical: 40 },
   modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },

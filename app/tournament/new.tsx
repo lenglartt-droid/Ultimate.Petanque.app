@@ -353,7 +353,7 @@ export default function NewTournamentScreen() {
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="payments" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.sectionCardTitle}>{t('tournament', 'finances')}</Text>
-                {(registrationCost || prize) ? <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{registrationCost ? `${registrationCost}\u20ac` : ''}{registrationCost && prize ? ' \u2022 ' : ''}{prize || ''}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'financesSubtitle')}</Text>}
+                {(registrationCost || prize) ? <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>{registrationCost ? `${registrationCost}\u20ac` : ''}{registrationCost && prize ? ' • ' : ''}{prize || ''}</Text> : <Text style={styles.sectionCardSubtitle}>{t('tournament', 'financesSubtitle')}</Text>}
               </View>
               <MaterialIcons name={showFinancesSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
             </Pressable>
@@ -461,7 +461,7 @@ export default function NewTournamentScreen() {
             </Pressable>
             {showScopeSection ? (
               <View style={styles.accordionContent}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                   {config.tournamentScopes.map(scope => {
                     const isActive = tournamentScope === scope;
                     return (<Pressable key={scope} style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]} onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}><Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text></Pressable>);
@@ -743,7 +743,7 @@ const styles = StyleSheet.create({
   modalPickerItem: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginHorizontal: 16, marginBottom: 8, ...theme.shadows.card },
   modalPickerItemActive: { borderWidth: 2, borderColor: theme.success },
   modalPickerItemIcon: { width: 40, height: 40, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalPickerItemName: { flex: 1, fontSize: 15, fontWeight: '600', color: theme.textPrimary },
+  modalPickerItemName: { fontSize: 15, fontWeight: '600', color: theme.textPrimary },
   modalPickerItemSub: { fontSize: 12, color: theme.textMuted, marginTop: 2 },
   modalEmpty: { alignItems: 'center', paddingVertical: 40 },
   modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },

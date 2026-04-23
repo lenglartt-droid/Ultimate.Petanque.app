@@ -325,7 +325,7 @@ Deno.serve(async (req: Request) => {
                   `${impressions} impressions ${impArrow}${Math.abs(impChange)}%`,
                   `${clicks} clics ${clkArrow}${Math.abs(clkChange)}%`,
                   `CTR: ${ctr}% | Push: ${pushes}`,
-                ].join(' \u2022 ');
+                ].join(' • ');
                 const body = bodyLines;
 
                 const messages = tokens.map(t => buildPushMessage(
@@ -1215,7 +1215,7 @@ Deno.serve(async (req: Request) => {
                 `${totalClubs} clubs (${verifiedClubs} verifies)`,
                 pendingReports > 0 ? `${pendingReports} signalement(s) en attente` : null,
                 pendingAppeals > 0 ? `${pendingAppeals} appel(s) en attente` : null,
-              ].filter(Boolean).join(' \u2022 ');
+              ].filter(Boolean).join(' • ');
 
               const messages = adminTokens.map((t: any) => buildPushMessage(
                 t.token,

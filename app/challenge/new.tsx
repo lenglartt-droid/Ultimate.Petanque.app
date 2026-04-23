@@ -1017,7 +1017,7 @@ export default function NewChallengeScreen() {
                     </View>
                   ) : null}
                 </View>
-                <Text style={styles.opponentMeta}>{player.club || '-'} \u2022 {player.role}</Text>
+                <Text style={styles.opponentMeta}>{player.club || '-'} • {player.role}</Text>
               </View>
               <View style={styles.opponentBtn}>
                 <Text style={styles.opponentBtnText}>{t('challenge', 'challengeBtn')}</Text>
@@ -1136,7 +1136,7 @@ export default function NewChallengeScreen() {
               <View style={styles.readyPickerContent}>
                 <Text style={styles.readyPickerLabel}>{t('challenge', 'terrain')}</Text>
                 <Text style={[styles.readyPickerValue, !selectedTerrainObj && styles.readyPickerPlaceholder]} numberOfLines={1}>
-                  {selectedTerrainObj ? `${selectedTerrainObj.name} \u2022 ${selectedTerrainObj.city}` : t('match', 'chooseTerrain')}
+                  {selectedTerrainObj ? `${selectedTerrainObj.name} • ${selectedTerrainObj.city}` : t('match', 'chooseTerrain')}
                 </Text>
               </View>
               {selectedTerrainObj ? (
@@ -1155,7 +1155,7 @@ export default function NewChallengeScreen() {
               <View style={styles.readyPickerContent}>
                 <Text style={styles.readyPickerLabel}>{t('challenge', 'boulesSet')}</Text>
                 <Text style={[styles.readyPickerValue, !selectedBoulesSetObj && styles.readyPickerPlaceholder]} numberOfLines={1}>
-                  {selectedBoulesSetObj ? `${selectedBoulesSetObj.name}${selectedBoulesSetObj.diameter ? ` \u2022 ${selectedBoulesSetObj.diameter}mm` : ''}${selectedBoulesSetObj.weight ? ` \u2022 ${selectedBoulesSetObj.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                  {selectedBoulesSetObj ? `${selectedBoulesSetObj.name}${selectedBoulesSetObj.diameter ? ` • ${selectedBoulesSetObj.diameter}mm` : ''}${selectedBoulesSetObj.weight ? ` • ${selectedBoulesSetObj.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
                 </Text>
               </View>
               {selectedBoulesSetObj ? (
@@ -1245,7 +1245,7 @@ export default function NewChallengeScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pickerModalItemName}>{tr.name}</Text>
-                    <Text style={styles.pickerModalItemSub}>{tr.city} \u2022 {tr.type}</Text>
+                    <Text style={styles.pickerModalItemSub}>{tr.city} • {tr.type}</Text>
                   </View>
                   {selectedTerrainId === tr.id ? <MaterialIcons name="check-circle" size={20} color={theme.primary} /> : null}
                 </Pressable>
@@ -1282,7 +1282,7 @@ export default function NewChallengeScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pickerModalItemName}>{bs.name}</Text>
-                    <Text style={styles.pickerModalItemSub}>{[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' \u2022 ')}</Text>
+                    <Text style={styles.pickerModalItemSub}>{[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' • ')}</Text>
                   </View>
                   {bs.isPrimary ? <View style={styles.pickerModalPrimaryBadge}><MaterialIcons name="star" size={10} color="#FFF" /></View> : null}
                   {selectedBoulesSetId === bs.id ? <MaterialIcons name="check-circle" size={20} color={theme.accent} /> : null}

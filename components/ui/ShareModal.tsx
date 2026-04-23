@@ -182,21 +182,21 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         const rank = getEloRank(p.eloRating);
         parts.push(`ELO ${p.eloRating} (${rank.label[fr ? 'fr' : 'en']})`);
       }
-      return parts.join(' \u2022 ');
+      return parts.join(' • ');
     }
     if (itemType === 'club') {
       const c = getClubById(itemId);
-      return c ? [c.city, c.country, c.membersCount ? `${c.membersCount} ${fr ? 'membres' : 'members'}` : ''].filter(Boolean).join(' \u2022 ') : '';
+      return c ? [c.city, c.country, c.membersCount ? `${c.membersCount} ${fr ? 'membres' : 'members'}` : ''].filter(Boolean).join(' • ') : '';
     }
     if (itemType === 'terrain') {
       const tr = getTerrainById(itemId);
-      return tr ? [tr.type, tr.city, tr.clubName].filter(Boolean).join(' \u2022 ') : '';
+      return tr ? [tr.type, tr.city, tr.clubName].filter(Boolean).join(' • ') : '';
     }
     if (itemType === 'tournament') {
       const to = getTournamentById(itemId);
       if (!to) return '';
       const dateStr = to.date ? new Date(to.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }) : '';
-      return [to.format, to.location?.city, dateStr].filter(Boolean).join(' \u2022 ');
+      return [to.format, to.location?.city, dateStr].filter(Boolean).join(' • ');
     }
     if (itemType === 'match') {
       const m = getMatchById(itemId) as any;
@@ -204,13 +204,13 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
       const scoreA = m.teamA?.score ?? 0;
       const scoreB = m.teamB?.score ?? 0;
       const dateStr = m.date ? new Date(m.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' }) : '';
-      return [`${scoreA}-${scoreB}`, m.format, dateStr].filter(Boolean).join(' \u2022 ');
+      return [`${scoreA}-${scoreB}`, m.format, dateStr].filter(Boolean).join(' • ');
     }
     if (itemType === 'challenge') {
       const ch = challenges.find((c: any) => c.id === itemId) as any;
       if (!ch) return '';
       const typeName = ch.type === '10_tirs' ? '10 Tirs' : ch.type === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision';
-      return [typeName, ch.mode === 'duel' ? 'Duel' : 'Solo'].filter(Boolean).join(' \u2022 ');
+      return [typeName, ch.mode === 'duel' ? 'Duel' : 'Solo'].filter(Boolean).join(' • ');
     }
     return '';
   }, [itemType, itemId, fr, getPlayerById, getClubById, getTerrainById, getTournamentById, getMatchById, challenges]);
@@ -614,8 +614,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                             </View>
                           ) : (
                             <View style={s.contactPreviewItems}>
-                              {d.email ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"\u2022".repeat(Math.min(d.email.indexOf("@"), 6)) + d.email.slice(d.email.indexOf("@"))}</Text></View> : null}
-                              {d.phone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.phone.slice(0, 3) + "\u2022".repeat(Math.max(0, d.phone.length - 5)) + d.phone.slice(-2)}</Text></View> : null}
+                              {d.email ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"•".repeat(Math.min(d.email.indexOf("@"), 6)) + d.email.slice(d.email.indexOf("@"))}</Text></View> : null}
+                              {d.phone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.phone.slice(0, 3) + "•".repeat(Math.max(0, d.phone.length - 5)) + d.phone.slice(-2)}</Text></View> : null}
                             </View>
                           )}
                         </View>
@@ -660,8 +660,8 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                             </View>
                           ) : (
                             <View style={s.contactPreviewItems}>
-                              {d.contactEmail ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"\u2022".repeat(Math.min(d.contactEmail.indexOf("@"), 6)) + d.contactEmail.slice(d.contactEmail.indexOf("@"))}</Text></View> : null}
-                              {d.contactPhone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.contactPhone.slice(0, 3) + "\u2022".repeat(Math.max(0, d.contactPhone.length - 5)) + d.contactPhone.slice(-2)}</Text></View> : null}
+                              {d.contactEmail ? <View style={s.contactPreviewItem}><MaterialIcons name="email" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{"•".repeat(Math.min(d.contactEmail.indexOf("@"), 6)) + d.contactEmail.slice(d.contactEmail.indexOf("@"))}</Text></View> : null}
+                              {d.contactPhone ? <View style={s.contactPreviewItem}><MaterialIcons name="phone" size={11} color="#CBD5E1" /><Text style={s.contactPreviewItemMasked}>{d.contactPhone.slice(0, 3) + "•".repeat(Math.max(0, d.contactPhone.length - 5)) + d.contactPhone.slice(-2)}</Text></View> : null}
                             </View>
                           )}
                         </View>
@@ -706,7 +706,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                         <View style={[s.detailPill, { backgroundColor: '#6366F112' }]}><MaterialIcons name="category" size={11} color="#6366F1" /><Text style={[s.detailPillText, { color: '#6366F1' }]}>{d.tournamentType}</Text></View>
                         <View style={[s.detailPill, { backgroundColor: statusColor + '12' }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: statusColor }} /><Text style={[s.detailPillText, { color: statusColor }]}>{d.status}</Text></View>
                       </View>
-                      {d.city ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.city}{d.terrainName ? ` \u2022 ${d.terrainName}` : ''}{d.clubName ? ` \u2022 ${d.clubName}` : ''}</Text></View> : null}
+                      {d.city ? <View style={s.detailLocationRow}><MaterialIcons name="place" size={12} color="#94A3B8" /><Text style={s.detailLocationText}>{d.city}{d.terrainName ? ` • ${d.terrainName}` : ''}{d.clubName ? ` • ${d.clubName}` : ''}</Text></View> : null}
                       <View style={s.detailStatsBar}>
                         <View style={s.detailStatItem}><Text style={s.detailStatValue}>{d.participants}/{d.maxParticipants}</Text><Text style={s.detailStatLabel}>{fr ? 'Inscrits' : 'Registered'}</Text></View>
                         {d.prize ? <><View style={s.detailStatDivider} /><View style={s.detailStatItem}><Text style={[s.detailStatValue, { color: '#CA8A04' }]}>{d.prize}</Text><Text style={s.detailStatLabel}>{fr ? 'Dotation' : 'Prize'}</Text></View></> : null}

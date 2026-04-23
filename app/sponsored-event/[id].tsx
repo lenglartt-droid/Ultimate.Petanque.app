@@ -924,7 +924,7 @@ export default function SponsoredEventDetailScreen() {
                 <MaterialIcons name="campaign" size={20} color="#FFF" />
                 <View style={{ flex: 1 }}>
                   <Text style={s.sharePreviewTitle} numberOfLines={1}>{event?.title}</Text>
-                  <Text style={s.sharePreviewSub}>{challengeName(event?.challengeType || '')} {event?.city ? `\u2022 ${event.city}` : ''}</Text>
+                  <Text style={s.sharePreviewSub}>{challengeName(event?.challengeType || '')} {event?.city ? `• ${event.city}` : ''}</Text>
                 </View>
                 <View style={s.sharePreviewCode}>
                   <Text style={s.sharePreviewCodeText}>{event?.shareCode}</Text>

@@ -259,7 +259,7 @@ export default function ShareCardSeason({
                 <Text style={{ fontSize: 7, fontWeight: '700', color: '#F59E0B' }}>{fr ? 'MEILLEUR MOIS' : 'BEST MONTH'}</Text>
               </View>
               <Text style={{ fontSize: 11, fontWeight: '800', color: ct.textPrimary, textTransform: 'capitalize' }} numberOfLines={1}>{bestMonth.name}</Text>
-              <Text style={{ fontSize: 8, fontWeight: '600', color: '#22C55E' }}>+{bestMonth.delta} ELO \u2022 {bestMonth.wins}V/{bestMonth.matches}M</Text>
+              <Text style={{ fontSize: 8, fontWeight: '600', color: '#22C55E' }}>+{bestMonth.delta} ELO • {bestMonth.wins}V/{bestMonth.matches}M</Text>
             </View>
           ) : null}
           {streak && streak.count >= 2 ? (

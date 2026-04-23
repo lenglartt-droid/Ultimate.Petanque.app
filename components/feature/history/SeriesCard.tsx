@@ -72,7 +72,7 @@ export const SeriesCard = React.memo(({ series, onMatchPress, t, language }: Ser
           <View style={styles.seriesTeamsRow}>
             <View style={styles.seriesTeamCol}>
               <Text style={styles.seriesTeamLabel}>{t('history', 'me')}</Text>
-              <Text style={styles.seriesTeamNames} numberOfLines={1}>{series.teamANames.slice(0, 2).join(' \u2022 ')}</Text>
+              <Text style={styles.seriesTeamNames} numberOfLines={1}>{series.teamANames.slice(0, 2).join(' • ')}</Text>
             </View>
             <View style={styles.seriesScoreContainer}>
               <View style={[styles.seriesScoreBadge, { backgroundColor: isWin ? theme.success : series.isComplete ? theme.error : theme.warning }]}>
@@ -82,7 +82,7 @@ export const SeriesCard = React.memo(({ series, onMatchPress, t, language }: Ser
             </View>
             <View style={[styles.seriesTeamCol, styles.teamRight]}>
               <Text style={styles.seriesTeamLabel}>{t('history', 'opp')}</Text>
-              <Text style={styles.seriesTeamNames} numberOfLines={1}>{series.teamBNames.slice(0, 2).join(' \u2022 ')}</Text>
+              <Text style={styles.seriesTeamNames} numberOfLines={1}>{series.teamBNames.slice(0, 2).join(' • ')}</Text>
             </View>
           </View>
           <View style={styles.seriesFooter}>

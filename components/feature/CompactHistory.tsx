@@ -109,7 +109,7 @@ function CompactHistory({ recentResults, matches, hasData, language, t }: Props)
                   <Text style={s.title} numberOfLines={1}>{item.title}</Text>
                   <View style={s.subRow}>
                     <Text style={s.sub} numberOfLines={1}>
-                      {item.subtitle} {' \u2022 '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                      {item.subtitle} {' • '} {d.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                     </Text>
                     {item.type === 'match' ? (() => {
                       const match = matches.find((m: any) => m.id === item.id);

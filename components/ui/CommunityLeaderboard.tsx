@@ -211,7 +211,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                 : activeTab === 'clubs' ? `${sortedClubs.length} ${t('leaderboard', 'publicClubsCount')}`
                 : activeTab === 'boules' ? `${boulesEntries.length} ${t('leaderboard', 'publicBoulesCount')}`
                 : `${eventEntries.length} ${t('leaderboard', 'publicEventsCount')}`}
-              {myRank && activeTab === 'players' ? ` \u2022 #${myRank}` : ''}
+              {myRank && activeTab === 'players' ? ` • #${myRank}` : ''}
             </Text>
           </View>
           {/* Geo pill */}

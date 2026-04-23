@@ -289,10 +289,10 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
 
   const getItemName = (item: any): string => item?.name || '';
   const getItemSubtitle = (item: any): string => {
-    if (itemType === 'player') return `${item.role || ''} \u2022 ${item.level || ''}`;
+    if (itemType === 'player') return `${item.role || ''} • ${item.level || ''}`;
     if (itemType === 'club') return item.city || '';
-    if (itemType === 'terrain') return `${item.city || ''} \u2022 ${item.type || ''}`;
-    if (itemType === 'tournament') return `${item.format || ''} \u2022 ${item.type || ''}`;
+    if (itemType === 'terrain') return `${item.city || ''} • ${item.type || ''}`;
+    if (itemType === 'tournament') return `${item.format || ''} • ${item.type || ''}`;
     return '';
   };
 

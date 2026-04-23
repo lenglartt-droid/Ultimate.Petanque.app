@@ -231,7 +231,7 @@ function EloSectionInner({
                 </Text>
                 <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 1 }}>
                   {new Date(entry.recordedAt).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-                  {entry.opponentElo ? ` \u2022 ELO ${entry.opponentElo}` : ''}
+                  {entry.opponentElo ? ` • ELO ${entry.opponentElo}` : ''}
                 </Text>
               </View>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>

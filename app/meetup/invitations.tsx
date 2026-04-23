@@ -80,7 +80,7 @@ const InvitationCard = React.memo(({ invitation: inv, index, respondingId, onRes
             <View style={styles.metaRow}>
               <MaterialIcons name="place" size={13} color={theme.primary} />
               <Text style={styles.terrainText} numberOfLines={1}>
-                {inv.terrainName}{inv.terrainCity ? ` \u2022 ${inv.terrainCity}` : ''}
+                {inv.terrainName}{inv.terrainCity ? ` • ${inv.terrainCity}` : ''}
               </Text>
             </View>
           ) : null}

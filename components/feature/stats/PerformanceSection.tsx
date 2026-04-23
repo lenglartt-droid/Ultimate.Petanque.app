@@ -339,7 +339,7 @@ export function PerformanceSection({
                     <MaterialIcons name="sports-baseball" size={14} color={'#D97706'} />
                     <View style={{ flex: 1 }}>
                       <Text style={ss.crossTableRowLabelText} numberOfLines={1}>{data.name}</Text>
-                      <Text style={ss.crossTableCellPct}>{data.matches}M{data.challenges > 0 ? ` +${data.challenges}C` : ''}{data.diameter ? ` \u2022 ${data.diameter}mm` : ''}{data.weight ? ` \u2022 ${data.weight}g` : ''}</Text>
+                      <Text style={ss.crossTableCellPct}>{data.matches}M{data.challenges > 0 ? ` +${data.challenges}C` : ''}{data.diameter ? ` • ${data.diameter}mm` : ''}{data.weight ? ` • ${data.weight}g` : ''}</Text>
                     </View>
                   </View>
                   <View style={ss.crossTableCell}><Text style={[ss.crossTableCellValue, { color: winRate >= 60 ? theme.success : winRate >= 45 ? theme.warning : theme.error }]}>{winRate}%</Text></View>

@@ -126,7 +126,7 @@ export default function PartnerGalleryManager({ sponsorId, userId, galleryPhotos
         )}
       </Pressable>
       <Text style={s.hint}>
-        {fr ? `${galleryPhotos.length}/10 photos \u2022 Format 16:9 recommande` : `${galleryPhotos.length}/10 photos \u2022 16:9 format recommended`}
+        {fr ? `${galleryPhotos.length}/10 photos • Format 16:9 recommande` : `${galleryPhotos.length}/10 photos • 16:9 format recommended`}
       </Text>
     </View>
   );

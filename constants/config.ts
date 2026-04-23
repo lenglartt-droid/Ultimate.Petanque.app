@@ -5,7 +5,7 @@
 // ============================================
 // Replace with your real DSN from: https://sentry.io → Settings → Client Keys (DSN)
 // Format: https://XXXX@oXXXXX.ingest.sentry.io/XXXXXXX
-export const SENTRY_DSN = 'https://5fbe33e9b3aaa190b31afc757c2ed4b0@o4511212761579520.ingest.us.sentry.io/4511212763807744';
+export const SENTRY_DSN = 'https://8ab6881c87f2fd84c1d5798221fc3221@o4511212729729024.ingest.us.sentry.io/4511253545746432';
 
 // Tournament Levels
 export const tournamentLevels = [

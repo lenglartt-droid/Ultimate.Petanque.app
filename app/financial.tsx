@@ -285,7 +285,7 @@ export default function FinancialScreen() {
                   <View style={styles.detailInfo}>
                     <Text style={styles.detailName} numberOfLines={1}>{bs.name}</Text>
                     <Text style={styles.detailDate}>
-                      {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}
+                      {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' • ')}
                     </Text>
                   </View>
                   <Text style={[styles.detailAmount, { color: theme.error }]}>-{bs.purchasePrice} €</Text>

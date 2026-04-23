@@ -440,8 +440,8 @@ export default function AdminABTestsScreen() {
                         </Text>
                         <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>
                           {new Date(test.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                          {' \u2022 '}{test.targetType}
-                          {test.pushSentCount > 0 ? ` \u2022 ${test.pushSentCount} sent` : ''}
+                          {' • '}{test.targetType}
+                          {test.pushSentCount > 0 ? ` • ${test.pushSentCount} sent` : ''}
                         </Text>
                       </View>
                       {winner ? (

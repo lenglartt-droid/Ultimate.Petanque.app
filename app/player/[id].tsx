@@ -1207,7 +1207,7 @@ export default function PlayerDetailScreen() {
                   <View style={[s.matchIndicator, { backgroundColor: won ? theme.success : theme.error }]} />
                   <View style={s.matchContent}>
                     <Text style={s.matchTeams} numberOfLines={1}>{match.teamA.playerNames.join(', ')} vs {match.teamB.playerNames.join(', ')}</Text>
-                    <Text style={s.matchMeta}>{t('formats', match.format)} {"\u2022"} {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                    <Text style={s.matchMeta}>{t('formats', match.format)} {"•"} {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
                   </View>
                   <View style={s.matchScoreBox}>
                     <Text style={[s.matchScoreText, won && { color: theme.success }]}>{isTeamA ? match.teamA.score : match.teamB.score}</Text>

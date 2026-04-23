@@ -166,7 +166,7 @@ export default function AmbassadorsScreen() {
             </View>
             {(amb.role || amb.club || amb.city) ? (
               <Text style={styles.ambMeta} numberOfLines={1}>
-                {[amb.role ? t('roles', amb.role) : null, amb.club, amb.city].filter(Boolean).join(' \u2022 ')}
+                {[amb.role ? t('roles', amb.role) : null, amb.club, amb.city].filter(Boolean).join(' • ')}
               </Text>
             ) : null}
           </View>

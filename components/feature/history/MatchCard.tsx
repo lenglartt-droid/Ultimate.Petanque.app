@@ -57,7 +57,7 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
         <View style={styles.scoreRow}>
           <View style={styles.teamCol}>
             <Text style={styles.teamLabel}>{t('history', 'me')}</Text>
-            <Text style={styles.teamNames} numberOfLines={1}>{match.teamA.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+            <Text style={styles.teamNames} numberOfLines={1}>{match.teamA.playerNames.slice(0, 2).join(' • ')}</Text>
           </View>
           <View style={styles.scoreBox}>
             <Text style={[styles.scoreNum, isWin && styles.scoreWin]}>{match.teamA.score}</Text>
@@ -66,7 +66,7 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
           </View>
           <View style={[styles.teamCol, styles.teamRight]}>
             <Text style={styles.teamLabel}>{t('history', 'opp')}</Text>
-            <Text style={styles.teamNames} numberOfLines={1}>{match.teamB.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+            <Text style={styles.teamNames} numberOfLines={1}>{match.teamB.playerNames.slice(0, 2).join(' • ')}</Text>
           </View>
         </View>
         <View style={styles.cardFooter}>

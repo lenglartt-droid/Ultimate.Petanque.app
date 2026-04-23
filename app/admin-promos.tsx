@@ -711,7 +711,7 @@ export default function AdminPromosScreen() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.modalTitle}>{fr ? 'Utilisations' : 'Redemptions'}</Text>
                 {selectedCode ? (
-                  <Text style={styles.modalSubtitle}>{selectedCode.code} {"\u2022"} {selectedCode.current_uses} / {selectedCode.max_uses}</Text>
+                  <Text style={styles.modalSubtitle}>{selectedCode.code} {"•"} {selectedCode.current_uses} / {selectedCode.max_uses}</Text>
                 ) : null}
               </View>
               <Pressable style={styles.modalCloseBtn} onPress={() => setShowRedemptionsModal(false)}>

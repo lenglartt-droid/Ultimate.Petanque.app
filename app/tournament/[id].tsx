@@ -142,7 +142,7 @@ const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (
         <View style={styles.tlScoreRow}>
           <View style={styles.tlTeam}>
             <Text style={styles.tlTeamLabel}>{t('tournament', 'meLabel')}</Text>
-            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamA.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamA.playerNames.slice(0, 2).join(' • ')}</Text>
           </View>
           <View style={styles.tlScoreBox}>
             <Text style={[styles.tlScoreNum, isWin && { color: theme.success }]}>{match.teamA.score}</Text>
@@ -151,7 +151,7 @@ const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (
           </View>
           <View style={[styles.tlTeam, { alignItems: 'flex-end' }]}>
             <Text style={styles.tlTeamLabel}>{t('tournament', 'opponentLabel')}</Text>
-            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamB.playerNames.slice(0, 2).join(' \u2022 ')}</Text>
+            <Text style={styles.tlTeamNames} numberOfLines={1}>{match.teamB.playerNames.slice(0, 2).join(' • ')}</Text>
           </View>
         </View>
         <View style={styles.tlCardFooter}>
@@ -1419,7 +1419,7 @@ export default function TournamentDetailScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.pvName}>{tournament.name}</Text>
-                    <Text style={styles.pvSubtext}>{t('formats', tournament.format)} \u2022 {t('tournamentTypes', tournament.type)}</Text>
+                    <Text style={styles.pvSubtext}>{t('formats', tournament.format)} • {t('tournamentTypes', tournament.type)}</Text>
                   </View>
                 </View>
 

@@ -727,37 +727,37 @@ export default function TerrainDetailScreen() {
             <View style={styles.tipsList}>
               {terrain.type === 'Stabilisé' && (
                 <>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise1')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise2')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipStabilise3')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipStabilise1')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipStabilise2')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipStabilise3')}</Text>
                 </>
               )}
               {terrain.type === 'Graviers' && (
                 <>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers1')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers2')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipGraviers3')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipGraviers1')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipGraviers2')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipGraviers3')}</Text>
                 </>
               )}
               {terrain.type === 'Sable' && (
                 <>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable1')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable2')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipSable3')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipSable1')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipSable2')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipSable3')}</Text>
                 </>
               )}
               {terrain.type === 'Cailloux' && (
                 <>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux1')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux2')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipCailloux3')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipCailloux1')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipCailloux2')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipCailloux3')}</Text>
                 </>
               )}
               {terrain.type === 'Terre battue' && (
                 <>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue1')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue2')}</Text>
-                  <Text style={styles.tipItem}>{"\u2022"} {t('terrain', 'tipTerreBattue3')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipTerreBattue1')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipTerreBattue2')}</Text>
+                  <Text style={styles.tipItem}>{"•"} {t('terrain', 'tipTerreBattue3')}</Text>
                 </>
               )}
             </View>

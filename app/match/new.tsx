@@ -1970,7 +1970,7 @@ export default function NewMatchScreen() {
                 <View style={styles.terrainSelectorContent}>
                   <Text style={styles.terrainSelectorLabel}>{t('match', 'boulesSet')}</Text>
                   <Text style={[styles.terrainSelectorValue, !selectedBoulesSet && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
-                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` \u2022 ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` \u2022 ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` • ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` • ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
                   </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
@@ -1984,7 +1984,7 @@ export default function NewMatchScreen() {
                 </View>
                 <View style={styles.modeBannerContent}>
                   <Text style={styles.modeBannerText}>{linkedTournament?.name}</Text>
-                  <Text style={styles.modeBannerSubtext}>{t('formats', format)} \u2022 {t('tournamentTypes', linkedTournament?.type || 'Mixte')}</Text>
+                  <Text style={styles.modeBannerSubtext}>{t('formats', format)} • {t('tournamentTypes', linkedTournament?.type || 'Mixte')}</Text>
                 </View>
               </View>
 
@@ -1995,7 +1995,7 @@ export default function NewMatchScreen() {
                 <View style={styles.terrainSelectorContent}>
                   <Text style={styles.terrainSelectorLabel}>{t('match', 'boulesSet')}</Text>
                   <Text style={[styles.terrainSelectorValue, !selectedBoulesSet && styles.terrainSelectorPlaceholder]} numberOfLines={1}>
-                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` \u2022 ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` \u2022 ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
+                    {selectedBoulesSet ? `${selectedBoulesSet.name}${selectedBoulesSet.diameter ? ` • ${selectedBoulesSet.diameter}mm` : ''}${selectedBoulesSet.weight ? ` • ${selectedBoulesSet.weight}g` : ''}` : t('match', 'chooseBoulesSet')}
                   </Text>
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
@@ -2532,7 +2532,7 @@ export default function NewMatchScreen() {
                     ) : null}
                   </View>
                   <Text style={styles.playerMeta}>
-                    {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' \u2022 ')}
+                    {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : '', bs.hardness].filter(Boolean).join(' • ')}
                   </Text>
                 </View>
                 <MaterialIcons
@@ -2633,7 +2633,7 @@ export default function NewMatchScreen() {
                         </View>
                       ) : null}
                     </View>
-                    <Text style={styles.terrainPickerItemSub}>{t('terrainTypes', terrain.type)} \u2022 {terrain.city}</Text>
+                    <Text style={styles.terrainPickerItemSub}>{t('terrainTypes', terrain.type)} • {terrain.city}</Text>
                   </View>
                   {selectedTerrainId === terrain.id ? <MaterialIcons name="check-circle" size={22} color={theme.primary} /> : null}
                 </Pressable>

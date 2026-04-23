@@ -61,7 +61,7 @@ const EliteCard = memo(({ amb, language, t, screenWidth, userId }: { amb: Ambass
           </View>
           <View style={s.eliteInfo}>
             <Text style={s.eliteName} numberOfLines={1}>{amb.displayName}</Text>
-            {amb.bio ? <Text style={s.eliteBio} numberOfLines={2}>{amb.bio}</Text> : amb.role ? <Text style={s.eliteBio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` \u2022 ${amb.club}` : ''}</Text> : null}
+            {amb.bio ? <Text style={s.eliteBio} numberOfLines={2}>{amb.bio}</Text> : amb.role ? <Text style={s.eliteBio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` • ${amb.club}` : ''}</Text> : null}
             {amb.stats ? (
               <View style={s.eliteStatsRow}>
                 <View style={s.eliteStatItem}><Text style={s.eliteStatVal}>{amb.stats.winRate}%</Text><Text style={s.eliteStatLbl}>{language === 'fr' ? 'Vict.' : 'Win'}</Text></View>
@@ -241,7 +241,7 @@ function RotatingCarousel({ ambassadors, language, t, screenWidth, userId }: { a
                 </View>
                 <View style={s.info}>
                   <Text style={s.name} numberOfLines={1}>{amb.displayName}</Text>
-                  {amb.bio ? <Text style={s.bio} numberOfLines={2}>{amb.bio}</Text> : amb.role ? <Text style={s.bio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` \u2022 ${amb.club}` : ''}</Text> : null}
+                  {amb.bio ? <Text style={s.bio} numberOfLines={2}>{amb.bio}</Text> : amb.role ? <Text style={s.bio} numberOfLines={1}>{t('roles', amb.role)}{amb.club ? ` • ${amb.club}` : ''}</Text> : null}
                   {amb.stats ? (
                     <View style={s.statsRow}>
                       <View style={s.statItem}><Text style={s.statVal}>{amb.stats.winRate}%</Text><Text style={s.statLbl}>{language === 'fr' ? 'Vict.' : 'Win'}</Text></View>

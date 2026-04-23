@@ -243,9 +243,11 @@ export default function DirectoryScreen() {
     r2.events.forEach(e => { if (!all.find(x => x.id === e.id)) all.push(e); });
     r3.events.forEach(e => { if (!all.find(x => x.id === e.id)) all.push(e); });
     all.sort((a, b) => new Date(b.eventDate).getTime() - new Date(a.eventDate).getTime());
+    console.log("---------------loading events");
     setSponsoredEvents(all);
     setEventsLoading(false);
   }, []);
+
   useEffect(() => { loadSponsoredEvents(); }, [loadSponsoredEvents]);
 
   // Tab configuration (uses t() for labels)
@@ -284,7 +286,7 @@ export default function DirectoryScreen() {
   const [filters, setFilters] = useState<{
     playerClub: string; playerCity: string; playerCountry: string; playerLevel: string; playerRole: string; playerEloRank: string; playerExperience: string; playerTerrain: string;
     clubCity: string; clubCountry: string; clubEquipment: string; clubMembersRange: string;
-    terrainType: string; terrainCity: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string; terrainParking: string; terrainToilets: string;
+    terrainType: string; terrainCity: string; terrainCountry: string; terrainLighting: string; terrainCovered: string; terrainEnvironment: string; terrainAccess: string; terrainParking: string; terrainToilets: string;
     tournamentStatus: string; tournamentFormat: string; tournamentLevel: string; tournamentCategory: string; tournamentRegistration: string; tournamentScope: string; tournamentCity: string; tournamentDate: string;
     eventStatus: string; eventType: string; eventAmbassador: string;
   }>({
@@ -412,14 +414,6 @@ export default function DirectoryScreen() {
     }
   }, [tabParam]);
 
-  // Counts for tabs
-  const counts = useMemo(() => ({
-    players: players.length,
-    clubs: clubs.length,
-    terrains: terrains.length,
-    tournaments: tournaments.length,
-    events: sponsoredEvents.length,
-  }), [players.length, clubs.length, terrains.length, tournaments.length, sponsoredEvents.length]);
 
   // === CASCADING FILTER VALUES ===
   // Each filter's options are computed from data filtered by ALL OTHER active filters (except itself)
@@ -428,6 +422,8 @@ export default function DirectoryScreen() {
   // Helper: apply player filters except the excluded one
   const getPlayerBaseFiltered = useCallback((excludeFilter?: string) => {
     return players.filter(p => {
+
+      if (p.isPublic !== true) return false; // ADD THIS LINE FIRST
       if (excludeFilter !== 'playerClub' && filters.playerClub !== 'all' && p.club !== filters.playerClub) return false;
       if (excludeFilter !== 'playerCity' && filters.playerCity !== 'all' && p.location?.city !== filters.playerCity) return false;
       if (excludeFilter !== 'playerCountry' && filters.playerCountry !== 'all' && (p.country || 'France') !== filters.playerCountry) return false;
@@ -677,6 +673,8 @@ export default function DirectoryScreen() {
       const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.club?.toLowerCase().includes(searchQuery.toLowerCase());
+
+      const matchesPublic = p.isPublic === true; // ADD THIS
       const matchesClub = filters.playerClub === 'all' || p.club === filters.playerClub;
       const matchesCity = filters.playerCity === 'all' || p.location?.city === filters.playerCity;
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
@@ -698,7 +696,7 @@ export default function DirectoryScreen() {
       const matchesTerrain = filters.playerTerrain === 'all' || p.terrainName === filters.playerTerrain;
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
       const matchesDist = isWithinDistance(p.location?.latitude, p.location?.longitude);
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
+      return matchesPublic && matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
     });
     
     // Apply multi-criteria sort or fallback to distance sort
@@ -736,6 +734,16 @@ export default function DirectoryScreen() {
     }
     return result;
   }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
+
+  // Counts for tabs
+  const counts = useMemo(() => ({
+    players: filteredPlayers.length,
+    clubs: clubs.length,
+    terrains: terrains.length,
+    tournaments: tournaments.length,
+    events: sponsoredEvents.length,
+  }), [filteredPlayers.length, clubs.length, terrains.length, tournaments.length, sponsoredEvents.length]);
+
 
   const filteredClubs = useMemo(() => {
     let result = clubs.filter(c => {
@@ -785,8 +793,6 @@ export default function DirectoryScreen() {
   }, [clubs, searchQuery, filters, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
 
   // terrainMeetupsMap, globalTerrainStats, and terrainActivityMap are now in useTerrainActivity hook
-
-
 
   const filteredTerrains = useMemo(() => {
     let result = terrains.filter(tr => {
@@ -2473,10 +2479,13 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; handleInviteToMeetup: (id: string, name: string) => void; user: any;
 }) => {
+
   const isSelf = selfPlayer && item.id === selfPlayer.id;
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const isRealUser = item.isPublic === true && (!selfPlayer || item.id !== selfPlayer.id);
+
+  const isRealUser = item.isPublic === true && (item.id == item.userId);
+
   // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
   const hasSponsor = !!item.sponsorId;
@@ -2561,18 +2570,19 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
             }
             return null;
           })()}
+          {(item.location?.latitude || item.location?.longitude) ? (
+            <Pressable style={[styles.tag, styles.mapLinkBtn]} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name } } as any); }} hitSlop={4}>
+              <MaterialIcons name="map" size={13} color={theme.success} />
+            </Pressable>
+          ) : null}
+          {isRealUser ? (
+            <Pressable style={[styles.tag, styles.inviteMeetupBtn]} onPress={(e) => { e.stopPropagation?.(); handleInviteToMeetup(item.id, item.name); }} hitSlop={4}>
+              <MaterialIcons name="event" size={13} color={theme.primary} />
+              <Text style={styles.inviteMeetupBtnText}>{t('meetup', 'inviteToMeetup')}</Text>
+            </Pressable>
+          ) : null}
         </View>
-        {(item.location?.latitude || item.location?.longitude) ? (
-          <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name } } as any); }} hitSlop={4}>
-            <MaterialIcons name="map" size={13} color={theme.success} />
-          </Pressable>
-        ) : null}
-        {isRealUser ? (
-          <Pressable style={styles.inviteMeetupBtn} onPress={(e) => { e.stopPropagation?.(); handleInviteToMeetup(item.id, item.name); }} hitSlop={4}>
-            <MaterialIcons name="event" size={13} color={theme.primary} />
-            <Text style={styles.inviteMeetupBtnText}>{t('meetup', 'inviteToMeetup')}</Text>
-          </Pressable>
-        ) : null}
+        
       </View>
       <MaterialIcons name="chevron-right" size={22} color={theme.textMuted} />
     </Pressable>
@@ -3260,7 +3270,7 @@ const styles = StyleSheet.create({
   selfCard: {
     borderWidth: 2,
     borderColor: theme.primary,
-    backgroundColor: theme.primary + '04',
+    // backgroundColor: theme.primary + '04',
   },
   favoriteCard: {
     borderWidth: 2,
@@ -3391,7 +3401,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 5,
     borderRadius: theme.borderRadius.sm,
-    marginTop: 6,
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: theme.primary + '25',
@@ -3448,6 +3457,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 6,
+    alignItems: 'center',
   },
   tag: {
     flexDirection: 'row',
@@ -3862,7 +3872,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
     borderWidth: 1,
     borderColor: theme.success + '25',
-    marginRight: 4,
   },
   // Active Now
   activeNowBanner: {

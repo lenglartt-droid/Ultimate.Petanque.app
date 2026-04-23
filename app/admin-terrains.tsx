@@ -555,7 +555,7 @@ export default function AdminTerrainsScreen() {
                     <View style={s.dupeGroupHeader}>
                       <MaterialIcons name="warning" size={14} color="#EF4444" />
                       <Text style={s.dupeGroupMeta}>
-                        {group.distanceM}m {fr ? 'de distance' : 'apart'} {"\u2022"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
+                        {group.distanceM}m {fr ? 'de distance' : 'apart'} {"•"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
                       </Text>
                     </View>
                     {group.terrains.map((t, tIdx) => {
@@ -568,7 +568,7 @@ export default function AdminTerrainsScreen() {
                           </View>
                           <View style={{ flex: 1 }}>
                             <Text style={s.dupeItemName}>{t.name}</Text>
-                            <Text style={s.dupeItemCity}>{t.city} {"\u2022"} {t.type}{isKept ? (fr ? ' (conserve)' : ' (kept)') : ''}</Text>
+                            <Text style={s.dupeItemCity}>{t.city} {"•"} {t.type}{isKept ? (fr ? ' (conserve)' : ' (kept)') : ''}</Text>
                           </View>
                           <Pressable
                             style={s.dupeDeleteBtn}
@@ -696,7 +696,7 @@ export default function AdminTerrainsScreen() {
                         <Text style={s.terrainCity}>{terrain.city}</Text>
                         {terrain.clubName ? (
                           <>
-                            <Text style={s.terrainDot}>{"\u2022"}</Text>
+                            <Text style={s.terrainDot}>{"•"}</Text>
                             <MaterialIcons name="home" size={11} color="#94A3B8" />
                             <Text style={s.terrainCity}>{terrain.clubName}</Text>
                           </>
@@ -826,7 +826,7 @@ export default function AdminTerrainsScreen() {
                         <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>{fr ? 'CONSERVER' : 'KEEP'}</Text>
                       </View>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{keepT.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepT.city} {"\u2022"} {keepT.type}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepT.city} {"•"} {keepT.type}</Text>
                     </View>
                     <View style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#FECACA' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -834,7 +834,7 @@ export default function AdminTerrainsScreen() {
                         <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 0.5 }}>{fr ? 'SUPPRIMER' : 'DELETE'}</Text>
                       </View>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{delT.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delT.city} {"\u2022"} {delT.type}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delT.city} {"•"} {delT.type}</Text>
                     </View>
                   </View>
 

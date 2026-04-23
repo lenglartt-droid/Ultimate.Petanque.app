@@ -575,9 +575,9 @@ export default function PartnerAnalyticsScreen() {
                   </View>
                   <View style={st.partnerMetrics}>
                     <Text style={st.partnerMetricItem}>{p.impressions} imp.</Text>
-                    <Text style={st.partnerMetricDot}>{"\u2022"}</Text>
+                    <Text style={st.partnerMetricDot}>{"•"}</Text>
                     <Text style={st.partnerMetricItem}>{p.profileViews} {fr ? 'vues' : 'views'}</Text>
-                    <Text style={st.partnerMetricDot}>{"\u2022"}</Text>
+                    <Text style={st.partnerMetricDot}>{"•"}</Text>
                     <Text style={st.partnerMetricItem}>{conversionRate}% conv.</Text>
                   </View>
                 </View>

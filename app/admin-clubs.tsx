@@ -908,7 +908,7 @@ export default function AdminClubsScreen() {
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <Text style={{ fontSize: 10, color: '#94A3B8' }}>{fr ? 'Soumis le' : 'Submitted'} {new Date(claim.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
-                            {respondedDate ? <Text style={{ fontSize: 10, color: '#94A3B8' }}>\u2022 {fr ? 'Traite le' : 'Processed'} {respondedDate}</Text> : null}
+                            {respondedDate ? <Text style={{ fontSize: 10, color: '#94A3B8' }}>• {fr ? 'Traite le' : 'Processed'} {respondedDate}</Text> : null}
                           </View>
                         </View>
                       );
@@ -1238,7 +1238,7 @@ export default function AdminClubsScreen() {
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
                       <MaterialIcons name="warning" size={14} color="#7C3AED" />
                       <Text style={{ fontSize: 11, fontWeight: '600', color: '#7C3AED' }}>
-                        {group.sameCity ? (fr ? 'Meme ville' : 'Same city') : ''} {"\u2022"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
+                        {group.sameCity ? (fr ? 'Meme ville' : 'Same city') : ''} {"•"} {Math.round(group.nameSimilarity * 100)}% {fr ? 'similaire' : 'similar'}
                       </Text>
                     </View>
                     {group.clubs.map((c, cIdx) => {
@@ -1252,8 +1252,8 @@ export default function AdminClubsScreen() {
                           <View style={{ flex: 1 }}>
                             <Text style={{ fontSize: 13, fontWeight: '600', color: '#0F172A' }}>{c.name}</Text>
                             <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 1 }}>
-                              {c.city} {"\u2022"} {c.membersCount} {fr ? 'membres' : 'members'}
-                              {c.isVerified ? ' \u2022 \u2705' : ''}
+                              {c.city} {"•"} {c.membersCount} {fr ? 'membres' : 'members'}
+                              {c.isVerified ? ' • \u2705' : ''}
                               {isKept ? (fr ? ' (conserve)' : ' (kept)') : ''}
                             </Text>
                           </View>
@@ -1455,7 +1455,7 @@ export default function AdminClubsScreen() {
                         <Text style={s.clubName} numberOfLines={1}>{club.name}</Text>
                         {club.isVerified ? <MaterialIcons name="verified" size={16} color="#2563EB" /> : null}
                       </View>
-                      <Text style={s.clubCity} numberOfLines={1}>{club.city}{club.country !== 'France' ? ` \u2022 ${club.country}` : ''}</Text>
+                      <Text style={s.clubCity} numberOfLines={1}>{club.city}{club.country !== 'France' ? ` • ${club.country}` : ''}</Text>
                       <View style={s.clubMetaRow}>
                         <View style={s.clubMeta}><MaterialIcons name="people" size={10} color="#64748B" /><Text style={s.clubMetaText}>{club.membersCount}</Text></View>
                         {club.isPublic ? <View style={[s.clubMeta, { backgroundColor: '#DCFCE7' }]}><MaterialIcons name="public" size={10} color="#10B981" /><Text style={[s.clubMetaText, { color: '#10B981' }]}>Public</Text></View> : null}
@@ -1869,7 +1869,7 @@ export default function AdminClubsScreen() {
                         <Text style={{ fontSize: 10, fontWeight: '800', color: '#10B981', letterSpacing: 0.5 }}>{fr ? 'CONSERVER' : 'KEEP'}</Text>
                       </View>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{keepC.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepC.city} {"\u2022"} {keepC.membersCount} {fr ? 'membres' : 'members'}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{keepC.city} {"•"} {keepC.membersCount} {fr ? 'membres' : 'members'}</Text>
                       {keepC.isVerified ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}><MaterialIcons name="verified" size={12} color="#2563EB" /><Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
                     </View>
                     <View style={{ flex: 1, backgroundColor: '#FEF2F2', borderRadius: 14, padding: 14, borderWidth: 1.5, borderColor: '#FECACA' }}>
@@ -1878,7 +1878,7 @@ export default function AdminClubsScreen() {
                         <Text style={{ fontSize: 10, fontWeight: '800', color: '#EF4444', letterSpacing: 0.5 }}>{fr ? 'SUPPRIMER' : 'DELETE'}</Text>
                       </View>
                       <Text style={{ fontSize: 14, fontWeight: '700', color: '#0F172A' }}>{delC.name}</Text>
-                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delC.city} {"\u2022"} {delC.membersCount} {fr ? 'membres' : 'members'}</Text>
+                      <Text style={{ fontSize: 11, color: '#64748B', marginTop: 2 }}>{delC.city} {"•"} {delC.membersCount} {fr ? 'membres' : 'members'}</Text>
                       {delC.isVerified ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}><MaterialIcons name="verified" size={12} color="#2563EB" /><Text style={{ fontSize: 10, fontWeight: '700', color: '#2563EB' }}>{fr ? 'Verifie' : 'Verified'}</Text></View> : null}
                     </View>
                   </View>

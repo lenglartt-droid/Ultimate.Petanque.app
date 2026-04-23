@@ -285,7 +285,7 @@ export default function NewPlayerScreen() {
                   <MaterialIcons name="sports-soccer" size={20} color={theme.success} />
                   <View style={styles.pickerSelectedInfo}>
                     <Text style={styles.pickerSelectedName}>{selectedTerrain.name}</Text>
-                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'\u2022'} {t('terrainTypes', selectedTerrain.type)}</Text>
+                    <Text style={styles.pickerSelectedSub}>{selectedTerrain.city} {'•'} {t('terrainTypes', selectedTerrain.type)}</Text>
                   </View>
                   <Pressable onPress={(e) => { e.stopPropagation(); setTerrainId(undefined); Haptics.selectionAsync(); }} hitSlop={8}>
                     <MaterialIcons name="close" size={18} color={theme.textMuted} />
@@ -515,7 +515,7 @@ export default function NewPlayerScreen() {
                 </View>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.modalPickerItemName}>{terrain.name}</Text>
-                  <Text style={styles.modalPickerItemSub}>{terrain.city} {'\u2022'} {t('terrainTypes', terrain.type)}</Text>
+                  <Text style={styles.modalPickerItemSub}>{terrain.city} {'•'} {t('terrainTypes', terrain.type)}</Text>
                 </View>
                 {terrainId === terrain.id ? <MaterialIcons name="check-circle" size={20} color={theme.success} /> : null}
               </Pressable>

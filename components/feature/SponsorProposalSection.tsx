@@ -181,7 +181,7 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
               <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' }}>
                 <View style={{ flex: 1 }}>
                   <Text style={{ fontSize: 13, fontWeight: '600', color: '#334155' }} numberOfLines={1}>{p.item_name}</Text>
-                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>{p.item_type} \u2022 {new Date(p.created_at).toLocaleDateString()}</Text>
+                  <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 1 }}>{p.item_type} • {new Date(p.created_at).toLocaleDateString()}</Text>
                 </View>
                 <View style={{ backgroundColor: sc + '15', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
                   <Text style={{ fontSize: 10, fontWeight: '700', color: sc }}>{sl}</Text>

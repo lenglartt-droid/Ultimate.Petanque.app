@@ -57,6 +57,8 @@ function GeoCard({ entry, rank, tab, isFr, sortKey }: { entry: GeoEntry; rank: n
     : tab === 'continents'
       ? getContinentFlag(entry.key)
       : null;
+  
+  console.log(entry.key);
 
   const displayLabel = tab === 'continents'
     ? getContinentLabel(entry.key, isFr)

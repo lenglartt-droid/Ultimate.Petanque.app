@@ -196,7 +196,7 @@ export default function AttestationSection({
             </Text>
             <Text style={st.headerSub}>
               {attestedCount > 0
-                ? `${attestedCount} ${fr ? 'temoin(s) confirme(s)' : 'witness(es) confirmed'} \u2022 ${fr ? 'Poids' : 'Weight'} 2.0x`
+                ? `${attestedCount} ${fr ? 'temoin(s) confirme(s)' : 'witness(es) confirmed'} • ${fr ? 'Poids' : 'Weight'} 2.0x`
                 : fr ? 'Invitez un temoin pour valider (poids 2.0x)' : 'Invite a witness to validate (2.0x weight)'}
             </Text>
           </View>

@@ -270,7 +270,7 @@ export default function RolePerformanceScreen() {
                     <Text style={st.bestRoleLabel}>{fr ? 'Meilleur role' : 'Best Role'}</Text>
                     <Text style={[st.bestRoleName, { color: getRoleColor(bestRole.role) }]}>{t('roles', bestRole.role)}</Text>
                     <Text style={st.bestRoleSub}>
-                      {bestRole.matchCount} {fr ? 'matchs' : 'matches'} {"\u2022"} {bestRole.winRate}% {fr ? 'victoires' : 'wins'}
+                      {bestRole.matchCount} {fr ? 'matchs' : 'matches'} {"•"} {bestRole.winRate}% {fr ? 'victoires' : 'wins'}
                     </Text>
                   </View>
                   <View style={[st.bestRoleScore, { backgroundColor: getRoleColor(bestRole.role) }]}>
@@ -328,7 +328,7 @@ export default function RolePerformanceScreen() {
                       <View style={{ flex: 1 }}>
                         <Text style={[st.roleCardName, { color: rc }]}>{t('roles', role.role)}</Text>
                         <Text style={st.roleCardSub}>
-                          {role.matchCount} {fr ? 'matchs' : 'matches'} {"\u2022"} {role.wins}V / {role.losses}D
+                          {role.matchCount} {fr ? 'matchs' : 'matches'} {"•"} {role.wins}V / {role.losses}D
                         </Text>
                       </View>
                       {hasData ? (

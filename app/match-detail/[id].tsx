@@ -337,7 +337,7 @@ export default function MatchDetailScreen() {
           <View style={s.scoreRow}>
             <View style={s.teamCol}>
               <Text style={s.teamLabel}>{fr ? 'MON EQUIPE' : 'MY TEAM'}</Text>
-              <Text style={s.teamNames} numberOfLines={2}>{match.teamA.playerNames.join(' \u2022 ')}</Text>
+              <Text style={s.teamNames} numberOfLines={2}>{match.teamA.playerNames.join(' • ')}</Text>
             </View>
             <View style={s.scoreCenter}>
               <View style={s.scoreBox}>
@@ -354,7 +354,7 @@ export default function MatchDetailScreen() {
             </View>
             <View style={[s.teamCol, { alignItems: 'flex-end' }]}>
               <Text style={s.teamLabel}>{fr ? 'ADVERSAIRE' : 'OPPONENT'}</Text>
-              <Text style={[s.teamNames, { textAlign: 'right' }]} numberOfLines={2}>{match.teamB.playerNames.join(' \u2022 ')}</Text>
+              <Text style={[s.teamNames, { textAlign: 'right' }]} numberOfLines={2}>{match.teamB.playerNames.join(' • ')}</Text>
             </View>
           </View>
 

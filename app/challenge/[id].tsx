@@ -655,7 +655,7 @@ export default function ChallengeDetailScreen() {
               <View style={s.shotGrid}>
                 <Text style={s.shotsGridTitle}>{fr ? 'Tir par tir' : 'Shot by shot'}</Text>
                 {isEditing ? (
-                  <Text style={s.editHintText}>{fr ? 'Appuyez pour basculer reussi/rate \u2022 Appui long pour carreau' : 'Tap to toggle hit/miss \u2022 Long press for carreau'}</Text>
+                  <Text style={s.editHintText}>{fr ? 'Appuyez pour basculer reussi/rate • Appui long pour carreau' : 'Tap to toggle hit/miss • Long press for carreau'}</Text>
                 ) : null}
                 <View style={s.shotDotsRow}>
                   {challenge.shots.map((shot, i) => (

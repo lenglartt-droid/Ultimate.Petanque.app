@@ -261,7 +261,7 @@ export default function NewSponsoredEventScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.selectedTerrainName}>{selectedTerrain.name}</Text>
-                <Text style={s.selectedTerrainCity}>{selectedTerrain.city}{selectedTerrain.type ? ` \u2022 ${selectedTerrain.type}` : ''}</Text>
+                <Text style={s.selectedTerrainCity}>{selectedTerrain.city}{selectedTerrain.type ? ` • ${selectedTerrain.type}` : ''}</Text>
               </View>
               <Pressable style={s.selectedTerrainChangeBtn} onPress={() => setShowTerrainPicker(true)}>
                 <MaterialIcons name="swap-horiz" size={18} color={theme.primary} />
@@ -346,7 +346,7 @@ export default function NewSponsoredEventScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={s.terrainName}>{item.name}</Text>
-                    <Text style={s.terrainCity}>{item.city}{item.type ? ` \u2022 ${item.type}` : ''}</Text>
+                    <Text style={s.terrainCity}>{item.city}{item.type ? ` • ${item.type}` : ''}</Text>
                   </View>
                   {selectedTerrainId === item.id ? <MaterialIcons name="check-circle" size={22} color={theme.success} /> : null}
                 </Pressable>

@@ -340,7 +340,7 @@ export default function AdminActivityLogScreen() {
                     <View style={s.logMeta}>
                       <MaterialIcons name="person-outline" size={11} color="#94A3B8" />
                       <Text style={s.logMetaText}>{log.adminName || 'Admin'}</Text>
-                      <Text style={s.logMetaDot}>{"\u2022"}</Text>
+                      <Text style={s.logMetaDot}>{"•"}</Text>
                       <Text style={s.logMetaText}>{formatFullDate(log.createdAt)}</Text>
                     </View>
                   </View>

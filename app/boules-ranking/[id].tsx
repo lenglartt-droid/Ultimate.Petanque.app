@@ -249,7 +249,7 @@ export default function BoulesRankingScreen() {
             <Text style={s.headerTitle} numberOfLines={1}>{displayName}</Text>
             <Text style={s.headerSubtitle}>
               {stats
-                ? `${stats.playerCount} ${t('leaderboard', 'boulesUsers')} \u2022 ${stats.totalMatches} ${t('leaderboard', 'boulesMatches')}`
+                ? `${stats.playerCount} ${t('leaderboard', 'boulesUsers')} • ${stats.totalMatches} ${t('leaderboard', 'boulesMatches')}`
                 : t('leaderboard', 'loading')}
             </Text>
           </View>

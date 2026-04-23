@@ -1465,7 +1465,7 @@ export default function HistoryScreen() {
                       <View style={[styles.detailModeBadge, { backgroundColor: '#D97706' + '15' }]}>
                         <MaterialIcons name="sports-baseball" size={13} color={'#D97706'} />
                         <Text style={[styles.detailModeBadgeText, { color: '#D97706' }]} numberOfLines={1}>
-                          {bs.name}{bs.diameter ? ` \u2022 ${bs.diameter}mm` : ''}{bs.weight ? ` \u2022 ${bs.weight}g` : ''}
+                          {bs.name}{bs.diameter ? ` • ${bs.diameter}mm` : ''}{bs.weight ? ` • ${bs.weight}g` : ''}
                         </Text>
                       </View>
                     );
@@ -2140,7 +2140,7 @@ export default function HistoryScreen() {
                       <View style={[styles.detailModeBadge, { backgroundColor: '#D97706' + '15' }]}>
                         <MaterialIcons name="sports-baseball" size={13} color={'#D97706'} />
                         <Text style={[styles.detailModeBadgeText, { color: '#D97706' }]} numberOfLines={1}>
-                          {matchBoules.name}{matchBoules.diameter ? ` \u2022 ${matchBoules.diameter}mm` : ''}
+                          {matchBoules.name}{matchBoules.diameter ? ` • ${matchBoules.diameter}mm` : ''}
                         </Text>
                       </View>
                     ) : null}
@@ -2158,7 +2158,7 @@ export default function HistoryScreen() {
                   <View style={styles.mdScoreRow}>
                     <View style={styles.mdTeamCol}>
                       <Text style={styles.mdTeamLabel}>{t('history', 'me')}</Text>
-                      <Text style={styles.mdTeamNames} numberOfLines={2}>{m.teamA.playerNames.join(' \u2022 ')}</Text>
+                      <Text style={styles.mdTeamNames} numberOfLines={2}>{m.teamA.playerNames.join(' • ')}</Text>
                     </View>
                     <View style={styles.mdScoreCenter}>
                       <View style={styles.mdScoreBox}>
@@ -2175,7 +2175,7 @@ export default function HistoryScreen() {
                     </View>
                     <View style={[styles.mdTeamCol, { alignItems: 'flex-end' }]}>
                       <Text style={styles.mdTeamLabel}>{t('history', 'opp')}</Text>
-                      <Text style={[styles.mdTeamNames, { textAlign: 'right' }]} numberOfLines={2}>{m.teamB.playerNames.join(' \u2022 ')}</Text>
+                      <Text style={[styles.mdTeamNames, { textAlign: 'right' }]} numberOfLines={2}>{m.teamB.playerNames.join(' • ')}</Text>
                     </View>
                   </View>
                   {/* Player roles */}

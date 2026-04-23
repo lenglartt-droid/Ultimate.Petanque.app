@@ -41,9 +41,9 @@ const ADMIN_SECTIONS: NavSection[] = [
 
 const GROUP_SEPARATORS: Record<string, string> = {
   moderation: '',
-  data: '\u2022',
-  marketing: '\u2022',
-  system: '\u2022',
+  data: '•',
+  marketing: '•',
+  system: '•',
 };
 
 interface AdminQuickNavProps {

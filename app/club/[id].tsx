@@ -862,7 +862,7 @@ export default function ClubDetailScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.locationAddress}>{mainTerrain.name}</Text>
-                    <Text style={styles.locationCity}>{t('terrainTypes', mainTerrain.type)} {"\u2022"} {mainTerrain.city}</Text>
+                    <Text style={styles.locationCity}>{t('terrainTypes', mainTerrain.type)} {"•"} {mainTerrain.city}</Text>
                   </View>
                   <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
                 </View>

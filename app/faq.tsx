@@ -1226,7 +1226,7 @@ export default function FAQScreen() {
               <MaterialIcons name={activeTabConfig.icon as any} size={32} color="#FFF" />
             </View>
             <Text style={st.heroTitle}>{fr ? 'Guide' : 'Guide'} {fr ? activeTabConfig.iconFr : activeTabConfig.iconEn}</Text>
-            <Text style={st.heroSub}>{totalQs} {fr ? 'reponses' : 'answers'} {"\u2022"} {faqData.length} {fr ? 'themes' : 'topics'}</Text>
+            <Text style={st.heroSub}>{totalQs} {fr ? 'reponses' : 'answers'} {"•"} {faqData.length} {fr ? 'themes' : 'topics'}</Text>
 
             <View style={st.heroSearch}>
               <MaterialIcons name="search" size={20} color="rgba(255,255,255,0.5)" />

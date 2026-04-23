@@ -41,7 +41,7 @@ import AdBanner from '@/components/ui/AdBanner';
 
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
-import { Image } from 'expo-image';
+import { Image as RNImage } from 'react-native'; // 👈 use RN Image, not expo-image
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 // import MapView from "react-native-map-clustering";
@@ -193,21 +193,58 @@ interface PartnerMarkerData extends Ambassador {
 }
 
 const PartnerMarkerView = React.memo(
-  ({ partner }: { partner: PartnerMarkerData }) => {
-    const customColor = partner.brandColor;
+  ({ partner, onReady }: { partner: PartnerMarkerData; onReady?: () => void }) => {
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+
+    const handleLoad = useCallback(() => {
+      setImageLoaded(true);
+      onReady?.(); // signal parent to set tracksViewChanges=false
+    }, [onReady]);
+
+    let customColor = partner.brandColor;
+
+    if (customColor) {
+      if (!customColor.startsWith('#')) {
+        customColor = `#${customColor}`;
+      }
+    } else {
+      customColor = undefined;
+    }
+
+    const hexToRgba = (hex: string, alpha = 1) => {
+      const clean = hex.replace('#', '');
+      const bigint = parseInt(clean, 16);
+
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };  
 
     const tier = customColor
-      ? { primary: customColor, bg: customColor + '15', border: customColor }
-      : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+    ? {
+        primary: customColor,
+        bg: hexToRgba(customColor, 0.5),
+        border: customColor
+      }
+    : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
 
     const isGold = partner._tier === 'gold_sponsor';
     const size = isGold ? 44 : 38;
+    const imageSize = size - 6;
 
     return (
-      <View style={{ alignItems: 'center' }} collapsable={false}>
+      <View
+        key={`${partner.id}-${tier.primary}`}
+        style={{ alignItems: 'center' }}
+        collapsable={false}
+      >
         <View
           style={[
             pMarkerStyles.container,
+            isGold && pMarkerStyles.containerGold,
             {
               width: size,
               height: size,
@@ -215,36 +252,46 @@ const PartnerMarkerView = React.memo(
               borderColor: tier.border,
               backgroundColor: tier.bg,
             },
-            isGold && pMarkerStyles.containerGold,
           ]}
         >
-          {partner.photo ? (
-            <Image
-              source={{ uri: partner.photo }}
-              style={{
-                width: size - 6,
-                height: size - 6,
-                borderRadius: (size - 6) / 2,
-                backgroundColor: "#fff",
-              }}
-              contentFit="cover"
-              cachePolicy="memory-disk"
-            />
+          {partner.photo && !imageError ? (
+            <>
+              {/* Fallback icon shown while loading */}
+              {!imageLoaded ? (
+                <MaterialIcons
+                  name={isGold ? 'workspace-premium' : 'handshake'}
+                  size={isGold ? 20 : 16}
+                  color="#fff"
+                  style={{ position: 'absolute' }}
+                />
+              ) : null}
+              <RNImage
+                source={{
+                  uri: partner.photo,
+                  cache: 'force-cache', // 👈 critical for Android builds
+                }}
+                style={{
+                  width: imageSize,
+                  height: imageSize,
+                  borderRadius: imageSize / 2,
+                  backgroundColor: tier.bg,
+                  opacity: imageLoaded ? 1 : 0, // hide until loaded
+                }}
+                resizeMode="cover"
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+              />
+            </>
           ) : (
             <MaterialIcons
               name={isGold ? 'workspace-premium' : 'handshake'}
               size={isGold ? 20 : 16}
-              color={tier.primary}
+              color="#fff"
             />
           )}
         </View>
 
-        <View
-          style={[
-            pMarkerStyles.badge,
-            { backgroundColor: tier.primary },
-          ]}
-        >
+        <View style={[pMarkerStyles.badge, { backgroundColor: tier.primary }]}>
           <MaterialIcons
             name={isGold ? 'star' : 'workspace-premium'}
             size={7}
@@ -255,6 +302,118 @@ const PartnerMarkerView = React.memo(
     );
   }
 );
+
+const ClubMarkerView = React.memo(
+  ({ partner, onReady }: { partner: PartnerMarkerData; onReady?: () => void }) => {
+    const [imageLoaded, setImageLoaded] = useState(false);
+    const [imageError, setImageError] = useState(false);
+
+    const handleLoad = useCallback(() => {
+      setImageLoaded(true);
+      onReady?.(); // signal parent to set tracksViewChanges=false
+    }, [onReady]);
+
+    let customColor = partner.brandColor;
+
+    if (customColor) {
+      if (!customColor.startsWith('#')) {
+        customColor = `#${customColor}`;
+      }
+    } else {
+      customColor = undefined;
+    }
+
+    const hexToRgba = (hex: string, alpha = 1) => {
+      const clean = hex.replace('#', '');
+      const bigint = parseInt(clean, 16);
+
+      const r = (bigint >> 16) & 255;
+      const g = (bigint >> 8) & 255;
+      const b = bigint & 255;
+
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+    };  
+
+    const tier = customColor
+    ? {
+        primary: customColor,
+        bg: hexToRgba(customColor, 0.5),
+        border: customColor
+      }
+    : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+
+    const isGold = partner._tier === 'gold_sponsor';
+    const size = isGold ? 44 : 38;
+    const imageSize = size - 6;
+
+    return (
+      <View
+        key={`${partner.id}-${tier.primary}`}
+        style={{ alignItems: 'center' }}
+        collapsable={false}
+      >
+        <View
+          style={[
+            pMarkerStyles.container,
+            isGold && pMarkerStyles.containerGold,
+            {
+              width: size,
+              height: size,
+              borderRadius: size / 2,
+              borderColor: tier.border,
+              backgroundColor: tier.bg,
+            },
+          ]}
+        >
+          {partner.logo && !imageError ? (
+            <>
+              {/* Fallback icon shown while loading */}
+              {!imageLoaded ? (
+                <MaterialIcons
+                  name={isGold ? 'workspace-premium' : 'handshake'}
+                  size={isGold ? 20 : 16}
+                  color="#fff"
+                  style={{ position: 'absolute' }}
+                />
+              ) : null}
+              <RNImage
+                source={{
+                  uri: partner.logo,
+                  cache: 'force-cache', // 👈 critical for Android builds
+                }}
+                style={{
+                  width: imageSize,
+                  height: imageSize,
+                  borderRadius: imageSize / 2,
+                  backgroundColor: tier.bg,
+                  opacity: imageLoaded ? 1 : 0, // hide until loaded
+                }}
+                resizeMode="cover"
+                onLoad={() => setImageLoaded(true)}
+                onError={() => setImageError(true)}
+              />
+            </>
+          ) : (
+            <MaterialIcons
+              name={isGold ? 'workspace-premium' : 'handshake'}
+              size={isGold ? 20 : 16}
+              color="#fff"
+            />
+          )}
+        </View>
+
+        <View style={[pMarkerStyles.badge, { backgroundColor: tier.primary }]}>
+          <MaterialIcons
+            name={isGold ? 'star' : 'workspace-premium'}
+            size={7}
+            color="#FFF"
+          />
+        </View>
+      </View>
+    );
+  }
+);
+
 
 const pMarkerStyles = StyleSheet.create({
   container: {
@@ -634,7 +793,7 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
           ) : null}
         </View>
         <Text style={styles.listMeta} numberOfLines={1}>
-          {item.itemType === 'terrains' ? `${item.city} \u2022 ${terrainTypeLabel || item.type}` :
+          {item.itemType === 'terrains' ? `${item.city} • ${terrainTypeLabel || item.type}` :
            item.itemType === 'clubs' ? item.city :
            item.itemType === 'players' ? (item.location?.city || item.club || '-') :
            item.location?.city}
@@ -886,11 +1045,13 @@ export default function MapScreen() {
         goldSilver.map(async (amb) => {
           const { data } = await supabase
             .from('players')
-            .select('id, location')
+            .select('id, location, is_public')
             .eq('id', amb.playerId)
             .single(); // 👈 important
 
+
           if (!data?.location) return null;
+          if (!data?.is_public) return null;
 
           return {
             ...amb,
@@ -907,13 +1068,14 @@ export default function MapScreen() {
         realPlayer.map(async (amb) => {
           const { data } = await supabase
             .from('players')
-            .select('id, location')
+            .select('id, location, is_public')
             .eq('id', amb.playerId)
             .single();
 
 
-
           if (!data?.location) return null;
+          if (!data?.is_public) return null;
+
 
           return {
             ...amb,
@@ -928,8 +1090,6 @@ export default function MapScreen() {
           // ✅ remove nulls
       goldMarkers = goldMarkers.filter(Boolean);
       playerMarkers1 = playerMarkers1.filter(Boolean);
-
-
           
       setPartnerMarkers(goldMarkers);
       setPlayerMarkers(playerMarkers1);
@@ -942,6 +1102,22 @@ export default function MapScreen() {
     const timer = setTimeout(loadPartnerMarkers, 1200);
     return () => clearTimeout(timer);
   }, [partnerMarkersLoaded]);
+
+  // Call this after loading partner markers
+const precachePartnerImages = useCallback((markers: typeof partnerMarkers) => {
+  markers.forEach(pm => {
+    if (pm.photo) {
+      RNImage.prefetch(pm.photo).catch(() => {});
+    }
+  });
+}, []);
+
+// In your loadPartnerMarkers effect, after setPartnerMarkers:
+useEffect(() => {
+  if (partnerMarkers.length > 0) {
+    precachePartnerImages(partnerMarkers);
+  }
+}, [partnerMarkers]);
 
   // Helper: check if a location has valid coordinates (not 0,0)
   const hasValidLocation = useCallback((item: any) => {
@@ -1431,9 +1607,9 @@ export default function MapScreen() {
   const [activeNowMode, setActiveNowMode] = useState(false);
   const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
 
-  const [freezeMarkers, setFreezeMarkers] = useState(false);
+  const [freezeMarkers, setFreezeMarkers] = useState(true);
   useEffect(() => {
-    const t = setTimeout(() => setFreezeMarkers(true), 5000);
+    const t = setTimeout(() => setFreezeMarkers(true), 500000);
     return () => clearTimeout(t);
   }, []);
 
@@ -1711,6 +1887,14 @@ export default function MapScreen() {
 
   const keyExtractor = useCallback((item: any) => `${item.itemType}-${item.id}-${item._isPublic ? 'p' : 'o'}`, []);
 
+    // In the parent, track per-marker readiness:
+  const [readyMarkers, setReadyMarkers] = useState<Set<string>>(new Set());
+
+  const handleMarkerReady = useCallback((id: string) => {
+    setReadyMarkers(prev => new Set([...prev, id]));
+  }, []);
+
+
   const renderMap = () => {
     if (!MapViewComponent || !MarkerComponent) return renderList();
     return (
@@ -1723,6 +1907,12 @@ export default function MapScreen() {
         showsUserLocation showsMyLocationButton={false}
         onPress={() => { setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
+        mapPadding={{
+          top: 50,    // Shifts UI down (good for search bars)
+          right: 10,
+          bottom: 150, // Shifts UI up (good for bottom sheets)
+          left: 10,
+        }}
       >
 
         {(filter !== '' )? clusters.map(cluster => {
@@ -1737,7 +1927,7 @@ export default function MapScreen() {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleClusterPress(cluster)}
-                tracksViewChanges={!freezeMarkers}
+                tracksViewChanges={true}
               >
                 <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
               </MarkerComponent>
@@ -1753,11 +1943,13 @@ export default function MapScreen() {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
-                tracksViewChanges={!freezeMarkers}
+                tracksViewChanges={!readyMarkers.has(item.id)}
               >
-                {(item.itemType === 'partners' || item.itemType === 'players') ? (
-                  <PartnerMarkerView partner={{ ...item, _tier: item._tier }} />
-                ) : (
+                {(item.itemType === 'partners' || item.itemType === 'players')? (
+                  <PartnerMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
+                ) : ((item.itemType === 'clubs' && item.logo)? (
+                  <ClubMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
+                ) :
                   <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)}  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
                 )}
               </MarkerComponent>
@@ -1844,6 +2036,8 @@ export default function MapScreen() {
     );
   };
 
+
+  
   return (
     <View style={styles.container}>
       {Platform.OS === 'web' ? renderList() : renderMap()}
@@ -1966,7 +2160,7 @@ export default function MapScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.heroTitle}>{t('map', 'map')}</Text>
               <Text style={styles.heroSubtitle}>
-                {counts.total} {t('map', 'results')} {counts.publicTotal > 0 ? `\u2022 ${counts.publicTotal} ${t('map', 'publicLabel')}` : ''}
+                {counts.total} {t('map', 'results')} {counts.publicTotal > 0 ? `• ${counts.publicTotal} ${t('map', 'publicLabel')}` : ''}
               </Text>
             </View>
             <View style={styles.heroActions}>
@@ -2152,7 +2346,7 @@ export default function MapScreen() {
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
-                      <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` \u2022 ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
+                      <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` • ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
                     </View>
                     {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
                   </Pressable>
@@ -2278,7 +2472,7 @@ export default function MapScreen() {
               <View style={styles.selectedMeta}>
                 <MaterialIcons name="place" size={12} color={theme.textMuted} />
                 <Text style={styles.selectedMetaText}>
-                  {selected.itemType === 'terrains' ? `${selected.city} \u2022 ${t('terrainTypes', selected.type)}` :
+                  {selected.itemType === 'terrains' ? `${selected.city} • ${t('terrainTypes', selected.type)}` :
                    selected.itemType === 'clubs' ? selected.city :
                    selected.itemType === 'players' ? (selected.location?.city || selected.club || '-') :
                    selected.location?.city}
@@ -2353,7 +2547,36 @@ export default function MapScreen() {
 
       {/* Partner Detail Popup */}
       {selectedPartner ? (() => {
-        const tierCfg = TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
+
+      let customColor = selectedPartner.brandColor;
+
+      if (customColor) {
+        if (!customColor.startsWith('#')) {
+          customColor = `#${customColor}`;
+        }
+      } else {
+        customColor = undefined;
+      }
+
+      const hexToRgba = (hex: string, alpha = 1) => {
+        const clean = hex.replace('#', '');
+        const bigint = parseInt(clean, 16);
+
+        const r = (bigint >> 16) & 255;
+        const g = (bigint >> 8) & 255;
+        const b = bigint & 255;
+
+        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      };  
+
+        const tierCfg = customColor
+        ? {
+            primary: customColor,
+            bg: hexToRgba(customColor, 0.5),
+            border: customColor
+          }
+        : TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
+          
         const isPartner = selectedPartner._itemType === 'partners';
         const isGold = selectedPartner._tier === 'gold_sponsor';
         const tierLabel = isPartner ? (isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner')) : (selectedPartner._tier);
@@ -2366,7 +2589,9 @@ export default function MapScreen() {
             {/* Header */}
             <View style={styles.partnerPopupHeader}>
               {selectedPartner.photo ? (
-                <Image source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: selectedPartner.brandColor?selectedPartner.brandColor : tierCfg.border }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                <RNImage source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: tierCfg.border, 
+                  backgroundColor: tierCfg.bg
+                 }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
               ) : (
                 <View style={[styles.partnerPopupAvatarFallback, { backgroundColor: tierCfg.bg, borderColor: tierCfg.border }]}>
                   <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={24} color={tierCfg.primary} />

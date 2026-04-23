@@ -478,17 +478,17 @@ export default function LeaderboardScreen() {
     if (activeTab === 'players') {
       results = allPlayers.filter(p => p.name.toLowerCase().includes(q) || (p.nickname || '').toLowerCase().includes(q) || (p.club || '').toLowerCase().includes(q)).slice(0, 6).map(p => ({
         id: p.id, name: p.name, type: 'player' as const, avatar: p.avatar,
-        subtitle: [p.club, p.city, p.eloRating ? `ELO ${p.eloRating}` : ''].filter(Boolean).join(' \u2022 '),
+        subtitle: [p.club, p.city, p.eloRating ? `ELO ${p.eloRating}` : ''].filter(Boolean).join(' • '),
       }));
     } else if (activeTab === 'clubs') {
       results = allClubs.filter(c => c.name.toLowerCase().includes(q) || (c.city || '').toLowerCase().includes(q)).slice(0, 6).map(c => ({
         id: c.id, name: c.name, type: 'club' as const, avatar: c.logo,
-        subtitle: [c.city, `${c.playerCount} joueurs`, `${c.stats.avgWinRate}%`].filter(Boolean).join(' \u2022 '),
+        subtitle: [c.city, `${c.playerCount} joueurs`, `${c.stats.avgWinRate}%`].filter(Boolean).join(' • '),
       }));
     } else if (activeTab === 'boules') {
       results = boulesEntries.filter(e => e.brand.toLowerCase().includes(q) || (e.model || '').toLowerCase().includes(q)).slice(0, 6).map(e => ({
         id: e.id, name: boulesMode === 'model' && e.model ? e.model : `${e.brand}${e.model ? ` ${e.model}` : ''}`, type: 'boules' as const,
-        subtitle: `${e.userCount} utilisateurs \u2022 ${e.stats.avgWinRate}% win`,
+        subtitle: `${e.userCount} utilisateurs • ${e.stats.avgWinRate}% win`,
       }));
     }
     setSearchSuggestions(results);
@@ -956,7 +956,7 @@ export default function LeaderboardScreen() {
               <Text style={s.headerTitle}>{t('leaderboard', 'title')}</Text>
               <Text style={s.headerSubtitle}>
                 {activeTab === 'players'
-                  ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}${myRank ? ` \u2022 #${myRank}` : ''}`
+                  ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}${myRank ? ` • #${myRank}` : ''}`
                   : activeTab === 'clubs'
                     ? `${filteredClubs.length} ${t('leaderboard', 'publicClubsCount')}`
                     : activeTab === 'events'
@@ -1961,7 +1961,7 @@ export default function LeaderboardScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.myRankName} numberOfLines={1}>{myP.name}</Text>
-                <Text style={s.myRankStats}>{myP.stats.winRate}% \u2022 {myP.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
+                <Text style={s.myRankStats}>{myP.stats.winRate}% • {myP.stats.matchesPlayed} {t('leaderboard', 'matches')}</Text>
               </View>
               <MaterialIcons name="star" size={18} color={theme.primary} />
             </View>

@@ -1048,8 +1048,8 @@ export default function ProfileScreen() {
             const boulesSource = primarySet || (selfPlayer?.boules && (selfPlayer.boules.name || selfPlayer.boules.diameter || selfPlayer.boules.weight) ? selfPlayer.boules : null);
             if (!boulesSource) return null;
             const label = primarySet
-              ? [primarySet.name, primarySet.brand, primarySet.diameter ? `${primarySet.diameter} mm` : '', primarySet.weight ? `${primarySet.weight} g` : ''].filter(Boolean).join(' \u2022 ')
-              : [selfPlayer?.boules?.name, selfPlayer?.boules?.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer?.boules?.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' \u2022 ');
+              ? [primarySet.name, primarySet.brand, primarySet.diameter ? `${primarySet.diameter} mm` : '', primarySet.weight ? `${primarySet.weight} g` : ''].filter(Boolean).join(' • ')
+              : [selfPlayer?.boules?.name, selfPlayer?.boules?.diameter ? `${selfPlayer.boules.diameter} mm` : '', selfPlayer?.boules?.weight ? `${selfPlayer.boules.weight} g` : ''].filter(Boolean).join(' • ');
             return (
               <Pressable style={styles.heroBoulesRow} onPress={() => router.push('/equipment')}>
                 <MaterialIcons name="sports-baseball" size={16} color={theme.accent} />
@@ -1478,7 +1478,7 @@ export default function ProfileScreen() {
                         <View style={styles.boulesSetPickerInfo}>
                           <Text style={[styles.boulesSetPickerName, isSelected && styles.boulesSetPickerNameActive]}>{bs.name}</Text>
                           <Text style={styles.boulesSetPickerMeta}>
-                            {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' \u2022 ')}
+                            {[bs.brand, bs.diameter ? `${bs.diameter}mm` : '', bs.weight ? `${bs.weight}g` : ''].filter(Boolean).join(' • ')}
                           </Text>
                         </View>
                         {isSelected ? (
@@ -2352,7 +2352,7 @@ export default function ProfileScreen() {
                   </View>
                   <View style={styles.clubPickerInfo}>
                     <Text style={styles.clubPickerName}>{terr.name}</Text>
-                    <Text style={styles.clubPickerCity}>{terr.city} {"\u2022"} {t('terrainTypes', terr.type)}</Text>
+                    <Text style={styles.clubPickerCity}>{terr.city} {"•"} {t('terrainTypes', terr.type)}</Text>
                   </View>
                   {terrainId === terr.id ? (
                     <MaterialIcons name="check-circle" size={24} color={theme.carreauColor} />

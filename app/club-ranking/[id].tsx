@@ -229,7 +229,7 @@ export default function ClubRankingScreen() {
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle} numberOfLines={1}>{clubName}</Text>
             <Text style={s.headerSubtitle}>
-              {stats ? `${stats.playerCount} ${t('leaderboard', 'clubPlayers')} \u2022 ${stats.totalMatches} ${t('leaderboard', 'clubMatches')}` : t('leaderboard', 'loading')}
+              {stats ? `${stats.playerCount} ${t('leaderboard', 'clubPlayers')} • ${stats.totalMatches} ${t('leaderboard', 'clubMatches')}` : t('leaderboard', 'loading')}
             </Text>
           </View>
           {clubLogo ? (
