@@ -80,7 +80,7 @@ import { createGetters } from '@/hooks/useAppGetters';
 import { addMatchOp, updateMatchOp, deleteMatchOp } from '@/services/matchCrudService';
 import { addPlayerOp, updatePlayerOp, deletePlayerOp } from '@/services/playerCrudService';
 import { addClubOp, updateClubOp, deleteClubOp } from '@/services/clubCrudService';
-import { addTournamentOp, updateTournamentOp, updateBracketMatchOp, deleteTournamentOp } from '@/services/tournamentCrudService';
+import { addTournamentOp, updateTournamentOp, updateBracketMatchOp, deleteTournamentOp, autoUpdateTournamentStatuses } from '@/services/tournamentCrudService';
 import { addTerrainOp, updateTerrainOp, deleteTerrainOp } from '@/services/terrainCrudService';
 import { addChallengeOp, updateChallengeOp, deleteChallengeOp } from '@/services/challengeCrudService';
 import { addBoulesSetOp, updateBoulesSetOp, deleteBoulesSetOp, setPrimaryBoulesSetOp } from '@/services/boulesSetCrudService';
@@ -773,6 +773,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (tournamentsRes.data) {
         const dbTournaments = tournamentsRes.data.map(mapTournamentFromDb);
         setTournaments(dbTournaments);
+        // Auto-update tournament statuses based on dates
+        setTimeout(() => {
+          autoUpdateTournamentStatuses(dbTournaments, setTournaments, supabase, user?.id).catch(() => {});
+        }, 500);
       }
       if (matchesRes.data) {
         const dbMatches = matchesRes.data.map(mapMatchFromDb);
