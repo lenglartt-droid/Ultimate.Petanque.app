@@ -3,7 +3,8 @@
  *
  * Tests: simpleHash (deterministic, collision resistance), generateRandomId
  * (length, charset), canCreateAccount logic (1 account per device, cooldown,
- * duplicate email bypass), canLoginOnDevice (device binding), constants validation.
+ * duplicate email bypass), canLoginOnDevice (device binding),
+ * shouldShowDeviceBindingNotification, adminUnlink logic, constants validation.
  */
 
 const MAX_ACCOUNTS_PER_DEVICE = 1;

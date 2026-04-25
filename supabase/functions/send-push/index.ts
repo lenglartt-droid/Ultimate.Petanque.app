@@ -2057,6 +2057,77 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // TEAM_INVITATION: Notify user about team-up invitation for tournament
+    // ============================================================
+    else if (type === 'team_invitation') {
+      const { targetUserId, inviterName, tournamentName, format } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const formatLabel = format === 'Triplette' ? 'triplette' : 'doublette';
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F91D} Invitation d'equipe !`,
+          `${inviterName || 'Un joueur'} vous invite a former une ${formatLabel} pour "${tournamentName || 'un tournoi'}".`,
+          { type: 'team_invitation' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // TEAM_INVITATION_RESPONSE: Notify inviter about accept/decline
+    // ============================================================
+    else if (type === 'team_invitation_response') {
+      const { targetUserId, responderName, tournamentName, accepted } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isAccepted = accepted === true;
+        const title = isAccepted
+          ? `\u2705 ${responderName || 'Un joueur'} accepte votre equipe !`
+          : `\u274C ${responderName || 'Un joueur'} a decline`;
+        const body = isAccepted
+          ? `${responderName || 'Un joueur'} a accepte de former une equipe pour "${tournamentName || 'un tournoi'}".`
+          : `${responderName || 'Un joueur'} a refuse votre invitation pour "${tournamentName || 'un tournoi'}".`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'team_invitation_response', accepted: isAccepted },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

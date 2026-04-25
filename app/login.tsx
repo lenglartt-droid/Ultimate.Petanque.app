@@ -19,7 +19,7 @@ import { useAuth, useAlert } from '@/template';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
-import { canCreateAccount, recordAccountCreation } from '@/services/deviceFingerprintService';
+import { canCreateAccount, canLoginOnDevice, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
 import { clearTempDataExpiry } from '@/services/retentionNotificationService';
 import { trackReferral } from '@/services/ambassadorService';
 
@@ -72,6 +72,8 @@ export default function LoginScreen() {
   };
 
   const handleGoogleLogin = async () => {
+    // Note: Google OAuth cannot pre-check email before auth flow,
+    // device binding is enforced via post-login check in canLoginOnDevice
     const { error } = await signInWithGoogle();
     if (error) {
       showAlert(t('login', 'googleError'), error);
@@ -84,10 +86,23 @@ export default function LoginScreen() {
       return;
     }
 
+    // Anti-cheat: check if device is bound to a different account
+    const { allowed, reason } = await canLoginOnDevice(email.trim());
+    if (!allowed && reason === 'device_bound_to_other_account') {
+      showAlert(t('common', 'error'), t('login', 'deviceBoundToOther'));
+      return;
+    }
+
     const { error } = await signInWithPassword(email.trim(), password);
     if (error) {
       showAlert(t('login', 'loginError'), error);
     } else {
+      // Show one-time device binding notification
+      const shouldShow = await shouldShowDeviceBindingNotification();
+      if (shouldShow) {
+        markDeviceBindingNotificationShown();
+        showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+      }
       router.replace('/');
     }
   };
@@ -193,9 +208,16 @@ export default function LoginScreen() {
       showAlert(t('common', 'error'), error);
     } else {
       // Record successful account creation for device fingerprint tracking
-      recordAccountCreation(email.trim()).catch(() => {});
+      recordAccountCreation(email.trim(), 'email').catch(() => {});
       // Clear 7-day temp data expiry since user is now registered
       clearTempDataExpiry().catch(() => {});
+      // Show one-time device binding notification
+      shouldShowDeviceBindingNotification().then(shouldShow => {
+        if (shouldShow) {
+          markDeviceBindingNotificationShown();
+          showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+        }
+      }).catch(() => {});
       // Track referral if code was provided
       if (referralCode.trim() && newUser?.id) {
         trackReferral(referralCode.trim(), newUser.id).then(({ success }) => {

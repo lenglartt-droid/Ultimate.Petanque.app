@@ -133,7 +133,7 @@ function ProfileChecker() {
             return;
           }
           // Record device binding for OAuth users (first-time)
-          recordAccountCreation(user.email).catch(() => {});
+          recordAccountCreation(user.email, 'google').catch(() => {});
           // Show one-time device binding notification
           const shouldShow = await shouldShowDeviceBindingNotification();
           if (shouldShow) {
