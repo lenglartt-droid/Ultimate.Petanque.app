@@ -791,6 +791,66 @@ export default function ActivityFeedScreen() {
       case 'club_invitation_declined':
       case 'club_invitation_expired':
         return wrapper(<FeedClubInvitationCard data={item.data as FeedClubInvitation} type={item.type} lang={lang} index={index} userId={user?.id} />);
+      case 'team_complete': {
+        const td = item.data as { teamId: string; tournamentId: string; tournamentName: string; memberNames: string[]; memberUserIds?: string[]; format: string };
+        return wrapper(
+          <Animated.View entering={index < 15 ? FadeInDown.duration(200).delay(Math.min(index * 30, 200)) : undefined}>
+            <Pressable
+              style={[fs.card, { borderLeftWidth: 3, borderLeftColor: '#22C55E', backgroundColor: '#F0FDF4' }]}
+              onPress={() => { Haptics.selectionAsync(); router.push(`/tournament/${td.tournamentId}` as any); }}
+            >
+              <View style={fs.cardHeader}>
+                <View style={[fs.avatarFallback, { backgroundColor: '#22C55E15' }]}>
+                  <MaterialIcons name="groups" size={20} color="#22C55E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[fs.cardTitle, { color: '#16A34A' }]}>
+                    {lang === 'fr' ? 'Equipe complete !' : 'Team complete!'}
+                  </Text>
+                  <Pressable onPress={() => { Haptics.selectionAsync(); router.push(`/tournament/${td.tournamentId}` as any); }}>
+                    <Text style={[fs.cardTitleBold, { color: '#0F172A' }]} numberOfLines={1}>{td.tournamentName}</Text>
+                  </Pressable>
+                  {/* Player avatars row */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: -6, marginTop: 8, marginBottom: 4 }}>
+                    {(td.memberUserIds || []).slice(0, 4).map((uid, i) => (
+                      <View key={uid} style={{ width: 30, height: 30, borderRadius: 15, backgroundColor: ['#22C55E', '#3B82F6', '#F59E0B', '#7C3AED'][i % 4] + '25', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#F0FDF4', marginLeft: i > 0 ? -6 : 0, zIndex: 10 - i }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: ['#16A34A', '#2563EB', '#D97706', '#6D28D9'][i % 4] }}>{(td.memberNames[i] || '?').charAt(0)}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4 }}>
+                    {td.memberNames.map((name, i) => (
+                      <View key={i} style={{ backgroundColor: '#22C55E15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#16A34A' }}>{name}</Text>
+                      </View>
+                    ))}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                    <View style={{ backgroundColor: '#22C55E10', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                      <Text style={{ fontSize: 10, fontWeight: '700', color: '#16A34A' }}>{td.format}</Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'center', gap: 4 }}>
+                  <View style={{ backgroundColor: '#22C55E', width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}>
+                    <MaterialIcons name="check" size={18} color="#FFF" />
+                  </View>
+                  <Text style={{ fontSize: 8, fontWeight: '700', color: '#16A34A' }}>{lang === 'fr' ? 'PRET' : 'READY'}</Text>
+                </View>
+              </View>
+              {/* View Tournament CTA */}
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#BBF7D0' }}
+                onPress={() => { Haptics.selectionAsync(); router.push(`/tournament/${td.tournamentId}` as any); }}
+              >
+                <MaterialIcons name="emoji-events" size={14} color="#16A34A" />
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#16A34A' }}>{lang === 'fr' ? 'Voir le tournoi' : 'View Tournament'}</Text>
+                <MaterialIcons name="chevron-right" size={14} color="#16A34A" />
+              </Pressable>
+            </Pressable>
+          </Animated.View>
+        );
+      }
       default:
         return null;
     }

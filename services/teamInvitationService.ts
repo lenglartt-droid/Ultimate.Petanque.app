@@ -494,6 +494,81 @@ async function _sendTeamRemovalPush(
 }
 
 /**
+ * Check incomplete teams approaching deadline and send push reminders to captain.
+ * Called on app mount with a delay. Uses AsyncStorage to avoid re-sending.
+ */
+export async function checkTeamDeadlineReminders(): Promise<void> {
+  try {
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const supabase = getSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+
+    // Get teams where current user is captain and status is 'forming'
+    const { data: teams } = await supabase
+      .from('tournament_teams')
+      .select('id, tournament_id, member_user_ids, format, status')
+      .eq('creator_user_id', user.id)
+      .eq('status', 'forming');
+
+    if (!teams || teams.length === 0) return;
+
+    const tournamentIds = teams.map(t => t.tournament_id);
+    const { data: tournaments } = await supabase
+      .from('tournaments')
+      .select('id, name, date')
+      .in('id', tournamentIds);
+
+    if (!tournaments || tournaments.length === 0) return;
+
+    const tournamentMap = new Map<string, { name: string; date: string }>();
+    tournaments.forEach((t: any) => tournamentMap.set(t.id, { name: t.name, date: t.date }));
+
+    const DEADLINE_DAYS = 2;
+    const now = new Date();
+    const today = now.toISOString().slice(0, 10);
+
+    for (const team of teams) {
+      const tInfo = tournamentMap.get(team.tournament_id);
+      if (!tInfo) continue;
+
+      const deadline = new Date(new Date(tInfo.date).getTime() - DEADLINE_DAYS * 86400000);
+      const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
+
+      if (daysLeft <= 0 || daysLeft > 3) continue;
+
+      // Check if already sent today for this team
+      const storageKey = `team_deadline_${team.id}_${today}`;
+      const alreadySent = await AsyncStorage.getItem(storageKey);
+      if (alreadySent) continue;
+
+      // Send push notification to self
+      const teamSize = getTeamSize(team.format);
+      const currentMembers = (team.member_user_ids || []).length;
+      const slotsLeft = teamSize - currentMembers;
+
+      await supabase.functions.invoke('send-push', {
+        body: {
+          type: 'team_deadline_reminder',
+          payload: {
+            targetUserId: user.id,
+            tournamentName: tInfo.name,
+            teamId: team.id,
+            daysLeft,
+            slotsLeft,
+            format: team.format,
+          },
+        },
+      });
+
+      await AsyncStorage.setItem(storageKey, '1');
+    }
+  } catch (e) {
+    console.log('[TeamDeadline] Error checking deadline reminders:', e);
+  }
+}
+
+/**
  * Get count of pending team invitations for the current user.
  */
 export async function getPendingTeamInvitationCount(): Promise<number> {
