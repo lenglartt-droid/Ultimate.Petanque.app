@@ -595,6 +595,16 @@ export default function MyPlayerCardScreen() {
                       <Text style={s.locationPillText}>{[selfPlayer.location?.city, selfPlayer.country].filter(Boolean).join(', ')}</Text>
                     </View>
                   ) : null}
+                  {(selfPlayer.location?.latitude || selfPlayer.location?.longitude) ? (
+                    <Pressable
+                      style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.success + '10', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, marginBottom: 8, borderWidth: 1, borderColor: theme.success + '25' }}
+                      onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(selfPlayer.location?.latitude), lng: String(selfPlayer.location?.longitude), name: selfPlayer.name } } as any)}
+                    >
+                      <MaterialIcons name="map" size={16} color={theme.success} />
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.success }}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
+                      <MaterialIcons name="chevron-right" size={16} color={theme.success} />
+                    </Pressable>
+                  ) : null}
                 </View>
               ) : null}
 
@@ -684,18 +694,6 @@ export default function MyPlayerCardScreen() {
                 <View style={{ width: '100%', marginBottom: 8 }}>
                   <SponsoredItemBanner sponsorId={(selfPlayer as any).sponsorId} page="my-player-card" />
                 </View>
-              ) : null}
-
-              {/* ── BLOC: MAP LINK ── */}
-              {(selfPlayer.location?.latitude || selfPlayer.location?.longitude) ? (
-                <Pressable
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.success + '10', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 20, marginBottom: 8, borderWidth: 1, borderColor: theme.success + '25' }}
-                  onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(selfPlayer.location?.latitude), lng: String(selfPlayer.location?.longitude), name: selfPlayer.name } } as any)}
-                >
-                  <MaterialIcons name="map" size={16} color={theme.success} />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: theme.success }}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
-                  <MaterialIcons name="chevron-right" size={16} color={theme.success} />
-                </Pressable>
               ) : null}
 
               {/* ── BLOC 5: STATS RAPIDES ── */}
