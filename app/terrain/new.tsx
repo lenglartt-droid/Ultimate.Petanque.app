@@ -35,6 +35,18 @@ import {
   PublicTerrain,
 } from '@/services/publicItemsService';
 
+// Store last selected placeId for duplicate detection
+let lastPlaceId: string | undefined;
+let lastPhotoRef: string | undefined;
+
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
+// Build Google Places Photo URL from reference
+function getGooglePhotoUrl(photoRef: string, maxWidth: number = 800): string {
+  if (!GOOGLE_API_KEY || !photoRef) return '';
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_API_KEY}`;
+}
+
 // ============================================
 // SectionCard
 // ============================================
@@ -101,6 +113,41 @@ export default function NewTerrainScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [location, setLocation] = useState<LocationData>({ address: '', city: '', country: 'France', latitude: 0, longitude: 0 });
 
+  // Location-based name suggestion
+  const [nameSuggestion, setNameSuggestion] = useState<string>('');
+
+  // Google Places auto-photo
+  const [googlePhotoUrl, setGooglePhotoUrl] = useState<string>('');
+  const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+
+  const handleLocationChange = useCallback((loc: LocationData) => {
+    setLocation(loc);
+    lastPlaceId = loc.placeId;
+    lastPhotoRef = loc.googlePhotoRef;
+    // Auto-fetch Google Places photo if no user photos yet
+    if (loc.googlePhotoRef && GOOGLE_API_KEY) {
+      const url = getGooglePhotoUrl(loc.googlePhotoRef);
+      if (url) setGooglePhotoUrl(url);
+    } else {
+      setGooglePhotoUrl('');
+    }
+    // Generate name suggestion from Google Places result
+    if (loc.placeName && loc.placeName !== loc.address) {
+      // Use place name directly (e.g. "Boulodrome du Parc")
+      const suggestion = loc.placeName;
+      if (suggestion.length > 3 && suggestion.length < 80) {
+        setNameSuggestion(suggestion);
+      }
+    } else if (loc.address && loc.city) {
+      // Fallback: suggest "Boulodrome [neighborhood/street]" 
+      const parts = loc.address.split(' ').filter(p => p.length > 2 && !/^\d+$/.test(p));
+      if (parts.length >= 1) {
+        const streetName = parts.slice(-2).join(' ');
+        setNameSuggestion(`Boulodrome ${streetName}`);
+      }
+    }
+  }, []);
+
   // Club picker modal
   const [showClubPicker, setShowClubPicker] = useState(false);
   const [clubSearch, setClubSearch] = useState('');
@@ -120,10 +167,10 @@ export default function NewTerrainScreen() {
 
   useEffect(() => {
     const trimmedCity = location.city.trim();
-    if (trimmedCity.length < 2) { setDuplicates([]); setDuplicatesDismissed(false); return; }
+    if (trimmedCity.length < 2 && !lastPlaceId) { setDuplicates([]); setDuplicatesDismissed(false); return; }
     const timer = setTimeout(async () => {
       setCheckingDuplicates(true);
-      const { duplicates: found } = await checkDuplicatePublicTerrains(trimmedCity, location.address.trim());
+      const { duplicates: found } = await checkDuplicatePublicTerrains(trimmedCity, location.address.trim(), lastPlaceId);
       setDuplicates(found); setDuplicatesDismissed(false); setCheckingDuplicates(false);
     }, 800);
     return () => clearTimeout(timer);
@@ -169,7 +216,8 @@ export default function NewTerrainScreen() {
         type, description: description.trim() || undefined, facilities: [], parking, toilets,
         clubId, clubName: sc?.name, isPublic: false, publicAccess,
         courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,
-      });
+        googlePlaceId: lastPlaceId,
+      } as any);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back();
     } catch (error) { Alert.alert(t('common', 'error'), t('terrain', 'errorSave')); } finally { setIsSaving(false); }
   };
@@ -204,6 +252,22 @@ export default function NewTerrainScreen() {
                   </Pressable>
                 </View>
               ))}
+              {/* Google Places auto-photo suggestion */}
+              {photos.length === 0 && googlePhotoUrl ? (
+                <Pressable
+                  style={styles.googlePhotoSuggestion}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowPhotoPreview(true);
+                  }}
+                >
+                  <Image source={{ uri: googlePhotoUrl }} style={styles.photoImage} contentFit="cover" transition={200} />
+                  <View style={styles.googlePhotoBadge}>
+                    <MaterialIcons name="visibility" size={12} color="#FFF" />
+                    <Text style={styles.googlePhotoBadgeText}>{t('common', 'preview') || 'Preview'}</Text>
+                  </View>
+                </Pressable>
+              ) : null}
               {photos.length < 5 ? (
                 <>
                   <Pressable style={styles.addPhotoBtn} onPress={async () => {
@@ -231,7 +295,22 @@ export default function NewTerrainScreen() {
 
           {/* 1. Nom du terrain */}
           <SectionCard title={t('terrain', 'terrainNameRequired').replace(' *', '')} icon="landscape" color={theme.accent} delay={100} required>
-            <TextInput style={styles.textInput} value={name} onChangeText={setName} placeholder={t('terrain', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
+            <TextInput style={styles.textInput} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameSuggestion(''); }} placeholder={t('terrain', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
+            {/* Auto-suggest name from Google Places */}
+            {nameSuggestion && !name.trim() ? (
+              <Pressable
+                style={styles.nameSuggestionChip}
+                onPress={() => {
+                  setName(nameSuggestion);
+                  setNameSuggestion('');
+                  Haptics.selectionAsync();
+                }}
+              >
+                <MaterialIcons name="auto-awesome" size={14} color={theme.accent} />
+                <Text style={styles.nameSuggestionText} numberOfLines={1}>{nameSuggestion}</Text>
+                <MaterialIcons name="arrow-forward" size={14} color={theme.accent} />
+              </Pressable>
+            ) : null}
           </SectionCard>
 
           {/* 2. Environnement */}
@@ -254,7 +333,30 @@ export default function NewTerrainScreen() {
 
           {/* 3. Adresse */}
           <SectionCard title={t('terrain', 'addressRequired').replace(' *', '')} icon="place" color={theme.error} delay={200} required>
-            <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('terrain', 'streetNumber')} required showAddressField />
+            <LocationPicker label="" value={location} onChange={handleLocationChange} placeholder={t('terrain', 'streetNumber')} required showAddressField />
+            {/* Auto-filled details from Google Places */}
+            {(location.postalCode || location.region) ? (
+              <View style={styles.autoFilledRow}>
+                {location.postalCode ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="local-post-office" size={12} color="#0EA5E9" />
+                    <Text style={styles.autoFilledChipText}>{location.postalCode}</Text>
+                  </View>
+                ) : null}
+                {location.region ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="map" size={12} color="#8B5CF6" />
+                    <Text style={styles.autoFilledChipText}>{location.region}</Text>
+                  </View>
+                ) : null}
+                {location.country && location.country !== 'France' ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="flag" size={12} color="#10B981" />
+                    <Text style={styles.autoFilledChipText}>{location.country}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </SectionCard>
 
           {/* Duplicate Detection */}
@@ -283,8 +385,8 @@ export default function NewTerrainScreen() {
                       <Text style={styles.duplicateCardName} numberOfLines={1}>{dup.name}</Text>
                       <Text style={styles.duplicateCardMeta} numberOfLines={1}>{dup.city} {dup.address ? `• ${dup.address}` : ''}</Text>
                     </View>
-                    <View style={[styles.matchBadge, dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
-                      <Text style={[styles.matchBadgeText, dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'exact' ? t('map', 'exactMatch') : t('map', 'cityMatch')}</Text>
+                    <View style={[styles.matchBadge, dup.matchType === 'place_id' ? styles.matchBadgePlaceId : dup.matchType === 'exact' ? styles.matchBadgeExact : styles.matchBadgeCity]}>
+                      <Text style={[styles.matchBadgeText, dup.matchType === 'place_id' ? styles.matchBadgeTextPlaceId : dup.matchType === 'exact' ? styles.matchBadgeTextExact : styles.matchBadgeTextCity]}>{dup.matchType === 'place_id' ? (t('map', 'exactLocation') || 'Lieu exact') : dup.matchType === 'exact' ? t('map', 'exactMatch') : t('map', 'cityMatch')}</Text>
                     </View>
                   </View>
                   <Pressable style={styles.importDuplicateBtn} onPress={() => handleImportDuplicate(dup)} disabled={importingId === dup.id}>
@@ -466,6 +568,52 @@ export default function NewTerrainScreen() {
         </View>
       </KeyboardAvoidingView>
 
+      {/* Google Photo Preview Modal */}
+      <Modal visible={showPhotoPreview} animationType="fade" transparent onRequestClose={() => setShowPhotoPreview(false)}>
+        <View style={styles.photoPreviewOverlay}>
+          <View style={styles.photoPreviewCard}>
+            <View style={styles.photoPreviewHeader}>
+              <MaterialIcons name="photo-camera" size={20} color="#4285F4" />
+              <Text style={styles.photoPreviewTitle}>{language === 'fr' ? 'Photo Google Places' : 'Google Places Photo'}</Text>
+              <Pressable onPress={() => setShowPhotoPreview(false)} hitSlop={8}>
+                <MaterialIcons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            <View style={styles.photoPreviewImageWrap}>
+              <Image source={{ uri: googlePhotoUrl }} style={styles.photoPreviewImage} contentFit="cover" transition={300} />
+            </View>
+            <Text style={styles.photoPreviewDesc}>
+              {language === 'fr' ? 'Utiliser cette photo comme miniature du terrain ?' : 'Use this photo as terrain thumbnail?'}
+            </Text>
+            <View style={styles.photoPreviewActions}>
+              <Pressable
+                style={styles.photoPreviewSkipBtn}
+                onPress={() => {
+                  setShowPhotoPreview(false);
+                  setGooglePhotoUrl('');
+                  Haptics.selectionAsync();
+                }}
+              >
+                <MaterialIcons name="close" size={16} color={theme.textSecondary} />
+                <Text style={styles.photoPreviewSkipText}>{language === 'fr' ? 'Ignorer' : 'Skip'}</Text>
+              </Pressable>
+              <Pressable
+                style={styles.photoPreviewUseBtn}
+                onPress={() => {
+                  setPhotos(prev => [...prev, googlePhotoUrl].slice(0, 5));
+                  setGooglePhotoUrl('');
+                  setShowPhotoPreview(false);
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                }}
+              >
+                <MaterialIcons name="check-circle" size={16} color="#FFF" />
+                <Text style={styles.photoPreviewUseText}>{language === 'fr' ? 'Utiliser cette photo' : 'Use this photo'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       {/* Club Picker Modal */}
       <Modal visible={showClubPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowClubPicker(false)}>
         <SafeAreaView edges={['top']} style={styles.modalContainer}>
@@ -603,6 +751,17 @@ const styles = StyleSheet.create({
   modalEmpty: { alignItems: 'center', paddingVertical: 40 },
   modalEmptyText: { fontSize: 14, color: theme.textMuted, marginTop: 10 },
 
+  // Auto-filled address details
+  autoFilledRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 10 },
+  autoFilledChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.border },
+  autoFilledChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
+  // Name suggestion
+  nameSuggestionChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginTop: 10, backgroundColor: theme.accent + '10', paddingHorizontal: 14, paddingVertical: 10, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.accent + '25' },
+  nameSuggestionText: { flex: 1, fontSize: 14, fontWeight: '600' as const, color: theme.accent },
+  // Google photo suggestion
+  googlePhotoSuggestion: { width: 90, height: 90, borderRadius: theme.borderRadius.md, overflow: 'hidden' as const, position: 'relative' as const, borderWidth: 2, borderColor: '#4285F4', borderStyle: 'solid' as const },
+  googlePhotoBadge: { position: 'absolute' as const, bottom: 0, left: 0, right: 0, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 3, backgroundColor: 'rgba(66,133,244,0.85)', paddingVertical: 3 },
+  googlePhotoBadgeText: { fontSize: 9, fontWeight: '700' as const, color: '#FFF' },
   // Footer
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.cardElevated },
@@ -630,8 +789,23 @@ const styles = StyleSheet.create({
   matchBadgeText: { fontSize: 10, fontWeight: '600' },
   matchBadgeTextExact: { color: theme.warning },
   matchBadgeTextCity: { color: theme.primary },
+  matchBadgePlaceId: { backgroundColor: '#EF444420' },
+  matchBadgeTextPlaceId: { color: '#EF4444' },
   importDuplicateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.primary, paddingVertical: 10, borderRadius: theme.borderRadius.md },
   importDuplicateBtnText: { fontSize: 13, fontWeight: '600', color: '#FFF' },
   continueCreateBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginTop: 4 },
   continueCreateBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  // Photo preview modal
+  photoPreviewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center' as const, alignItems: 'center' as const, padding: 24 },
+  photoPreviewCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 8 }, default: {} }) },
+  photoPreviewHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
+  photoPreviewTitle: { flex: 1, fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
+  photoPreviewImageWrap: { borderRadius: 14, overflow: 'hidden' as const, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
+  photoPreviewImage: { width: '100%', aspectRatio: 4 / 3 },
+  photoPreviewDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' as const, lineHeight: 19, marginBottom: 16 },
+  photoPreviewActions: { flexDirection: 'row' as const, gap: 10 },
+  photoPreviewSkipBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 13, borderRadius: 12, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  photoPreviewSkipText: { fontSize: 14, fontWeight: '600' as const, color: theme.textSecondary },
+  photoPreviewUseBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 13, borderRadius: 12, backgroundColor: '#4285F4' },
+  photoPreviewUseText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
 });

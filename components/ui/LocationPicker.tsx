@@ -39,6 +39,7 @@ export interface LocationData {
   region?: string;
   placeName?: string;
   placeId?: string;
+  googlePhotoRef?: string;
 }
 
 interface MyPlace {
@@ -73,6 +74,7 @@ interface SearchResult {
   postalCode?: string;
   region?: string;
   placeName?: string;
+  googlePhotoRef?: string;
 }
 
 // ============================================
@@ -121,7 +123,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     const params = new URLSearchParams({
       place_id: placeId,
       key: GOOGLE_API_KEY,
-      fields: 'geometry,address_components,formatted_address,name',
+      fields: 'geometry,address_components,formatted_address,name,photos',
       language: lang,
     });
     const response = await fetch(
@@ -146,6 +148,9 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     const lat = result.geometry?.location?.lat || 0;
     const lng = result.geometry?.location?.lng || 0;
 
+    // Extract first photo reference if available
+    const photoRef = result.photos?.[0]?.photo_reference || '';
+
     return {
       id: placeId,
       placeId,
@@ -158,6 +163,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
       postalCode,
       region,
       placeName: result.name || '',
+      googlePhotoRef: photoRef || undefined,
     };
   } catch (e) {
     console.log('[Google Places] Details error:', e);
@@ -548,6 +554,7 @@ export default function LocationPicker({
           region: details.region,
           placeName: details.placeName,
           placeId: details.placeId,
+          googlePhotoRef: details.googlePhotoRef,
         };
         onChange(newLocation);
 
