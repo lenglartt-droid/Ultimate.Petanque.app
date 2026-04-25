@@ -22,6 +22,7 @@ export interface NotificationPreferences {
   club_invitation_reminder: boolean;
   terrain_proximity: boolean;
   terrain_proximity_radius: number; // meters: 1000, 3000, 5000, 10000
+  terrain_activity: boolean; // Push when favorite terrains become active
 }
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
@@ -40,6 +41,7 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   club_invitation_reminder: true,
   terrain_proximity: true,
   terrain_proximity_radius: 3000,
+  terrain_activity: true,
 };
 
 export const PROXIMITY_RADIUS_OPTIONS = [

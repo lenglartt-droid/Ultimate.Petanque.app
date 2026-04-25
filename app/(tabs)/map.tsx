@@ -38,6 +38,7 @@ import {
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup as MeetupType } from '@/services/meetupService';
 import AdBanner from '@/components/ui/AdBanner';
+import { useTerrainActivity, TerrainActivityInfo } from '@/hooks/useTerrainActivity';
 
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
@@ -1607,6 +1608,9 @@ useEffect(() => {
   const [activeNowMode, setActiveNowMode] = useState(false);
   const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
 
+  // Terrain activity data from dedicated hook (accurate active-now detection)
+  const terrainActivityMap = useTerrainActivity();
+
   const [freezeMarkers, setFreezeMarkers] = useState(true);
   useEffect(() => {
     const t = setTimeout(() => setFreezeMarkers(true), 500000);
@@ -1771,30 +1775,19 @@ useEffect(() => {
     if (paramActiveNow === 'true') {
       setActiveNowMode(true);
       setFilter('terrains');
-      // Compute active terrain IDs from match history
-      const now = new Date();
-      const currentDow = now.getDay();
-      const currentHour = now.getHours();
-      const todayStr = now.toISOString().slice(0, 10);
-      const activeIds = new Set<string>();
-      terrains.forEach(tr => {
-        const terrainMatches = (allMatches || []).filter((m: any) => m.terrainId === tr.id);
-        let score = 0;
-        terrainMatches.forEach((m: any) => {
-          const d = new Date(m.date);
-          if (d.getDay() === currentDow) {
-            score += 3;
-            if (Math.abs(d.getHours() - currentHour) <= 2) score += 10;
-          }
-        });
-        // Tournaments today bonus
-        const todayTournaments = tournaments.filter(t => t.terrainId === tr.id && (t.status === 'En cours' || (t.status === '\u00c0 venir' && t.date && t.date.slice(0, 10) === todayStr)));
-        score += todayTournaments.length * 25;
-        if (score > 0) activeIds.add(tr.id);
-      });
-      setActiveNowTerrainIds(activeIds);
     }
   }, [paramFilter, paramActiveNow]);
+
+  // Compute active-now terrain IDs from useTerrainActivity hook
+  useEffect(() => {
+    const activeIds = new Set<string>();
+    terrainActivityMap.forEach((info, terrainId) => {
+      if (info.isActiveNow || info.habitualScore > 10) {
+        activeIds.add(terrainId);
+      }
+    });
+    setActiveNowTerrainIds(activeIds);
+  }, [terrainActivityMap]);
 
   // Access matches for active-now computation
   const { matches: allMatches } = useAppData();
@@ -2051,19 +2044,57 @@ useEffect(() => {
         </View>
       ) : null}
 
+      {/* Active Now toggle button */}
+      {Platform.OS !== 'web' ? (
+        <Pressable
+          style={[styles.heatmapToggle, { top: insets.top + 138 }, activeNowMode && { backgroundColor: '#22C55E', borderColor: '#22C55E' }]}
+          onPress={() => {
+            Haptics.selectionAsync();
+            const next = !activeNowMode;
+            setActiveNowMode(next);
+            if (next) setFilter('terrains');
+          }}
+        >
+          <MaterialIcons name="local-fire-department" size={20} color={activeNowMode ? '#FFF' : theme.textSecondary} />
+        </Pressable>
+      ) : null}
+
       {/* Heatmap toggle button */}
       {Platform.OS !== 'web' ? (
         <Pressable
-          style={[styles.heatmapToggle, { top: insets.top + 138 }, showHeatmap && styles.heatmapToggleActive]}
+          style={[styles.heatmapToggle, { top: insets.top + 186 }, showHeatmap && styles.heatmapToggleActive]}
           onPress={() => { Haptics.selectionAsync(); setShowHeatmap(prev => !prev); }}
         >
           <MaterialIcons name="blur-on" size={20} color={showHeatmap ? '#FFF' : theme.textSecondary} />
         </Pressable>
       ) : null}
 
+      {/* Active Now legend */}
+      {activeNowMode && Platform.OS !== 'web' ? (
+        <View style={[styles.heatmapLegend, { top: insets.top + 138, minWidth: 160 }]}>
+          <View style={styles.heatmapLegendHeader}>
+            <MaterialIcons name="local-fire-department" size={14} color="#22C55E" />
+            <Text style={[styles.heatmapLegendTitle, { color: '#166534' }]}>{language === 'fr' ? 'Terrains actifs' : 'Active terrains'}</Text>
+          </View>
+          <Text style={styles.heatmapLegendCount}>
+            {activeNowTerrainIds.size} {language === 'fr' ? 'terrain(s) actif(s)' : 'active terrain(s)'}
+          </Text>
+          <View style={styles.heatmapLegendScale}>
+            <View style={styles.heatmapLegendItem}>
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFF' }} />
+              <Text style={styles.heatmapLegendLabel}>LIVE</Text>
+            </View>
+            <View style={styles.heatmapLegendItem}>
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#22C55E' }} />
+              <Text style={styles.heatmapLegendLabel}>{language === 'fr' ? 'Habituel' : 'Habitual'}</Text>
+            </View>
+          </View>
+        </View>
+      ) : null}
+
       {/* Heatmap legend + controls */}
-      {showHeatmap && Platform.OS !== 'web' ? (
-        <View style={[styles.heatmapLegend, { top: insets.top + 138 }]}>
+      {showHeatmap && !activeNowMode && Platform.OS !== 'web' ? (
+        <View style={[styles.heatmapLegend, { top: insets.top + 186 }]}>
           <View style={styles.heatmapLegendHeader}>
             <MaterialIcons name="blur-on" size={14} color={theme.primary} />
             <Text style={styles.heatmapLegendTitle}>{language === 'fr' ? 'Densite joueurs' : 'Player density'}</Text>
@@ -2487,6 +2518,23 @@ useEffect(() => {
                 {selected.itemType === 'terrains' && selected.courtsCount ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{selected.courtsCount} {selected.courtsCount > 1 ? t('map', 'courts') : t('map', 'court')}</Text></View>
                 ) : null}
+                {selected.itemType === 'terrains' && (() => {
+                  const actInfo = terrainActivityMap.get(selected.id);
+                  if (!actInfo) return null;
+                  if (actInfo.isActiveNow) return (
+                    <View style={[styles.tag, { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }]}>
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                      <Text style={[styles.tagText, { color: '#DC2626' }]}>LIVE</Text>
+                    </View>
+                  );
+                  if (actInfo.habitualScore > 0) return (
+                    <View style={[styles.tag, { backgroundColor: '#F0FDF4', borderWidth: 1, borderColor: '#BBF7D0' }]}>
+                      <MaterialIcons name="schedule" size={8} color="#22C55E" />
+                      <Text style={[styles.tagText, { color: '#16A34A' }]}>{actInfo.peakLabel}</Text>
+                    </View>
+                  );
+                  return null;
+                })()}
                 {selected.itemType === 'players' ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{selected.role}</Text></View>
                 ) : null}

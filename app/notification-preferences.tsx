@@ -172,6 +172,15 @@ const NOTIF_CATEGORIES: NotifCategory[] = [
         descFr: 'Alerte quand vous etes a proximite d\'un terrain ou des joueurs jouent habituellement a cette heure.',
         descEn: 'Alert when you are near a terrain where players usually play at this time.',
       },
+      {
+        key: 'terrain_activity',
+        icon: 'local-fire-department',
+        color: '#EF4444',
+        labelFr: 'Terrains favoris actifs',
+        labelEn: 'Favorite terrains active',
+        descFr: 'Notification quand un de vos terrains favoris a un RDV, tournoi ou partie en cours.',
+        descEn: 'Notification when one of your favorite terrains has an ongoing meetup, tournament, or game.',
+      },
     ],
   },
   {
