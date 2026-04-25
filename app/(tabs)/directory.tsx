@@ -820,10 +820,25 @@ export default function DirectoryScreen() {
     if (sortCriteria.length > 0) {
       result = applyMultiSort(result);
     } else if (showActiveNow) {
-      // When "Active Now" toggle is on, only show terrains with activity
-      result = result
-        .filter(tr => terrainActivityMap.has(tr.id))
-        .sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
+      // "Active Now" priority system:
+      // 1. Terrains active RIGHT NOW (ongoing meetup/tournament/recent match) — sorted by score desc
+      // 2. Terrains with habitual activity at this day+hour — sorted by habitualScore desc
+      // Exclude terrains with no activity signal at all
+      const activeNowTerrains: typeof result = [];
+      const habitualTerrains: typeof result = [];
+      result.forEach(tr => {
+        const info = terrainActivityMap.get(tr.id);
+        if (!info) return;
+        if (info.isActiveNow) {
+          activeNowTerrains.push(tr);
+        } else if (info.habitualScore > 0) {
+          habitualTerrains.push(tr);
+        }
+      });
+      // Sort each group independently
+      activeNowTerrains.sort((a, b) => (terrainActivityMap.get(b.id)?.score || 0) - (terrainActivityMap.get(a.id)?.score || 0));
+      habitualTerrains.sort((a, b) => (terrainActivityMap.get(b.id)?.habitualScore || 0) - (terrainActivityMap.get(a.id)?.habitualScore || 0));
+      result = [...activeNowTerrains, ...habitualTerrains];
     } else if (distanceFilter !== 'all' && userLocation) {
       result.sort((a, b) => {
         const da = (a.location?.latitude && a.location?.longitude) ? haversineDistance(userLocation.latitude, userLocation.longitude, a.location.latitude, a.location.longitude) : 99999;
@@ -2659,7 +2674,7 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
-  activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number };
+  activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number; isActiveNow?: boolean; activeNowLabel?: string; habitualScore?: number };
 }) => {
   const typeConfig = getTerrainTypeConfig(item.type);
   const isFavorite = favoriteTerrainIds.includes(item.id);
@@ -2714,14 +2729,19 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
         </View>
         {activityInfo ? (
           <View style={styles.activityScoreRow}>
-            {activityInfo.rank && activityInfo.rank <= 10 ? (
+            {activityInfo.isActiveNow ? (
+              <View style={[styles.activityRankBadge, { backgroundColor: '#EF4444', flexDirection: 'row' as const, gap: 3, paddingHorizontal: 8 }]}>
+                <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFF' }} />
+                <Text style={styles.activityRankText}>LIVE</Text>
+              </View>
+            ) : activityInfo.rank && activityInfo.rank <= 10 ? (
               <View style={[styles.activityRankBadge, activityInfo.rank === 1 ? { backgroundColor: '#D4A017' } : activityInfo.rank <= 3 ? { backgroundColor: '#78909C' } : { backgroundColor: '#A1887F' }]}>
                 <Text style={styles.activityRankText}>#{activityInfo.rank}</Text>
               </View>
             ) : null}
-            <View style={styles.activityScoreBadge}>
-              <MaterialIcons name="local-fire-department" size={12} color="#22C55E" />
-              <Text style={styles.activityScoreText}>{activityInfo.peakLabel}</Text>
+            <View style={[styles.activityScoreBadge, activityInfo.isActiveNow && { backgroundColor: '#FEF2F2', borderColor: '#FECACA' }]}>
+              <MaterialIcons name={activityInfo.isActiveNow ? 'sensors' : 'local-fire-department'} size={12} color={activityInfo.isActiveNow ? '#EF4444' : '#22C55E'} />
+              <Text style={[styles.activityScoreText, activityInfo.isActiveNow && { color: '#DC2626' }]}>{activityInfo.peakLabel}</Text>
             </View>
             {(activityInfo.recentMatches || activityInfo.recentChallenges || activityInfo.recentTournaments) ? (
               <View style={styles.activityBreakdown}>

@@ -4,6 +4,10 @@
  * 1. Fix declaration order (terrainActivityMap must be defined before getCompareValue)
  * 2. Reduce re-renders in directory by isolating async data loading
  * 3. Enable reuse across map and other screens
+ *
+ * "Active Now" priority system:
+ *  - Priority 1: Terrains with an ongoing meetup/tournament RIGHT NOW
+ *  - Priority 2: Terrains with habitual activity at the same day-of-week + hour window
  */
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useAppData } from '@/contexts/AppContext';
@@ -18,6 +22,17 @@ export interface TerrainActivityInfo {
   recentMatches: number;
   recentChallenges: number;
   recentTournaments: number;
+  /** True when something is happening RIGHT NOW (ongoing meetup, tournament, or very recent match) */
+  isActiveNow: boolean;
+  /** Label describing why the terrain is active now */
+  activeNowLabel: string;
+  /** Score based on habitual activity at this day-of-week + hour */
+  habitualScore: number;
+}
+
+interface MeetupEntry {
+  date: string;
+  endTime: string | null;
 }
 
 interface GlobalTerrainStats {
@@ -37,8 +52,8 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
   const { terrains, matches, tournaments } = useAppData();
   const { language } = useLanguage();
 
-  // Meetups loaded from Supabase (loaded once)
-  const [terrainMeetupsMap, setTerrainMeetupsMap] = useState<Map<string, { date: string }[]>>(new Map());
+  // Meetups loaded from Supabase (loaded once) — now includes end_time
+  const [terrainMeetupsMap, setTerrainMeetupsMap] = useState<Map<string, MeetupEntry[]>>(new Map());
   const meetupLoadRef = useRef(false);
 
   useEffect(() => {
@@ -47,21 +62,22 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
     const loadMeetups = async () => {
       try {
         const supabase = getSupabaseClient();
-        const today = new Date().toISOString().slice(0, 10);
+        // Load meetups from the last 7 days forward (to catch ongoing ones)
+        const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
         const { data, error } = await supabase
           .from('terrain_meetups')
-          .select('terrain_id, date')
+          .select('terrain_id, date, end_time')
           .eq('status', 'active')
-          .gte('date', today);
+          .gte('date', weekAgo);
         if (error) {
           console.log('[useTerrainActivity] Error loading meetups:', error.message);
           return;
         }
         if (data) {
-          const map = new Map<string, { date: string }[]>();
+          const map = new Map<string, MeetupEntry[]>();
           data.forEach((r: any) => {
             const arr = map.get(r.terrain_id) || [];
-            arr.push({ date: r.date });
+            arr.push({ date: r.date, endTime: r.end_time || null });
             map.set(r.terrain_id, arr);
           });
           setTerrainMeetupsMap(map);
@@ -117,12 +133,81 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
   const terrainActivityMap = useMemo(() => {
     const scoreMap = new Map<string, TerrainActivityInfo>();
     const now = new Date();
+    const nowMs = now.getTime();
     const currentDow = now.getDay();
     const currentHour = now.getHours();
     const todayStr = now.toISOString().slice(0, 10);
 
+    const fr = language === 'fr';
+    const dayNames = fr
+      ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
+      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
     terrains.forEach(tr => {
       const terrainMatches = matches.filter(m => m.terrainId === tr.id);
+
+      // ========================================
+      // 1) ACTIVE NOW detection (real-time)
+      // ========================================
+      let isActiveNow = false;
+      let activeNowLabel = '';
+      const activeNowReasons: string[] = [];
+
+      // 1a. Ongoing meetups: start <= now <= end (or within 3h default window if no end_time)
+      const terrainMeetups = terrainMeetupsMap.get(tr.id) || [];
+      const ongoingMeetups = terrainMeetups.filter(mt => {
+        const start = new Date(mt.date).getTime();
+        const end = mt.endTime
+          ? new Date(mt.endTime).getTime()
+          : start + 3 * 60 * 60 * 1000; // Default 3h window
+        return nowMs >= start && nowMs <= end;
+      });
+      if (ongoingMeetups.length > 0) {
+        isActiveNow = true;
+        activeNowReasons.push(
+          ongoingMeetups.length === 1
+            ? (fr ? 'RDV en cours' : 'Meetup in progress')
+            : `${ongoingMeetups.length} ${fr ? 'RDV en cours' : 'meetups in progress'}`
+        );
+      }
+
+      // 1b. Ongoing tournaments: status "En cours" or starts today
+      const ongoingTournaments = tournaments.filter(t =>
+        t.terrainId === tr.id &&
+        (t.status === 'En cours' || (t.status === 'À venir' && t.date && t.date.slice(0, 10) === todayStr))
+      );
+      if (ongoingTournaments.length > 0) {
+        isActiveNow = true;
+        activeNowReasons.push(
+          ongoingTournaments.length === 1
+            ? (fr ? 'Tournoi en cours' : 'Tournament in progress')
+            : `${ongoingTournaments.length} ${fr ? 'tournois en cours' : 'tournaments in progress'}`
+        );
+      }
+
+      // 1c. Very recent match (within last 2 hours)
+      const twoHoursAgo = nowMs - 2 * 60 * 60 * 1000;
+      const veryRecentMatches = terrainMatches.filter(m => {
+        const matchTime = new Date(m.date).getTime();
+        return matchTime >= twoHoursAgo && matchTime <= nowMs;
+      });
+      if (veryRecentMatches.length > 0) {
+        isActiveNow = true;
+        activeNowReasons.push(
+          veryRecentMatches.length === 1
+            ? (fr ? 'Partie recente' : 'Recent game')
+            : `${veryRecentMatches.length} ${fr ? 'parties recentes' : 'recent games'}`
+        );
+      }
+
+      if (activeNowReasons.length > 0) {
+        activeNowLabel = activeNowReasons.join(' + ');
+      }
+
+      // ========================================
+      // 2) HABITUAL SCORE (same day + hour window)
+      // ========================================
+      // Count how many times activity was recorded at the same day-of-week within ±2 hours
       let sameDayHourCount = 0;
       let sameDayCount = 0;
       terrainMatches.forEach(m => {
@@ -134,20 +219,34 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
         }
       });
 
-      // Bonus: tournaments happening today at this terrain
-      const todayTournaments = tournaments.filter(t =>
-        t.terrainId === tr.id &&
-        (t.status === 'En cours' || (t.status === 'À venir' && t.date && t.date.slice(0, 10) === todayStr))
-      );
-      const tournamentBonus = todayTournaments.length * 25;
+      // Global community stats for habitual patterns
+      const gStats = globalTerrainStats.get(tr.id);
+      // Check if the global peak matches current day+hour
+      let globalPeakMatchesCurrent = false;
+      let globalPeakDowCount = 0;
+      if (gStats && gStats.peakDow === currentDow) {
+        globalPeakMatchesCurrent = true;
+        globalPeakDowCount = gStats.peakDowCount;
+        if (Math.abs(gStats.peakHour - currentHour) <= 2) {
+          globalPeakDowCount += gStats.peakHourCount;
+        }
+      }
 
-      // Bonus: meetups scheduled today at this terrain
-      const terrainMeetups = terrainMeetupsMap.get(tr.id) || [];
+      // Habitual score: how likely is activity NOW based on historical patterns
+      const habitualScore =
+        sameDayHourCount * 15 +    // Personal matches at same day+hour (strong signal)
+        sameDayCount * 3 +          // Personal matches on same day
+        (globalPeakMatchesCurrent ? globalPeakDowCount * 5 : 0) + // Community peak matches current day
+        (gStats && gStats.peakDow === currentDow && Math.abs(gStats.peakHour - currentHour) <= 2
+          ? gStats.peakHourCount * 8 : 0); // Community peak matches current hour
+
+      // ========================================
+      // 3) GENERAL SCORE (for overall ranking)
+      // ========================================
       const meetupsToday = terrainMeetups.filter(mt => mt.date.slice(0, 10) === todayStr);
+      const tournamentBonus = ongoingTournaments.length * 25;
       const meetupBonus = meetupsToday.length * 30;
 
-      // Global community stats (all users)
-      const gStats = globalTerrainStats.get(tr.id);
       const globalRecentBonus = gStats ? Math.min(gStats.recentMatches, 30) * 5 : 0;
       const globalTotalBonus = gStats ? Math.min(gStats.totalMatches, 100) : 0;
       const globalChallengeBonus = gStats ? Math.min(gStats.recentChallenges, 20) * 4 : 0;
@@ -155,7 +254,6 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
       const globalTournamentRecentBonus = gStats ? Math.min(gStats.recentTournaments, 10) * 8 : 0;
       const globalTournamentTotalBonus = gStats ? Math.min(gStats.totalTournaments, 30) * 2 : 0;
 
-      // Score: weighted combination (user patterns + community stats)
       const hourScore = sameDayHourCount * 10;
       const dayScore = sameDayCount * 3;
       const totalScore = Math.min(terrainMatches.length, 10);
@@ -163,48 +261,48 @@ export function useTerrainActivity(): Map<string, TerrainActivityInfo> {
         globalRecentBonus + globalTotalBonus + globalChallengeBonus + globalChallengeTotalBonus +
         globalTournamentRecentBonus + globalTournamentTotalBonus;
 
-      if (rawScore > 0) {
-        const dayNames = language === 'fr'
-          ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
-          : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      if (rawScore > 0 || isActiveNow || habitualScore > 0) {
+        // Build peak label
         let peakLabel = '';
 
-        if (meetupsToday.length > 0) {
+        if (isActiveNow) {
+          peakLabel = activeNowLabel;
+        } else if (meetupsToday.length > 0) {
           peakLabel = meetupsToday.length === 1
-            ? `${language === 'fr' ? 'RDV prevu aujourd\'hui' : 'Meetup today'}`
-            : `${meetupsToday.length} ${language === 'fr' ? 'RDV aujourd\'hui' : 'meetups today'}`;
-        } else if (todayTournaments.length > 0) {
-          peakLabel = todayTournaments.length === 1
-            ? `${language === 'fr' ? 'Tournoi aujourd\'hui' : 'Tournament today'}`
-            : `${todayTournaments.length} ${language === 'fr' ? 'tournois aujourd\'hui' : 'tournaments today'}`;
+            ? (fr ? 'RDV prevu aujourd\'hui' : 'Meetup today')
+            : `${meetupsToday.length} ${fr ? 'RDV aujourd\'hui' : 'meetups today'}`;
+        } else if (habitualScore > 10 && sameDayHourCount > 0) {
+          peakLabel = `${sameDayHourCount} ${fr ? 'partie(s) habituelles' : 'usual game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
         } else if (gStats && gStats.peakDowCount > 0 && gStats.peakHourCount > 0) {
-          const communityDayNames = language === 'fr'
-            ? ['dim', 'lun', 'mar', 'mer', 'jeu', 'ven', 'sam']
-            : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-          peakLabel = `${language === 'fr' ? 'Pic' : 'Peak'}: ${communityDayNames[gStats.peakDow]} ~${gStats.peakHour}h (${gStats.peakHourCount})`;
+          peakLabel = `${fr ? 'Pic' : 'Peak'}: ${dayNames[gStats.peakDow]} ~${gStats.peakHour}h (${gStats.peakHourCount})`;
         } else if (sameDayHourCount > 0) {
-          peakLabel = `${sameDayHourCount} ${language === 'fr' ? 'partie(s)' : 'game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
+          peakLabel = `${sameDayHourCount} ${fr ? 'partie(s)' : 'game(s)'} ${dayNames[currentDow]} ~${currentHour}h`;
         } else if (gStats && gStats.recentMatches + (gStats.recentChallenges || 0) > 0) {
           const recentTotal = gStats.recentMatches + (gStats.recentChallenges || 0);
-          peakLabel = `${recentTotal} ${language === 'fr' ? 'activites ce mois' : 'activities this month'}`;
+          peakLabel = `${recentTotal} ${fr ? 'activites ce mois' : 'activities this month'}`;
         } else if (gStats && gStats.totalMatches + (gStats.totalChallenges || 0) > 0) {
           const allTotal = gStats.totalMatches + (gStats.totalChallenges || 0);
-          peakLabel = `${allTotal} ${language === 'fr' ? 'activites au total' : 'total activities'}`;
+          peakLabel = `${allTotal} ${fr ? 'activites au total' : 'total activities'}`;
         } else if (sameDayCount > 0) {
-          peakLabel = `${sameDayCount} ${language === 'fr' ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
+          peakLabel = `${sameDayCount} ${fr ? 'partie(s) le' : 'game(s) on'} ${dayNames[currentDow]}`;
         } else {
-          peakLabel = language === 'fr' ? 'Terrain actif' : 'Active terrain';
+          peakLabel = fr ? 'Terrain actif' : 'Active terrain';
         }
 
         const communityTotal = gStats ? gStats.totalMatches + gStats.totalChallenges : 0;
+        const finalScore = Math.max(rawScore, isActiveNow ? 1 : 0, habitualScore > 0 ? 1 : 0);
+
         scoreMap.set(tr.id, {
-          score: rawScore,
-          matchCount: communityTotal + terrainMatches.length + todayTournaments.length + meetupsToday.length,
+          score: finalScore,
+          matchCount: communityTotal + terrainMatches.length + ongoingTournaments.length + meetupsToday.length,
           peakLabel,
           rank: 0,
           recentMatches: gStats?.recentMatches || 0,
           recentChallenges: gStats?.recentChallenges || 0,
           recentTournaments: gStats?.recentTournaments || 0,
+          isActiveNow,
+          activeNowLabel,
+          habitualScore,
         });
       }
     });

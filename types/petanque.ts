@@ -152,6 +152,7 @@ export interface Terrain {
   parking: boolean;
   toilets: boolean;
   environment?: 'indoor' | 'outdoor';
+  sponsorId?: string;
   createdAt?: string;
 }
 
