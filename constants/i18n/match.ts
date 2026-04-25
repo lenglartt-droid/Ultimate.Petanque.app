@@ -128,5 +128,8 @@ export const matchTranslations = {
     sponsorType: { fr: 'Sponsor', en: 'Sponsor' },
     partnerType: { fr: 'Partenaire', en: 'Partner' },
     ambassadorType: { fr: 'Ambassadeur', en: 'Ambassador' },
+    localPlayersWarningTitle: { fr: 'Match hors classement', en: 'Unranked match' },
+    localPlayersWarningMessage: { fr: 'Aucun joueur dans ce match n\'est lie a un compte utilisateur reel. Ce match ne comptera pas pour le classement ELO ni les leaderboards. Souhaitez-vous continuer ?', en: 'No players in this match are linked to a real user account. This match will not count towards ELO rankings or leaderboards. Do you want to continue?' },
+    localPlayersWarningContinue: { fr: 'Enregistrer quand meme', en: 'Save anyway' },
   },
 };

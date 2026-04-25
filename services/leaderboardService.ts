@@ -37,7 +37,7 @@ export type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 
 
 export type LeaderboardPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y' | 'season' | 'lastSeason';
 
-export const LEADERBOARD_MIN_MATCHES = 10;
+export const LEADERBOARD_MIN_MATCHES = 3;
 
 /** Compute date range for a given period */
 export function getPeriodDateRange(period: LeaderboardPeriod): { from: Date | null; to: Date | null; label: string } {
@@ -244,7 +244,11 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       }
     }
 
+    // Filter: only include real user profiles (player.id === player.user_id)
+    // and players who meet the minimum match threshold
     const filteredData = (playersData || []).filter((p: any) => {
+      // Exclude locally created players (tracking cards) from leaderboard
+      if (!p.user_id || p.id !== p.user_id) return false;
       if (playerStatsMap) {
         const ps = playerStatsMap.get(p.id);
         return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;

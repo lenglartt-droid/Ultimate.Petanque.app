@@ -154,9 +154,6 @@ export default function PlayerDetailScreen() {
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  // Allow editing own players (self or locally created) but not other real users' profiles
-  const isOtherRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
-  const canEdit = !isReadOnly && !isOtherRealUser && (isSelf || (playerUserId === user?.id));
 
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
@@ -187,6 +184,9 @@ export default function PlayerDetailScreen() {
   const isPublicItem = player?.isPublic === true;
   const playerUserId = player?.userId;
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
+  // Allow editing own players (self or locally created) but not other real users' profiles
+  const isOtherRealUser = !!(isPublicItem && playerUserId && playerUserId !== user?.id);
+  const canEdit = !isReadOnly && !isOtherRealUser && (isSelf || (playerUserId === user?.id));
   // A player linked to a real registered user account (self or other user's public profile)
   // Locally created players have player.id !== player.userId (different UUIDs), so they're excluded
   const isLinkedToRealUser = !!(isSelf || (playerUserId && player?.id === playerUserId));

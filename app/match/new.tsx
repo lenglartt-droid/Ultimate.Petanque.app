@@ -250,6 +250,7 @@ export default function NewMatchScreen() {
   const [showShareRequestModal, setShowShareRequestModal] = useState(false);
   const [shareRequestItemId, setShareRequestItemId] = useState<string | null>(null);
   const [shareRequestPlayerIds, setShareRequestPlayerIds] = useState<string[]>([]);
+  const localPlayersWarningShown = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const maxScore = config.game.maxScore;
@@ -799,6 +800,17 @@ export default function NewMatchScreen() {
     setMenes(prev => prev.slice(0, -1));
   };
 
+  // Helper: check if all players in the match are locally created (no real user profiles)
+  const hasOnlyLocalPlayers = useCallback((): boolean => {
+    const allPlayerIds = [...getTeamPlayerIds(teamAPlayers), ...getTeamPlayerIds(teamBPlayers)].filter(id => id !== '1' && id !== '2');
+    if (allPlayerIds.length === 0) return false;
+    // A real user profile has player.id === player.userId
+    return allPlayerIds.every(pid => {
+      const p = players.find(pl => pl.id === pid);
+      return !p || !p.userId || p.id !== p.userId;
+    });
+  }, [teamAPlayers, teamBPlayers, players]);
+
   // Save match
   const handleSaveMatch = (overrideSeriesContext?: {
     seriesId: string;
@@ -815,6 +827,21 @@ export default function NewMatchScreen() {
       Alert.alert(t('match', 'phaseRequired'), t('match', 'selectPhase'));
       return;
     }
+
+    // Warn user if all players are locally created (no ELO/leaderboard impact)
+    if (!localPlayersWarningShown.current && hasOnlyLocalPlayers()) {
+      localPlayersWarningShown.current = true;
+      Alert.alert(
+        t('match', 'localPlayersWarningTitle'),
+        t('match', 'localPlayersWarningMessage'),
+        [
+          { text: t('common', 'cancel'), style: 'cancel', onPress: () => { localPlayersWarningShown.current = false; } },
+          { text: t('match', 'localPlayersWarningContinue'), onPress: () => handleSaveMatch(overrideSeriesContext) },
+        ]
+      );
+      return;
+    }
+    localPlayersWarningShown.current = false;
 
     if (isTimerRunning) {
       setIsTimerRunning(false);
