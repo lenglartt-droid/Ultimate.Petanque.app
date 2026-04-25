@@ -154,6 +154,7 @@ export interface Terrain {
   toilets: boolean;
   environment?: 'indoor' | 'outdoor';
   sponsorId?: string;
+  googlePlaceId?: string;
   createdAt?: string;
 }
 

@@ -14,3 +14,4 @@ export { default as ShareCardClub } from './ShareCardClub';
 export { default as ShareCardWatermark } from './ShareCardWatermark';
 export { default as ShareCardSeason } from './ShareCardSeason';
 export { default as ShareCardSeasonComparison } from './ShareCardSeasonComparison';
+export { default as ShareCardTeamSynergy } from './ShareCardTeamSynergy';
