@@ -19,6 +19,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import {
   TeamMessage, fetchTeamMessages, sendTeamMessage, deleteTeamMessage,
+  TeamMessageReaction, fetchReactionsForTeam, toggleReaction, REACTION_TYPES,
 } from '@/services/teamChatService';
 import { TournamentTeam, getTeamSize } from '@/services/teamInvitationService';
 
@@ -63,6 +64,8 @@ export default function TeamChatScreen() {
   const [loading, setLoading] = useState(true);
   const flatListRef = useRef<FlatList>(null);
   const lastCountRef = useRef(0);
+  const [reactions, setReactions] = useState<Map<string, TeamMessageReaction[]>>(new Map());
+  const [activeReactionPicker, setActiveReactionPicker] = useState<string | null>(null);
 
   // Load team info
   useEffect(() => {
@@ -86,8 +89,12 @@ export default function TeamChatScreen() {
   // Load & poll messages
   const loadMessages = useCallback(async () => {
     if (!teamId) return;
-    const { messages: msgs } = await fetchTeamMessages(teamId);
+    const [{ messages: msgs }, rxMap] = await Promise.all([
+      fetchTeamMessages(teamId),
+      fetchReactionsForTeam(teamId),
+    ]);
     setMessages(msgs);
+    setReactions(rxMap);
     if (msgs.length > lastCountRef.current) {
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
     }
@@ -121,6 +128,40 @@ export default function TeamChatScreen() {
     const { error } = await deleteTeamMessage(msgId);
     if (!error) setMessages(prev => prev.filter(m => m.id !== msgId));
   }, []);
+
+  const handleToggleReaction = useCallback(async (messageId: string, reactionType: string) => {
+    if (!teamId || !user?.id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setActiveReactionPicker(null);
+
+    // Optimistic update
+    setReactions(prev => {
+      const newMap = new Map(prev);
+      const msgReactions = [...(newMap.get(messageId) || [])];
+      const existingIdx = msgReactions.findIndex(r => r.user_id === user.id && r.reaction_type === reactionType);
+      if (existingIdx >= 0) {
+        msgReactions.splice(existingIdx, 1);
+      } else {
+        msgReactions.push({ id: 'temp', message_id: messageId, user_id: user.id, reaction_type: reactionType });
+      }
+      newMap.set(messageId, msgReactions);
+      return newMap;
+    });
+
+    await toggleReaction(teamId, messageId, user.id, reactionType);
+    // Reload reactions for consistency
+    const rxMap = await fetchReactionsForTeam(teamId);
+    setReactions(rxMap);
+  }, [teamId, user?.id]);
+
+  const handleLongPress = useCallback((msgId: string, isOwn: boolean) => {
+    Haptics.selectionAsync();
+    if (activeReactionPicker === msgId) {
+      setActiveReactionPicker(null);
+    } else {
+      setActiveReactionPicker(msgId);
+    }
+  }, [activeReactionPicker]);
 
   // Messages with date separators
   const messagesWithSeps = useMemo(() => {
@@ -212,21 +253,75 @@ export default function TeamChatScreen() {
             const initials = msg.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
             return (
               <Animated.View entering={index < 20 ? FadeInDown.duration(150).delay(Math.min(index * 20, 200)) : undefined}>
-                <Pressable
-                  style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}
-                  onLongPress={() => { if (isOwn) { Haptics.selectionAsync(); handleDelete(msg.id); } }}
-                >
-                  {!isOwn ? (
-                    <View style={[s.bubbleAvatar, { backgroundColor: avatarColor + '20' }]}>
-                      <Text style={[s.bubbleAvatarText, { color: avatarColor }]}>{initials}</Text>
+                <View>
+                  {/* Reaction picker */}
+                  {activeReactionPicker === msg.id ? (
+                    <View style={[s.reactionPicker, isOwn && s.reactionPickerOwn]}>
+                      {REACTION_TYPES.map(rt => {
+                        const msgRx = reactions.get(msg.id) || [];
+                        const hasMyReaction = msgRx.some(r => r.user_id === user?.id && r.reaction_type === rt.type);
+                        return (
+                          <Pressable
+                            key={rt.type}
+                            style={[s.reactionPickerItem, hasMyReaction && s.reactionPickerItemActive]}
+                            onPress={() => handleToggleReaction(msg.id, rt.type)}
+                          >
+                            <Text style={s.reactionEmoji}>{rt.emoji}</Text>
+                          </Pressable>
+                        );
+                      })}
+                      {isOwn ? (
+                        <Pressable style={s.reactionDeleteBtn} onPress={() => { setActiveReactionPicker(null); handleDelete(msg.id); }}>
+                          <MaterialIcons name="delete-outline" size={16} color="#EF4444" />
+                        </Pressable>
+                      ) : null}
                     </View>
                   ) : null}
-                  <View style={[s.bubble, isOwn ? s.bubbleOwn : s.bubbleOther]}>
-                    {!isOwn ? <Text style={[s.bubbleName, { color: avatarColor }]}>{msg.user_name}</Text> : null}
-                    <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
-                    <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
-                  </View>
-                </Pressable>
+                  <Pressable
+                    style={[s.bubbleRow, isOwn && s.bubbleRowOwn]}
+                    onLongPress={() => handleLongPress(msg.id, isOwn)}
+                  >
+                    {!isOwn ? (
+                      <View style={[s.bubbleAvatar, { backgroundColor: avatarColor + '20' }]}>
+                        <Text style={[s.bubbleAvatarText, { color: avatarColor }]}>{initials}</Text>
+                      </View>
+                    ) : null}
+                    <View style={[s.bubble, isOwn ? s.bubbleOwn : s.bubbleOther]}>
+                      {!isOwn ? <Text style={[s.bubbleName, { color: avatarColor }]}>{msg.user_name}</Text> : null}
+                      <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
+                      <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
+                    </View>
+                  </Pressable>
+                  {/* Reaction counts */}
+                  {(() => {
+                    const msgRx = reactions.get(msg.id) || [];
+                    if (msgRx.length === 0) return null;
+                    const grouped = new Map<string, number>();
+                    const myReactions = new Set<string>();
+                    msgRx.forEach(r => {
+                      grouped.set(r.reaction_type, (grouped.get(r.reaction_type) || 0) + 1);
+                      if (r.user_id === user?.id) myReactions.add(r.reaction_type);
+                    });
+                    return (
+                      <View style={[s.reactionRow, isOwn && s.reactionRowOwn]}>
+                        {[...grouped.entries()].map(([type, count]) => {
+                          const rt = REACTION_TYPES.find(r => r.type === type);
+                          const isMine = myReactions.has(type);
+                          return (
+                            <Pressable
+                              key={type}
+                              style={[s.reactionChip, isMine && s.reactionChipMine]}
+                              onPress={() => handleToggleReaction(msg.id, type)}
+                            >
+                              <Text style={s.reactionChipEmoji}>{rt?.emoji || type}</Text>
+                              <Text style={[s.reactionChipCount, isMine && s.reactionChipCountMine]}>{count}</Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    );
+                  })()}
+                </View>
               </Animated.View>
             );
           }}
@@ -309,4 +404,18 @@ const s = StyleSheet.create({
   input: { flex: 1, backgroundColor: '#F1F5F9', borderRadius: 18, paddingHorizontal: 16, paddingVertical: 10, fontSize: 14, color: '#0F172A', maxHeight: 80, borderWidth: 1, borderColor: '#E2E8F0' },
   sendBtn: { width: 40, height: 40, borderRadius: 20, backgroundColor: '#22C55E', alignItems: 'center', justifyContent: 'center' },
   sendBtnDisabled: { backgroundColor: '#94A3B8', opacity: 0.5 },
+  // Reactions
+  reactionPicker: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#FFF', borderRadius: 20, paddingHorizontal: 8, paddingVertical: 6, marginBottom: 4, marginLeft: 34, alignSelf: 'flex-start' as any, borderWidth: 1, borderColor: '#E2E8F0', ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 6 }, android: { elevation: 4 }, default: {} }) },
+  reactionPickerOwn: { alignSelf: 'flex-end' as any, marginLeft: 0, marginRight: 0 },
+  reactionPickerItem: { width: 36, height: 36, borderRadius: 18, alignItems: 'center' as any, justifyContent: 'center' as any, backgroundColor: '#F8FAFC' },
+  reactionPickerItemActive: { backgroundColor: '#22C55E18', borderWidth: 1.5, borderColor: '#22C55E40' },
+  reactionEmoji: { fontSize: 18 },
+  reactionDeleteBtn: { width: 36, height: 36, borderRadius: 18, alignItems: 'center' as any, justifyContent: 'center' as any, backgroundColor: '#FEF2F2', marginLeft: 2 },
+  reactionRow: { flexDirection: 'row' as any, gap: 4, marginLeft: 40, marginTop: 2, marginBottom: 2 },
+  reactionRowOwn: { justifyContent: 'flex-end' as any, marginLeft: 0, marginRight: 6 },
+  reactionChip: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 3, backgroundColor: '#F1F5F9', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12, borderWidth: 1, borderColor: '#E2E8F0' },
+  reactionChipMine: { backgroundColor: '#22C55E12', borderColor: '#22C55E30' },
+  reactionChipEmoji: { fontSize: 13 },
+  reactionChipCount: { fontSize: 11, fontWeight: '700' as any, color: '#64748B' },
+  reactionChipCountMine: { color: '#22C55E' },
 });

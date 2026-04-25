@@ -2128,6 +2128,178 @@ Deno.serve(async (req: Request) => {
       }
     }
 
+    // ============================================================
+    // TEAM_DISSOLVED: Notify members when captain dissolves team
+    // ============================================================
+    else if (type === 'team_dissolved') {
+      const { targetUserId, captainName, tournamentName, format } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F6AB} Equipe dissoute`,
+          `${captainName || 'Le capitaine'} a dissous l'equipe ${format || ''} pour "${tournamentName || 'un tournoi'}".`,
+          { type: 'team_dissolved' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // TEAM_MEMBER_REMOVED: Notify member when removed from team
+    // ============================================================
+    else if (type === 'team_member_removed') {
+      const { targetUserId, captainName, tournamentName, removedName } = payload || {};
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          `\u{1F6AB} Retire de l'equipe`,
+          `${captainName || 'Le capitaine'} vous a retire de l'equipe pour "${tournamentName || 'un tournoi'}".`,
+          { type: 'team_member_removed' },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // TEAM_CHAT_MESSAGE: Notify team member about new chat message
+    // ============================================================
+    else if (type === 'team_chat_message') {
+      const { targetUserId, senderName, teamId: chatTeamId, tournamentName: chatTournamentName, messagePreview } = payload || {};
+      if (!targetUserId || !chatTeamId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/teamId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const title = `\u{1F4AC} ${senderName || 'Coequipier'}${chatTournamentName ? ` (${chatTournamentName})` : ''}`;
+        const body = messagePreview || 'Nouveau message dans le chat equipe';
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'team_chat_message', teamId: chatTeamId },
+          { channelId: 'share-requests', priority: 'default' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // TEAM_DEADLINE_REMINDER: Remind captain about approaching team formation deadline
+    // ============================================================
+    else if (type === 'team_deadline_reminder') {
+      const { targetUserId, tournamentName, teamId: dlTeamId, daysLeft, slotsLeft, format } = payload || {};
+      if (!targetUserId || !dlTeamId) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/teamId' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isUrgent = daysLeft <= 1;
+        const icon = isUrgent ? '\u{26A0}\u{FE0F}' : '\u{23F0}';
+        const title = isUrgent
+          ? `${icon} Dernier jour pour completer votre equipe !`
+          : `${icon} ${daysLeft}j pour completer votre equipe`;
+        const body = `Votre ${format || 'equipe'} pour "${tournamentName || 'un tournoi'}" a encore ${slotsLeft || 1} place(s) libre(s). Invitez des coequipiers avant la date limite.`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'team_deadline_reminder', teamId: dlTeamId },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
+    // DEVICE_TRANSFER_DECISION: Notify user about device transfer validation/rejection
+    // ============================================================
+    else if (type === 'device_transfer_decision') {
+      const { targetUserId, decision } = payload || {};
+      if (!targetUserId || !decision) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/decision' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const isValidated = decision === 'validated';
+        const title = isValidated
+          ? `\u2705 Transfert d'appareil valide !`
+          : `\u274C Transfert d'appareil refuse`;
+        const body = isValidated
+          ? `Votre demande de transfert a ete validee. Votre ancien appareil a ete delie. Connectez-vous sur votre nouvel appareil.`
+          : `Votre demande de transfert d'appareil a ete refusee. Contactez le support si necessaire.`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'device_transfer_decision', decision },
+          { channelId: 'share-requests', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
     else {
       return new Response(JSON.stringify({ error: `Unknown type: ${type}` }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },

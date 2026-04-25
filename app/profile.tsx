@@ -51,6 +51,7 @@ import { extraTranslations } from '@/constants/i18nExtra';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 import { APP_VERSION_DISPLAY } from '@/constants/appVersion';
+import { getMyTeams, TournamentTeam, getTeamSize } from '@/services/teamInvitationService';
 
 export default function ProfileScreen() {
   const insets = useSafeAreaInsets();
@@ -147,6 +148,11 @@ export default function ProfileScreen() {
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [notifPrefsLoaded, setNotifPrefsLoaded] = useState(false);
 
+  // Team history
+  const [myTeams, setMyTeams] = useState<TournamentTeam[]>([]);
+  const [teamsLoading, setTeamsLoading] = useState(true);
+  const [tournamentNames, setTournamentNames] = useState<Map<string, { name: string; date: string }>>(new Map());
+
   // Maintenance status (admin only)
   const [maintenanceActive, setMaintenanceActive] = useState(false);
 
@@ -221,6 +227,26 @@ export default function ProfileScreen() {
     const interval = setInterval(loadPolledData, 30000);
     return () => clearInterval(interval);
   }, [user?.id, isAdmin]);
+
+  // Load team history
+  useEffect(() => {
+    if (!user?.id) return;
+    const loadTeams = async () => {
+      const { teams } = await getMyTeams();
+      setMyTeams(teams);
+      // Resolve tournament names/dates
+      const ids = [...new Set(teams.map(t => t.tournamentId))];
+      if (ids.length > 0) {
+        const sb = getSupabaseClient();
+        const { data } = await sb.from('tournaments').select('id, name, date').in('id', ids);
+        const map = new Map<string, { name: string; date: string }>();
+        (data || []).forEach((t: any) => map.set(t.id, { name: t.name, date: t.date }));
+        setTournamentNames(map);
+      }
+      setTeamsLoading(false);
+    };
+    loadTeams();
+  }, [user?.id]);
 
   // Load notification preferences + ambassador/sponsor status (one-time, no polling)
   useEffect(() => {
@@ -1710,6 +1736,92 @@ export default function ProfileScreen() {
           </View>
         )}
 
+        {/* Team History Section */}
+        {!isEditing && !teamsLoading ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>{language === 'fr' ? 'MES EQUIPES' : 'MY TEAMS'}</Text>
+            {myTeams.length === 0 ? (
+              <Pressable
+                style={teamStyles.emptyCard}
+                onPress={() => router.push('/(tabs)' as any)}
+              >
+                <View style={teamStyles.emptyIcon}>
+                  <MaterialIcons name="groups" size={32} color="#22C55E" />
+                </View>
+                <Text style={teamStyles.emptyTitle}>{language === 'fr' ? 'Pas encore d\'equipe' : 'No teams yet'}</Text>
+                <Text style={teamStyles.emptyDesc}>
+                  {language === 'fr'
+                    ? 'Inscrivez-vous a un tournoi Doublette ou Triplette et invitez des coequipiers depuis la page d\'accueil.'
+                    : 'Register for a Doublette or Triplette tournament and invite teammates from the home page.'}
+                </Text>
+                <View style={teamStyles.emptyCta}>
+                  <MaterialIcons name="person-add" size={14} color="#FFF" />
+                  <Text style={teamStyles.emptyCtaText}>{language === 'fr' ? 'Former une equipe' : 'Build a team'}</Text>
+                </View>
+              </Pressable>
+            ) : null}
+            {myTeams.length > 0 ? myTeams.slice(0, 5).map((team) => {
+              const tInfo = tournamentNames.get(team.tournamentId);
+              const isComplete = team.status === 'complete';
+              const isCaptain = team.creatorUserId === user?.id;
+              const teamSize = getTeamSize(team.format);
+              const tDate = tInfo?.date ? new Date(tInfo.date) : null;
+              return (
+                <Pressable
+                  key={team.id}
+                  style={[teamStyles.card, isComplete && teamStyles.cardComplete]}
+                  onPress={() => router.push(`/tournament/${team.tournamentId}` as any)}
+                >
+                  <View style={teamStyles.cardRow}>
+                    <View style={[teamStyles.statusIcon, { backgroundColor: isComplete ? '#22C55E15' : '#F59E0B15' }]}>
+                      <MaterialIcons name={isComplete ? 'check-circle' : 'groups'} size={20} color={isComplete ? '#22C55E' : '#F59E0B'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={teamStyles.tournamentName} numberOfLines={1}>{tInfo?.name || team.tournamentId.slice(0, 8)}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                        <View style={[teamStyles.formatChip, { backgroundColor: isComplete ? '#22C55E12' : '#F59E0B12' }]}>
+                          <Text style={[teamStyles.formatText, { color: isComplete ? '#22C55E' : '#F59E0B' }]}>{team.format}</Text>
+                        </View>
+                        <View style={[teamStyles.statusBadge, { backgroundColor: isComplete ? '#22C55E12' : '#F59E0B12' }]}>
+                          <Text style={[teamStyles.statusText, { color: isComplete ? '#16A34A' : '#D97706' }]}>
+                            {isComplete ? (language === 'fr' ? 'Complete' : 'Complete') : `${team.memberUserIds.length}/${teamSize}`}
+                          </Text>
+                        </View>
+                        {isCaptain ? (
+                          <View style={teamStyles.captainBadge}>
+                            <MaterialIcons name="star" size={9} color="#2563EB" />
+                            <Text style={teamStyles.captainText}>{language === 'fr' ? 'Capitaine' : 'Captain'}</Text>
+                          </View>
+                        ) : null}
+                      </View>
+                    </View>
+                    {tDate ? (
+                      <View style={teamStyles.dateCol}>
+                        <Text style={teamStyles.dateDay}>{tDate.getDate()}</Text>
+                        <Text style={teamStyles.dateMonth}>{tDate.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {/* Member avatars row */}
+                  <View style={teamStyles.membersRow}>
+                    {team.memberNames.map((name, i) => {
+                      const colors = ['#22C55E', '#3B82F6', '#F59E0B', '#7C3AED'];
+                      return (
+                        <View key={i} style={[teamStyles.memberChip, { backgroundColor: colors[i % 4] + '12' }]}>
+                          <View style={[teamStyles.memberDot, { backgroundColor: colors[i % 4] }]}>
+                            <Text style={teamStyles.memberInitial}>{name.charAt(0)}</Text>
+                          </View>
+                          <Text style={[teamStyles.memberName, { color: colors[i % 4] }]} numberOfLines={1}>{name}</Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                </Pressable>
+              );
+            }) : null}
+          </View>
+        ) : null}
+
         {/* Federation Card Section */}
         {!isEditing && !loading && (
           <View style={styles.section}>
@@ -1819,6 +1931,16 @@ export default function ProfileScreen() {
               <View style={[styles.menuIcon, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="favorite" size={20} color={theme.error} /></View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{t('creatorNote', 'title')}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
+            {/* Device Transfer */}
+            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/device-transfer' as any); }}>
+              <View style={[styles.menuIcon, { backgroundColor: '#F59E0B' + '15' }]}><MaterialIcons name="swap-horiz" size={20} color="#F59E0B" /></View>
+              <View style={styles.menuItemContent}>
+                <Text style={styles.menuItemText}>{language === 'fr' ? 'Transferer mon compte' : 'Transfer my account'}</Text>
+                <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Changer d\'appareil' : 'Change device'}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
@@ -4187,6 +4309,34 @@ const progStyles = StyleSheet.create({
     fontWeight: '700' as const,
     color: theme.primary,
   },
+});
+
+const teamStyles = StyleSheet.create({
+  card: { backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 10, borderWidth: 1, borderColor: '#E2E8F0', ...theme.shadows.card },
+  cardComplete: { borderColor: '#22C55E25', backgroundColor: '#FAFFFE' },
+  cardRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 8 },
+  statusIcon: { width: 42, height: 42, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  tournamentName: { fontSize: 14, fontWeight: '700' as const, color: '#0F172A' },
+  formatChip: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  formatText: { fontSize: 10, fontWeight: '700' as const },
+  statusBadge: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  statusText: { fontSize: 10, fontWeight: '700' as const },
+  captainBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#2563EB12', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
+  captainText: { fontSize: 9, fontWeight: '700' as const, color: '#2563EB' },
+  dateCol: { width: 40, height: 40, borderRadius: 10, backgroundColor: '#EFF6FF', alignItems: 'center' as const, justifyContent: 'center' as const },
+  dateDay: { fontSize: 15, fontWeight: '800' as const, color: '#2563EB', lineHeight: 17 },
+  dateMonth: { fontSize: 7, fontWeight: '700' as const, color: '#2563EB', letterSpacing: 0.3 },
+  membersRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 },
+  memberChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 },
+  memberDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center' as const, justifyContent: 'center' as const },
+  memberInitial: { fontSize: 10, fontWeight: '700' as const, color: '#FFF' },
+  memberName: { fontSize: 11, fontWeight: '600' as const },
+  emptyCard: { backgroundColor: theme.surface, borderRadius: 16, padding: 28, alignItems: 'center' as const, borderWidth: 2, borderColor: '#22C55E20', borderStyle: 'dashed' as const, ...theme.shadows.card },
+  emptyIcon: { width: 64, height: 64, borderRadius: 20, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const, marginBottom: 14 },
+  emptyTitle: { fontSize: 16, fontWeight: '700' as const, color: '#0F172A', marginBottom: 6 },
+  emptyDesc: { fontSize: 13, color: '#64748B', textAlign: 'center' as const, lineHeight: 19, marginBottom: 18 },
+  emptyCta: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#22C55E', paddingHorizontal: 20, paddingVertical: 11, borderRadius: 12 },
+  emptyCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
 });
 
 

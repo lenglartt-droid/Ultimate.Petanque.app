@@ -849,17 +849,17 @@ export default function TournamentDetailScreen() {
               </Pressable>
             ) : null}
 
-            {/* Sponsor Banner — inside hero card, at the end */}
+            {/* Sponsor Banner */}
             {(tournament as any).sponsorId ? (
               <View style={{ marginTop: 14 }}>
                 <SponsoredItemBanner sponsorId={(tournament as any).sponsorId} page="tournament-detail" style={{ marginBottom: 0 }} />
+              </View>
+            ) : null}
 
-                {/* Team Bracket View */}
-                {(tournament.format === 'Doublette' || tournament.format === 'Triplette') ? (
-                  <View style={{ marginTop: 16 }}>
-                    <TeamBracketView tournamentId={tournament.id} format={tournament.format} language={language} />
-                  </View>
-                ) : null}
+            {/* Team Bracket View — always show for Doublette/Triplette */}
+            {(tournament.format === 'Doublette' || tournament.format === 'Triplette') ? (
+              <View style={{ marginTop: 14 }}>
+                <TeamBracketView tournamentId={tournament.id} format={tournament.format} language={language} />
               </View>
             ) : null}
           </View>
