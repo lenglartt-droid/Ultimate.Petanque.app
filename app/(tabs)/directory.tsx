@@ -423,7 +423,6 @@ export default function DirectoryScreen() {
   const getPlayerBaseFiltered = useCallback((excludeFilter?: string) => {
     return players.filter(p => {
 
-      if (p.isPublic !== true) return false; // ADD THIS LINE FIRST
       if (excludeFilter !== 'playerClub' && filters.playerClub !== 'all' && p.club !== filters.playerClub) return false;
       if (excludeFilter !== 'playerCity' && filters.playerCity !== 'all' && p.location?.city !== filters.playerCity) return false;
       if (excludeFilter !== 'playerCountry' && filters.playerCountry !== 'all' && (p.country || 'France') !== filters.playerCountry) return false;
@@ -674,7 +673,6 @@ export default function DirectoryScreen() {
         p.nickname?.toLowerCase().includes(searchQuery.toLowerCase()) ||
         p.club?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesPublic = p.isPublic === true; // ADD THIS
       const matchesClub = filters.playerClub === 'all' || p.club === filters.playerClub;
       const matchesCity = filters.playerCity === 'all' || p.location?.city === filters.playerCity;
       const matchesCountry = filters.playerCountry === 'all' || (p.country || 'France') === filters.playerCountry;
@@ -696,7 +694,7 @@ export default function DirectoryScreen() {
       const matchesTerrain = filters.playerTerrain === 'all' || p.terrainName === filters.playerTerrain;
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
       const matchesDist = isWithinDistance(p.location?.latitude, p.location?.longitude);
-      return matchesPublic && matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
     });
     
     // Apply multi-criteria sort or fallback to distance sort
