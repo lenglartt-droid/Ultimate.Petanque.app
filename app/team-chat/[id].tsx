@@ -1,6 +1,6 @@
 /**
  * Team Chat Page — messaging within formed tournament teams.
- * Similar to meetup chat but scoped to tournament teams (2-3 players).
+ * Features: messages, emoji reactions, typing indicators, read receipts, roster share.
  */
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
@@ -10,7 +10,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import { Share } from 'react-native';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
@@ -21,10 +21,15 @@ import { useAppData } from '@/contexts/AppContext';
 import {
   TeamMessage, fetchTeamMessages, sendTeamMessage, deleteTeamMessage,
   TeamMessageReaction, fetchReactionsForTeam, toggleReaction, REACTION_TYPES,
+  TypingUser, setTypingStatus, clearTypingStatus, fetchTypingUsers,
+  TeamReadReceipt, markTeamMessagesAsRead, fetchTeamReadReceipts,
 } from '@/services/teamChatService';
 import { TournamentTeam, getTeamSize } from '@/services/teamInvitationService';
 
 const POLL_INTERVAL = 6000;
+const TYPING_POLL_INTERVAL = 3000;
+const READ_POLL_INTERVAL = 5000;
+const TYPING_DEBOUNCE = 1000;
 const AVATAR_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
 
 function getAvatarColor(userId: string): string {
@@ -49,6 +54,28 @@ function formatDateSep(dateStr: string, lang: string): string {
 const QUICK_FR = ['On se retrouve ou ?', 'Je suis pret', 'A quelle heure ?', 'Strategie ?'];
 const QUICK_EN = ['Where do we meet?', "I'm ready", 'What time?', 'Strategy?'];
 
+// Animated typing dots
+const TypingDots = React.memo(() => {
+  const dot1 = useSharedValue(0);
+  const dot2 = useSharedValue(0);
+  const dot3 = useSharedValue(0);
+  useEffect(() => {
+    dot1.value = withRepeat(withSequence(withTiming(-4, { duration: 300 }), withTiming(0, { duration: 300 })), -1, false);
+    setTimeout(() => { dot2.value = withRepeat(withSequence(withTiming(-4, { duration: 300 }), withTiming(0, { duration: 300 })), -1, false); }, 150);
+    setTimeout(() => { dot3.value = withRepeat(withSequence(withTiming(-4, { duration: 300 }), withTiming(0, { duration: 300 })), -1, false); }, 300);
+  }, []);
+  const s1 = useAnimatedStyle(() => ({ transform: [{ translateY: dot1.value }] }));
+  const s2 = useAnimatedStyle(() => ({ transform: [{ translateY: dot2.value }] }));
+  const s3 = useAnimatedStyle(() => ({ transform: [{ translateY: dot3.value }] }));
+  return (
+    <View style={{ flexDirection: 'row', gap: 3, alignItems: 'center' }}>
+      <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' }, s1]} />
+      <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' }, s2]} />
+      <Animated.View style={[{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#22C55E' }, s3]} />
+    </View>
+  );
+});
+
 export default function TeamChatScreen() {
   const insets = useSafeAreaInsets();
   const { id: teamId } = useLocalSearchParams<{ id: string }>();
@@ -70,6 +97,14 @@ export default function TeamChatScreen() {
   const [tournamentDate, setTournamentDate] = useState<string>('');
   const [tournamentFormat, setTournamentFormat] = useState<string>('');
 
+  // Typing indicator state
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const typingDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastTypingReport = useRef(0);
+
+  // Read receipts state
+  const [readReceipts, setReadReceipts] = useState<TeamReadReceipt[]>([]);
+
   // Load team info
   useEffect(() => {
     if (!teamId) return;
@@ -82,7 +117,7 @@ export default function TeamChatScreen() {
           memberUserIds: t.member_user_ids || [], memberNames: t.member_names || [],
           format: t.format, status: t.status, completedAt: t.completed_at, createdAt: t.created_at,
         });
-        const { data: tour } = await sb.from('tournaments').select('name').eq('id', t.tournament_id).single();
+        const { data: tour } = await sb.from('tournaments').select('name, date, format').eq('id', t.tournament_id).single();
         if (tour) {
           setTournamentName(tour.name);
           setTournamentDate(tour.date || '');
@@ -107,7 +142,12 @@ export default function TeamChatScreen() {
     }
     lastCountRef.current = msgs.length;
     setLoading(false);
-  }, [teamId]);
+
+    // Mark as read
+    if (msgs.length > 0 && user?.id) {
+      markTeamMessagesAsRead(teamId, user.id, msgs[msgs.length - 1].id);
+    }
+  }, [teamId, user?.id]);
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
   useEffect(() => {
@@ -115,10 +155,73 @@ export default function TeamChatScreen() {
     return () => clearInterval(iv);
   }, [loadMessages]);
 
+  // Poll typing indicators
+  useEffect(() => {
+    if (!teamId || !user?.id) return;
+    const iv = setInterval(async () => {
+      const users = await fetchTypingUsers(teamId, user.id);
+      setTypingUsers(users);
+    }, TYPING_POLL_INTERVAL);
+    return () => clearInterval(iv);
+  }, [teamId, user?.id]);
+
+  // Poll read receipts
+  useEffect(() => {
+    if (!teamId) return;
+    const poll = async () => {
+      const receipts = await fetchTeamReadReceipts(teamId);
+      setReadReceipts(receipts);
+    };
+    poll();
+    const iv = setInterval(poll, READ_POLL_INTERVAL);
+    return () => clearInterval(iv);
+  }, [teamId]);
+
+  // Clear typing on unmount
+  useEffect(() => {
+    return () => {
+      if (teamId && user?.id) clearTypingStatus(teamId, user.id);
+    };
+  }, [teamId, user?.id]);
+
+  // Handle text change with typing report
+  const handleTextChange = useCallback((newText: string) => {
+    setText(newText);
+    if (!teamId || !user?.id) return;
+    const now = Date.now();
+    if (now - lastTypingReport.current > TYPING_DEBOUNCE) {
+      lastTypingReport.current = now;
+      const userName = selfPlayer?.name || user?.username || user?.email?.split('@')[0] || 'Player';
+      setTypingStatus(teamId, user.id, userName);
+    }
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+    typingDebounceRef.current = setTimeout(() => {
+      if (teamId && user?.id) clearTypingStatus(teamId, user.id);
+    }, 4000);
+  }, [teamId, user?.id, selfPlayer]);
+
+  // Compute read status for a message
+  const isMessageRead = useCallback((messageId: string, messageIndex: number): boolean => {
+    if (!user?.id) return false;
+    // Check if any other user has read up to or past this message
+    const msgOrder = messages.map(m => m.id);
+    const msgIdx = msgOrder.indexOf(messageId);
+    if (msgIdx < 0) return false;
+    return readReceipts.some(rr => {
+      if (rr.user_id === user.id) return false;
+      const rrIdx = msgOrder.indexOf(rr.last_read_message_id);
+      return rrIdx >= msgIdx;
+    });
+  }, [messages, readReceipts, user?.id]);
+
   const handleSend = useCallback(async (msgText?: string) => {
     const final = (msgText || text).trim();
     if (!final || sending || !teamId || !user?.id) return;
     setSending(true);
+    // Clear typing on send
+    clearTypingStatus(teamId, user.id);
+    if (typingDebounceRef.current) clearTimeout(typingDebounceRef.current);
+
     const userName = selfPlayer?.name || user?.username || user?.email?.split('@')[0] || 'Player';
     const { message: newMsg } = await sendTeamMessage(teamId, user.id, userName, selfPlayer?.avatar || null, final);
     setSending(false);
@@ -127,6 +230,8 @@ export default function TeamChatScreen() {
       setText('');
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 50);
+      // Mark own message as read
+      markTeamMessagesAsRead(teamId, user.id, newMsg.id);
     }
   }, [teamId, user, selfPlayer, text, sending]);
 
@@ -156,7 +261,6 @@ export default function TeamChatScreen() {
     });
 
     await toggleReaction(teamId, messageId, user.id, reactionType);
-    // Reload reactions for consistency
     const rxMap = await fetchReactionsForTeam(teamId);
     setReactions(rxMap);
   }, [teamId, user?.id]);
@@ -185,6 +289,14 @@ export default function TeamChatScreen() {
   const quickMessages = fr ? QUICK_FR : QUICK_EN;
   const teamSize = team ? getTeamSize(team.format) : 2;
 
+  // Typing text
+  const typingText = useMemo(() => {
+    if (typingUsers.length === 0) return '';
+    if (typingUsers.length === 1) return `${typingUsers[0].user_name.split(' ')[0]} ${fr ? 'ecrit' : 'is typing'}`;
+    if (typingUsers.length === 2) return `${typingUsers[0].user_name.split(' ')[0]} ${fr ? 'et' : 'and'} ${typingUsers[1].user_name.split(' ')[0]} ${fr ? 'ecrivent' : 'are typing'}`;
+    return `${typingUsers[0].user_name.split(' ')[0]} ${fr ? 'et' : 'and'} ${typingUsers.length - 1} ${fr ? 'autres ecrivent' : 'others are typing'}`;
+  }, [typingUsers, fr]);
+
   return (
     <SafeAreaView edges={['top']} style={s.container}>
       {/* Header */}
@@ -194,9 +306,15 @@ export default function TeamChatScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{fr ? 'Chat equipe' : 'Team Chat'}</Text>
-          <Text style={s.headerSub} numberOfLines={1}>
-            {tournamentName || ''} {team ? `• ${team.format}` : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+            <Text style={s.headerSub} numberOfLines={1}>
+              {tournamentName || ''} {team ? `\u2022 ${team.format}` : ''}
+            </Text>
+            {/* Typing indicator in header */}
+            {typingUsers.length > 0 ? (
+              <View style={s.headerTypingDot} />
+            ) : null}
+          </View>
         </View>
         {/* Share Roster */}
         <Pressable
@@ -204,7 +322,6 @@ export default function TeamChatScreen() {
           onPress={async () => {
             if (!team) return;
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            const names = team.memberNames.join(', ');
             const dateStr = tournamentDate ? new Date(tournamentDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
             const rosterText = [
               `\u{1F3AF} ${fr ? 'Equipe formee !' : 'Team formed!'}`,
@@ -286,6 +403,8 @@ export default function TeamChatScreen() {
             const isOwn = msg.user_id === user?.id;
             const avatarColor = getAvatarColor(msg.user_id);
             const initials = msg.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
+            const msgIndex = messages.findIndex(m => m.id === msg.id);
+            const read = isOwn ? isMessageRead(msg.id, msgIndex) : false;
             return (
               <Animated.View entering={index < 20 ? FadeInDown.duration(150).delay(Math.min(index * 20, 200)) : undefined}>
                 <View>
@@ -324,7 +443,17 @@ export default function TeamChatScreen() {
                     <View style={[s.bubble, isOwn ? s.bubbleOwn : s.bubbleOther]}>
                       {!isOwn ? <Text style={[s.bubbleName, { color: avatarColor }]}>{msg.user_name}</Text> : null}
                       <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
-                      <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
+                      <View style={s.bubbleFooter}>
+                        <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
+                        {isOwn ? (
+                          <MaterialIcons
+                            name="done-all"
+                            size={14}
+                            color={read ? '#3B82F6' : 'rgba(255,255,255,0.35)'}
+                            style={{ marginLeft: 4 }}
+                          />
+                        ) : null}
+                      </View>
                     </View>
                   </Pressable>
                   {/* Reaction counts */}
@@ -363,6 +492,14 @@ export default function TeamChatScreen() {
         />
       )}
 
+      {/* Typing indicator bar */}
+      {typingUsers.length > 0 ? (
+        <Animated.View entering={FadeIn.duration(200)} style={s.typingBar}>
+          <TypingDots />
+          <Text style={s.typingText}>{typingText}...</Text>
+        </Animated.View>
+      ) : null}
+
       {/* Quick messages */}
       <View style={s.quickRow}>
         {quickMessages.map((qm, idx) => (
@@ -378,7 +515,7 @@ export default function TeamChatScreen() {
           <TextInput
             style={s.input}
             value={text}
-            onChangeText={setText}
+            onChangeText={handleTextChange}
             placeholder={fr ? 'Votre message...' : 'Your message...'}
             placeholderTextColor="#94A3B8"
             multiline
@@ -403,6 +540,7 @@ const s = StyleSheet.create({
   backBtn: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
   headerSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
+  headerTypingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#22C55E' },
   memberAvatars: { flexDirection: 'row', alignItems: 'center' },
   shareRosterBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
   memberDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
@@ -431,8 +569,12 @@ const s = StyleSheet.create({
   bubbleName: { fontSize: 11, fontWeight: '700', marginBottom: 3 },
   bubbleText: { fontSize: 14, color: '#0F172A', lineHeight: 20 },
   bubbleTextOwn: { color: '#FFF' },
-  bubbleTime: { fontSize: 10, color: '#94A3B8', marginTop: 4, textAlign: 'right' },
+  bubbleFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', marginTop: 4 },
+  bubbleTime: { fontSize: 10, color: '#94A3B8' },
   bubbleTimeOwn: { color: 'rgba(255,255,255,0.5)' },
+  // Typing indicator
+  typingBar: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 6, backgroundColor: '#F0FDF4', borderTopWidth: 1, borderTopColor: '#BBF7D0' },
+  typingText: { fontSize: 12, fontWeight: '600', color: '#16A34A' },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingHorizontal: 12, paddingTop: 8, paddingBottom: 4 },
   quickChip: { backgroundColor: '#22C55E10', paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, borderWidth: 1, borderColor: '#22C55E20' },
   quickChipText: { fontSize: 12, fontWeight: '600', color: '#22C55E' },

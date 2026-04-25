@@ -606,30 +606,55 @@ const ClusterMarkerView = React.memo(
     const dominantColor = CLUSTER_COLOR_MAP[dominantType] || theme.primary;
 
     const size = count <= 5 ? 44 : count <= 15 ? 52 : 60;
+    const innerSize = size - 8;
+    const showPills = sorted.length > 1 && size >= 52;
 
     return (
-      <View
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: dominantColor,
-          alignItems: 'center',
-          justifyContent: 'center',
-          borderWidth: 2,
-          borderColor: "#fff"
-        }}
-        collapsable={false}
-      >
-        <Text
+      <View style={{ alignItems: 'center' }} collapsable={false}>
+        {/* Outer ring with gradient-like effect */}
+        <View
           style={{
-            color: '#fff',
-            fontWeight: 'bold',
-            fontSize: 14,
+            width: size,
+            height: size,
+            borderRadius: size / 2,
+            backgroundColor: dominantColor + '25',
+            alignItems: 'center',
+            justifyContent: 'center',
+            borderWidth: 2,
+            borderColor: dominantColor + '40',
           }}
         >
-          {count}
-        </Text>
+          {/* Inner circle */}
+          <View
+            style={{
+              width: innerSize,
+              height: innerSize,
+              borderRadius: innerSize / 2,
+              backgroundColor: dominantColor,
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderWidth: 2.5,
+              borderColor: '#FFF',
+              ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, android: { elevation: 5 }, default: {} }),
+            }}
+          >
+            <Text style={{ color: '#FFF', fontWeight: '900', fontSize: count > 99 ? 11 : 14 }}>
+              {count}
+            </Text>
+          </View>
+        </View>
+        {/* Type indicator dots below cluster */}
+        {showPills ? (
+          <View style={{ flexDirection: 'row', gap: 3, marginTop: -2 }}>
+            {sorted.slice(0, 4).map(([type, cnt]) => (
+              <View key={type} style={{
+                width: 8, height: 8, borderRadius: 4,
+                backgroundColor: CLUSTER_COLOR_MAP[type] || theme.primary,
+                borderWidth: 1.5, borderColor: '#FFF',
+              }} />
+            ))}
+          </View>
+        ) : null}
       </View>
     );
   }
@@ -982,6 +1007,10 @@ export default function MapScreen() {
 
 
   const [selectedPartner, setSelectedPartner] = useState<(typeof partnerMarkers)[0] | null>(null);
+
+  // Cluster expansion list
+  const [clusterListItems, setClusterListItems] = useState<ClusterItem[]>([]);
+  const [showClusterList, setShowClusterList] = useState(false);
 
   // Compute top 3 most frequent cities from user data for quick search chips
   const topCities = useMemo(() => {
@@ -1449,7 +1478,6 @@ useEffect(() => {
 
   const handleClusterPress = useCallback((cluster: Cluster) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    if (!mapRef.current) return;
 
     // Trigger burst animation with dominant cluster color
     const typeCounts: Record<string, number> = {};
@@ -1458,9 +1486,15 @@ useEffect(() => {
     const burstC = dominant ? (CLUSTER_COLOR_MAP[dominant[0]] || theme.primary) : theme.primary;
     triggerBurst(burstC);
 
-    // Calculate bounding region for cluster items
+    // Show cluster expansion list
+    setClusterListItems(cluster.items);
+    setShowClusterList(true);
+  }, []);
+
+  const handleClusterZoom = useCallback(() => {
+    if (!mapRef.current || clusterListItems.length === 0) return;
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-    cluster.items.forEach(item => {
+    clusterListItems.forEach(item => {
       const lat = item.location?.latitude || 0;
       const lng = item.location?.longitude || 0;
       if (lat < minLat) minLat = lat;
@@ -1468,17 +1502,16 @@ useEffect(() => {
       if (lng < minLng) minLng = lng;
       if (lng > maxLng) maxLng = lng;
     });
-
     const padLat = Math.max((maxLat - minLat) * 0.4, 0.01);
     const padLng = Math.max((maxLng - minLng) * 0.4, 0.01);
-
     mapRef.current.animateToRegion({
       latitude: (minLat + maxLat) / 2,
       longitude: (minLng + maxLng) / 2,
       latitudeDelta: (maxLat - minLat) + padLat,
       longitudeDelta: (maxLng - minLng) + padLng,
     }, 400);
-  }, []);
+    setShowClusterList(false);
+  }, [clusterListItems]);
 
   const handleNavigate = useCallback(() => {
     if (!selected) return;
@@ -2922,6 +2955,74 @@ useEffect(() => {
         </SafeAreaView>
       </Modal>
 
+      {/* Cluster Expansion List Modal */}
+      <Modal visible={showClusterList} animationType="slide" transparent onRequestClose={() => setShowClusterList(false)}>
+        <View style={styles.clusterListOverlay}>
+          <View style={styles.clusterListContent}>
+            <View style={styles.clusterListHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.clusterListTitle}>{clusterListItems.length} {language === 'fr' ? 'elements' : 'items'}</Text>
+                <Text style={styles.clusterListSub}>
+                  {(() => {
+                    const tc: Record<string, number> = {};
+                    clusterListItems.forEach(it => { tc[it.itemType] = (tc[it.itemType] || 0) + 1; });
+                    return Object.entries(tc).map(([type, count]) => `${count} ${MARKER_CONFIG[type as keyof typeof MARKER_CONFIG]?.label || type}`).join(' · ');
+                  })()}
+                </Text>
+              </View>
+              <Pressable style={styles.clusterListZoomBtn} onPress={handleClusterZoom}>
+                <MaterialIcons name="zoom-in" size={18} color={theme.primary} />
+              </Pressable>
+              <Pressable style={styles.clusterListCloseBtn} onPress={() => setShowClusterList(false)}>
+                <MaterialIcons name="close" size={22} color={theme.textSecondary} />
+              </Pressable>
+            </View>
+            <ScrollView style={{ maxHeight: 350 }} showsVerticalScrollIndicator={false}>
+              {clusterListItems.map((item, idx) => {
+                const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
+                if (!cfg) return null;
+                const tc = item.itemType === 'terrains' ? config.terrainTypes.find(tt => tt.id === item.type) : null;
+                return (
+                  <Pressable
+                    key={`${item.itemType}-${item.id}-${idx}`}
+                    style={styles.clusterListItem}
+                    onPress={() => {
+                      setShowClusterList(false);
+                      handleSelect(item, item.itemType);
+                    }}
+                  >
+                    <View style={[styles.clusterListItemIcon, { backgroundColor: cfg.color }]}>
+                      <MaterialIcons name={(tc?.icon || cfg.icon) as any} size={16} color="#FFF" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.clusterListItemName} numberOfLines={1}>{item.name}</Text>
+                      <Text style={styles.clusterListItemMeta} numberOfLines={1}>
+                        {item.city || item.location?.city || ''}
+                        {item.itemType === 'terrains' && item.type ? ` · ${t('terrainTypes', item.type)}` : ''}
+                      </Text>
+                    </View>
+                    <View style={[styles.clusterListItemType, { backgroundColor: cfg.color + '12' }]}>
+                      <Text style={[styles.clusterListItemTypeText, { color: cfg.color }]}>{cfg.singular}</Text>
+                    </View>
+                    {item._isPublic ? (
+                      <Pressable
+                        style={styles.clusterListImportBtn}
+                        onPress={(e) => { e.stopPropagation?.(); setShowClusterList(false); handleImportPublicItem(item); }}
+                        hitSlop={4}
+                      >
+                        <MaterialIcons name="add-circle" size={20} color={theme.primary} />
+                      </Pressable>
+                    ) : (
+                      <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
       {/* Meetup Invitation Picker Modal (Map) */}
       <Modal visible={showMeetupPicker} animationType="slide" transparent onRequestClose={() => setShowMeetupPicker(false)}>
         <View style={styles.meetupOverlay}>
@@ -3381,4 +3482,19 @@ const styles = StyleSheet.create({
   heatmapCumulativeToggleActive: { backgroundColor: theme.primary, borderColor: theme.primary },
   heatmapCumulativeText: { fontSize: 10, fontWeight: '700' as const, color: theme.textSecondary },
   heatmapCumulativeTextActive: { color: '#FFF' },
+  // Cluster expansion list
+  clusterListOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' as const },
+  clusterListContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingTop: 16, paddingBottom: Platform.select({ ios: 34, default: 16 }), paddingHorizontal: 16 },
+  clusterListHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 14, paddingBottom: 12, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  clusterListTitle: { fontSize: 17, fontWeight: '700' as const, color: theme.textPrimary },
+  clusterListSub: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  clusterListZoomBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: theme.primary + '12', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: theme.primary + '20' },
+  clusterListCloseBtn: { width: 38, height: 38, borderRadius: 12, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },
+  clusterListItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingVertical: 10, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#F1F5F9' },
+  clusterListItemIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  clusterListItemName: { fontSize: 14, fontWeight: '600' as const, color: theme.textPrimary },
+  clusterListItemMeta: { fontSize: 11, color: theme.textSecondary, marginTop: 1 },
+  clusterListItemType: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  clusterListItemTypeText: { fontSize: 9, fontWeight: '700' as const },
+  clusterListImportBtn: { padding: 4 },
 });

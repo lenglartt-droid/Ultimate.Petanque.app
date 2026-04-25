@@ -191,6 +191,115 @@ export async function toggleReaction(
   }
 }
 
+// ============================================
+// Typing Indicator
+// ============================================
+
+export interface TypingUser {
+  user_id: string;
+  user_name: string;
+  updated_at: string;
+}
+
+const TYPING_STALE_MS = 6000;
+
+export async function setTypingStatus(
+  teamId: string,
+  userId: string,
+  userName: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    await supabase
+      .from('team_chat_typing')
+      .upsert(
+        { team_id: teamId, user_id: userId, user_name: userName, updated_at: new Date().toISOString() },
+        { onConflict: 'team_id,user_id' }
+      );
+  } catch { /* silent */ }
+}
+
+export async function clearTypingStatus(
+  teamId: string,
+  userId: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    await supabase
+      .from('team_chat_typing')
+      .delete()
+      .eq('team_id', teamId)
+      .eq('user_id', userId);
+  } catch { /* silent */ }
+}
+
+export async function fetchTypingUsers(
+  teamId: string,
+  currentUserId: string
+): Promise<TypingUser[]> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('team_chat_typing')
+      .select('user_id, user_name, updated_at')
+      .eq('team_id', teamId)
+      .neq('user_id', currentUserId);
+    if (error || !data) return [];
+    const now = Date.now();
+    return data.filter(t => now - new Date(t.updated_at).getTime() < TYPING_STALE_MS);
+  } catch {
+    return [];
+  }
+}
+
+// ============================================
+// Read Receipts
+// ============================================
+
+export interface TeamReadReceipt {
+  team_id: string;
+  user_id: string;
+  last_read_message_id: string;
+  last_read_at: string;
+}
+
+export async function markTeamMessagesAsRead(
+  teamId: string,
+  userId: string,
+  lastMessageId: string
+): Promise<void> {
+  try {
+    const supabase = getSupabaseClient();
+    await supabase
+      .from('team_chat_read_receipts')
+      .upsert(
+        {
+          team_id: teamId,
+          user_id: userId,
+          last_read_message_id: lastMessageId,
+          last_read_at: new Date().toISOString(),
+        },
+        { onConflict: 'team_id,user_id' }
+      );
+  } catch { /* silent */ }
+}
+
+export async function fetchTeamReadReceipts(
+  teamId: string
+): Promise<TeamReadReceipt[]> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('team_chat_read_receipts')
+      .select('team_id, user_id, last_read_message_id, last_read_at')
+      .eq('team_id', teamId);
+    if (error || !data) return [];
+    return data;
+  } catch {
+    return [];
+  }
+}
+
 export async function getTeamMessageCount(teamId: string): Promise<number> {
   try {
     const supabase = getSupabaseClient();

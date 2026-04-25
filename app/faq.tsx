@@ -608,6 +608,50 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
       ],
     },
     {
+      id: 'team_formation',
+      category: fr ? 'Formation d\'equipes & Synergie' : 'Team Formation & Synergy',
+      icon: 'groups',
+      color: '#22C55E',
+      description: fr ? 'Inviter des partenaires, analyser la synergie, former des equipes pour vos tournois' : 'Invite partners, analyze synergy, build teams for your tournaments',
+      questions: [
+        {
+          id: 'tf1',
+          q: fr ? 'Comment former une equipe pour un tournoi ?' : 'How do I build a team for a tournament?',
+          a: fr
+            ? 'Depuis la page d\'accueil, section "Former une equipe", appuyez sur un tournoi Doublette ou Triplette a venir. Le modal de formation s\'ouvre avec : statut de l\'equipe, membres actuels, places libres, barre de progression. Recherchez un joueur public par nom, filtrez par role, ville, ELO. Envoyez une invitation — le joueur recoit une notification push et peut accepter/refuser dans Notifications > Teams. Quand le nombre requis est atteint (2 pour Doublette, 3 pour Triplette), l\'equipe est automatiquement completee.'
+            : 'From the home page, "Team Up" section, tap an upcoming Doubles or Triples tournament. The formation modal opens with: team status, current members, open slots, progress bar. Search for a public player by name, filter by role, city, ELO. Send an invitation — the player gets a push notification and can accept/decline in Notifications > Teams. When the required number is reached (2 for Doubles, 3 for Triples), the team auto-completes.',
+        },
+        {
+          id: 'tf2',
+          q: fr ? 'Qu\'est-ce que le score de synergie et comment est-il calcule ?' : 'What is the synergy score and how is it calculated?',
+          a: fr
+            ? 'Le score de synergie (0-100) mesure la compatibilite avec un partenaire potentiel. Il combine 4 composantes : taux de victoire ensemble (/30 pts), frequence de matchs partages (/25 pts), compatibilite ELO (/25 pts — plus proches = mieux), complementarite de role (/20 pts — Tireur+Pointeur = ideal). Appuyez sur le badge de synergie pour voir le detail de chaque composante avec des barres de progression. Un graphique sparkline montre l\'evolution du taux de victoire sur les 10 derniers matchs partages avec un indicateur de tendance.'
+            : 'The synergy score (0-100) measures compatibility with a potential partner. It combines 4 components: win rate together (/30 pts), shared match frequency (/25 pts), ELO compatibility (/25 pts — closer = better), role complementarity (/20 pts — Shooter+Pointer = ideal). Tap the synergy badge to see each component detail with progress bars. A sparkline chart shows win rate evolution over the last 10 shared matches with a trend indicator.',
+        },
+        {
+          id: 'tf3',
+          q: fr ? 'Comment fonctionne le filtre "A proximite" dans la recherche d\'equipiers ?' : 'How does the "Nearby" filter work in teammate search?',
+          a: fr
+            ? 'Dans le modal de formation d\'equipe, appuyez sur le bouton vert "A proximite". L\'app detecte votre position GPS et trie tous les resultats de recherche par distance a vol d\'oiseau (Haversine). Chaque joueur affiche un badge distance en km. Ce filtre fonctionne independamment de la localisation du tournoi — il utilise votre position actuelle. Utile pour trouver des joueurs locaux rapidement.'
+            : 'In the team builder modal, tap the green "Nearby" button. The app detects your GPS position and sorts all search results by straight-line distance (Haversine). Each player shows a distance badge in km. This filter works independently of tournament location — it uses your current position. Useful for quickly finding local players.',
+        },
+        {
+          id: 'tf4',
+          q: fr ? 'Comment sauvegarder un partenaire en favori ?' : 'How do I save a partner as favorite?',
+          a: fr
+            ? 'Appuyez sur l\'etoile a cote d\'un partenaire dans la section "Partenaires recents" ou dans les resultats de recherche. Les favoris (etoile doree) sont tries en priorite et apparaissent toujours en haut de la liste. Les favoris sont sauvegardes localement sur votre appareil et persistent entre les sessions.'
+            : 'Tap the star next to a partner in the "Recent Partners" section or in search results. Favorites (golden star) are sorted first and always appear at the top of the list. Favorites are saved locally on your device and persist between sessions.',
+        },
+        {
+          id: 'tf5',
+          q: fr ? 'Comment fonctionne la date limite de formation ?' : 'How does the formation deadline work?',
+          a: fr
+            ? 'Par defaut, les invitations sont bloquees 2 jours avant le tournoi. Le capitaine peut activer/desactiver cette limite pour chaque tournoi via le switch "Date limite formation" dans le modal d\'equipe. Un badge rouge s\'affiche quand la deadline est proche (J-3). Quand la deadline est passee, aucune nouvelle invitation ne peut etre envoyee.'
+            : 'By default, invitations are blocked 2 days before the tournament. The captain can enable/disable this limit per tournament via the "Formation deadline" switch in the team modal. A red badge shows when the deadline is close (3 days left). When the deadline passes, no new invitations can be sent.',
+        },
+      ],
+    },
+    {
       id: 'roadmap',
       category: fr ? 'Roadmap V2' : 'V2 Roadmap',
       icon: 'rocket-launch',
