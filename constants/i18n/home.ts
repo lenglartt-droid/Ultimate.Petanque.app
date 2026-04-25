@@ -63,8 +63,12 @@ export const homeTranslations = {
     loginError: { fr: 'Erreur de connexion', en: 'Login error' },
     googleError: { fr: 'Erreur Google', en: 'Google error' },
     disposableEmail: { fr: 'Les adresses email temporaires ne sont pas acceptees. Utilisez une adresse email permanente.', en: 'Temporary email addresses are not accepted. Please use a permanent email address.' },
-    maxAccountsReached: { fr: 'Nombre maximum de comptes atteint pour cet appareil. Contactez le support si necessaire.', en: 'Maximum number of accounts reached for this device. Contact support if needed.' },
+    maxAccountsReached: { fr: 'Un compte est deja enregistre sur cet appareil. Un seul compte par appareil est autorise. Contactez le support si necessaire.', en: 'An account is already registered on this device. Only one account per device is allowed. Contact support if needed.' },
     cooldownActive: { fr: 'Veuillez attendre 24h avant de creer un nouveau compte depuis cet appareil.', en: 'Please wait 24h before creating a new account from this device.' },
+     deviceBoundToOther: { fr: 'Cet appareil est deja lie a un autre compte. Un seul compte par appareil est autorise pour des raisons anti-triche.', en: 'This device is already linked to another account. Only one account per device is allowed for anti-cheat purposes.' },
+     deviceBindingTitle: { fr: 'Appareil lie a votre compte', en: 'Device linked to your account' },
+     deviceBindingMessage: { fr: 'Pour des raisons de securite anti-triche, cet appareil est maintenant lie a votre compte. Un seul compte par appareil est autorise. Si vous changez de telephone, contactez le support pour transferer votre compte.', en: 'For anti-cheat security, this device is now linked to your account. Only one account per device is allowed. If you change phones, contact support to transfer your account.' },
+     deviceBindingOAuthKicked: { fr: 'Ce compte Google ne correspond pas a l\'appareil. Cet appareil est lie a un autre compte. Connexion impossible.', en: 'This Google account does not match this device. This device is linked to another account. Login denied.' },
   },
   onboarding: {
     skip: { fr: 'Passer', en: 'Skip' },

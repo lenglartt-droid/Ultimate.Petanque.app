@@ -39,6 +39,7 @@ import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+import TeamBracketView from '@/components/feature/TeamBracketView';
 import * as ImagePicker from '@/services/imagePicker';
 import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
@@ -852,6 +853,13 @@ export default function TournamentDetailScreen() {
             {(tournament as any).sponsorId ? (
               <View style={{ marginTop: 14 }}>
                 <SponsoredItemBanner sponsorId={(tournament as any).sponsorId} page="tournament-detail" style={{ marginBottom: 0 }} />
+
+                {/* Team Bracket View */}
+                {(tournament.format === 'Doublette' || tournament.format === 'Triplette') ? (
+                  <View style={{ marginTop: 16 }}>
+                    <TeamBracketView tournamentId={tournament.id} format={tournament.format} language={language} />
+                  </View>
+                ) : null}
               </View>
             ) : null}
           </View>

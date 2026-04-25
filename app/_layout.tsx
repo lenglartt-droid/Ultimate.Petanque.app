@@ -253,6 +253,23 @@ function LayoutInner() {
           case 'player_transfer_response':
             router.push({ pathname: '/notifications-hub', params: { tab: 'transfers' } } as any);
             break;
+          case 'team_invitation':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            break;
+          case 'team_invitation_response':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            break;
+          case 'device_transfer_decision':
+            router.push('/device-transfer' as any);
+            break;
+          case 'team_dissolved':
+          case 'team_member_removed':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            break;
+          case 'team_chat_message':
+            if (data.teamId) router.push(`/team-chat/${data.teamId}` as any);
+            else router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            break;
           case 'terrain_activity':
             if (data.terrainId) router.push(`/terrain/${data.terrainId}` as any);
             else router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any);
@@ -989,7 +1006,21 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="device-transfer" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="terrain-activity/[id]" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="team-chat/[id]" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',
