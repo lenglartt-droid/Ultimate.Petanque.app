@@ -23,6 +23,7 @@ import { addNotificationResponseListener } from '@/services/notificationService'
 import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
+import { checkFavoriteTerrainActivity } from '@/services/terrainActivityNotificationService';
 import * as Linking from 'expo-linking';
 import { findEventByCode } from '@/services/sponsoredEventService';
 
@@ -150,6 +151,18 @@ function LayoutInner() {
     }).catch(() => {});
   }, []);
 
+  // Check if favorite terrains are active and send push notification
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      checkFavoriteTerrainActivity().then(({ activeTerrains, notificationSent }) => {
+        if (activeTerrains.length > 0) {
+          console.log(`[TerrainActivity] ${activeTerrains.length} favorite terrain(s) active, push sent: ${notificationSent}`);
+        }
+      }).catch(() => {});
+    }, 5000); // Delay 5s after app mount
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle deep links for event QR codes (?event=CODE)
   React.useEffect(() => {
     const handleDeepLinkUrl = async (url: string) => {
@@ -239,6 +252,10 @@ function LayoutInner() {
             break;
           case 'player_transfer_response':
             router.push({ pathname: '/notifications-hub', params: { tab: 'transfers' } } as any);
+            break;
+          case 'terrain_activity':
+            if (data.terrainId) router.push(`/terrain/${data.terrainId}` as any);
+            else router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any);
             break;
           case 'maintenance':
             // No navigation, banner auto-shows via polling

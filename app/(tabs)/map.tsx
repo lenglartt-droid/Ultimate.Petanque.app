@@ -416,6 +416,64 @@ const ClubMarkerView = React.memo(
 );
 
 
+// ============================================
+// SPONSORED SPLIT MARKER COMPONENT
+// Shows half item photo/icon + half sponsor logo
+// ============================================
+const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, sponsorPhoto, sponsorColor, size = 40 }: {
+  itemIcon: string; itemColor: string; itemPhoto?: string | null; sponsorPhoto?: string | null; sponsorColor: string; size?: number;
+}) => {
+  const [itemImgLoaded, setItemImgLoaded] = useState(false);
+  const [sponsorImgLoaded, setSponsorImgLoaded] = useState(false);
+  const [itemImgError, setItemImgError] = useState(false);
+  const [sponsorImgError, setSponsorImgError] = useState(false);
+  const halfW = size / 2;
+
+  return (
+    <View style={{ alignItems: 'center' }} collapsable={false}>
+      <View style={{
+        width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
+        borderWidth: 2.5, borderColor: sponsorColor,
+        flexDirection: 'row',
+        ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }, android: { elevation: 5 }, default: {} }),
+      }}>
+        {/* Left half: item photo/icon */}
+        <View style={{ width: halfW, height: size, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          {itemPhoto && !itemImgError ? (
+            <RNImage
+              source={{ uri: itemPhoto, cache: 'force-cache' }}
+              style={{ width: halfW + 4, height: size, marginLeft: -2 }}
+              resizeMode="cover"
+              onLoad={() => setItemImgLoaded(true)}
+              onError={() => setItemImgError(true)}
+            />
+          ) : (
+            <MaterialIcons name={itemIcon as any} size={size * 0.4} color="#FFF" />
+          )}
+        </View>
+        {/* Right half: sponsor logo */}
+        <View style={{ width: halfW, height: size, backgroundColor: sponsorColor + '30', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          {sponsorPhoto && !sponsorImgError ? (
+            <RNImage
+              source={{ uri: sponsorPhoto, cache: 'force-cache' }}
+              style={{ width: halfW + 4, height: size, marginRight: -2 }}
+              resizeMode="cover"
+              onLoad={() => setSponsorImgLoaded(true)}
+              onError={() => setSponsorImgError(true)}
+            />
+          ) : (
+            <MaterialIcons name="handshake" size={size * 0.35} color={sponsorColor} />
+          )}
+        </View>
+      </View>
+      {/* Sponsor badge */}
+      <View style={[pMarkerStyles.badge, { backgroundColor: sponsorColor }]}>
+        <MaterialIcons name="handshake" size={7} color="#FFF" />
+      </View>
+    </View>
+  );
+});
+
 const pMarkerStyles = StyleSheet.create({
   container: {
     alignItems: 'center' as const,
@@ -1271,6 +1329,54 @@ useEffect(() => {
 
       addItems(enrichWithSponsorColor(filterPlayers(playerMarkers)), 'players', true)
     }
+
+    // Enrich terrains with sponsor data for split markers
+    if (filter === 'all' || filter === 'terrains') {
+      results.forEach((item: any) => {
+        if (item.itemType === 'terrains' && item.sponsorId) {
+          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
+          if (sponsorInfo) {
+            item._sponsorPhoto = sponsorInfo.photo;
+            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+          }
+        }
+      });
+    }
+    // Enrich clubs with sponsor data for split markers
+    if (filter === 'all' || filter === 'clubs') {
+      results.forEach((item: any) => {
+        if (item.itemType === 'clubs' && item.sponsorId) {
+          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
+          if (sponsorInfo) {
+            item._sponsorPhoto = sponsorInfo.photo;
+            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+          }
+        }
+      });
+    }
+    // Enrich tournaments with sponsor data for split markers
+    if (filter === 'all' || filter === 'tournaments') {
+      results.forEach((item: any) => {
+        if (item.itemType === 'tournaments' && item.sponsorId) {
+          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
+          if (sponsorInfo) {
+            item._sponsorPhoto = sponsorInfo.photo;
+            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+          }
+        }
+      });
+    }
+    // Enrich players with sponsor data for split markers
+    results.forEach((item: any) => {
+      if (item.itemType === 'players' && item.sponsorId) {
+        const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
+        if (sponsorInfo) {
+          item._sponsorPhoto = sponsorInfo.photo;
+          item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+        }
+      }
+    });
+    }
     if (filter === 'all' || filter === 'events') {
       // Skip events when partner filter active
       if (filter !== 'partners') sponsoredEvents.forEach(evt => {
@@ -1938,8 +2044,17 @@ useEffect(() => {
                 onPress={() => handleSelect(item, item.itemType)}
                 tracksViewChanges={!readyMarkers.has(item.id)}
               >
-                {(item.itemType === 'partners' || item.itemType === 'players')? (
+                {(item.itemType === 'partners' || (item.itemType === 'players' && item._tier))? (
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
+                ) : item._sponsorPhoto || item._sponsorColor ? (
+                  <SponsoredSplitMarkerView
+                    itemIcon={tc?.icon || cfg.icon}
+                    itemColor={cfg.color}
+                    itemPhoto={item.itemType === 'terrains' ? item.photos?.[0] : item.itemType === 'clubs' ? item.logo : item.itemType === 'players' ? item.avatar : null}
+                    sponsorPhoto={item._sponsorPhoto}
+                    sponsorColor={item._sponsorColor || '#2563EB'}
+                    size={40}
+                  />
                 ) : ((item.itemType === 'clubs' && item.logo)? (
                   <ClubMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
                 ) :
