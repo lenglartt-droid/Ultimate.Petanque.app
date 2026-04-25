@@ -21,6 +21,8 @@ import {
   banPlayer, fetchDeletionAlerts, DeletionAlert,
   reverseDeletedEloLoss, fetchDeletionTimeline, DeletionTimelinePoint,
 } from '@/services/trustScoreService';
+import { fetchDeviceRegistrations, adminUnlinkDevice, adminUnlinkAllForDevice } from '@/services/deviceFingerprintService';
+import { fetchPendingTransferRequests, validateTransferRequest, rejectTransferRequest, DeviceTransferRequest } from '@/services/deviceTransferService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import { recalculateAllElo, ELO_RANKS, getEloRank, ELO_INITIAL, applyInactivityDecay } from '@/services/eloService';
 import { useAdminCache } from '@/hooks/useAdminCache';
@@ -79,6 +81,21 @@ export default function AdminAntiCheatScreen() {
 
   // Deletion heatmap (day x hour) for detail modal
   const [deletionHeatmap, setDeletionHeatmap] = useState<number[][]>([]);
+
+  // Device registrations management
+  const [deviceRegs, setDeviceRegs] = useState<Array<{ id: string; fingerprint: string; email: string; userId: string | null; registeredAt: string; ipHint: string | null }>>([]);
+  const [deviceRegsLoading, setDeviceRegsLoading] = useState(false);
+  const [deviceRegsLoaded, setDeviceRegsLoaded] = useState(false);
+  const [deviceSearch, setDeviceSearch] = useState('');
+  const [unlinkingId, setUnlinkingId] = useState<string | null>(null);
+
+  // Device transfer requests
+  const [transferRequests, setTransferRequests] = useState<DeviceTransferRequest[]>([]);
+  const [transferLoading, setTransferLoading] = useState(false);
+
+  // Anti-cheat weekly analytics
+  const [weeklyAnalytics, setWeeklyAnalytics] = useState<Array<{ week: string; blocked: number; registrations: number; multiAccount: number }>>([]);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -610,6 +627,310 @@ export default function AdminAntiCheatScreen() {
           ) : null}
         </View>
       ) : null}
+
+      {/* ============ ANTI-CHEAT WEEKLY ANALYTICS ============ */}
+      <View style={st.deviceSection}>
+        <Pressable
+          style={st.deviceHeaderRow}
+          onPress={async () => {
+            if (weeklyAnalytics.length > 0) { setWeeklyAnalytics([]); return; }
+            setAnalyticsLoading(true);
+            try {
+              const supabase = getSupabaseClient();
+              // Get registrations over last 12 weeks
+              const twelveWeeksAgo = new Date(); twelveWeeksAgo.setDate(twelveWeeksAgo.getDate() - 84);
+              const { data: regData } = await supabase.from('device_registrations').select('registered_at, device_fingerprint, email').gte('registered_at', twelveWeeksAgo.toISOString()).order('registered_at', { ascending: true });
+              // Group by week
+              const weekMap = new Map<string, { blocked: number; registrations: number; multiAccount: number }>();
+              const fpEmailMap = new Map<string, Set<string>>();
+              for (const r of regData || []) {
+                const d = new Date(r.registered_at);
+                const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7)); monday.setHours(0, 0, 0, 0);
+                const wk = monday.toISOString().split('T')[0];
+                if (!weekMap.has(wk)) weekMap.set(wk, { blocked: 0, registrations: 0, multiAccount: 0 });
+                weekMap.get(wk)!.registrations++;
+                if (r.device_fingerprint && r.email) {
+                  if (!fpEmailMap.has(r.device_fingerprint)) fpEmailMap.set(r.device_fingerprint, new Set());
+                  fpEmailMap.get(r.device_fingerprint)!.add(r.email.toLowerCase());
+                  if (fpEmailMap.get(r.device_fingerprint)!.size > 1) {
+                    weekMap.get(wk)!.multiAccount++;
+                  }
+                }
+              }
+              const weeks = Array.from(weekMap.entries()).sort((a, b) => a[0].localeCompare(b[0])).map(([week, stats]) => ({ week: week.substring(5), ...stats }));
+              setWeeklyAnalytics(weeks);
+            } catch { /* silent */ }
+            setAnalyticsLoading(false);
+          }}
+        >
+          <View style={[st.deviceIcon, { backgroundColor: '#7C3AED15' }]}>
+            <MaterialIcons name="analytics" size={18} color="#7C3AED" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Analytiques Anti-Triche' : 'Anti-Cheat Analytics'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? 'Tendances hebdomadaires (12 sem.)' : 'Weekly trends (12 wks)'}</Text>
+          </View>
+          {analyticsLoading ? <ActivityIndicator size="small" color="#7C3AED" /> : (
+            <MaterialIcons name={weeklyAnalytics.length > 0 ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+        {weeklyAnalytics.length > 0 ? (
+          <View style={{ paddingTop: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 3, height: 90, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 10, paddingBottom: 24 }}>
+              {weeklyAnalytics.map((w, i) => {
+                const maxReg = Math.max(...weeklyAnalytics.map(wk => wk.registrations), 1);
+                const regH = Math.max(4, (w.registrations / maxReg) * 50);
+                const maH = Math.max(2, (w.multiAccount / Math.max(maxReg, 1)) * 50);
+                return (
+                  <View key={w.week} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+                      <View style={{ width: 6, height: regH, borderRadius: 3, backgroundColor: '#3B82F6' }} />
+                      {w.multiAccount > 0 ? <View style={{ width: 5, height: maH, borderRadius: 3, backgroundColor: '#EF4444' }} /> : null}
+                    </View>
+                    <Text style={{ fontSize: 6, color: theme.textMuted, fontWeight: '500' }}>{w.week}</Text>
+                  </View>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Inscriptions' : 'Registrations'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Multi-comptes' : 'Multi-accounts'}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#3B82F6' }}>{weeklyAnalytics.reduce((s, w) => s + w.registrations, 0)}</Text>
+                <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Total inscriptions' : 'Total registrations'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>{weeklyAnalytics.reduce((s, w) => s + w.multiAccount, 0)}</Text>
+                <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Violations' : 'Violations'}</Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
+      </View>
+
+      {/* ============ DEVICE TRANSFER REQUESTS ============ */}
+      <View style={st.deviceSection}>
+        <Pressable
+          style={st.deviceHeaderRow}
+          onPress={async () => {
+            if (transferRequests.length > 0) { setTransferRequests([]); return; }
+            setTransferLoading(true);
+            const { requests, error: trErr } = await fetchPendingTransferRequests();
+            if (trErr) showAlert('Error', trErr);
+            setTransferRequests(requests);
+            setTransferLoading(false);
+          }}
+        >
+          <View style={[st.deviceIcon, { backgroundColor: '#F59E0B15' }]}>
+            <MaterialIcons name="swap-horiz" size={18} color="#F59E0B" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Transferts d\'appareils' : 'Device Transfers'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? 'Demandes en attente de validation' : 'Pending validation requests'}</Text>
+          </View>
+          {transferLoading ? <ActivityIndicator size="small" color="#F59E0B" /> : (
+            <MaterialIcons name={transferRequests.length > 0 ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+        {transferRequests.length > 0 ? (
+          <View style={{ paddingTop: 10 }}>
+            {transferRequests.map((tr) => (
+              <View key={tr.id} style={st.deviceCard}>
+                <View style={{ marginBottom: 8 }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: theme.textPrimary }}>{tr.username || tr.userEmail || tr.userId.substring(0, 8)}</Text>
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 2 }}>Code: <Text style={{ fontWeight: '800', color: '#F59E0B', letterSpacing: 2 }}>{tr.transferCode}</Text></Text>
+                  <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                    {isFr ? 'Expire' : 'Expires'}: {new Date(tr.expiresAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                  </Text>
+                  {tr.oldFingerprint ? <Text style={{ fontSize: 8, color: theme.textMuted, fontFamily: 'monospace', marginTop: 2 }}>{tr.oldFingerprint}</Text> : null}
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <Pressable
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#22C55E15', paddingVertical: 10, borderRadius: 10 }}
+                    onPress={async () => {
+                      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                      const { error: vErr } = await validateTransferRequest(tr.id);
+                      if (vErr) { showAlert('Error', vErr); return; }
+                      setTransferRequests(prev => prev.filter(r => r.id !== tr.id));
+                      showAlert(isFr ? 'Transfert valide' : 'Transfer validated');
+                    }}
+                  >
+                    <MaterialIcons name="check" size={16} color="#22C55E" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#22C55E' }}>{isFr ? 'Valider' : 'Validate'}</Text>
+                  </Pressable>
+                  <Pressable
+                    style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: '#EF444415', paddingVertical: 10, borderRadius: 10 }}
+                    onPress={async () => {
+                      Haptics.selectionAsync();
+                      const { error: rErr } = await rejectTransferRequest(tr.id);
+                      if (rErr) { showAlert('Error', rErr); return; }
+                      setTransferRequests(prev => prev.filter(r => r.id !== tr.id));
+                    }}
+                  >
+                    <MaterialIcons name="close" size={16} color="#EF4444" />
+                    <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>{isFr ? 'Rejeter' : 'Reject'}</Text>
+                  </Pressable>
+                </View>
+              </View>
+            ))}
+            {transferRequests.length === 0 ? (
+              <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: 'center', paddingVertical: 16 }}>{isFr ? 'Aucune demande en attente' : 'No pending requests'}</Text>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
+
+      {/* ============ DEVICE MANAGEMENT ============ */}
+      <View style={st.deviceSection}>
+        <Pressable
+          style={st.deviceHeaderRow}
+          onPress={async () => {
+            if (deviceRegsLoaded) {
+              setDeviceRegsLoaded(false);
+              setDeviceRegs([]);
+              return;
+            }
+            setDeviceRegsLoading(true);
+            const { registrations, error: err } = await fetchDeviceRegistrations();
+            if (err) showAlert('Error', err);
+            setDeviceRegs(registrations);
+            setDeviceRegsLoading(false);
+            setDeviceRegsLoaded(true);
+          }}
+        >
+          <View style={[st.deviceIcon, { backgroundColor: '#0EA5E915' }]}>
+            <MaterialIcons name="devices" size={18} color="#0EA5E9" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Gestion des appareils' : 'Device Management'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? 'Delier des comptes de leurs appareils' : 'Unlink accounts from their devices'}</Text>
+          </View>
+          {deviceRegsLoading ? <ActivityIndicator size="small" color="#0EA5E9" /> : (
+            <MaterialIcons name={deviceRegsLoaded ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+
+        {deviceRegsLoaded ? (
+          <View style={{ paddingTop: 10 }}>
+            <View style={[st.searchBar, { marginHorizontal: 0, marginBottom: 10 }]}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput style={st.searchInput} value={deviceSearch} onChangeText={setDeviceSearch} placeholder={isFr ? 'Filtrer par email ou fingerprint...' : 'Filter by email or fingerprint...'} placeholderTextColor={theme.textMuted} />
+              {deviceSearch.length > 0 ? <Pressable onPress={() => setDeviceSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable> : null}
+            </View>
+
+            {(() => {
+              const filteredDevices = deviceRegs.filter(d => {
+                if (!deviceSearch.trim()) return true;
+                const q = deviceSearch.toLowerCase();
+                return d.email.toLowerCase().includes(q) || d.fingerprint.toLowerCase().includes(q);
+              });
+
+              // Group by fingerprint for multi-account detection
+              const fpGroups = new Map<string, typeof filteredDevices>();
+              filteredDevices.forEach(d => {
+                if (!fpGroups.has(d.fingerprint)) fpGroups.set(d.fingerprint, []);
+                fpGroups.get(d.fingerprint)!.push(d);
+              });
+              const multiAccountFps = Array.from(fpGroups.entries()).filter(([_, regs]) => {
+                const uniqueEmails = new Set(regs.map(r => r.email.toLowerCase()));
+                return uniqueEmails.size > 1;
+              });
+
+              return (
+                <>
+                  {/* Multi-account alerts */}
+                  {multiAccountFps.length > 0 ? (
+                    <View style={{ backgroundColor: '#EF444408', borderRadius: 12, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: '#EF444420' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <MaterialIcons name="warning" size={14} color="#EF4444" />
+                        <Text style={{ fontSize: 12, fontWeight: '700', color: '#EF4444' }}>
+                          {multiAccountFps.length} {isFr ? 'appareil(s) multi-compte detecte(s)' : 'multi-account device(s) detected'}
+                        </Text>
+                      </View>
+                      {multiAccountFps.slice(0, 3).map(([fp, regs]) => {
+                        const emails = [...new Set(regs.map(r => r.email))];
+                        return (
+                          <View key={fp} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderTopWidth: 1, borderTopColor: '#EF444415' }}>
+                            <Text style={{ fontSize: 9, fontWeight: '600', color: theme.textMuted, fontFamily: 'monospace' }}>{fp.substring(0, 12)}...</Text>
+                            <View style={{ flex: 1 }}>
+                              {emails.map(e => <Text key={e} style={{ fontSize: 11, color: '#EF4444', fontWeight: '600' }}>{e}</Text>)}
+                            </View>
+                            <Pressable
+                              style={{ backgroundColor: '#EF444415', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }}
+                              onPress={async () => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                const { error: err, count } = await adminUnlinkAllForDevice(fp);
+                                if (err) { showAlert('Error', err); return; }
+                                setDeviceRegs(prev => prev.filter(d => d.fingerprint !== fp));
+                                showAlert(isFr ? `${count} enregistrement(s) supprime(s)` : `${count} registration(s) removed`);
+                              }}
+                            >
+                              <Text style={{ fontSize: 10, fontWeight: '700', color: '#EF4444' }}>{isFr ? 'Tout delier' : 'Unlink all'}</Text>
+                            </Pressable>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  <Text style={{ fontSize: 11, color: theme.textMuted, marginBottom: 8, fontWeight: '600' }}>
+                    {filteredDevices.length} {isFr ? 'enregistrement(s)' : 'registration(s)'}
+                  </Text>
+
+                  {filteredDevices.slice(0, 50).map((d) => (
+                    <View key={d.id} style={st.deviceCard}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{d.email || 'Unknown'}</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+                            <Text style={{ fontSize: 9, color: theme.textMuted, fontFamily: 'monospace' }}>{d.fingerprint}</Text>
+                            {(d as any).authMethod ? (
+                              <View style={{ backgroundColor: (d as any).authMethod === 'google' ? '#EA433515' : '#3B82F615', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 8, fontWeight: '700', color: (d as any).authMethod === 'google' ? '#EA4335' : '#3B82F6' }}>{((d as any).authMethod || 'email').toUpperCase()}</Text>
+                              </View>
+                            ) : null}
+                          </View>
+                          <Text style={{ fontSize: 10, color: theme.textMuted, marginTop: 2 }}>
+                            {new Date(d.registeredAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </Text>
+                        </View>
+                        <Pressable
+                          style={[st.deviceUnlinkBtn, unlinkingId === d.id && { opacity: 0.6 }]}
+                          onPress={async () => {
+                            Haptics.selectionAsync();
+                            setUnlinkingId(d.id);
+                            const { error: err } = await adminUnlinkDevice(d.id);
+                            setUnlinkingId(null);
+                            if (err) { showAlert('Error', err); return; }
+                            setDeviceRegs(prev => prev.filter(r => r.id !== d.id));
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          }}
+                          disabled={unlinkingId === d.id}
+                        >
+                          {unlinkingId === d.id ? <ActivityIndicator size="small" color="#EF4444" /> : (
+                            <><MaterialIcons name="link-off" size={14} color="#EF4444" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>{isFr ? 'Delier' : 'Unlink'}</Text></>
+                          )}
+                        </Pressable>
+                      </View>
+                    </View>
+                  ))}
+                  {filteredDevices.length > 50 ? (
+                    <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'center', paddingVertical: 8 }}>+{filteredDevices.length - 50} {isFr ? 'autres' : 'more'}...</Text>
+                  ) : null}
+                </>
+              );
+            })()}
+          </View>
+        ) : null}
+      </View>
 
       {/* Status filter chips */}
       <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
@@ -1255,4 +1576,13 @@ const st = StyleSheet.create({
 
   // Heatmap
   heatmapContainer: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 12 },
+
+  // Device management
+  deviceSection: { marginHorizontal: 16, marginBottom: 10, backgroundColor: theme.surface, borderRadius: 16, padding: 14, ...theme.shadows.card, borderWidth: 1, borderColor: '#0EA5E9' + '15' },
+  deviceHeaderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  deviceIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
+  deviceTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  deviceSubtitle: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
+  deviceCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 6 },
+  deviceUnlinkBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#EF444410', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
 });
