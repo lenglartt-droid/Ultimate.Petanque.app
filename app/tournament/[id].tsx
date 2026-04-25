@@ -817,11 +817,6 @@ export default function TournamentDetailScreen() {
               </View>
             ) : null}
 
-            {/* Sponsor Banner — only when sponsor_id is explicitly set */}
-            {(tournament as any).sponsorId ? (
-              <SponsoredItemBanner sponsorId={(tournament as any).sponsorId} page="tournament-detail" style={{ marginBottom: 0 }} />
-            ) : null}
-
             {/* Terrain Info */}
             {terrain ? (
               <Pressable
@@ -851,6 +846,13 @@ export default function TournamentDetailScreen() {
                 <Text style={styles.heroMapBtnText}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
                 <MaterialIcons name="chevron-right" size={16} color={theme.success} />
               </Pressable>
+            ) : null}
+
+            {/* Sponsor Banner — inside hero card, at the end */}
+            {(tournament as any).sponsorId ? (
+              <View style={{ marginTop: 14 }}>
+                <SponsoredItemBanner sponsorId={(tournament as any).sponsorId} page="tournament-detail" style={{ marginBottom: 0 }} />
+              </View>
             ) : null}
           </View>
         </Animated.View>

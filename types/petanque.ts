@@ -36,6 +36,7 @@ export interface BoulesInfo {
 
 export interface Player {
   id: string;
+  userId?: string;
   name: string;
   nickname?: string;
   avatar?: string;
