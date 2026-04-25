@@ -60,11 +60,18 @@ import {
   declineTransferRequest,
   PlayerTransferRequest,
 } from '@/services/playerTransferService';
+import {
+  getPendingTeamInvitations,
+  respondToTeamInvitation,
+  getTeamSize,
+  TeamInvitation,
+} from '@/services/teamInvitationService';
 
-type TabKey = 'invitations' | 'witness' | 'transfers' | 'claims' | 'tournaments' | 'preferences';
+type TabKey = 'invitations' | 'witness' | 'teams' | 'transfers' | 'claims' | 'tournaments' | 'preferences';
 
 const TABS: { key: TabKey; labelFr: string; labelEn: string; icon: string; color: string }[] = [
   { key: 'invitations', labelFr: 'Invitations', labelEn: 'Invitations', icon: 'mail', color: theme.primary },
+  { key: 'teams', labelFr: 'Equipes', labelEn: 'Teams', icon: 'groups', color: '#22C55E' },
   { key: 'witness', labelFr: 'Attestations', labelEn: 'Witness', icon: 'visibility', color: '#7C3AED' },
   { key: 'transfers', labelFr: 'Transferts', labelEn: 'Transfers', icon: 'swap-horiz', color: '#0EA5E9' },
   { key: 'claims', labelFr: 'Clubs', labelEn: 'Claims', icon: 'verified-user', color: '#2563EB' },
@@ -138,6 +145,10 @@ export default function NotificationsHubScreen() {
   const [processingTransferId, setProcessingTransferId] = useState<string | null>(null);
   const [transferFilter, setTransferFilter] = useState('all');
 
+  // Team invitations state
+  const [teamInvitations, setTeamInvitations] = useState<TeamInvitation[]>([]);
+  const [respondingTeamId, setRespondingTeamId] = useState<string | null>(null);
+
   // Claims state
   const [clubClaims, setClubClaims] = useState<ClubClaimRequest[]>([]);
   const [processingClaimId, setProcessingClaimId] = useState<string | null>(null);
@@ -153,10 +164,12 @@ export default function NotificationsHubScreen() {
   const pendingMatchCount = matchRequests.filter(r => r.status === 'pending').length;
   const pendingMeetupCount = meetupInvitations.length;
   const pendingWitnessCount = witnessInvitations.filter(i => i.status === 'pending').length;
+  const pendingTeamCount = teamInvitations.filter(i => i.status === 'pending').length;
   const pendingTransferCount = transferRequests.filter(r => r.status === 'pending').length;
   const pendingClaimCount = clubClaims.filter(c => c.status === 'pending').length;
   const tabBadges: Record<TabKey, number> = {
     invitations: pendingMatchCount + pendingMeetupCount,
+    teams: pendingTeamCount,
     witness: pendingWitnessCount,
     transfers: pendingTransferCount,
     claims: pendingClaimCount,
@@ -288,6 +301,10 @@ export default function NotificationsHubScreen() {
       // Load club claims
       const { claims: claimsData } = await getReceivedClaims();
       setClubClaims(claimsData);
+
+      // Load team invitations
+      const { invitations: teamInvs } = await getPendingTeamInvitations();
+      setTeamInvitations(teamInvs);
 
       const prefs = await loadNotificationPreferences();
       setNotifPrefs(prefs);
@@ -634,6 +651,95 @@ export default function NotificationsHubScreen() {
             ) : null}
 
             {filteredMatchRequests.length === 0 && filteredMeetupInvitations.length === 0 ? renderEmpty('mail-outline', invFilter !== 'all') : null}
+          </View>
+        ) : null}
+
+        {/* ========== TEAMS TAB ========== */}
+        {activeTab === 'teams' ? (
+          <View>
+            <View style={s.tipBanner}>
+              <View style={[s.tipIcon, { backgroundColor: '#DCFCE7' }]}><MaterialIcons name="info-outline" size={16} color="#22C55E" /></View>
+              <Text style={[s.tipText, { color: '#166534' }]}>{fr ? 'Acceptez les invitations pour former votre equipe de doublette ou triplette pour les tournois.' : 'Accept invitations to form your doubles or triples team for tournaments.'}</Text>
+            </View>
+
+            {teamInvitations.length > 0 ? (
+              <View style={s.section}>
+                <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#22C55E' }]} /><Text style={s.sectionLabel}>{fr ? 'Invitations d\'equipe' : 'Team Invitations'}</Text><Text style={s.sectionCount}>{teamInvitations.length}</Text></View>
+                {teamInvitations.map((inv, idx) => {
+                  const isPending = inv.status === 'pending';
+                  const teamSize = getTeamSize(inv.format);
+                  return (
+                    <Animated.View key={inv.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
+                      <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: isPending ? '#22C55E' : '#94A3B8' }, !isPending && { opacity: 0.65 }]}>
+                        <View style={s.cardRow}>
+                          <View style={[s.cardIconBg, { backgroundColor: '#22C55E12' }]}>
+                            <MaterialIcons name="groups" size={20} color="#22C55E" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={s.cardTitle} numberOfLines={1}>
+                              <Text style={{ fontWeight: '700', color: '#0F172A' }}>{inv.inviterName}</Text>
+                              {' '}{fr ? 'vous invite' : 'invites you'}
+                            </Text>
+                            <Text style={s.cardMeta}>{inv.tournamentName}</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                              <View style={{ backgroundColor: '#22C55E15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#22C55E' }}>{inv.format}</Text>
+                              </View>
+                              <Text style={{ fontSize: 10, color: '#64748B' }}>{teamSize} {fr ? 'joueurs' : 'players'}</Text>
+                            </View>
+                          </View>
+                        </View>
+                        {isPending ? (
+                          <View style={s.actionRow}>
+                            <Pressable
+                              style={s.declineBtn}
+                              onPress={async () => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                                setRespondingTeamId(inv.id);
+                                const { error } = await respondToTeamInvitation(inv.id, 'declined');
+                                setRespondingTeamId(null);
+                                if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+                                setTeamInvitations(prev => prev.filter(i => i.id !== inv.id));
+                              }}
+                              disabled={respondingTeamId === inv.id}
+                            >
+                              <MaterialIcons name="close" size={16} color={theme.error} />
+                              <Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text>
+                            </Pressable>
+                            <Pressable
+                              style={[s.acceptBtn, { backgroundColor: '#22C55E' }]}
+                              onPress={async () => {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setRespondingTeamId(inv.id);
+                                const { error, teamComplete } = await respondToTeamInvitation(inv.id, 'accepted');
+                                setRespondingTeamId(null);
+                                if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+                                setTeamInvitations(prev => prev.filter(i => i.id !== inv.id));
+                                if (teamComplete) {
+                                  showAlert(fr ? 'Equipe complete !' : 'Team complete!', fr ? 'Votre equipe est formee pour ce tournoi.' : 'Your team is ready for this tournament.');
+                                } else {
+                                  showAlert(fr ? 'Invitation acceptee' : 'Invitation accepted');
+                                }
+                              }}
+                              disabled={respondingTeamId === inv.id}
+                            >
+                              {respondingTeamId === inv.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                                <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Accepter' : 'Accept'}</Text></>
+                              )}
+                            </Pressable>
+                          </View>
+                        ) : (
+                          <View style={s.statusRow}>
+                            <MaterialIcons name={inv.status === 'accepted' ? 'check-circle' : 'cancel'} size={14} color={inv.status === 'accepted' ? theme.success : theme.textMuted} />
+                            <Text style={[s.statusText, { color: inv.status === 'accepted' ? theme.success : theme.textMuted }]}>{inv.status === 'accepted' ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Refuse' : 'Declined')}</Text>
+                          </View>
+                        )}
+                      </View>
+                    </Animated.View>
+                  );
+                })}
+              </View>
+            ) : renderEmpty('groups', false)}
           </View>
         ) : null}
 

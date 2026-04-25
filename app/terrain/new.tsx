@@ -379,8 +379,41 @@ export default function NewTerrainScreen() {
 
           {/* 6. Nombre de terrains */}
           <SectionCard title={t('terrain', 'courtsCount')} icon="grid-view" color={theme.carreauColor} delay={350}>
+            <View style={styles.courtsCountRow}>
+              <Pressable
+                style={styles.courtsCountBtn}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  const current = parseInt(courtsCount) || 1;
+                  if (current > 1) setCourtsCount(String(current - 1));
+                }}
+              >
+                <MaterialIcons name="remove" size={22} color={theme.textSecondary} />
+              </Pressable>
+              <TextInput
+                style={styles.courtsCountInput}
+                value={courtsCount}
+                onChangeText={(text) => {
+                  const cleaned = text.replace(/[^0-9]/g, '');
+                  setCourtsCount(cleaned);
+                }}
+                keyboardType="number-pad"
+                maxLength={3}
+                selectTextOnFocus
+              />
+              <Pressable
+                style={styles.courtsCountBtn}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  const current = parseInt(courtsCount) || 0;
+                  setCourtsCount(String(current + 1));
+                }}
+              >
+                <MaterialIcons name="add" size={22} color={theme.carreauColor} />
+              </Pressable>
+            </View>
             <View style={styles.countsRow}>
-              {['1', '2', '4', '6', '8', '10', '12', '18'].map(num => {
+              {['1', '2', '4', '6', '8', '12'].map(num => {
                 const isActive = courtsCount === num;
                 return (
                   <Pressable key={num} style={[styles.countPill, isActive && styles.countPillActive]} onPress={() => { Haptics.selectionAsync(); setCourtsCount(num); }}>
@@ -528,10 +561,13 @@ const styles = StyleSheet.create({
   pickerPlaceholderText: { flex: 1, fontSize: 15, color: theme.textMuted },
 
   // Courts count
-  countsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  countPill: { minWidth: 44, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
+  courtsCountRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 16, marginBottom: 14 },
+  courtsCountBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: theme.border },
+  courtsCountInput: { fontSize: 28, fontWeight: '800' as const, color: theme.carreauColor, width: 80, textAlign: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, paddingVertical: 8, borderWidth: 1.5, borderColor: theme.carreauColor + '30' },
+  countsRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, justifyContent: 'center' as const },
+  countPill: { minWidth: 44, alignItems: 'center' as const, paddingVertical: 8, paddingHorizontal: 14, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
   countPillActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
-  countPillText: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
+  countPillText: { fontSize: 13, fontWeight: '700' as const, color: theme.textSecondary },
   countPillTextActive: { color: theme.carreauColor },
 
   // Features

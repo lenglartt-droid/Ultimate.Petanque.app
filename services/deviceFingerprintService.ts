@@ -9,7 +9,7 @@ import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/template';
 
 const STORAGE_KEY = '@device_registration_history';
-const MAX_ACCOUNTS_PER_DEVICE = 3;
+const MAX_ACCOUNTS_PER_DEVICE = 1;
 const COOLDOWN_HOURS = 24; // hours between account creations
 
 interface DeviceRegistrationHistory {
@@ -143,7 +143,7 @@ export async function canCreateAccount(email: string): Promise<{ allowed: boolea
 /**
  * Record a new account creation for this device
  */
-export async function recordAccountCreation(email: string): Promise<void> {
+export async function recordAccountCreation(email: string, authMethod: string = 'email'): Promise<void> {
   try {
     const fingerprint = await getDeviceFingerprint();
     const now = new Date().toISOString();
@@ -159,7 +159,144 @@ export async function recordAccountCreation(email: string): Promise<void> {
       device_fingerprint: fingerprint,
       email: email.toLowerCase(),
       registered_at: now,
+      auth_method: authMethod,
     }).then(() => {}).catch(() => {});
+  } catch { /* silent */ }
+}
+
+/**
+ * Check if this device can log in with the given email.
+ * Enforces 1-account-per-device: if device is already bound to a different account, block login.
+ */
+export async function canLoginOnDevice(email: string): Promise<{ allowed: boolean; reason?: string }> {
+  try {
+    const fingerprint = await getDeviceFingerprint();
+
+    // 1. Check local history first
+    const localHistory = await getLocalHistory();
+    if (localHistory && localHistory.registrations.length > 0) {
+      const boundEmails = new Set(localHistory.registrations.map(r => r.email.toLowerCase()));
+      // If device is bound to a different email, block
+      if (boundEmails.size > 0 && !boundEmails.has(email.toLowerCase())) {
+        return { allowed: false, reason: 'device_bound_to_other_account' };
+      }
+    }
+
+    // 2. Check server-side
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('device_registrations')
+      .select('email')
+      .eq('device_fingerprint', fingerprint)
+      .order('registered_at', { ascending: false })
+      .limit(5);
+
+    if (!error && data && data.length > 0) {
+      const serverEmails = new Set(data.map((d: any) => (d.email || '').toLowerCase()).filter(Boolean));
+      if (serverEmails.size > 0 && !serverEmails.has(email.toLowerCase())) {
+        return { allowed: false, reason: 'device_bound_to_other_account' };
+      }
+    }
+
+    return { allowed: true };
+  } catch {
+    // On error, allow (don't block legitimate users)
+    return { allowed: true };
+  }
+}
+
+/**
+ * Admin: Fetch all device registrations for management
+ */
+export async function fetchDeviceRegistrations(): Promise<{ registrations: Array<{ id: string; fingerprint: string; email: string; userId: string | null; registeredAt: string; ipHint: string | null }>; error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('device_registrations')
+      .select('id, device_fingerprint, email, user_id, registered_at, ip_hint, auth_method')
+      .order('registered_at', { ascending: false })
+      .limit(200);
+    if (error) return { registrations: [], error: error.message };
+    return {
+      registrations: (data || []).map((d: any) => ({
+        id: d.id,
+        fingerprint: d.device_fingerprint,
+        email: d.email || '',
+        userId: d.user_id,
+        registeredAt: d.registered_at,
+        ipHint: d.ip_hint,
+        authMethod: d.auth_method || 'email',
+      })),
+      error: null,
+    };
+  } catch (e: any) {
+    return { registrations: [], error: e.message || 'Failed to fetch' };
+  }
+}
+
+/**
+ * Admin: Unlink a device from an account by deleting the device registration record.
+ * This allows the user to register/login on a new device, or allows a new user on this device.
+ */
+export async function adminUnlinkDevice(registrationId: string): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { error } = await supabase
+      .from('device_registrations')
+      .delete()
+      .eq('id', registrationId);
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message || 'Failed to unlink' };
+  }
+}
+
+/**
+ * Admin: Unlink ALL registrations for a specific device fingerprint
+ */
+export async function adminUnlinkAllForDevice(fingerprint: string): Promise<{ error: string | null; count: number }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('device_registrations')
+      .delete()
+      .eq('device_fingerprint', fingerprint)
+      .select('id');
+    if (error) return { error: error.message, count: 0 };
+    return { error: null, count: data?.length || 0 };
+  } catch (e: any) {
+    return { error: e.message || 'Failed to unlink', count: 0 };
+  }
+}
+
+/**
+ * Post-OAuth device binding check.
+ * Called after Google OAuth completes to verify the authenticated email matches the device binding.
+ * Returns { allowed: true } if OK, or { allowed: false, reason } if device is bound to another account.
+ */
+export async function checkPostOAuthDeviceBinding(email: string): Promise<{ allowed: boolean; reason?: string }> {
+  return canLoginOnDevice(email);
+}
+
+/**
+ * Show device binding notification once (stores flag in AsyncStorage).
+ * Returns true if this is the first time and notification should be shown.
+ */
+const DEVICE_BINDING_SHOWN_KEY = '@device_binding_notification_shown';
+
+export async function shouldShowDeviceBindingNotification(): Promise<boolean> {
+  try {
+    const shown = await AsyncStorage.getItem(DEVICE_BINDING_SHOWN_KEY);
+    return shown !== 'true';
+  } catch {
+    return false;
+  }
+}
+
+export async function markDeviceBindingNotificationShown(): Promise<void> {
+  try {
+    await AsyncStorage.setItem(DEVICE_BINDING_SHOWN_KEY, 'true');
   } catch { /* silent */ }
 }
 

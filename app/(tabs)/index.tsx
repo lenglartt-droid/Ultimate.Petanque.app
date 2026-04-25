@@ -29,6 +29,7 @@ import LeaguePromotionModal from '@/components/ui/LeaguePromotionModal';
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
+import TeamBuilderSection from '@/components/feature/TeamBuilderSection';
 
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
@@ -460,6 +461,8 @@ export default function HomeScreen() {
     s.push({ key: 'sponsor', data: ['sponsor'] });
     // Season summary moved to History page
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
+    // Team Builder (before timeline)
+    if (tournaments.length > 0) s.push({ key: 'teamBuilder' as SectionKey, data: ['teamBuilder' as SectionKey] });
     s.push({ key: 'timeline', data: ['timeline'] });
     // Ad banner after timeline — first natural break point
     s.push({ key: 'adBanner1', data: ['adBanner1'] });
@@ -855,6 +858,18 @@ export default function HomeScreen() {
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <AdBanner position="inline" />
+          </View>
+        );
+
+      // ===== TEAM BUILDER =====
+      case 'teamBuilder' as SectionKey:
+        return (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <TeamBuilderSection
+              tournaments={tournaments}
+              language={language}
+              selfPlayerName={displayName}
+            />
           </View>
         );
 
