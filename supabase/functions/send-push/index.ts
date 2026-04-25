@@ -1771,6 +1771,60 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================================
+    // TERRAIN_ACTIVITY: Notify user when favorite terrain becomes active
+    // ============================================================
+    else if (type === 'terrain_activity') {
+      const { targetUserId, activeTerrains } = payload || {};
+      if (!targetUserId || !activeTerrains || !Array.isArray(activeTerrains) || activeTerrains.length === 0) {
+        return new Response(JSON.stringify({ error: 'Missing targetUserId/activeTerrains' }), {
+          status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      // Check notification preference
+      const enabled = await isNotifEnabled(targetUserId, 'terrain_activity');
+      if (!enabled) {
+        return new Response(JSON.stringify({ sent: 0, errors: 0, reason: 'user_disabled' }), {
+          status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+
+      const { data: tokens } = await supabaseAdmin
+        .from('push_tokens')
+        .select('token')
+        .eq('user_id', targetUserId)
+        .eq('active', true);
+
+      if (tokens && tokens.length > 0) {
+        const firstTerrain = activeTerrains[0];
+        const reasonLabels: Record<string, string> = {
+          meetup: 'RDV en cours',
+          tournament: 'Tournoi en cours',
+          recent_match: 'Partie en cours',
+        };
+        const reasonLabel = reasonLabels[firstTerrain.reason] || 'Activite detectee';
+        const terrainCount = activeTerrains.length;
+        const title = terrainCount === 1
+          ? `\u{1F525} ${firstTerrain.terrainName} est actif !`
+          : `\u{1F525} ${terrainCount} terrains favoris actifs !`;
+        const body = terrainCount === 1
+          ? `${reasonLabel} sur votre terrain favori "${firstTerrain.terrainName}". C'est le moment d'y aller !`
+          : `${firstTerrain.terrainName} et ${terrainCount - 1} autre(s) terrain(s) favori(s) sont actifs en ce moment.`;
+
+        const messages = tokens.map((t: any) => buildPushMessage(
+          t.token,
+          title,
+          body,
+          { type: 'terrain_activity', terrainId: firstTerrain.terrainId },
+          { channelId: 'tournament-reminders', priority: 'high' }
+        ));
+        const tickets = await sendPushNotifications(messages);
+        sent = tickets.filter((t: any) => t.status === 'ok').length;
+        errors = tickets.filter((t: any) => t.status === 'error').length;
+      }
+    }
+
+    // ============================================================
     // CLUB_INVITATION: Notify player when invited to join a club
     // ============================================================
     else if (type === 'club_invitation') {

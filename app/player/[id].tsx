@@ -750,13 +750,6 @@ export default function PlayerDetailScreen() {
                 </View>
               ) : null}
 
-              {/* Sponsored Player Banner */}
-              {(player as any)?.sponsorId ? (
-                <View style={{ width: '100%', marginBottom: 8 }}>
-                  <SponsoredItemBanner sponsorId={(player as any).sponsorId} page="player-detail" />
-                </View>
-              ) : null}
-
               {trustScore ? (
                 trustScore.level === 'suspicious' && trustScore.score === 0 ? (
                   <View style={[s.trustScoreBadge, { borderColor: '#EF444430', backgroundColor: '#EF444408' }]}>
@@ -889,6 +882,13 @@ export default function PlayerDetailScreen() {
                   <View style={s.leaderboardProgressTrack}><View style={[s.leaderboardProgressFill, { width: `${Math.min((player.stats.matchesPlayed / LEADERBOARD_MIN_MATCHES) * 100, 100)}%` }]} /></View>
                   <Text style={s.leaderboardProgressDesc}>{t('leaderboard', 'progressAlmostThere').replace('{remaining}', String(LEADERBOARD_MIN_MATCHES - player.stats.matchesPlayed))}</Text>
                 </Pressable>
+              ) : null}
+
+              {/* Sponsored Player Banner — inside hero card, at the end */}
+              {(player as any)?.sponsorId ? (
+                <View style={{ width: '100%', marginBottom: 8 }}>
+                  <SponsoredItemBanner sponsorId={(player as any).sponsorId} page="player-detail" />
+                </View>
               ) : null}
 
               <View style={s.quickStatsBar}>

@@ -1329,54 +1329,6 @@ useEffect(() => {
 
       addItems(enrichWithSponsorColor(filterPlayers(playerMarkers)), 'players', true)
     }
-
-    // Enrich terrains with sponsor data for split markers
-    if (filter === 'all' || filter === 'terrains') {
-      results.forEach((item: any) => {
-        if (item.itemType === 'terrains' && item.sponsorId) {
-          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
-          if (sponsorInfo) {
-            item._sponsorPhoto = sponsorInfo.photo;
-            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
-          }
-        }
-      });
-    }
-    // Enrich clubs with sponsor data for split markers
-    if (filter === 'all' || filter === 'clubs') {
-      results.forEach((item: any) => {
-        if (item.itemType === 'clubs' && item.sponsorId) {
-          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
-          if (sponsorInfo) {
-            item._sponsorPhoto = sponsorInfo.photo;
-            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
-          }
-        }
-      });
-    }
-    // Enrich tournaments with sponsor data for split markers
-    if (filter === 'all' || filter === 'tournaments') {
-      results.forEach((item: any) => {
-        if (item.itemType === 'tournaments' && item.sponsorId) {
-          const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
-          if (sponsorInfo) {
-            item._sponsorPhoto = sponsorInfo.photo;
-            item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
-          }
-        }
-      });
-    }
-    // Enrich players with sponsor data for split markers
-    results.forEach((item: any) => {
-      if (item.itemType === 'players' && item.sponsorId) {
-        const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
-        if (sponsorInfo) {
-          item._sponsorPhoto = sponsorInfo.photo;
-          item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
-        }
-      }
-    });
-    }
     if (filter === 'all' || filter === 'events') {
       // Skip events when partner filter active
       if (filter !== 'partners') sponsoredEvents.forEach(evt => {
@@ -1399,6 +1351,18 @@ useEffect(() => {
 
     // Deduplicate by id
     const seen = new Set<string>();
+
+    // Enrich all items with sponsor data for split markers
+    items.forEach((item: any) => {
+      if (item.sponsorId) {
+        const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
+        if (sponsorInfo) {
+          item._sponsorPhoto = sponsorInfo.photo;
+          item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+        }
+      }
+    });
+
     return items.filter(it => {
       const key = `${it.itemType}-${it.id}`;
       if (seen.has(key)) return false;

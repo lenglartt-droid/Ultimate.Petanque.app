@@ -30,6 +30,7 @@ import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardServ
 import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
 import EloSparkline from '@/components/feature/player/EloSparkline';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
+import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -675,6 +676,13 @@ export default function MyPlayerCardScreen() {
                     <MaterialIcons name="add-circle" size={14} color="#7C3AED" />
                     <Text style={s.ambQuickActionText}>{language === 'fr' ? 'Creer un defi' : 'New challenge'}</Text>
                   </Pressable>
+                </View>
+              ) : null}
+
+              {/* Sponsored Player Banner — inside hero card, at the end */}
+              {(selfPlayer as any)?.sponsorId ? (
+                <View style={{ width: '100%', marginBottom: 8 }}>
+                  <SponsoredItemBanner sponsorId={(selfPlayer as any).sponsorId} page="my-player-card" />
                 </View>
               ) : null}
 
