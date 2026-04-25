@@ -63,44 +63,50 @@ export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: P
 
     const result: PlayerGeoRank = { city: null, country: null, continent: null };
 
+    // Helper: filter to only real user profiles (player.id === player.user_id)
+    const filterRealProfiles = (players: any[]) => players.filter(p => p.user_id && p.id === p.user_id);
+
     // City rank
     if (playerCity) {
       const { data: cityPlayers } = await supabase
         .from('players')
-        .select('id, elo_rating')
+        .select('id, user_id, elo_rating')
         .eq('city', playerCity)
         .eq('is_public', true)
         .order('elo_rating', { ascending: false });
 
-      if (cityPlayers && cityPlayers.length > 0) {
-        const rank = cityPlayers.findIndex(p => p.id === playerId) + 1;
-        result.city = { name: playerCity, rank: rank > 0 ? rank : cityPlayers.length, total: cityPlayers.length };
+      const realCityPlayers = filterRealProfiles(cityPlayers || []);
+      if (realCityPlayers.length > 0) {
+        const rank = realCityPlayers.findIndex(p => p.id === playerId) + 1;
+        result.city = { name: playerCity, rank: rank > 0 ? rank : realCityPlayers.length, total: realCityPlayers.length };
       }
     }
 
     // Country rank
     const { data: countryPlayers } = await supabase
       .from('players')
-      .select('id, elo_rating')
+      .select('id, user_id, elo_rating')
       .eq('country', playerCountry)
       .eq('is_public', true)
       .order('elo_rating', { ascending: false });
 
-    if (countryPlayers && countryPlayers.length > 0) {
-      const rank = countryPlayers.findIndex(p => p.id === playerId) + 1;
-      result.country = { name: playerCountry, rank: rank > 0 ? rank : countryPlayers.length, total: countryPlayers.length };
+    const realCountryPlayers = filterRealProfiles(countryPlayers || []);
+    if (realCountryPlayers.length > 0) {
+      const rank = realCountryPlayers.findIndex(p => p.id === playerId) + 1;
+      result.country = { name: playerCountry, rank: rank > 0 ? rank : realCountryPlayers.length, total: realCountryPlayers.length };
     }
 
     // Continent rank — need all public players in the continent
     // Get all countries in same continent
     const { data: continentPlayers } = await supabase
       .from('players')
-      .select('id, country, elo_rating')
+      .select('id, user_id, country, elo_rating')
       .eq('is_public', true)
       .order('elo_rating', { ascending: false });
 
     if (continentPlayers && continentPlayers.length > 0) {
-      const sameContinent = continentPlayers.filter(p => getContinent(p.country || 'France') === playerContinent);
+      const realContinentPlayers = filterRealProfiles(continentPlayers);
+      const sameContinent = realContinentPlayers.filter(p => getContinent(p.country || 'France') === playerContinent);
       if (sameContinent.length > 0) {
         const rank = sameContinent.findIndex(p => p.id === playerId) + 1;
         result.continent = { name: playerContinent, rank: rank > 0 ? rank : sameContinent.length, total: sameContinent.length };
@@ -123,14 +129,17 @@ export async function fetchGeoLeaderboard(): Promise<{
   const supabase = getSupabaseClient();
 
   try {
-    // Fetch all public players with stats
-    const { data: players, error } = await supabase
+    // Fetch all public players with stats — include user_id to filter real profiles
+    const { data: rawPlayers, error } = await supabase
       .from('players')
-      .select('id, name, city, country, elo_rating, stats, is_public')
+      .select('id, user_id, name, city, country, elo_rating, stats, is_public')
       .eq('is_public', true);
 
+    // Filter to only real user profiles (player.id === player.user_id)
+    const players = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id);
+
     // Fetch trust scores for all public players
-    const playerIds = (players || []).map((p: any) => p.id);
+    const playerIds = players.map((p: any) => p.id);
     let trustMap = new Map<string, number>();
     if (playerIds.length > 0) {
       try {
@@ -146,7 +155,7 @@ export async function fetchGeoLeaderboard(): Promise<{
 
     if (error) throw error;
 
-    if (!players || players.length === 0) {
+    if (players.length === 0) {
       return { cities: [], countries: [], continents: [], error: null };
     }
 
