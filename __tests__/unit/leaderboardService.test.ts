@@ -39,7 +39,7 @@ interface LeaderboardPlayer {
 type LeaderboardSort = 'winRate' | 'matches' | 'tirRate' | 'pointRate' | 'carreauRate';
 type LeaderboardPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y' | 'season' | 'lastSeason';
 
-const LEADERBOARD_MIN_MATCHES = 10;
+const LEADERBOARD_MIN_MATCHES = 3;
 
 // ─── Inline implementations (mirrors leaderboardService logic) ──
 
@@ -301,15 +301,15 @@ describe('getPeriodDateRange', () => {
 // ============================================
 
 describe('LEADERBOARD_MIN_MATCHES', () => {
-  test('minimum matches threshold is 10', () => {
-    expect(LEADERBOARD_MIN_MATCHES).toBe(10);
+  test('minimum matches threshold is 3', () => {
+    expect(LEADERBOARD_MIN_MATCHES).toBe(3);
   });
 
   test('players below threshold are excluded', () => {
     const players = [
       makePlayer({ name: 'Active', stats: { matchesPlayed: 15, wins: 10, losses: 5, winRate: 66.7, tirRate: 70, pointRate: 60, carreauRate: 20 } }),
-      makePlayer({ name: 'Inactive', stats: { matchesPlayed: 5, wins: 3, losses: 2, winRate: 60, tirRate: 80, pointRate: 70, carreauRate: 30 } }),
-      makePlayer({ name: 'Borderline', stats: { matchesPlayed: 10, wins: 5, losses: 5, winRate: 50, tirRate: 50, pointRate: 50, carreauRate: 10 } }),
+      makePlayer({ name: 'Inactive', stats: { matchesPlayed: 1, wins: 1, losses: 0, winRate: 100, tirRate: 80, pointRate: 70, carreauRate: 30 } }),
+      makePlayer({ name: 'Borderline', stats: { matchesPlayed: 3, wins: 2, losses: 1, winRate: 66.7, tirRate: 50, pointRate: 50, carreauRate: 10 } }),
     ];
 
     const filtered = players.filter(p => p.stats.matchesPlayed >= LEADERBOARD_MIN_MATCHES);
@@ -319,13 +319,13 @@ describe('LEADERBOARD_MIN_MATCHES', () => {
     expect(filtered.map(p => p.name)).not.toContain('Inactive');
   });
 
-  test('exactly 10 matches passes threshold', () => {
-    const p = makePlayer({ stats: { matchesPlayed: 10, wins: 5, losses: 5, winRate: 50, tirRate: 50, pointRate: 50, carreauRate: 10 } });
+  test('exactly 3 matches passes threshold', () => {
+    const p = makePlayer({ stats: { matchesPlayed: 3, wins: 2, losses: 1, winRate: 66.7, tirRate: 50, pointRate: 50, carreauRate: 10 } });
     expect(p.stats.matchesPlayed >= LEADERBOARD_MIN_MATCHES).toBe(true);
   });
 
-  test('9 matches does not pass threshold', () => {
-    const p = makePlayer({ stats: { matchesPlayed: 9, wins: 5, losses: 4, winRate: 55.6, tirRate: 50, pointRate: 50, carreauRate: 10 } });
+  test('2 matches does not pass threshold', () => {
+    const p = makePlayer({ stats: { matchesPlayed: 2, wins: 1, losses: 1, winRate: 50, tirRate: 50, pointRate: 50, carreauRate: 10 } });
     expect(p.stats.matchesPlayed >= LEADERBOARD_MIN_MATCHES).toBe(false);
   });
 });
