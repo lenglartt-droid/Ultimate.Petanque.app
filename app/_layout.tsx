@@ -24,6 +24,7 @@ import { registerPushToken } from '@/services/pushTokenService';
 import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
 import { checkFavoriteTerrainActivity } from '@/services/terrainActivityNotificationService';
+import { checkTeamDeadlineReminders } from '@/services/teamInvitationService';
 import * as Linking from 'expo-linking';
 import { findEventByCode } from '@/services/sponsoredEventService';
 
@@ -163,6 +164,14 @@ function LayoutInner() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Check team formation deadline reminders
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      checkTeamDeadlineReminders().catch(() => {});
+    }, 8000); // Delay 8s after mount
+    return () => clearTimeout(timer);
+  }, []);
+
   // Handle deep links for event QR codes (?event=CODE)
   React.useEffect(() => {
     const handleDeepLinkUrl = async (url: string) => {
@@ -269,6 +278,10 @@ function LayoutInner() {
           case 'team_chat_message':
             if (data.teamId) router.push(`/team-chat/${data.teamId}` as any);
             else router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            break;
+          case 'team_deadline_reminder':
+            if (data.teamId) router.push({ pathname: '/notifications-hub', params: { tab: 'teams' } } as any);
+            else router.push('/(tabs)' as any);
             break;
           case 'terrain_activity':
             if (data.terrainId) router.push(`/terrain/${data.terrainId}` as any);
