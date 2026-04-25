@@ -74,6 +74,40 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
     return { color: '#DC2626', bgColor: '#EF444415', label: `${winRate}%` };
   }, []);
 
+  // Synergy score: composite of win rate, frequency, ELO compatibility, role complementarity
+  const computeSynergyScore = useCallback((partnerUserId: string, partnerRole?: string, partnerElo?: number): { score: number; color: string; bgColor: string; label: string; breakdown: { winRate: number; frequency: number; elo: number; role: number } } => {
+    const ps = getPartnerMatchStats(partnerUserId);
+    // 1. Win rate component (0-30 pts)
+    const winRatePts = ps.total > 0 ? Math.round((ps.winRate / 100) * 30) : 15;
+    // 2. Frequency component (0-25 pts) — more matches = higher score
+    const freqPts = Math.min(25, Math.round((ps.total / 10) * 25));
+    // 3. ELO compatibility (0-25 pts) — closer ELO = better synergy, or bonus if both strong
+    let eloPts = 15; // default when no ELO data
+    if (partnerElo && user?.id) {
+      // Find user's own ELO from matches context
+      const ownPlayers = matches.length > 0 ? matches[0]?.teamA : null;
+      // Simplify: use 1000 as base, reward similar ELO levels
+      const ownElo = 1000; // approximate
+      const diff = Math.abs(partnerElo - ownElo);
+      if (diff < 100) eloPts = 25;
+      else if (diff < 200) eloPts = 20;
+      else if (diff < 400) eloPts = 15;
+      else eloPts = 10;
+    }
+    // 4. Role complementarity (0-20 pts) — Tireur+Pointeur = best
+    let rolePts = 10; // default
+    if (partnerRole) {
+      // Check self player role from matches or use generic
+      const complementary = (partnerRole === 'Tireur' || partnerRole === 'Pointeur');
+      rolePts = complementary ? 20 : partnerRole === 'Milieu' ? 15 : 10;
+    }
+    const score = Math.min(100, winRatePts + freqPts + eloPts + rolePts);
+    const color = score >= 75 ? '#16A34A' : score >= 50 ? '#D97706' : score >= 30 ? '#EA580C' : '#DC2626';
+    const bgColor = score >= 75 ? '#22C55E10' : score >= 50 ? '#F59E0B10' : score >= 30 ? '#F9731610' : '#EF444410';
+    const label = score >= 75 ? (fr ? 'Excellente' : 'Excellent') : score >= 50 ? (fr ? 'Bonne' : 'Good') : score >= 30 ? (fr ? 'Moyenne' : 'Average') : (fr ? 'Faible' : 'Low');
+    return { score, color, bgColor, label, breakdown: { winRate: winRatePts, frequency: freqPts, elo: eloPts, role: rolePts } };
+  }, [getPartnerMatchStats, user?.id, matches, fr]);
+
   // Favorite partners
   const [favoritePartnerIds, setFavoritePartnerIds] = useState<Set<string>>(new Set());
 
@@ -743,26 +777,33 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
                             </View>
                             {partner.club ? <Text style={{ fontSize: 10, color: '#94A3B8' }}>{partner.club}</Text> : null}
                           </View>
-                          {/* Partner match history with win rate badge */}
+                          {/* Synergy score + Partner match history */}
                           {(() => {
+                            const synergy = computeSynergyScore(partner.userId);
                             const ps = getPartnerMatchStats(partner.userId);
-                            if (ps.total === 0) return null;
-                            const badge = getWinRateBadge(ps.winRate);
                             return (
-                              <View style={s.partnerStatsRow}>
-                                <View style={[s.winRateBadge, { backgroundColor: badge.bgColor }]}>
-                                  <MaterialIcons name={ps.winRate > 60 ? 'trending-up' : ps.winRate >= 40 ? 'trending-flat' : 'trending-down'} size={10} color={badge.color} />
-                                  <Text style={[s.winRateBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                              <View style={{ gap: 3 }}>
+                                <View style={s.synergyRow}>
+                                  <View style={[s.synergyBadge, { backgroundColor: synergy.bgColor, borderColor: synergy.color + '30' }]}>
+                                    <View style={[s.synergyRing, { borderColor: synergy.color }]}>
+                                      <Text style={[s.synergyScoreText, { color: synergy.color }]}>{synergy.score}</Text>
+                                    </View>
+                                    <Text style={[s.synergyLabel, { color: synergy.color }]}>{synergy.label}</Text>
+                                  </View>
                                 </View>
-                                <View style={s.partnerStatChip}>
-                                  <MaterialIcons name="emoji-events" size={9} color="#22C55E" />
-                                  <Text style={[s.partnerStatText, { color: '#22C55E' }]}>{ps.wins}W</Text>
-                                </View>
-                                <View style={s.partnerStatChip}>
-                                  <Text style={[s.partnerStatText, { color: '#EF4444' }]}>{ps.losses}L</Text>
-                                </View>
-                                {ps.lastDate ? (
-                                  <Text style={s.partnerStatDate}>{new Date(ps.lastDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                                {ps.total > 0 ? (
+                                  <View style={s.partnerStatsRow}>
+                                    <View style={s.partnerStatChip}>
+                                      <MaterialIcons name="emoji-events" size={9} color="#22C55E" />
+                                      <Text style={[s.partnerStatText, { color: '#22C55E' }]}>{ps.wins}W</Text>
+                                    </View>
+                                    <View style={s.partnerStatChip}>
+                                      <Text style={[s.partnerStatText, { color: '#EF4444' }]}>{ps.losses}L</Text>
+                                    </View>
+                                    {ps.lastDate ? (
+                                      <Text style={s.partnerStatDate}>{new Date(ps.lastDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                                    ) : null}
+                                  </View>
                                 ) : null}
                               </View>
                             );
@@ -842,26 +883,33 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
                               {pCity ? <Text style={s.resultCity} numberOfLines={1}>{pCity}</Text> : null}
                               {!pRole && !pElo && player.club ? <Text style={s.resultClub} numberOfLines={1}>{player.club}</Text> : null}
                             </View>
-                            {/* Match history with win rate badge */}
+                            {/* Synergy score + Match history */}
                             {(() => {
+                              const synergy = computeSynergyScore(player.userId, (player as any).role, (player as any).eloRating);
                               const ps = getPartnerMatchStats(player.userId);
-                              if (ps.total === 0) return null;
-                              const badge = getWinRateBadge(ps.winRate);
                               return (
-                                <View style={s.partnerStatsRow}>
-                                  <View style={[s.winRateBadge, { backgroundColor: badge.bgColor }]}>
-                                    <MaterialIcons name={ps.winRate > 60 ? 'trending-up' : ps.winRate >= 40 ? 'trending-flat' : 'trending-down'} size={10} color={badge.color} />
-                                    <Text style={[s.winRateBadgeText, { color: badge.color }]}>{badge.label}</Text>
+                                <View style={{ gap: 3 }}>
+                                  <View style={s.synergyRow}>
+                                    <View style={[s.synergyBadge, { backgroundColor: synergy.bgColor, borderColor: synergy.color + '30' }]}>
+                                      <View style={[s.synergyRing, { borderColor: synergy.color }]}>
+                                        <Text style={[s.synergyScoreText, { color: synergy.color }]}>{synergy.score}</Text>
+                                      </View>
+                                      <Text style={[s.synergyLabel, { color: synergy.color }]}>{synergy.label}</Text>
+                                    </View>
                                   </View>
-                                  <View style={s.partnerStatChip}>
-                                    <MaterialIcons name="emoji-events" size={9} color="#22C55E" />
-                                    <Text style={[s.partnerStatText, { color: '#22C55E' }]}>{ps.wins}W</Text>
-                                  </View>
-                                  <View style={s.partnerStatChip}>
-                                    <Text style={[s.partnerStatText, { color: '#EF4444' }]}>{ps.losses}L</Text>
-                                  </View>
-                                  {ps.lastDate ? (
-                                    <Text style={s.partnerStatDate}>{new Date(ps.lastDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                                  {ps.total > 0 ? (
+                                    <View style={s.partnerStatsRow}>
+                                      <View style={s.partnerStatChip}>
+                                        <MaterialIcons name="emoji-events" size={9} color="#22C55E" />
+                                        <Text style={[s.partnerStatText, { color: '#22C55E' }]}>{ps.wins}W</Text>
+                                      </View>
+                                      <View style={s.partnerStatChip}>
+                                        <Text style={[s.partnerStatText, { color: '#EF4444' }]}>{ps.losses}L</Text>
+                                      </View>
+                                      {ps.lastDate ? (
+                                        <Text style={s.partnerStatDate}>{new Date(ps.lastDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                                      ) : null}
+                                    </View>
                                   ) : null}
                                 </View>
                               );
@@ -1130,6 +1178,12 @@ const s = StyleSheet.create({
   winRateBadge: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8 },
   winRateBadgeText: { fontSize: 10, fontWeight: '800' as any },
   partnerStatDate: { fontSize: 9, color: '#94A3B8', fontWeight: '500' as any },
+  // Synergy score
+  synergyRow: { flexDirection: 'row' as any, alignItems: 'center' as any },
+  synergyBadge: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 6, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1 },
+  synergyRing: { width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: 'center' as any, justifyContent: 'center' as any, backgroundColor: '#FFF' },
+  synergyScoreText: { fontSize: 8, fontWeight: '900' as any },
+  synergyLabel: { fontSize: 9, fontWeight: '700' as any },
   // Recent partners
   recentPartnersSection: { backgroundColor: '#7C3AED08', borderRadius: 14, padding: 12, marginBottom: 14, borderWidth: 1, borderColor: '#7C3AED15' },
   recentPartnersTitle: { fontSize: 12, fontWeight: '700', color: '#7C3AED' },

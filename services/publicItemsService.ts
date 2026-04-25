@@ -230,15 +230,49 @@ export async function importPublicItemToDirectory(
   }
 }
 
-// Check for duplicate public terrains by city + address similarity
+// Check for duplicate public terrains by Google place_id first, then city + address similarity
 export async function checkDuplicatePublicTerrains(
   city: string,
   address?: string,
-): Promise<{ duplicates: (PublicTerrain & { matchType: 'exact' | 'city' })[]; error: string | null }> {
+  googlePlaceId?: string,
+): Promise<{ duplicates: (PublicTerrain & { matchType: 'exact' | 'city' | 'place_id' })[]; error: string | null }> {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData?.user?.id;
 
+  // 1. Check exact match by Google Place ID first
+  if (googlePlaceId) {
+    const { data: placeMatches, error: placeErr } = await supabase
+      .from('terrains')
+      .select('*')
+      .eq('google_place_id', googlePlaceId);
+    if (!placeErr && placeMatches && placeMatches.length > 0) {
+      const placeIdDups = placeMatches
+        .filter((t: any) => t.user_id !== userId)
+        .map((t: any) => ({
+          id: t.id, userId: t.user_id, name: t.name, address: t.address, city: t.city,
+          location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
+          description: t.description, facilities: t.facilities, clubName: t.club_name,
+          courtsCount: t.courts_count || 1, lighting: t.lighting ?? false, covered: t.covered ?? false,
+          matchType: 'place_id' as const,
+        }));
+      // Also check own terrains
+      const ownPlaceDups = placeMatches
+        .filter((t: any) => t.user_id === userId)
+        .map((t: any) => ({
+          id: t.id, userId: t.user_id, name: t.name, address: t.address, city: t.city,
+          location: t.location || { latitude: 0, longitude: 0 }, type: t.type,
+          description: t.description, facilities: t.facilities, clubName: t.club_name,
+          courtsCount: t.courts_count || 1, lighting: t.lighting ?? false, covered: t.covered ?? false,
+          matchType: 'place_id' as const,
+        }));
+      if (placeIdDups.length > 0 || ownPlaceDups.length > 0) {
+        return { duplicates: [...placeIdDups, ...ownPlaceDups], error: null };
+      }
+    }
+  }
+
+  // 2. Fallback to city + address fuzzy matching
   const normalizedCity = city.trim().toLowerCase();
   if (!normalizedCity) return { duplicates: [], error: null };
 
