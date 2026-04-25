@@ -55,6 +55,7 @@ export async function addTerrainOp(
       lighting: terrain.lighting,
       covered: terrain.covered,
       environment: terrain.environment || 'outdoor',
+      google_place_id: (terrain as any).googlePlaceId || null,
     }).select().single();
 
     if (error) throw error;
@@ -78,6 +79,7 @@ export async function addTerrainOp(
         lighting: data.lighting,
         covered: data.covered,
         environment: data.environment || 'outdoor',
+        googlePlaceId: data.google_place_id || undefined,
         createdAt: data.created_at,
       };
       setTerrains(prev => [...prev, newTerrain]);

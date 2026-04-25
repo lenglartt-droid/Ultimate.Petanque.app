@@ -21,6 +21,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { getSupabaseClient } from '@/template';
 
 const RECENT_SEARCHES_KEY = '@location_picker_recent_searches';
 const MAX_RECENT = 8;
@@ -36,6 +37,18 @@ export interface LocationData {
   formattedAddress?: string;
   postalCode?: string;
   region?: string;
+  placeName?: string;
+  placeId?: string;
+}
+
+interface MyPlace {
+  id: string;
+  name: string;
+  city: string;
+  address?: string;
+  latitude: number;
+  longitude: number;
+  type: 'terrain' | 'club' | 'tournament';
 }
 
 interface LocationPickerProps {
@@ -59,6 +72,7 @@ interface SearchResult {
   formattedAddress: string;
   postalCode?: string;
   region?: string;
+  placeName?: string;
 }
 
 // ============================================
@@ -143,6 +157,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
       formattedAddress: result.formatted_address || '',
       postalCode,
       region,
+      placeName: result.name || '',
     };
   } catch (e) {
     console.log('[Google Places] Details error:', e);
@@ -284,6 +299,11 @@ export default function LocationPicker({
   const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
   const recentLoadedRef = useRef(false);
   const [resolvingPlace, setResolvingPlace] = useState(false);
+
+  // My Places from user's existing data
+  const [myPlaces, setMyPlaces] = useState<MyPlace[]>([]);
+  const [myPlacesLoading, setMyPlacesLoading] = useState(false);
+  const myPlacesLoadedRef = useRef(false);
 
   // Manual GPS state
   const [showManualGps, setShowManualGps] = useState(false);
@@ -526,6 +546,8 @@ export default function LocationPicker({
           formattedAddress: details.formattedAddress,
           postalCode: details.postalCode,
           region: details.region,
+          placeName: details.placeName,
+          placeId: details.placeId,
         };
         onChange(newLocation);
 
@@ -568,6 +590,63 @@ export default function LocationPicker({
     setSearchResults([]);
   };
 
+  // Load My Places from user's terrains, clubs, tournaments
+  const loadMyPlaces = useCallback(async () => {
+    if (myPlacesLoadedRef.current) return;
+    setMyPlacesLoading(true);
+    try {
+      const sb = getSupabaseClient();
+      const { data: userData } = await sb.auth.getUser();
+      if (!userData?.user) { setMyPlacesLoading(false); return; }
+      const uid = userData.user.id;
+      const [tRes, cRes, toRes] = await Promise.all([
+        sb.from('terrains').select('id, name, city, address, location').eq('user_id', uid).limit(10),
+        sb.from('clubs').select('id, name, city, address, location').eq('user_id', uid).limit(10),
+        sb.from('tournaments').select('id, name, location').eq('user_id', uid).limit(10),
+      ]);
+      const places: MyPlace[] = [];
+      const seen = new Set<string>();
+      (tRes.data || []).forEach((t: any) => {
+        const key = `${t.city}-${t.name}`.toLowerCase();
+        if (seen.has(key) || !t.city) return;
+        seen.add(key);
+        places.push({ id: t.id, name: t.name, city: t.city, address: t.address, latitude: t.location?.latitude || 0, longitude: t.location?.longitude || 0, type: 'terrain' });
+      });
+      (cRes.data || []).forEach((c: any) => {
+        const key = `${c.city}-${c.name}`.toLowerCase();
+        if (seen.has(key) || !c.city) return;
+        seen.add(key);
+        places.push({ id: c.id, name: c.name, city: c.city, address: c.address, latitude: c.location?.latitude || 0, longitude: c.location?.longitude || 0, type: 'club' });
+      });
+      (toRes.data || []).forEach((to: any) => {
+        const loc = to.location;
+        const city = loc?.city || '';
+        const key = `${city}-${to.name}`.toLowerCase();
+        if (seen.has(key) || !city) return;
+        seen.add(key);
+        places.push({ id: to.id, name: to.name, city, address: loc?.name, latitude: loc?.latitude || 0, longitude: loc?.longitude || 0, type: 'tournament' });
+      });
+      setMyPlaces(places.slice(0, 15));
+      myPlacesLoadedRef.current = true;
+    } catch { /* silent */ }
+    setMyPlacesLoading(false);
+  }, []);
+
+  const handleSelectMyPlace = useCallback((place: MyPlace) => {
+    Haptics.selectionAsync();
+    onChange({
+      address: place.address || '',
+      city: place.city,
+      country: 'France',
+      latitude: place.latitude,
+      longitude: place.longitude,
+      formattedAddress: [place.address, place.city].filter(Boolean).join(', '),
+    });
+    setModalVisible(false);
+    setSearchQuery('');
+    setSearchResults([]);
+  }, [onChange]);
+
   const openModal = () => {
     Haptics.selectionAsync();
     setModalVisible(true);
@@ -576,6 +655,7 @@ export default function LocationPicker({
     setShowManualGps(false);
     setManualLat('');
     setManualLng('');
+    loadMyPlaces();
   };
 
   const closeModal = () => {
@@ -853,6 +933,41 @@ export default function LocationPicker({
                   </Animated.View>
                 ) : null}
 
+                {/* My Places */}
+                {myPlaces.length > 0 ? (
+                  <View style={styles.myPlacesSection}>
+                    <View style={styles.myPlacesHeader}>
+                      <MaterialIcons name="bookmark" size={14} color="#7C3AED" />
+                      <Text style={styles.myPlacesTitle}>{language === 'fr' ? 'Mes lieux' : 'My Places'}</Text>
+                    </View>
+                    {myPlaces.map((place) => {
+                      const typeIcon = place.type === 'terrain' ? 'sports-soccer' : place.type === 'club' ? 'home-work' : 'emoji-events';
+                      const typeColor = place.type === 'terrain' ? '#22C55E' : place.type === 'club' ? '#3B82F6' : '#F59E0B';
+                      return (
+                        <Pressable
+                          key={`${place.type}-${place.id}`}
+                          style={styles.myPlaceItem}
+                          onPress={() => handleSelectMyPlace(place)}
+                        >
+                          <View style={[styles.myPlaceIcon, { backgroundColor: typeColor + '15' }]}>
+                            <MaterialIcons name={typeIcon as any} size={16} color={typeColor} />
+                          </View>
+                          <View style={styles.myPlaceContent}>
+                            <Text style={styles.myPlaceName} numberOfLines={1}>{place.name}</Text>
+                            <Text style={styles.myPlaceCity} numberOfLines={1}>{[place.address, place.city].filter(Boolean).join(', ')}</Text>
+                          </View>
+                          <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                        </Pressable>
+                      );
+                    })}
+                  </View>
+                ) : myPlacesLoading ? (
+                  <View style={styles.myPlacesLoadingRow}>
+                    <ActivityIndicator size="small" color="#7C3AED" />
+                    <Text style={styles.myPlacesLoadingText}>{language === 'fr' ? 'Chargement...' : 'Loading...'}</Text>
+                  </View>
+                ) : null}
+
                 {/* Recent searches */}
                 {recentSearches.length > 0 ? (
                   <View style={styles.recentSection}>
@@ -982,6 +1097,17 @@ const styles = StyleSheet.create({
   cityModeText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   postalCodeIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginHorizontal: 16, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#0EA5E9' + '10', borderRadius: theme.borderRadius.full, alignSelf: 'center' },
   postalCodeText: { fontSize: 12, fontWeight: '600', color: '#0EA5E9' },
+  // My Places
+  myPlacesSection: { backgroundColor: '#7C3AED08', borderRadius: theme.borderRadius.md, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#7C3AED15' },
+  myPlacesHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
+  myPlacesTitle: { fontSize: 11, fontWeight: '700' as const, color: '#7C3AED', letterSpacing: 0.5, textTransform: 'uppercase' as const },
+  myPlaceItem: { flexDirection: 'row' as const, alignItems: 'center' as const, paddingHorizontal: 12, paddingVertical: 10, gap: 10, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#7C3AED15' },
+  myPlaceIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  myPlaceContent: { flex: 1 },
+  myPlaceName: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+  myPlaceCity: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  myPlacesLoadingRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 12, marginBottom: 8 },
+  myPlacesLoadingText: { fontSize: 12, color: '#7C3AED', fontWeight: '500' as const },
   resolvingOverlay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, backgroundColor: theme.primary + '08' },
   resolvingText: { fontSize: 13, color: theme.primary, fontWeight: '500' },
 });

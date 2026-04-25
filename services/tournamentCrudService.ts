@@ -193,6 +193,86 @@ export function updateBracketMatchOp(
   }));
 }
 
+/**
+ * Auto-update tournament statuses based on dates:
+ * - "À venir" → "En cours" when tournament date ≤ today
+ * - "En cours" → "Terminé" when end_date < today (or date + 1 day if no end_date)
+ * Returns the list of updated tournament IDs.
+ */
+export async function autoUpdateTournamentStatuses(
+ tournaments: Tournament[],
+ setTournaments: React.Dispatch<React.SetStateAction<Tournament[]>>,
+ supabase: any,
+ userId: string | undefined,
+): Promise<string[]> {
+ if (!userId) return [];
+ const now = new Date();
+ const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight today
+ const updatedIds: string[] = [];
+
+ for (const t of tournaments) {
+ const tournamentDate = new Date(t.date);
+ const tournamentDay = new Date(tournamentDate.getFullYear(), tournamentDate.getMonth(), tournamentDate.getDate());
+
+ // Determine end day: use endDate if available, otherwise same as date
+ const endDate = t.endDate ? new Date(t.endDate) : tournamentDate;
+ const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+
+ let newStatus: string | null = null;
+
+ if (t.status === 'À venir') {
+ // Tournament has started (date <= today)
+ if (tournamentDay <= today) {
+ // If it's a single-day tournament and today is past the tournament day, mark as Terminé
+ if (endDay < today) {
+ newStatus = 'Terminé';
+ } else {
+ newStatus = 'En cours';
+ }
+ }
+ } else if (t.status === 'En cours') {
+ // Tournament ended (end day < today)
+ if (endDay < today) {
+ newStatus = 'Terminé';
+ }
+ }
+
+ if (newStatus && newStatus !== t.status) {
+ updatedIds.push(t.id);
+ // Update in DB
+ try {
+ await supabase.from('tournaments').update({
+ status: newStatus,
+ updated_at: new Date().toISOString(),
+ }).eq('id', t.id);
+ } catch (e) {
+ console.log('[AutoStatus] Error updating tournament', t.id, e);
+ }
+ }
+ }
+
+ if (updatedIds.length > 0) {
+ // Batch update local state
+ setTournaments(prev => prev.map(t => {
+ if (!updatedIds.includes(t.id)) return t;
+ const tournamentDate = new Date(t.date);
+ const tournamentDay = new Date(tournamentDate.getFullYear(), tournamentDate.getMonth(), tournamentDate.getDate());
+ const endDate = t.endDate ? new Date(t.endDate) : tournamentDate;
+ const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+ if (t.status === 'À venir' && tournamentDay <= today) {
+ return { ...t, status: endDay < today ? 'Terminé' : 'En cours' };
+ }
+ if (t.status === 'En cours' && endDay < today) {
+ return { ...t, status: 'Terminé' };
+ }
+ return t;
+ }));
+ console.log(`[AutoStatus] Updated ${updatedIds.length} tournament(s)`);
+ }
+
+ return updatedIds;
+}
+
 export async function deleteTournamentOp(
   id: string,
   deps: Pick<TournamentCrudDeps, 'supabase' | 'userId' | 'isConnected' | 'setTournaments' | 'setMatches'>
