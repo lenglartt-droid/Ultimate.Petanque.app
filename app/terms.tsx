@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-03-20';
+const EFFECTIVE_DATE = '2026-04-25';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -177,6 +177,30 @@ export default function TermsScreen() {
       color: theme.carreauColor,
       title: t('termsExtended', 'sponsoredEventsRulesTitle'),
       content: t('termsExtended', 'sponsoredEventsRulesContent'),
+    },
+    {
+      icon: 'groups',
+      color: '#22C55E',
+      title: language === 'fr' ? 'Formation d\'equipes & Tournois' : 'Team Formation & Tournaments',
+      content: language === 'fr'
+        ? 'Le systeme de formation d\'equipes permet aux joueurs d\'inviter des partenaires pour les tournois (Doublette/Triplette). Le capitaine peut activer/desactiver la date limite de formation (2 jours avant le tournoi). Le score de synergie (0-100) est calcule automatiquement a partir du taux de victoire, de la frequence de matchs, de la compatibilite ELO et de la complementarite de role. Les equipes formees disposent d\'un chat integre avec reactions emoji. Le capitaine peut dissoudre l\'equipe ou retirer des membres. Les invitations de tournoi expirent automatiquement apres la date limite. Les partenaires favoris sont stockes localement sur l\'appareil.'
+        : 'The team formation system allows players to invite partners for tournaments (Doubles/Triples). The captain can enable/disable the formation deadline (2 days before tournament). The synergy score (0-100) is automatically calculated from win rate, match frequency, ELO compatibility and role complementarity. Formed teams have a built-in chat with emoji reactions. The captain can dissolve the team or remove members. Tournament invitations expire automatically after the deadline. Favorite partners are stored locally on device.',
+    },
+    {
+      icon: 'fingerprint',
+      color: '#DC2626',
+      title: language === 'fr' ? 'Securite des comptes & Anti-triche' : 'Account Security & Anti-Cheat',
+      content: language === 'fr'
+        ? 'Chaque appareil est limite a un seul compte utilisateur. L\'application genere une empreinte numerique de l\'appareil (hash de proprietes materielles) pour empecher la creation de comptes multiples. En cas de changement d\'appareil, un systeme de transfert par code (6 caracteres, expiration 48h) est disponible avec validation par un administrateur. L\'application detecte et signale les comportements suspects (stats aberrantes, multi-comptes). Les comptes enfreignant ces regles peuvent etre suspendus.'
+        : 'Each device is limited to a single user account. The app generates a device fingerprint (hash of hardware properties) to prevent multiple account creation. For device changes, a code-based transfer system (6 characters, 48h expiry) is available with admin validation. The app detects and flags suspicious behaviors (abnormal stats, multi-accounts). Accounts violating these rules may be suspended.',
+    },
+    {
+      icon: 'map',
+      color: '#4285F4',
+      title: language === 'fr' ? 'Google Maps & Geolocalisation' : 'Google Maps & Geolocation',
+      content: language === 'fr'
+        ? 'L\'application utilise l\'API Google Maps Places Autocomplete pour la recherche d\'adresses lors de la creation de terrains, clubs, joueurs et tournois. Les donnees de localisation (coordonnees GPS, adresse, ville, code postal, region) sont extraites des resultats Google Places et stockees dans notre base de donnees. Les photos de lieux Google Places peuvent etre proposees comme miniatures de terrains. La geolocalisation GPS est utilisee pour le filtre "A proximite" dans la recherche d\'equipiers et pour les alertes de terrain actif. Vous pouvez refuser la geolocalisation a tout moment via les parametres de votre appareil.'
+        : 'The app uses the Google Maps Places Autocomplete API for address searches when creating terrains, clubs, players and tournaments. Location data (GPS coordinates, address, city, postal code, region) is extracted from Google Places results and stored in our database. Google Places photos may be suggested as terrain thumbnails. GPS geolocation is used for the "Nearby" filter in teammate search and active terrain alerts. You can refuse geolocation at any time via your device settings.',
     },
     {
       icon: 'email',
