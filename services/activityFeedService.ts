@@ -29,7 +29,8 @@ export type FeedItemType =
   | 'club_invitation_sent'
   | 'club_invitation_accepted'
   | 'club_invitation_declined'
-  | 'club_invitation_expired';
+  | 'club_invitation_expired'
+  | 'team_complete';
 
 export interface FeedItem {
   id: string;
@@ -592,6 +593,45 @@ export async function fetchActivityFeed(limit: number = 30): Promise<{ items: Fe
         }
       }
     }
+
+    // 7. Completed tournament teams ("Team complete" social feed)
+    try {
+      const { data: teamsData } = await supabase
+        .from('tournament_teams')
+        .select('id, tournament_id, creator_user_id, member_user_ids, member_names, format, completed_at')
+        .eq('status', 'complete')
+        .order('completed_at', { ascending: false })
+        .limit(limit);
+
+      if (teamsData) {
+        // Resolve tournament names
+        const tournamentIds = [...new Set(teamsData.map((t: any) => t.tournament_id))];
+        const tournamentNameMap = new Map<string, string>();
+        if (tournamentIds.length > 0) {
+          const { data: tournData } = await supabase
+            .from('tournaments')
+            .select('id, name')
+            .in('id', tournamentIds);
+          (tournData || []).forEach((t: any) => tournamentNameMap.set(t.id, t.name));
+        }
+
+        for (const row of teamsData) {
+          items.push({
+            id: `team-${row.id}`,
+            type: 'team_complete',
+            timestamp: row.completed_at || row.created_at,
+            data: {
+              teamId: row.id,
+              tournamentId: row.tournament_id,
+              tournamentName: tournamentNameMap.get(row.tournament_id) || '',
+              memberNames: row.member_names || [],
+              memberUserIds: row.member_user_ids || [],
+              format: row.format,
+            },
+          });
+        }
+      }
+    } catch { /* silent */ }
 
     // Sort by timestamp descending
     items.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
