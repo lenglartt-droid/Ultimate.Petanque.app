@@ -324,6 +324,29 @@ export default function NewClubScreen() {
           {/* 2. Localisation */}
           <SectionCard title={t('club', 'locationLabel')} icon="place" color={theme.success} delay={100} required>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('club', 'searchAddress')} required showAddressField />
+            {/* Auto-filled details from Google Places */}
+            {(location.postalCode || location.region) ? (
+              <View style={styles.autoFilledRow}>
+                {location.postalCode ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="local-post-office" size={12} color="#0EA5E9" />
+                    <Text style={styles.autoFilledChipText}>{location.postalCode}</Text>
+                  </View>
+                ) : null}
+                {location.region ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="map" size={12} color="#8B5CF6" />
+                    <Text style={styles.autoFilledChipText}>{location.region}</Text>
+                  </View>
+                ) : null}
+                {location.country && location.country !== 'France' ? (
+                  <View style={styles.autoFilledChip}>
+                    <MaterialIcons name="flag" size={12} color="#10B981" />
+                    <Text style={styles.autoFilledChipText}>{location.country}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
           </SectionCard>
 
           {/* Duplicate Detection */}
@@ -585,6 +608,10 @@ const styles = StyleSheet.create({
   contactInputContainer: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, borderRadius: theme.borderRadius.md, borderWidth: 1, borderColor: theme.border },
   contactInput: { flex: 1, paddingVertical: 13, fontSize: 15, color: theme.textPrimary },
 
+  // Auto-filled address details
+  autoFilledRow: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6, marginTop: 10 },
+  autoFilledChip: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 5, borderRadius: theme.borderRadius.full, borderWidth: 1, borderColor: theme.border },
+  autoFilledChipText: { fontSize: 12, fontWeight: '600' as const, color: theme.textSecondary },
   // Footer
   footer: { paddingHorizontal: 16, paddingTop: 12, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },
   saveButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.accent, paddingVertical: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.cardElevated },
