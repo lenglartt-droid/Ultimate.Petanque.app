@@ -126,6 +126,8 @@ export async function updateTerrainOp(
     if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
     if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
     if (updates.environment !== undefined) dbUpdates.environment = updates.environment;
+    if (updates.parking !== undefined) dbUpdates.parking = updates.parking;
+    if (updates.toilets !== undefined) dbUpdates.toilets = updates.toilets;
     dbUpdates.updated_at = new Date().toISOString();
 
     await supabase.from('terrains').update(dbUpdates).eq('id', id);

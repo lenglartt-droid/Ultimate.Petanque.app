@@ -659,7 +659,9 @@ export default function EditTournamentScreen() {
                     return (<Pressable key={num} style={[styles.participantPill, isActive && styles.participantPillActive]} onPress={() => { Haptics.selectionAsync(); setMaxParticipants(num); }}><Text style={[styles.participantPillText, isActive && styles.participantPillTextActive]}>{num}</Text></Pressable>);
                   })}
                 </View>
+                
               </View>
+
             ) : null}
           </Animated.View>
 

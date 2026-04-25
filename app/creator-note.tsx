@@ -424,37 +424,6 @@ export default function CreatorNoteScreen() {
           </View>
         ) : null}
 
-        {/* ===== COMMUNITY HEALTH ===== */}
-        {trustStats.total > 0 ? (
-          <View style={st.card}>
-            <View style={st.statsHeader}>
-              <View style={[st.statsSectionIcon, { backgroundColor: '#3B82F612' }]}>
-                <MaterialIcons name="health-and-safety" size={18} color="#3B82F6" />
-              </View>
-              <Text style={st.statsTitle}>
-                {fr ? 'Sante de la communaute' : 'Community Health'}
-              </Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 10 }}>
-              {[
-                { label: fr ? 'Score moyen' : 'Avg Score', value: trustStats.avg, color: trustStats.avg >= 65 ? '#22C55E' : trustStats.avg >= 45 ? '#D97706' : '#EF4444' },
-                { label: fr ? 'Verifies' : 'Verified', value: trustStats.verified, color: '#22C55E' },
-                { label: fr ? 'Fiables' : 'Trusted', value: trustStats.trusted, color: '#3B82F6' },
-                { label: 'Standard', value: trustStats.standard, color: '#D97706' },
-              ].map((item, i) => (
-                <View key={i} style={{ flex: 1, alignItems: 'center', backgroundColor: '#F8FAFC', borderRadius: 10, paddingVertical: 8 }}>
-                  <Text style={{ fontSize: 18, fontWeight: '900', color: item.color }}>{item.value}</Text>
-                  <Text style={{ fontSize: 9, color: '#64748B', marginTop: 2 }}>{item.label}</Text>
-                </View>
-              ))}
-            </View>
-            <View style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', backgroundColor: '#F1F5F9' }}>
-              <View style={{ flex: Math.max(trustStats.verified, 0.1), backgroundColor: '#22C55E', borderRadius: 4 }} />
-              <View style={{ flex: Math.max(trustStats.trusted, 0.1), backgroundColor: '#3B82F6' }} />
-              <View style={{ flex: Math.max(trustStats.standard, 0.1), backgroundColor: '#D97706', borderRadius: 4 }} />
-            </View>
-          </View>
-        ) : null}
 
         {/* ===== SUPPORT ===== */}
         <View style={[st.card, st.supportCard]}>

@@ -61,7 +61,7 @@ async function searchNominatim(query: string): Promise<SearchResult[]> {
   try {
     const encoded = encodeURIComponent(query);
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=8&accept-language=fr,en`,
+      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=8&accept-language=en`,
       {
         headers: {
           'User-Agent': 'UltimatePetanque/1.0',

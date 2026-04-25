@@ -60,7 +60,7 @@ type SortCriterion = { field: SortField; direction: SortDirection };
 
 export default function DirectoryScreen() {
   const insets = useSafeAreaInsets();
-  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, sharedMatchIds, sharedChallengeIds } = useAppData();
+  const { players, clubs, tournaments, terrains, selfPlayer, favoriteTerrainIds, favoriteClubIds, sharedMatchIds, sharedChallengeIds } = useAppData();  
   const { getSharedPermission, refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, deletePlayer, deleteClub, deleteTerrain, deleteTournament } = useAppActions();
   const { t, language } = useLanguage();
   const { user } = useAuth();
