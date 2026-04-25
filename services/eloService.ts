@@ -381,6 +381,10 @@ export async function updateEloAfterMatch(
 
     if (!playersData || playersData.length === 0) return;
 
+    // Filter: only update ELO for real user profiles (player.id === player.user_id)
+    // Locally created players (tracking cards) have different UUIDs and should not accumulate ELO
+    const isRealUserProfile = (p: any): boolean => !!(p.user_id && p.id === p.user_id);
+
     const playerMap = new Map(playersData.map(p => [p.id, p]));
 
     // Calculate team average ELOs
@@ -432,6 +436,14 @@ export async function updateEloAfterMatch(
     for (const pid of teamAPlayerIds) {
       const p = playerMap.get(pid);
       if (!p) continue;
+
+      // Skip ELO updates for locally created players (not real user profiles)
+      if (!isRealUserProfile(p)) {
+        // Still update last_match_date for tracking purposes
+        await supabase.from('players').update({ last_match_date: now }).eq('id', pid);
+        continue;
+      }
+
       const currentElo = p.elo_rating || ELO_INITIAL;
       const mc = p.stats?.matchesPlayed || 0;
       const won = winner === 'A';
@@ -456,25 +468,30 @@ export async function updateEloAfterMatch(
 
       await supabase.from('players').update(roleUpdates).eq('id', pid);
 
-      if (p.user_id) {
-        historyRows.push({
-          user_id: p.user_id,
-          player_id: pid,
-          elo_before: currentElo,
-          elo_after: newElo,
-          elo_delta: delta,
-          match_id: matchId,
-          opponent_elo: avgEloB,
-          opponent_name: teamBNames,
-          won,
-        });
-      }
+      historyRows.push({
+        user_id: p.user_id,
+        player_id: pid,
+        elo_before: currentElo,
+        elo_after: newElo,
+        elo_delta: delta,
+        match_id: matchId,
+        opponent_elo: avgEloB,
+        opponent_name: teamBNames,
+        won,
+      });
     }
 
     // Update team B players
     for (const pid of teamBPlayerIds) {
       const p = playerMap.get(pid);
       if (!p) continue;
+
+      // Skip ELO updates for locally created players (not real user profiles)
+      if (!isRealUserProfile(p)) {
+        await supabase.from('players').update({ last_match_date: now }).eq('id', pid);
+        continue;
+      }
+
       const currentElo = p.elo_rating || ELO_INITIAL;
       const mc = p.stats?.matchesPlayed || 0;
       const won = winner === 'B';
@@ -499,19 +516,17 @@ export async function updateEloAfterMatch(
 
       await supabase.from('players').update(roleUpdates).eq('id', pid);
 
-      if (p.user_id) {
-        historyRows.push({
-          user_id: p.user_id,
-          player_id: pid,
-          elo_before: currentElo,
-          elo_after: newElo,
-          elo_delta: delta,
-          match_id: matchId,
-          opponent_elo: avgEloA,
-          opponent_name: teamANames,
-          won,
-        });
-      }
+      historyRows.push({
+        user_id: p.user_id,
+        player_id: pid,
+        elo_before: currentElo,
+        elo_after: newElo,
+        elo_delta: delta,
+        match_id: matchId,
+        opponent_elo: avgEloA,
+        opponent_name: teamANames,
+        won,
+      });
     }
 
     // Insert history records

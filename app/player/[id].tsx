@@ -154,9 +154,9 @@ export default function PlayerDetailScreen() {
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  // Prevent editing another real user's player profile — only own players or locally created ones
+  // Allow editing own players (self or locally created) but not other real users' profiles
   const isOtherRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
-  const canEdit = !isReadOnly && (isSelf || (playerUserId === user?.id));
+  const canEdit = !isReadOnly && !isOtherRealUser && (isSelf || (playerUserId === user?.id));
 
   const [showShareModal, setShowShareModal] = React.useState(false);
   const [showMergePicker, setShowMergePicker] = React.useState(false);
@@ -184,9 +184,12 @@ export default function PlayerDetailScreen() {
   const [reportReason, setReportReason] = React.useState<ReportReason | ''>('');
   const [reportDetails, setReportDetails] = React.useState('');
   const [reportSubmitting, setReportSubmitting] = React.useState(false);
-  const isPublicItem = (player as any)?.isPublic === true;
-  const playerUserId = (player as any)?.userId;
+  const isPublicItem = player?.isPublic === true;
+  const playerUserId = player?.userId;
   const isRealUser = isPublicItem && playerUserId && playerUserId !== user?.id;
+  // A player linked to a real registered user account (self or other user's public profile)
+  // Locally created players have player.id !== player.userId (different UUIDs), so they're excluded
+  const isLinkedToRealUser = !!(isSelf || (playerUserId && player?.id === playerUserId));
 
   const [trustScore, setTrustScore] = React.useState<TrustScoreData | null>(null);
   const [trustScoreLoading, setTrustScoreLoading] = React.useState(false);
@@ -571,8 +574,8 @@ export default function PlayerDetailScreen() {
                   </View>
                 </View>
 
-                {/* Follower / Following counters */}
-              {(followerCount > 0 || followingCount > 0 || playerUserId) ? (
+                {/* Follower / Following counters — only for players linked to real users */}
+              {isLinkedToRealUser && (followerCount > 0 || followingCount > 0 || playerUserId) ? (
                 <Pressable style={s.followStatsRow} onPress={() => { Haptics.selectionAsync(); if (isSelf) router.push('/following' as any); }}>
                   <View style={s.followStatItem}>
                     <Text style={s.followStatValue}>{followerCount}</Text>
@@ -750,7 +753,7 @@ export default function PlayerDetailScreen() {
                 </View>
               ) : null}
 
-              {trustScore ? (
+              {isLinkedToRealUser && trustScore ? (
                 trustScore.level === 'suspicious' && trustScore.score === 0 ? (
                   <View style={[s.trustScoreBadge, { borderColor: '#EF444430', backgroundColor: '#EF444408' }]}>
                     <View style={[s.trustScoreIconBg, { backgroundColor: '#EF444415' }]}><MaterialIcons name="block" size={18} color="#EF4444" /></View>
@@ -780,8 +783,8 @@ export default function PlayerDetailScreen() {
                 )
               ) : null}
 
-              {/* ===== ELO SECTION IN HERO (matching me.tsx) — only for real users ===== */}
-              {player.eloRating && player.userId ? (() => {
+              {/* ===== ELO SECTION IN HERO (matching me.tsx) — only for players linked to real users ===== */}
+              {player.eloRating && isLinkedToRealUser ? (() => {
                 const eloR = getEloRank(player.eloRating);
                 return (
                   <View style={s.heroSectionBlock}>
@@ -822,7 +825,8 @@ export default function PlayerDetailScreen() {
                 );
               })() : null}
 
-              {/* ===== UNIFIED RANKING HUB ===== */}
+              {/* ===== UNIFIED RANKING HUB — only for players linked to real users ===== */}
+              {isLinkedToRealUser ? (
               <View style={s.rankingHub}>
                 {/* League tier compact */}
                 <GlobalRankBadge
@@ -871,8 +875,9 @@ export default function PlayerDetailScreen() {
                   </Pressable>
                 ) : null}
               </View>
+              ) : null}
 
-              {player.isPublic && player.stats.matchesPlayed < LEADERBOARD_MIN_MATCHES ? (
+              {isLinkedToRealUser && player.isPublic && player.stats.matchesPlayed < LEADERBOARD_MIN_MATCHES ? (
                 <Pressable style={s.leaderboardProgressCard} onPress={() => router.push('/leaderboard' as any)}>
                   <View style={s.leaderboardProgressHeader}>
                     <MaterialIcons name="leaderboard" size={16} color="#D97706" />
