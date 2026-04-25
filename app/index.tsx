@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
-import { AuthRouter, useAuth } from '@/template';
+import { AuthRouter, useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import { Redirect, router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
+import { checkPostOAuthDeviceBinding, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
+import { useLanguage } from '@/hooks/useLanguage';
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
 
@@ -45,13 +47,16 @@ function parseDeepLink(url: string): { type: 'share' | 'meetup'; code: string } 
 // Profile Checker with Deep Link Handling
 // ============================================
 function ProfileChecker() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
+  const { showAlert } = useAlert();
+  const { t } = useLanguage();
   const [checking, setChecking] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const supabase = getSupabaseClient();
   const [needsConsent, setNeedsConsent] = useState(false);
   const pendingDeepLinkRef = useRef<{ type: 'share' | 'meetup'; code: string } | null>(null);
   const profileReadyRef = useRef(false);
+  const oauthCheckedRef = useRef(false);
 
   // Handle deep link navigation after profile is ready
   const handleDeepLinkNavigation = (link: { type: 'share' | 'meetup'; code: string }) => {
@@ -104,6 +109,38 @@ function ProfileChecker() {
       if (!user?.id) {
         setChecking(false);
         return;
+      }
+
+      // Post-OAuth device binding check (runs once per session)
+      if (!oauthCheckedRef.current && user?.email) {
+        oauthCheckedRef.current = true;
+        try {
+          const { allowed, reason } = await checkPostOAuthDeviceBinding(user.email);
+          if (!allowed && reason === 'device_bound_to_other_account') {
+            // Device is bound to another account — kick user out
+            showAlert(
+              t('common', 'error'),
+              t('login', 'deviceBindingOAuthKicked'),
+              [{
+                text: 'OK',
+                onPress: async () => {
+                  await logout();
+                  router.replace('/login');
+                }
+              }]
+            );
+            setChecking(false);
+            return;
+          }
+          // Record device binding for OAuth users (first-time)
+          recordAccountCreation(user.email).catch(() => {});
+          // Show one-time device binding notification
+          const shouldShow = await shouldShowDeviceBindingNotification();
+          if (shouldShow) {
+            markDeviceBindingNotificationShown();
+            showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+          }
+        } catch { /* silent — don't block login on error */ }
       }
 
       try {
