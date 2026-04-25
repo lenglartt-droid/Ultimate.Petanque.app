@@ -155,11 +155,14 @@ export async function fetchWeeklyLeaderboard(): Promise<{
     }
 
     // 4. Filter players with minimum weekly matches
+    // Also exclude locally created players (tracking cards) — only real user profiles (id === user_id)
     const qualifiedPlayerIds = [...weeklyStatsMap.entries()]
       .filter(([_, ws]) => ws.matchesPlayed >= WEEKLY_MIN_MATCHES)
       .map(([pid]) => pid);
 
-    const qualifiedPlayersData = (playersData || []).filter((p: any) => qualifiedPlayerIds.includes(p.id));
+    const qualifiedPlayersData = (playersData || []).filter((p: any) => 
+      qualifiedPlayerIds.includes(p.id) && p.user_id && p.id === p.user_id
+    );
 
     // 4b. Fetch trust scores for shadow banning
     const qualifiedIds = qualifiedPlayersData.map((p: any) => p.id);

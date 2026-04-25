@@ -2561,7 +2561,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
               </View>
             );
           })() : null}
-          {item.eloRating ? (() => { const eloRank = getEloRank(item.eloRating); return (
+          {item.eloRating && item.userId && item.id === item.userId ? (() => { const eloRank = getEloRank(item.eloRating); return (
             <View style={[styles.tag, { backgroundColor: eloRank.color + '12', borderWidth: 1, borderColor: eloRank.color + '25' }]}>
               <MaterialIcons name={eloRank.icon as any} size={10} color={eloRank.color} />
               <Text style={[styles.tagText, { color: eloRank.color }]}>{item.eloRating}</Text>
