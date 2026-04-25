@@ -25,6 +25,8 @@ import { useLanguage } from '@/hooks/useLanguage';
 const RECENT_SEARCHES_KEY = '@location_picker_recent_searches';
 const MAX_RECENT = 8;
 
+const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
 export interface LocationData {
   address: string;
   city: string;
@@ -32,6 +34,8 @@ export interface LocationData {
   latitude: number;
   longitude: number;
   formattedAddress?: string;
+  postalCode?: string;
+  region?: string;
 }
 
 interface LocationPickerProps {
@@ -46,40 +50,170 @@ interface LocationPickerProps {
 
 interface SearchResult {
   id: string;
+  placeId?: string;
   address: string;
   city: string;
   country: string;
   latitude: number;
   longitude: number;
   formattedAddress: string;
+  postalCode?: string;
+  region?: string;
 }
 
 // ============================================
-// Nominatim (OpenStreetMap) geocoding
+// Google Places Autocomplete
 // ============================================
-async function searchNominatim(query: string): Promise<SearchResult[]> {
+async function searchGooglePlaces(query: string, types?: string, lang: string = 'fr'): Promise<SearchResult[]> {
+  if (!GOOGLE_API_KEY) return searchNominatimFallback(query);
+  try {
+    const params = new URLSearchParams({
+      input: query,
+      key: GOOGLE_API_KEY,
+      language: lang,
+    });
+    if (types) params.set('types', types);
+
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      console.log('[Google Places] Status:', data.status, data.error_message);
+      return [];
+    }
+
+    return (data.predictions || []).map((p: any) => ({
+      id: p.place_id,
+      placeId: p.place_id,
+      address: p.structured_formatting?.main_text || '',
+      city: '',
+      country: '',
+      latitude: 0,
+      longitude: 0,
+      formattedAddress: p.description || '',
+    }));
+  } catch (e) {
+    console.log('[Google Places] Search error:', e);
+    return [];
+  }
+}
+
+// Fetch full place details (lat/lng, address components) from a placeId
+async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Promise<SearchResult | null> {
+  if (!GOOGLE_API_KEY) return null;
+  try {
+    const params = new URLSearchParams({
+      place_id: placeId,
+      key: GOOGLE_API_KEY,
+      fields: 'geometry,address_components,formatted_address,name',
+      language: lang,
+    });
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.status !== 'OK' || !data.result) return null;
+
+    const result = data.result;
+    const components = result.address_components || [];
+    const getComponent = (type: string) =>
+      components.find((c: any) => c.types?.includes(type))?.long_name || '';
+
+    const streetNumber = getComponent('street_number');
+    const route = getComponent('route');
+    const street = [streetNumber, route].filter(Boolean).join(' ');
+    const city = getComponent('locality') || getComponent('administrative_area_level_2') || getComponent('postal_town') || getComponent('sublocality_level_1') || '';
+    const country = getComponent('country') || '';
+    const postalCode = getComponent('postal_code') || '';
+    const region = getComponent('administrative_area_level_1') || getComponent('administrative_area_level_2') || '';
+    const lat = result.geometry?.location?.lat || 0;
+    const lng = result.geometry?.location?.lng || 0;
+
+    return {
+      id: placeId,
+      placeId,
+      address: street || result.name || '',
+      city,
+      country,
+      latitude: lat,
+      longitude: lng,
+      formattedAddress: result.formatted_address || '',
+      postalCode,
+      region,
+    };
+  } catch (e) {
+    console.log('[Google Places] Details error:', e);
+    return null;
+  }
+}
+
+// Google Geocoding API reverse geocode
+async function reverseGoogleGeocode(lat: number, lng: number, lang: string = 'fr'): Promise<SearchResult | null> {
+  if (!GOOGLE_API_KEY) return reverseNominatimFallback(lat, lng);
+  try {
+    const params = new URLSearchParams({
+      latlng: `${lat},${lng}`,
+      key: GOOGLE_API_KEY,
+      language: lang,
+    });
+    const response = await fetch(
+      `https://maps.googleapis.com/maps/api/geocode/json?${params.toString()}`
+    );
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) return null;
+
+    const result = data.results[0];
+    const components = result.address_components || [];
+    const getComponent = (type: string) =>
+      components.find((c: any) => c.types?.includes(type))?.long_name || '';
+
+    const streetNumber = getComponent('street_number');
+    const route = getComponent('route');
+    const street = [streetNumber, route].filter(Boolean).join(' ');
+    const city = getComponent('locality') || getComponent('administrative_area_level_2') || getComponent('postal_town') || '';
+    const country = getComponent('country') || '';
+    const postalCode = getComponent('postal_code') || '';
+    const region = getComponent('administrative_area_level_1') || getComponent('administrative_area_level_2') || '';
+
+    return {
+      id: result.place_id || `${lat}-${lng}`,
+      address: street || '',
+      city,
+      country,
+      latitude: lat,
+      longitude: lng,
+      formattedAddress: result.formatted_address || [street, city, country].filter(Boolean).join(', '),
+      postalCode,
+      region,
+    };
+  } catch (e) {
+    console.log('[Google Geocode] Reverse error:', e);
+    return null;
+  }
+}
+
+// ============================================
+// Nominatim fallbacks (when no Google key)
+// ============================================
+async function searchNominatimFallback(query: string): Promise<SearchResult[]> {
   try {
     const encoded = encodeURIComponent(query);
     const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=8&accept-language=en`,
-      {
-        headers: {
-          'User-Agent': 'UltimatePetanque/1.0',
-          'Accept': 'application/json',
-        },
-      }
+      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=8&accept-language=fr,en`,
+      { headers: { 'User-Agent': 'UltimatePetanque/1.0', 'Accept': 'application/json' } }
     );
     if (!response.ok) return [];
     const data = await response.json();
     if (!Array.isArray(data)) return [];
-
     return data.map((item: any) => {
       const addr = item.address || {};
       const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
       const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
       const country = addr.country || '';
-      const displayParts = [street, city, country].filter(Boolean);
-
       return {
         id: `${item.place_id}`,
         address: street || item.name || '',
@@ -87,148 +221,25 @@ async function searchNominatim(query: string): Promise<SearchResult[]> {
         country,
         latitude: parseFloat(item.lat),
         longitude: parseFloat(item.lon),
-        formattedAddress: displayParts.join(', ') || item.display_name || '',
+        formattedAddress: [street, city, country].filter(Boolean).join(', ') || item.display_name || '',
       };
     }).filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude));
-  } catch (e) {
-    console.log('[Nominatim] Search error:', e);
-    return [];
-  }
+  } catch { return []; }
 }
 
-// City-specific search using Nominatim featuretype filter
-async function searchCitiesNominatim(query: string): Promise<SearchResult[]> {
-  try {
-    const encoded = encodeURIComponent(query);
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?q=${encoded}&format=json&addressdetails=1&limit=10&featuretype=settlement&accept-language=fr,en`,
-      {
-        headers: {
-          'User-Agent': 'UltimatePetanque/1.0',
-          'Accept': 'application/json',
-        },
-      }
-    );
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (!Array.isArray(data)) return [];
-
-    return data
-      .map((item: any) => {
-        const addr = item.address || {};
-        const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || item.name || '';
-        const state = addr.state || addr.region || '';
-        const country = addr.country || '';
-        const displayParts = [city, state, country].filter(Boolean);
-
-        return {
-          id: `city-${item.place_id}`,
-          address: '',
-          city,
-          country,
-          latitude: parseFloat(item.lat),
-          longitude: parseFloat(item.lon),
-          formattedAddress: displayParts.join(', ') || item.display_name || '',
-        };
-      })
-      .filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude) && r.city);
-  } catch (e) {
-    console.log('[Nominatim] City search error:', e);
-    return [];
-  }
-}
-
-// Postal code search using Nominatim postalcode parameter
-async function searchByPostalCode(postalCode: string, countryCode?: string): Promise<SearchResult[]> {
-  try {
-    // Build query with postalcode parameter for precise results
-    const params = new URLSearchParams({
-      postalcode: postalCode.trim(),
-      format: 'json',
-      addressdetails: '1',
-      limit: '10',
-      'accept-language': 'fr,en',
-    });
-    // Add country code bias if provided (e.g. 'fr' for France)
-    if (countryCode) {
-      params.set('countrycodes', countryCode);
-    }
-
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
-      {
-        headers: {
-          'User-Agent': 'UltimatePetanque/1.0',
-          'Accept': 'application/json',
-        },
-      }
-    );
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (!Array.isArray(data)) return [];
-
-    return data
-      .map((item: any) => {
-        const addr = item.address || {};
-        const postcode = addr.postcode || postalCode;
-        const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
-        const state = addr.state || addr.region || '';
-        const country = addr.country || '';
-        const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
-        const displayParts = [postcode, city, state, country].filter(Boolean);
-
-        return {
-          id: `postal-${item.place_id}`,
-          address: street || '',
-          city,
-          country,
-          latitude: parseFloat(item.lat),
-          longitude: parseFloat(item.lon),
-          formattedAddress: displayParts.join(', ') || item.display_name || '',
-        };
-      })
-      .filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude) && r.city);
-  } catch (e) {
-    console.log('[Nominatim] Postal code search error:', e);
-    return [];
-  }
-}
-
-// Detect if a query looks like a postal code (digits only, 3-10 chars)
-function isPostalCodeQuery(query: string): boolean {
-  const trimmed = query.trim();
-  // Pure digits: 75001, 13000, 8000, etc.
-  if (/^\d{3,10}$/.test(trimmed)) return true;
-  // Common formats: UK (SW1A 1AA), Canada (K1A 0B1), etc.
-  if (/^[A-Z0-9]{2,4}\s?[A-Z0-9]{2,4}$/i.test(trimmed) && /\d/.test(trimmed)) return true;
-  return false;
-}
-
-// Generate static map URL from OpenStreetMap
-function getStaticMapUrl(lat: number, lng: number, zoom: number = 14, width: number = 600, height: number = 200): string {
-  return `https://staticmap.openstreetmap.de/staticmap.php?center=${lat},${lng}&zoom=${zoom}&size=${width}x${height}&maptype=mapnik&markers=${lat},${lng},red-pushpin`;
-}
-
-async function reverseNominatim(lat: number, lng: number): Promise<SearchResult | null> {
+async function reverseNominatimFallback(lat: number, lng: number): Promise<SearchResult | null> {
   try {
     const response = await fetch(
       `https://nominatim.openstreetmap.org/reverse?lat=${lat}&lon=${lng}&format=json&addressdetails=1&accept-language=fr,en`,
-      {
-        headers: {
-          'User-Agent': 'UltimatePetanque/1.0',
-          'Accept': 'application/json',
-        },
-      }
+      { headers: { 'User-Agent': 'UltimatePetanque/1.0', 'Accept': 'application/json' } }
     );
     if (!response.ok) return null;
     const item = await response.json();
     if (!item || item.error) return null;
-
     const addr = item.address || {};
     const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
     const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
     const country = addr.country || '';
-
     return {
       id: `${item.place_id || Date.now()}`,
       address: street || '',
@@ -238,10 +249,15 @@ async function reverseNominatim(lat: number, lng: number): Promise<SearchResult 
       longitude: parseFloat(item.lon),
       formattedAddress: [street, city, country].filter(Boolean).join(', '),
     };
-  } catch (e) {
-    console.log('[Nominatim] Reverse error:', e);
-    return null;
-  }
+  } catch { return null; }
+}
+
+// Detect postal codes
+function isPostalCodeQuery(query: string): boolean {
+  const trimmed = query.trim();
+  if (/^\d{3,10}$/.test(trimmed)) return true;
+  if (/^[A-Z0-9]{2,4}\s?[A-Z0-9]{2,4}$/i.test(trimmed) && /\d/.test(trimmed)) return true;
+  return false;
 }
 
 export default function LocationPicker({
@@ -253,7 +269,8 @@ export default function LocationPicker({
   showAddressField = true,
   showCityOnly = false,
 }: LocationPickerProps) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  const lang = language === 'fr' ? 'fr' : 'en';
 
   const resolvedPlaceholder = placeholder || t('locationPicker', 'searchAddress');
   const resolvedLabel = label !== undefined ? label : t('locationPicker', 'location');
@@ -266,6 +283,7 @@ export default function LocationPicker({
   const [locationPermission, setLocationPermission] = useState<boolean | null>(null);
   const [recentSearches, setRecentSearches] = useState<SearchResult[]>([]);
   const recentLoadedRef = useRef(false);
+  const [resolvingPlace, setResolvingPlace] = useState(false);
 
   // Manual GPS state
   const [showManualGps, setShowManualGps] = useState(false);
@@ -276,21 +294,17 @@ export default function LocationPicker({
   // Debounce ref
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Check location permission on mount
   useEffect(() => {
     checkLocationPermission();
   }, []);
 
-  // Load recent searches from AsyncStorage on mount
   useEffect(() => {
     AsyncStorage.getItem(RECENT_SEARCHES_KEY)
       .then(raw => {
         if (raw) {
           try {
             const parsed = JSON.parse(raw);
-            if (Array.isArray(parsed)) {
-              setRecentSearches(parsed.slice(0, MAX_RECENT));
-            }
+            if (Array.isArray(parsed)) setRecentSearches(parsed.slice(0, MAX_RECENT));
           } catch { /* ignore */ }
         }
         recentLoadedRef.current = true;
@@ -298,9 +312,8 @@ export default function LocationPicker({
       .catch(() => { recentLoadedRef.current = true; });
   }, []);
 
-  // Persist recent searches to AsyncStorage when they change
   useEffect(() => {
-    if (!recentLoadedRef.current) return; // Skip initial load
+    if (!recentLoadedRef.current) return;
     AsyncStorage.setItem(RECENT_SEARCHES_KEY, JSON.stringify(recentSearches)).catch(() => {});
   }, [recentSearches]);
 
@@ -315,7 +328,7 @@ export default function LocationPicker({
     return status === 'granted';
   };
 
-  // Search addresses using Nominatim (OSM) with Expo geocoding fallback
+  // Search addresses using Google Places Autocomplete
   const searchAddresses = useCallback(async (query: string) => {
     if (!query.trim() || query.length < 3) {
       setSearchResults([]);
@@ -324,94 +337,26 @@ export default function LocationPicker({
 
     setIsSearching(true);
     try {
-      // Postal code detection: auto-route to postal code search
-      if (isPostalCodeQuery(query)) {
-        const postalResults = await searchByPostalCode(query);
-        if (postalResults.length > 0) {
-          // Deduplicate by city+country
-          const seen = new Set<string>();
-          const unique = postalResults.filter(r => {
-            const key = `${r.city.toLowerCase()}-${r.country.toLowerCase()}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          setSearchResults(unique);
-          return;
-        }
-        // If no postal results, fall through to normal search
-      }
-
-      // City-only mode: use settlement-filtered Nominatim search
-      if (showCityOnly) {
-        const cityResults = await searchCitiesNominatim(query);
-        if (cityResults.length > 0) {
-          // Deduplicate by city+country
-          const seen = new Set<string>();
-          const unique = cityResults.filter(r => {
-            const key = `${r.city.toLowerCase()}-${r.country.toLowerCase()}`;
-            if (seen.has(key)) return false;
-            seen.add(key);
-            return true;
-          });
-          setSearchResults(unique);
-        } else {
-          // Fallback to general search filtered for cities
-          const generalResults = await searchNominatim(query);
-          const cityFiltered = generalResults.filter(r => r.city);
-          setSearchResults(cityFiltered.length > 0 ? cityFiltered : generalResults);
-        }
-        return;
-      }
-
-      // Primary: Nominatim (OpenStreetMap)
-      const nominatimResults = await searchNominatim(query);
-
-      if (nominatimResults.length > 0) {
-        setSearchResults(nominatimResults);
-        return;
-      }
-
-      // Fallback: Expo Location geocoding
-      const searchTerm = query.includes('France') ? query : `${query}, France`;
-      const results = await Location.geocodeAsync(searchTerm);
-
-      if (results && results.length > 0) {
-        const detailedResults: SearchResult[] = [];
-
-        for (const result of results.slice(0, 5)) {
-          try {
-            const reverseResults = await Location.reverseGeocodeAsync({
-              latitude: result.latitude,
-              longitude: result.longitude,
-            });
-
-            if (reverseResults && reverseResults.length > 0) {
-              const r = reverseResults[0];
-              const addressParts = [r.streetNumber, r.street].filter(Boolean);
-              const address = addressParts.join(' ') || r.name || '';
-              const city = r.city || r.subregion || r.region || '';
-              const country = r.country || 'France';
-              const formattedAddress = [address, city, country].filter(Boolean).join(', ');
-
-              detailedResults.push({
-                id: `${result.latitude}-${result.longitude}`,
-                address,
-                city,
-                country,
-                latitude: result.latitude,
-                longitude: result.longitude,
-                formattedAddress,
-              });
-            }
-          } catch (e) {
-            // Skip failed reverse geocode
-          }
+      if (GOOGLE_API_KEY) {
+        // Google Places Autocomplete
+        let types: string | undefined;
+        if (showCityOnly) {
+          types = '(cities)';
+        } else if (isPostalCodeQuery(query)) {
+          types = '(regions)';
         }
 
-        setSearchResults(detailedResults);
+        const results = await searchGooglePlaces(query, types, lang);
+        setSearchResults(results);
       } else {
-        setSearchResults([]);
+        // Fallback to Nominatim
+        const results = await searchNominatimFallback(query);
+        if (showCityOnly) {
+          const cityFiltered = results.filter(r => r.city);
+          setSearchResults(cityFiltered.length > 0 ? cityFiltered : results);
+        } else {
+          setSearchResults(results);
+        }
       }
     } catch (error) {
       console.log('Search error:', error);
@@ -419,7 +364,7 @@ export default function LocationPicker({
     } finally {
       setIsSearching(false);
     }
-  }, [showCityOnly]);
+  }, [showCityOnly, lang]);
 
   // Debounced search
   useEffect(() => {
@@ -429,7 +374,7 @@ export default function LocationPicker({
       if (modalVisible && searchQuery.trim()) {
         searchAddresses(searchQuery);
       }
-    }, 400);
+    }, 350);
 
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
@@ -457,20 +402,21 @@ export default function LocationPicker({
         accuracy: Location.Accuracy.Balanced,
       });
 
-      // Use Nominatim reverse geocoding for better results
-      const nominatimResult = await reverseNominatim(
+      // Reverse geocode using Google or Nominatim fallback
+      const geocodeResult = await reverseGoogleGeocode(
         location.coords.latitude,
-        location.coords.longitude
+        location.coords.longitude,
+        lang
       );
 
-      if (nominatimResult) {
+      if (geocodeResult) {
         const newLocation: LocationData = {
-          address: nominatimResult.address,
-          city: nominatimResult.city,
-          country: nominatimResult.country || 'France',
+          address: geocodeResult.address,
+          city: geocodeResult.city,
+          country: geocodeResult.country || 'France',
           latitude: location.coords.latitude,
           longitude: location.coords.longitude,
-          formattedAddress: nominatimResult.formattedAddress,
+          formattedAddress: geocodeResult.formattedAddress,
         };
 
         onChange(newLocation);
@@ -493,16 +439,7 @@ export default function LocationPicker({
         const country = r.country || 'France';
         const formattedAddress = [address, city, country].filter(Boolean).join(', ');
 
-        const newLocation: LocationData = {
-          address,
-          city,
-          country,
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
-          formattedAddress,
-        };
-
-        onChange(newLocation);
+        onChange({ address, city, country, latitude: location.coords.latitude, longitude: location.coords.longitude, formattedAddress });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModalVisible(false);
       } else {
@@ -533,16 +470,15 @@ export default function LocationPicker({
     Keyboard.dismiss();
 
     try {
-      // Reverse geocode to get address from coordinates
-      const nominatimResult = await reverseNominatim(lat, lng);
+      const geocodeResult = await reverseGoogleGeocode(lat, lng, lang);
 
       const newLocation: LocationData = {
-        address: nominatimResult?.address || '',
-        city: nominatimResult?.city || '',
-        country: nominatimResult?.country || 'France',
+        address: geocodeResult?.address || '',
+        city: geocodeResult?.city || '',
+        country: geocodeResult?.country || 'France',
         latitude: lat,
         longitude: lng,
-        formattedAddress: nominatimResult?.formattedAddress || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
+        formattedAddress: geocodeResult?.formattedAddress || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
       };
 
       onChange(newLocation);
@@ -553,7 +489,6 @@ export default function LocationPicker({
       setShowManualGps(false);
     } catch (error) {
       console.log('Manual GPS error:', error);
-      // Still apply even if reverse geocoding fails
       onChange({
         address: '',
         city: '',
@@ -572,25 +507,61 @@ export default function LocationPicker({
     }
   };
 
-  const handleSelectResult = (result: SearchResult) => {
+  const handleSelectResult = async (result: SearchResult) => {
     Haptics.selectionAsync();
 
-    const newLocation: LocationData = {
-      address: result.address,
-      city: result.city,
-      country: result.country,
-      latitude: result.latitude,
-      longitude: result.longitude,
-      formattedAddress: result.formattedAddress,
-    };
+    // If Google place (no lat/lng yet), resolve details first
+    if (result.placeId && result.latitude === 0 && result.longitude === 0) {
+      setResolvingPlace(true);
+      const details = await getGooglePlaceDetails(result.placeId, lang);
+      setResolvingPlace(false);
 
-    onChange(newLocation);
+      if (details) {
+        const newLocation: LocationData = {
+          address: details.address,
+          city: details.city,
+          country: details.country,
+          latitude: details.latitude,
+          longitude: details.longitude,
+          formattedAddress: details.formattedAddress,
+          postalCode: details.postalCode,
+          region: details.region,
+        };
+        onChange(newLocation);
 
-    // Add to recent searches (keep max)
-    setRecentSearches(prev => {
-      const filtered = prev.filter(r => r.id !== result.id);
-      return [result, ...filtered].slice(0, MAX_RECENT);
-    });
+        // Save resolved result to recents
+        const resolvedResult: SearchResult = { ...result, ...details };
+        setRecentSearches(prev => {
+          const filtered = prev.filter(r => r.id !== resolvedResult.id);
+          return [resolvedResult, ...filtered].slice(0, MAX_RECENT);
+        });
+      } else {
+        // Fallback: use the result as-is
+        onChange({
+          address: result.address,
+          city: result.city,
+          country: result.country,
+          latitude: result.latitude,
+          longitude: result.longitude,
+          formattedAddress: result.formattedAddress,
+        });
+      }
+    } else {
+      // Already resolved (from recents or Nominatim fallback)
+      onChange({
+        address: result.address,
+        city: result.city,
+        country: result.country,
+        latitude: result.latitude,
+        longitude: result.longitude,
+        formattedAddress: result.formattedAddress,
+      });
+
+      setRecentSearches(prev => {
+        const filtered = prev.filter(r => r.id !== result.id);
+        return [result, ...filtered].slice(0, MAX_RECENT);
+      });
+    }
 
     setModalVisible(false);
     setSearchQuery('');
@@ -618,32 +589,26 @@ export default function LocationPicker({
 
   const clearLocation = () => {
     Haptics.selectionAsync();
-    onChange({
-      address: '',
-      city: '',
-      country: 'France',
-      latitude: 0,
-      longitude: 0,
-      formattedAddress: '',
-    });
+    onChange({ address: '', city: '', country: 'France', latitude: 0, longitude: 0, formattedAddress: '' });
   };
 
   const renderSearchResult = ({ item }: { item: SearchResult }) => (
     <Pressable
       style={styles.resultItem}
       onPress={() => handleSelectResult(item)}
+      disabled={resolvingPlace}
     >
       <View style={styles.resultIcon}>
         <MaterialIcons name="place" size={22} color={theme.primary} />
       </View>
       <View style={styles.resultContent}>
         <Text style={styles.resultAddress} numberOfLines={1}>
-          {item.address || item.city}
+          {item.address || item.formattedAddress?.split(',')[0] || item.city}
         </Text>
         <Text style={styles.resultCity} numberOfLines={1}>
           {item.formattedAddress || `${item.city}${item.country && item.country !== 'France' ? `, ${item.country}` : ''}`}
         </Text>
-        {item.latitude ? (
+        {item.latitude && item.latitude !== 0 ? (
           <Text style={styles.resultCoords}>
             {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
           </Text>
@@ -652,6 +617,9 @@ export default function LocationPicker({
       <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
     </Pressable>
   );
+
+  const isGoogleEnabled = !!GOOGLE_API_KEY;
+  const providerLabel = isGoogleEnabled ? 'Google Maps' : 'OpenStreetMap';
 
   return (
     <View style={styles.container}>
@@ -704,33 +672,6 @@ export default function LocationPicker({
           <Text style={styles.confirmedCoords}>
             {value?.latitude?.toFixed(5)}, {value?.longitude?.toFixed(5)}
           </Text>
-        </Animated.View>
-      ) : null}
-
-      {/* Miniature Map Preview */}
-      {false && value?.latitude && value?.longitude && value.latitude !== 0 && value.longitude !== 0 ? (
-        <Animated.View entering={FadeInDown.duration(300).delay(100)} style={styles.miniMapContainer}>
-          <Image
-            source={{ uri: getStaticMapUrl(value.latitude, value.longitude) }}
-            style={styles.miniMapImage}
-            contentFit="cover"
-            transition={300}
-            placeholder={undefined}
-          />
-          <View style={styles.miniMapOverlay}>
-            <View style={styles.miniMapPin}>
-              <MaterialIcons name="place" size={16} color="#FFF" />
-            </View>
-            <View style={styles.miniMapLabel}>
-              <Text style={styles.miniMapLabelText} numberOfLines={1}>
-                {value.formattedAddress || value.city || `${value.latitude.toFixed(4)}, ${value.longitude.toFixed(4)}`}
-              </Text>
-            </View>
-          </View>
-          <View style={styles.miniMapAttribution}>
-            <MaterialIcons name="public" size={10} color={theme.textMuted} />
-            <Text style={styles.miniMapAttributionText}>{t('locationPicker', 'poweredByOSM')}</Text>
-          </View>
         </Animated.View>
       ) : null}
 
@@ -802,6 +743,14 @@ export default function LocationPicker({
             ) : null}
           </View>
 
+          {/* Resolving place overlay */}
+          {resolvingPlace ? (
+            <View style={styles.resolvingOverlay}>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={styles.resolvingText}>{language === 'fr' ? 'Chargement...' : 'Loading...'}</Text>
+            </View>
+          ) : null}
+
           {/* Search Results / Recent / Loading */}
           <View style={styles.resultsContainer}>
             {isSearching ? (
@@ -810,22 +759,20 @@ export default function LocationPicker({
                 <Text style={styles.loadingText}>{t('locationPicker', 'searching')}</Text>
               </View>
             ) : searchResults.length > 0 ? (
-              <>
-                <FlatList
-                  data={searchResults}
-                  keyExtractor={(item) => item.id}
-                  renderItem={renderSearchResult}
-                  showsVerticalScrollIndicator={false}
-                  contentContainerStyle={styles.resultsList}
-                  keyboardShouldPersistTaps="handled"
-                  ListFooterComponent={
-                    <View style={styles.osmBadge}>
-                      <MaterialIcons name="public" size={12} color={theme.textMuted} />
-                      <Text style={styles.osmBadgeText}>{t('locationPicker', 'poweredByOSM')}</Text>
-                    </View>
-                  }
-                />
-              </>
+              <FlatList
+                data={searchResults}
+                keyExtractor={(item) => item.id}
+                renderItem={renderSearchResult}
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={styles.resultsList}
+                keyboardShouldPersistTaps="handled"
+                ListFooterComponent={
+                  <View style={styles.osmBadge}>
+                    <MaterialIcons name={isGoogleEnabled ? 'map' : 'public'} size={12} color={theme.textMuted} />
+                    <Text style={styles.osmBadgeText}>{providerLabel}</Text>
+                  </View>
+                }
+              />
             ) : searchQuery.length >= 3 ? (
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="location-off" size={48} color={theme.textMuted} />
@@ -955,7 +902,7 @@ export default function LocationPicker({
                   <View style={styles.hintsContent}>
                     <Text style={styles.hintsTitle}>{t('locationPicker', 'searchTips')}</Text>
                     <Text style={styles.hintsText}>
-                      {`• ${t('locationPicker', 'tipMinChars')}\n• ${t('locationPicker', 'tipIncludeCity')}\n• ${t('locationPicker', 'tipPostalCode')}\n• ${t('locationPicker', 'tipExample')}`}
+                      {`\u2022 ${t('locationPicker', 'tipMinChars')}\n\u2022 ${t('locationPicker', 'tipIncludeCity')}\n\u2022 ${t('locationPicker', 'tipPostalCode')}\n\u2022 ${t('locationPicker', 'tipExample')}`}
                     </Text>
                   </View>
                 </View>
@@ -969,484 +916,72 @@ export default function LocationPicker({
 }
 
 const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-    flex: 1,
-  },
-  label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.textSecondary,
-    letterSpacing: 1,
-    marginBottom: 10,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    gap: 12,
-    ...theme.shadows.card,
-  },
-  inputContent: {
-    flex: 1,
-  },
-  inputValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: theme.textPrimary,
-  },
-  inputCity: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  placeholder: {
-    fontSize: 16,
-    color: theme.textMuted,
-  },
-  clearButton: {
-    padding: 4,
-  },
-  confirmedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 8,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    backgroundColor: theme.success + '10',
-    borderRadius: theme.borderRadius.sm,
-    alignSelf: 'flex-start',
-    flexWrap: 'wrap',
-  },
-  confirmedText: {
-    fontSize: 12,
-    fontWeight: '500',
-    color: theme.success,
-  },
-  confirmedCoords: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.success + 'AA',
-    fontFamily: undefined,
-  },
-  // Modal styles
-  modalContainer: {
-    flex: 1,
-    backgroundColor: theme.backgroundSecondary,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: theme.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: theme.border,
-  },
-  modalCloseBtn: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalTitle: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-  },
-  gpsButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: theme.primary,
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingVertical: 16,
-    borderRadius: theme.borderRadius.md,
-    ...theme.shadows.card,
-  },
-  gpsButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  searchContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    marginHorizontal: 16,
-    marginTop: 16,
-    paddingHorizontal: 14,
-    borderRadius: theme.borderRadius.md,
-    gap: 10,
-    ...theme.shadows.card,
-  },
-  searchInput: {
-    flex: 1,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: theme.textPrimary,
-  },
-  // Manual GPS
-  manualGpsToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    marginBottom: 4,
-  },
-  manualGpsToggleText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: theme.textSecondary,
-  },
-  manualGpsContainer: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    gap: 12,
-    marginBottom: 12,
-    ...theme.shadows.card,
-  },
-  manualGpsRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  manualGpsField: {
-    flex: 1,
-  },
-  manualGpsLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textSecondary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  manualGpsInput: {
-    backgroundColor: theme.backgroundSecondary,
-    borderRadius: theme.borderRadius.sm,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    textAlign: 'center',
-    borderWidth: 1,
-    borderColor: theme.border,
-  },
-  manualGpsHint: {
-    fontSize: 10,
-    color: theme.textMuted,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  manualGpsApplyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: theme.success,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-  },
-  manualGpsApplyBtnDisabled: {
-    backgroundColor: theme.textMuted,
-    opacity: 0.5,
-  },
-  manualGpsApplyText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#FFF',
-  },
-  // Results
-  resultsContainer: {
-    flex: 1,
-    marginTop: 12,
-  },
-  resultsList: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  resultItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: theme.surface,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 10,
-    gap: 12,
-    ...theme.shadows.card,
-  },
-  resultIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.primary + '15',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  resultContent: {
-    flex: 1,
-  },
-  resultAddress: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: theme.textPrimary,
-  },
-  resultCity: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    marginTop: 2,
-  },
-  resultCoords: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 2,
-    fontWeight: '500',
-  },
-  osmBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    opacity: 0.6,
-  },
-  osmBadgeText: {
-    fontSize: 11,
-    color: theme.textMuted,
-    fontWeight: '500',
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
-  loadingText: {
-    fontSize: 15,
-    color: theme.textSecondary,
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-  },
-  emptyText: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: theme.textPrimary,
-    marginTop: 16,
-  },
-  emptyHint: {
-    fontSize: 14,
-    color: theme.textSecondary,
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  hintsScrollView: {
-    flex: 1,
-  },
-  hintsContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 24,
-  },
-  hintsSectionTitle: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: theme.textSecondary,
-    letterSpacing: 0.5,
-    textTransform: 'uppercase',
-  },
-  recentSection: {
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.md,
-    marginBottom: 12,
-    overflow: 'hidden',
-  },
-  recentHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
-  },
-  clearAllBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    paddingVertical: 3,
-    paddingHorizontal: 6,
-  },
-  clearAllText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: theme.error,
-  },
-  recentItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    gap: 10,
-  },
-  recentItemBorder: {
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: theme.border,
-  },
-  recentDeleteBtn: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 14,
-  },
-  recentContent: {
-    flex: 1,
-  },
-  recentAddress: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: theme.textPrimary,
-  },
-  recentCity: {
-    fontSize: 11,
-    color: theme.textMuted,
-    marginTop: 1,
-  },
-  hintsCard: {
-    flexDirection: 'row',
-    backgroundColor: theme.warning + '10',
-    borderRadius: theme.borderRadius.md,
-    padding: 14,
-    marginTop: 16,
-    gap: 12,
-    borderWidth: 1,
-    borderColor: theme.warning + '30',
-  },
-  hintsContent: {
-    flex: 1,
-  },
-  hintsTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: theme.warning,
-    marginBottom: 6,
-  },
-  hintsText: {
-    fontSize: 13,
-    color: theme.textSecondary,
-    lineHeight: 20,
-  },
-  // Mini Map
-  miniMapContainer: {
-    marginTop: 10,
-    borderRadius: theme.borderRadius.md,
-    overflow: 'hidden',
-    backgroundColor: theme.surface,
-    ...theme.shadows.card,
-  },
-  miniMapImage: {
-    width: '100%',
-    height: 120,
-  },
-  miniMapOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    justifyContent: 'flex-end',
-    padding: 8,
-  },
-  miniMapPin: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    marginTop: -16,
-    marginLeft: -10,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    backgroundColor: theme.error,
-    alignItems: 'center',
-    justifyContent: 'center',
-    ...theme.shadows.card,
-  },
-  miniMapLabel: {
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    borderRadius: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    alignSelf: 'flex-start',
-    maxWidth: '80%',
-  },
-  miniMapLabelText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFF',
-  },
-  miniMapAttribution: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    backgroundColor: theme.surface,
-  },
-  miniMapAttributionText: {
-    fontSize: 9,
-    color: theme.textMuted,
-    fontWeight: '500',
-  },
-  // City mode indicator
-  cityModeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginHorizontal: 16,
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: theme.primary + '10',
-    borderRadius: theme.borderRadius.full,
-    alignSelf: 'center',
-  },
-  cityModeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: theme.primary,
-  },
-  // Postal code indicator
-  postalCodeIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginHorizontal: 16,
-    marginTop: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    backgroundColor: '#0EA5E9' + '10',
-    borderRadius: theme.borderRadius.full,
-    alignSelf: 'center',
-  },
-  postalCodeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#0EA5E9',
-  },
+  container: { marginBottom: 16, flex: 1 },
+  label: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 10 },
+  inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, paddingHorizontal: 14, paddingVertical: 14, borderRadius: theme.borderRadius.md, gap: 12, ...theme.shadows.card },
+  inputContent: { flex: 1 },
+  inputValue: { fontSize: 16, fontWeight: '500', color: theme.textPrimary },
+  inputCity: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  placeholder: { fontSize: 16, color: theme.textMuted },
+  clearButton: { padding: 4 },
+  confirmedBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingHorizontal: 10, paddingVertical: 6, backgroundColor: theme.success + '10', borderRadius: theme.borderRadius.sm, alignSelf: 'flex-start', flexWrap: 'wrap' },
+  confirmedText: { fontSize: 12, fontWeight: '500', color: theme.success },
+  confirmedCoords: { fontSize: 11, fontWeight: '600', color: theme.success + 'AA' },
+  modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  modalCloseBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
+  gpsButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, marginHorizontal: 16, marginTop: 16, paddingVertical: 16, borderRadius: theme.borderRadius.md, ...theme.shadows.card },
+  gpsButtonText: { fontSize: 15, fontWeight: '600', color: '#FFF' },
+  searchContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, marginHorizontal: 16, marginTop: 16, paddingHorizontal: 14, borderRadius: theme.borderRadius.md, gap: 10, ...theme.shadows.card },
+  searchInput: { flex: 1, paddingVertical: 14, fontSize: 16, color: theme.textPrimary },
+  manualGpsToggle: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, marginBottom: 4 },
+  manualGpsToggleText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  manualGpsContainer: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, padding: 14, gap: 12, marginBottom: 12, ...theme.shadows.card },
+  manualGpsRow: { flexDirection: 'row', gap: 12 },
+  manualGpsField: { flex: 1 },
+  manualGpsLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 },
+  manualGpsInput: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.sm, paddingVertical: 12, paddingHorizontal: 14, fontSize: 16, fontWeight: '600', color: theme.textPrimary, textAlign: 'center', borderWidth: 1, borderColor: theme.border },
+  manualGpsHint: { fontSize: 10, color: theme.textMuted, textAlign: 'center', marginTop: 4 },
+  manualGpsApplyBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: theme.success, paddingVertical: 14, borderRadius: theme.borderRadius.md },
+  manualGpsApplyBtnDisabled: { backgroundColor: theme.textMuted, opacity: 0.5 },
+  manualGpsApplyText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  resultsContainer: { flex: 1, marginTop: 12 },
+  resultsList: { paddingHorizontal: 16, paddingBottom: 16 },
+  resultItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, paddingHorizontal: 14, paddingVertical: 14, borderRadius: theme.borderRadius.md, marginBottom: 10, gap: 12, ...theme.shadows.card },
+  resultIcon: { width: 40, height: 40, borderRadius: 20, backgroundColor: theme.primary + '15', alignItems: 'center', justifyContent: 'center' },
+  resultContent: { flex: 1 },
+  resultAddress: { fontSize: 15, fontWeight: '500', color: theme.textPrimary },
+  resultCity: { fontSize: 13, color: theme.textSecondary, marginTop: 2 },
+  resultCoords: { fontSize: 11, color: theme.textMuted, marginTop: 2, fontWeight: '500' },
+  osmBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, opacity: 0.6 },
+  osmBadgeText: { fontSize: 11, color: theme.textMuted, fontWeight: '500' },
+  loadingContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
+  loadingText: { fontSize: 15, color: theme.textSecondary },
+  emptyContainer: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  emptyText: { fontSize: 17, fontWeight: '600', color: theme.textPrimary, marginTop: 16 },
+  emptyHint: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', marginTop: 8 },
+  hintsScrollView: { flex: 1 },
+  hintsContainer: { paddingHorizontal: 16, paddingBottom: 24 },
+  hintsSectionTitle: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, letterSpacing: 0.5, textTransform: 'uppercase' },
+  recentSection: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.md, marginBottom: 12, overflow: 'hidden' },
+  recentHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
+  clearAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingVertical: 3, paddingHorizontal: 6 },
+  clearAllText: { fontSize: 11, fontWeight: '600', color: theme.error },
+  recentItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, gap: 10 },
+  recentItemBorder: { borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+  recentDeleteBtn: { width: 28, height: 28, alignItems: 'center', justifyContent: 'center', borderRadius: 14 },
+  recentContent: { flex: 1 },
+  recentAddress: { fontSize: 13, fontWeight: '500', color: theme.textPrimary },
+  recentCity: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  hintsCard: { flexDirection: 'row', backgroundColor: theme.warning + '10', borderRadius: theme.borderRadius.md, padding: 14, marginTop: 16, gap: 12, borderWidth: 1, borderColor: theme.warning + '30' },
+  hintsContent: { flex: 1 },
+  hintsTitle: { fontSize: 14, fontWeight: '600', color: theme.warning, marginBottom: 6 },
+  hintsText: { fontSize: 13, color: theme.textSecondary, lineHeight: 20 },
+  cityModeIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginHorizontal: 16, marginTop: 12, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.full, alignSelf: 'center' },
+  cityModeText: { fontSize: 12, fontWeight: '600', color: theme.primary },
+  postalCodeIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginHorizontal: 16, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#0EA5E9' + '10', borderRadius: theme.borderRadius.full, alignSelf: 'center' },
+  postalCodeText: { fontSize: 12, fontWeight: '600', color: '#0EA5E9' },
+  resolvingOverlay: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 8, backgroundColor: theme.primary + '08' },
+  resolvingText: { fontSize: 13, color: theme.primary, fontWeight: '500' },
 });

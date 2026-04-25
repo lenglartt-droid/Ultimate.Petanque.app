@@ -11,6 +11,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { MaterialIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, router } from 'expo-router';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import { Share } from 'react-native';
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { useAuth } from '@/template';
@@ -66,6 +67,8 @@ export default function TeamChatScreen() {
   const lastCountRef = useRef(0);
   const [reactions, setReactions] = useState<Map<string, TeamMessageReaction[]>>(new Map());
   const [activeReactionPicker, setActiveReactionPicker] = useState<string | null>(null);
+  const [tournamentDate, setTournamentDate] = useState<string>('');
+  const [tournamentFormat, setTournamentFormat] = useState<string>('');
 
   // Load team info
   useEffect(() => {
@@ -80,7 +83,11 @@ export default function TeamChatScreen() {
           format: t.format, status: t.status, completedAt: t.completed_at, createdAt: t.created_at,
         });
         const { data: tour } = await sb.from('tournaments').select('name').eq('id', t.tournament_id).single();
-        if (tour) setTournamentName(tour.name);
+        if (tour) {
+          setTournamentName(tour.name);
+          setTournamentDate(tour.date || '');
+          setTournamentFormat(tour.format || '');
+        }
       }
     };
     load();
@@ -191,6 +198,34 @@ export default function TeamChatScreen() {
             {tournamentName || ''} {team ? `• ${team.format}` : ''}
           </Text>
         </View>
+        {/* Share Roster */}
+        <Pressable
+          style={s.shareRosterBtn}
+          onPress={async () => {
+            if (!team) return;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+            const names = team.memberNames.join(', ');
+            const dateStr = tournamentDate ? new Date(tournamentDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+            const rosterText = [
+              `\u{1F3AF} ${fr ? 'Equipe formee !' : 'Team formed!'}`,
+              '',
+              `\u{1F3C6} ${tournamentName}`,
+              tournamentFormat ? `\u{1F91D} ${tournamentFormat}` : '',
+              dateStr ? `\u{1F4C5} ${dateStr}` : '',
+              '',
+              `\u{1F465} ${fr ? 'Joueurs' : 'Players'}:`,
+              ...team.memberNames.map((n, i) => `  ${i === 0 ? '\u{2B50}' : '\u{1F3BD}'} ${n}${i === 0 ? (fr ? ' (Capitaine)' : ' (Captain)') : ''}`),
+              '',
+              fr ? 'Pret pour la competition !' : 'Ready to compete!',
+            ].filter(Boolean).join('\n');
+            try {
+              await Share.share({ message: rosterText, title: fr ? 'Mon equipe' : 'My team' });
+            } catch { /* user cancelled */ }
+          }}
+          hitSlop={8}
+        >
+          <MaterialIcons name="share" size={18} color="#2563EB" />
+        </Pressable>
         {/* Member avatars */}
         <View style={s.memberAvatars}>
           {(team?.memberNames || []).slice(0, 3).map((name, i) => (
@@ -369,6 +404,7 @@ const s = StyleSheet.create({
   headerTitle: { fontSize: 17, fontWeight: '700', color: '#0F172A' },
   headerSub: { fontSize: 12, color: '#64748B', marginTop: 1 },
   memberAvatars: { flexDirection: 'row', alignItems: 'center' },
+  shareRosterBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#EFF6FF', alignItems: 'center', justifyContent: 'center' },
   memberDot: { width: 28, height: 28, borderRadius: 14, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF' },
   memberInitial: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   statusBar: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: '#FAFAFA', borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
