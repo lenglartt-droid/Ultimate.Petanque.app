@@ -1207,12 +1207,12 @@ useEffect(() => {
     });
   }, [players, terrains, clubs, hasValidLocation]);
 
-  // Own data with locations
+  // Own data with locations — only public items appear on map
   const ownData = useMemo(() => ({
-    terrains: terrains.filter(hasValidLocation),
-    clubs: clubs.filter(hasValidLocation),
-    players: enrichedPlayers.filter(hasValidLocation),
-    tournaments: tournaments.filter(hasValidLocation),
+    terrains: terrains.filter(t => hasValidLocation(t) && t.isPublic),
+    clubs: clubs.filter(c => hasValidLocation(c) && c.isPublic),
+    players: enrichedPlayers.filter(p => hasValidLocation(p) && p.isPublic),
+    tournaments: tournaments.filter(t => hasValidLocation(t) && (t as any).isPublic),
   }), [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation]);
 
   // Public data with locations

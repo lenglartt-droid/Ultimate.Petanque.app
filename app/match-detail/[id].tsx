@@ -41,6 +41,7 @@ import AttestationSection from '@/components/feature/AttestationSection';
 import { getEloRank, getEloColor, formatEloDelta, EloHistoryEntry } from '@/services/eloService';
 import { getSupabaseClient } from '@/template';
 import { Player } from '@/types/petanque';
+import { useAppData as useAppDataHook } from '@/contexts/AppContext';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -59,6 +60,8 @@ export default function MatchDetailScreen() {
   const [exportingPdf, setExportingPdf] = useState(false);
   const { showAlert } = useAlert();
 
+  const { players: allPlayers } = useAppDataHook();
+
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
     const sub = Dimensions.addEventListener('change', ({ window }: any) => setScreenWidth(window.width));
@@ -71,6 +74,17 @@ export default function MatchDetailScreen() {
       if (gold) setGoldSponsor(gold);
     });
   }, []);
+
+  // Check if match was played between only locally created players (no real user profiles)
+  const isLocalOnlyMatch = useMemo(() => {
+    if (!match) return false;
+    const allPlayerIds = [...(match.teamA.players || []), ...(match.teamB.players || [])].filter(id => id !== '1' && id !== '2');
+    if (allPlayerIds.length === 0) return false;
+    return allPlayerIds.every(pid => {
+      const p = allPlayers.find(pl => pl.id === pid);
+      return !p || !p.userId || p.id !== p.userId;
+    });
+  }, [match, allPlayers]);
 
   // ELO deltas for this match
   const [eloDeltas, setEloDeltas] = useState<Map<string, { delta: number; eloAfter: number }>>(new Map());
@@ -404,6 +418,27 @@ export default function MatchDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* Unranked Match Badge (locally created players only) */}
+        {isLocalOnlyMatch ? (
+          <View style={[s.card, { borderWidth: 1.5, borderColor: '#D9770640', backgroundColor: '#D9770606' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: '#D9770615', alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name="info-outline" size={20} color="#D97706" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 14, fontWeight: '700', color: '#D97706' }}>
+                  {fr ? 'Match hors classement' : 'Unranked match'}
+                </Text>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, marginTop: 3, lineHeight: 17 }}>
+                  {fr
+                    ? 'Aucun joueur dans ce match n\'est lie a un compte utilisateur reel. Ce match ne compte pas pour le classement ELO ni les leaderboards.'
+                    : 'No players in this match are linked to a real user account. This match does not count towards ELO rankings or leaderboards.'}
+                </Text>
+              </View>
+            </View>
+          </View>
+        ) : null}
 
         {/* Validation Badge */}
         {validation ? (

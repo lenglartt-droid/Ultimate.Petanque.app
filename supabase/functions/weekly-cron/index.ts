@@ -923,7 +923,7 @@ Deno.serve(async (req: Request) => {
 
         const { data: inactivePlayers } = await supabaseAdmin
           .from('players')
-          .select('id, elo_rating, last_match_date')
+          .select('id, user_id, elo_rating, last_match_date')
           .lt('last_match_date', decayCutoff.toISOString())
           .gt('elo_rating', 800);
 
@@ -931,6 +931,8 @@ Deno.serve(async (req: Request) => {
         if (inactivePlayers && inactivePlayers.length > 0) {
           for (const p of inactivePlayers) {
             if (!p.last_match_date) continue;
+            // Skip locally created players (only decay real user profiles)
+            if (!p.user_id || p.id !== p.user_id) continue;
             const lastMatch = new Date(p.last_match_date);
             const now = new Date();
             const daysSince = Math.floor((now.getTime() - lastMatch.getTime()) / (1000 * 60 * 60 * 24));
