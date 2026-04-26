@@ -85,8 +85,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'ot6',
           q: fr ? 'Comment partager un match avec mes partenaires de jeu ?' : 'How do I share a match with my playing partners?',
           a: fr
-            ? 'Ouvrez le detail d\'un match > "Partager". Choisissez parmi 4 options : partage WhatsApp/SMS/email, copie du code, copie de l\'invitation complete ou QR code. Definissez une expiration si souhaite. Quand votre partenaire accepte, le match apparait dans son historique et ses stats se mettent a jour automatiquement. En 1v1, l\'adversaire qui accepte genere aussi une attestation automatique.'
-            : 'Open match detail > "Share". Choose from 4 options: WhatsApp/SMS/email share, copy code, copy full invitation or QR code. Set an expiration if desired. When your partner accepts, the match appears in their history and stats auto-update. In 1v1, the accepting opponent also generates an automatic attestation.',
+            ? 'Ouvrez le detail d\'un match > "Partager". Choisissez parmi 4 options : partage WhatsApp/SMS/email, copie du code, copie de l\'invitation complete ou QR code. Quand votre partenaire accepte, le match apparait dans son historique et ses stats (ELO, taux de victoire, tir, point, carreaux) se mettent a jour automatiquement. Une notification locale resume les changements (delta ELO, evolution du win rate). Les demandes de partage expirent automatiquement apres 7 jours sans reponse. Un compte a rebours est visible dans la page de detail du match et dans le hub de notifications. En 1v1, l\'adversaire qui accepte genere aussi une attestation automatique. Si vous partagez par erreur avec un joueur non-participant, un avertissement s\'affiche et ses stats ne seront PAS mises a jour. Le proprietaire du match peut revoquer un partage a tout moment (bouton X par destinataire, ou "Revoquer tout" pour tous les partages en masse). La revocation d\'un partage accepte annule automatiquement les changements de stats et d\'ELO du destinataire.'
+            : 'Open match detail > "Share". Choose from 4 options: WhatsApp/SMS/email share, copy code, copy full invitation or QR code. When your partner accepts, the match appears in their history and stats (ELO, win rate, shot, point, carreaux) auto-update. A local notification summarizes the changes (ELO delta, win rate evolution). Share requests expire automatically after 7 days without response. A countdown is visible in the match detail page and the notifications hub. In 1v1, the accepting opponent also generates an automatic attestation. If you accidentally share with a non-participant player, a warning is shown and their stats will NOT be updated. The match owner can revoke a share at any time (X button per recipient, or "Revoke all" for bulk revocation). Revoking an accepted share automatically undoes the recipient\'s stats and ELO changes.',
         },
       ],
     },
@@ -453,6 +453,13 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
             : 'Tap "Share" at top of any card. A full-screen page shows a detailed preview. 4 modes: native share (WhatsApp, SMS, email), copy code, copy invitation or QR code. Set expiration (unlimited, 1 day, 1 week, 1 month).',
         },
         {
+          id: 'ps3b',
+          q: fr ? 'Comment voir l\'historique de tous mes partages ?' : 'How do I see the history of all my shares?',
+          a: fr
+            ? 'Depuis le profil, section Donnees > "Historique des partages". La page affiche tous vos partages envoyes et recus, avec un resume (nombre envoyes, recus, acceptes, en attente) et l\'impact ELO total. Filtrez par direction (envoyes/recus), statut (en attente/accepte/refuse) pour retrouver un partage specifique. Chaque carte montre le destinataire ou l\'expediteur, le resume du match, le statut, le delta ELO et le temps restant avant expiration. Appuyez sur une carte pour ouvrir le detail du match ou du defi.'
+            : 'From profile, Data section > "Share History". The page shows all your sent and received shares, with a summary (sent, received, accepted, pending counts) and total ELO impact. Filter by direction (sent/received), status (pending/accepted/declined) to find a specific share. Each card shows the recipient or sender, match summary, status, ELO delta and time remaining before expiry. Tap a card to open the match or challenge detail.',
+        },
+        {
           id: 'ps4',
           q: fr ? 'Comment partager mes resultats sur les reseaux sociaux (Instagram, WhatsApp, etc.) ?' : 'How do I share my results on social media (Instagram, WhatsApp, etc.)?',
           a: fr
@@ -618,8 +625,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'tf1',
           q: fr ? 'Comment former une equipe pour un tournoi ?' : 'How do I build a team for a tournament?',
           a: fr
-            ? 'Depuis la page d\'accueil, section "Former une equipe", appuyez sur un tournoi Doublette ou Triplette a venir. Le modal de formation s\'ouvre avec : statut de l\'equipe, membres actuels, places libres, barre de progression. Recherchez un joueur public par nom, filtrez par role, ville, ELO. Envoyez une invitation — le joueur recoit une notification push et peut accepter/refuser dans Notifications > Teams. Quand le nombre requis est atteint (2 pour Doublette, 3 pour Triplette), l\'equipe est automatiquement completee.'
-            : 'From the home page, "Team Up" section, tap an upcoming Doubles or Triples tournament. The formation modal opens with: team status, current members, open slots, progress bar. Search for a public player by name, filter by role, city, ELO. Send an invitation — the player gets a push notification and can accept/decline in Notifications > Teams. When the required number is reached (2 for Doubles, 3 for Triples), the team auto-completes.',
+            ? 'Depuis la page d\'accueil, section "Former une equipe", appuyez sur un tournoi Doublette ou Triplette a venir. Le modal de formation s\'ouvre avec : statut de l\'equipe, membres actuels, places libres, barre de progression. Recherchez un joueur public par nom, filtrez par role, ville, ELO. Envoyez une invitation — le joueur recoit une notification push et peut accepter/refuser dans Notifications > Teams. Quand le nombre requis est atteint (2 pour Doublette, 3 pour Triplette), l\'equipe est automatiquement completee. Note : la date limite de formation est desactivee par defaut. Le capitaine peut l\'activer manuellement via le toggle dans le modal de formation pour bloquer les invitations 2 jours avant le tournoi.'
+            : 'From the home page, "Team Up" section, tap an upcoming Doubles or Triples tournament. The formation modal opens with: team status, current members, open slots, progress bar. Search for a public player by name, filter by role, city, ELO. Send an invitation — the player gets a push notification and can accept/decline in Notifications > Teams. When the required number is reached (2 for Doubles, 3 for Triples), the team auto-completes. Note: the formation deadline is disabled by default. The captain can manually enable it via the toggle in the formation modal to block invitations 2 days before the tournament.',
         },
         {
           id: 'tf2',
@@ -646,8 +653,8 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'tf5',
           q: fr ? 'Comment fonctionne la date limite de formation ?' : 'How does the formation deadline work?',
           a: fr
-            ? 'Par defaut, les invitations sont bloquees 2 jours avant le tournoi. Le capitaine peut activer/desactiver cette limite pour chaque tournoi via le switch "Date limite formation" dans le modal d\'equipe. Un badge rouge s\'affiche quand la deadline est proche (J-3). Quand la deadline est passee, aucune nouvelle invitation ne peut etre envoyee.'
-            : 'By default, invitations are blocked 2 days before the tournament. The captain can enable/disable this limit per tournament via the "Formation deadline" switch in the team modal. A red badge shows when the deadline is close (3 days left). When the deadline passes, no new invitations can be sent.',
+            ? 'La date limite de formation est desactivee par defaut. Le capitaine peut l\'activer pour chaque tournoi via le switch "Date limite formation" dans le modal d\'equipe. Une fois activee, les invitations sont bloquees 2 jours avant le tournoi. Un badge rouge s\'affiche quand la deadline est proche (J-3). Quand la deadline est passee, aucune nouvelle invitation ne peut etre envoyee.'
+            : 'The formation deadline is disabled by default. The captain can enable it per tournament via the "Formation deadline" switch in the team modal. Once enabled, invitations are blocked 2 days before the tournament. A red badge shows when the deadline is close (3 days left). When the deadline passes, no new invitations can be sent.',
         },
       ],
     },

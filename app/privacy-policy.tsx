@@ -71,6 +71,14 @@ export default function PrivacyPolicyScreen() {
       content: t('privacy', 'sharingFeatureContent'),
     },
     {
+      icon: 'timer-off',
+      color: '#F59E0B',
+      title: language === 'fr' ? 'Expiration & Revocation des partages' : 'Share Expiry & Revocation',
+      content: language === 'fr'
+        ? 'Les demandes de partage expirent automatiquement apres 7 jours. Lors de la revocation d\'un partage accepte, les donnees de statistiques et d\'ELO synchronisees au profil du destinataire sont automatiquement annulees (suppression de l\'entree elo_history, recalcul des stats joueur). Le destinataire perd immediatement l\'acces au match partage. Aucune donnee personnelle supplementaire n\'est collectee pour cette fonctionnalite.'
+        : 'Share requests expire automatically after 7 days. When revoking an accepted share, the stats and ELO data synced to the recipient profile is automatically undone (elo_history entry deleted, player stats recalculated). The recipient immediately loses access to the shared match. No additional personal data is collected for this feature.',
+    },
+    {
       icon: 'public',
       color: theme.success,
       title: t('privacy', 'publicItemsTitle'),
