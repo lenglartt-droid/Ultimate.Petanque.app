@@ -50,7 +50,7 @@ export default function ShareCardEventLeaderboard({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
               <MaterialIcons name="leaderboard" size={10} color={ct.accent} />
@@ -108,7 +108,7 @@ export default function ShareCardEventLeaderboard({
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: isStory ? 14 : 10 }}>
           <View style={{ backgroundColor: ct.accent + '20', width: isStory ? 36 : 30, height: isStory ? 36 : 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
@@ -214,5 +214,5 @@ export default function ShareCardEventLeaderboard({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
 });

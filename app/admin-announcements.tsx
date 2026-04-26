@@ -522,7 +522,14 @@ export default function AdminAnnouncementsScreen() {
     || targetType === 'account_age'
     || targetType === 'match_count'
     || targetType === 'last_active';
-  const hasValidSchedule = !scheduleMode || (scheduleDate.length === 10 && scheduleTime.length === 5);
+  const hasValidSchedule = useMemo(() => {
+    if (!scheduleMode) return true;
+    if (scheduleDate.length !== 10 || scheduleTime.length !== 5) return false;
+    const schedMs = new Date(`${scheduleDate}T${scheduleTime}:00`).getTime();
+    if (isNaN(schedMs)) return false;
+    if (schedMs <= Date.now()) return false;
+    return true;
+  }, [scheduleMode, scheduleDate, scheduleTime]);
   const hasValidAB = !abTestMode || ((variantBTitleFr.trim() || variantBTitleEn.trim()) && (variantBMessageFr.trim() || variantBMessageEn.trim()));
   const hasCombinedTarget = retentionSegment === 'combined' && Object.keys(combinedFilters).length >= 2;
   const canSend = hasMessage && (hasTarget || hasCombinedTarget) && hasValidSchedule && hasValidAB && !submitting;
@@ -588,7 +595,12 @@ export default function AdminAnnouncementsScreen() {
     // Build scheduled_at if in schedule mode
     let scheduledAt: string | null = null;
     if (scheduleMode && scheduleDate && scheduleTime) {
-      scheduledAt = new Date(`${scheduleDate}T${scheduleTime}:00`).toISOString();
+      const parsedDate = new Date(`${scheduleDate}T${scheduleTime}:00`);
+      if (isNaN(parsedDate.getTime()) || parsedDate.getTime() <= Date.now()) {
+        showAlert(fr ? 'Erreur' : 'Error', fr ? 'La date de planification doit etre dans le futur et au format valide (AAAA-MM-JJ / HH:MM)' : 'Schedule date must be in the future and in valid format (YYYY-MM-DD / HH:MM)');
+        return;
+      }
+      scheduledAt = parsedDate.toISOString();
     }
 
     const actionLabel = scheduledAt

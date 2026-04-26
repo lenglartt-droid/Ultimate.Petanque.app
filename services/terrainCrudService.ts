@@ -55,6 +55,8 @@ export async function addTerrainOp(
       lighting: terrain.lighting,
       covered: terrain.covered,
       environment: terrain.environment || 'outdoor',
+      parking: terrain.parking ?? false,
+      toilets: terrain.toilets ?? false,
       google_place_id: (terrain as any).googlePlaceId || null,
     }).select().single();
 
@@ -79,6 +81,8 @@ export async function addTerrainOp(
         lighting: data.lighting,
         covered: data.covered,
         environment: data.environment || 'outdoor',
+        parking: data.parking ?? false,
+        toilets: data.toilets ?? false,
         googlePlaceId: data.google_place_id || undefined,
         createdAt: data.created_at,
       };
