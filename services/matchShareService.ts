@@ -477,22 +477,175 @@ export async function updateSharePermission(
 
 /**
  * Delete (revoke) a share request (sender only).
+ * If the request was accepted and stats were synced, reverses the recipient's stats.
  */
 export async function revokeShareRequest(
-  requestId: string
+  requestId: string,
+  options?: { undoStats?: boolean }
 ): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
   try {
+    // Fetch request details before deleting (needed for stats undo)
+    let reqData: any = null;
+    if (options?.undoStats) {
+      const { data } = await supabase
+        .from('match_share_requests')
+        .select('*')
+        .eq('id', requestId)
+        .single();
+      reqData = data;
+    }
+
     const { error } = await supabase
       .from('match_share_requests')
       .delete()
       .eq('id', requestId);
 
     if (error) return { error: error.message };
+
+    // Undo stats sync if requested and the share was accepted for a match
+    if (options?.undoStats && reqData && reqData.status === 'accepted' && reqData.item_type === 'match') {
+      undoStatsForRevokedMatch(reqData.item_id, reqData.recipient_user_id).catch((e) => {
+        console.log('[MatchShare] Stats undo error (non-blocking):', e);
+      });
+    }
+
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
   }
+}
+
+/**
+ * Revoke all share requests for a specific item (match or challenge).
+ * Returns the count of revoked requests.
+ */
+export async function revokeAllShareRequests(
+  itemType: 'match' | 'challenge',
+  itemId: string,
+  options?: { undoStats?: boolean }
+): Promise<{ revokedCount: number; error: string | null }> {
+  const supabase = getSupabaseClient();
+  try {
+    // Fetch all requests for this item first
+    const { data: requests, error: fetchErr } = await supabase
+      .from('match_share_requests')
+      .select('id, status, recipient_user_id, item_type, item_id')
+      .eq('item_type', itemType)
+      .eq('item_id', itemId);
+
+    if (fetchErr) return { revokedCount: 0, error: fetchErr.message };
+    if (!requests || requests.length === 0) return { revokedCount: 0, error: null };
+
+    // Undo stats for accepted requests if requested
+    if (options?.undoStats && itemType === 'match') {
+      const acceptedRequests = requests.filter(r => r.status === 'accepted');
+      for (const req of acceptedRequests) {
+        undoStatsForRevokedMatch(itemId, req.recipient_user_id).catch((e) => {
+          console.log('[MatchShare] Bulk stats undo error (non-blocking):', e);
+        });
+      }
+    }
+
+    // Delete all requests
+    const { error: deleteErr } = await supabase
+      .from('match_share_requests')
+      .delete()
+      .eq('item_type', itemType)
+      .eq('item_id', itemId);
+
+    if (deleteErr) return { revokedCount: 0, error: deleteErr.message };
+    return { revokedCount: requests.length, error: null };
+  } catch (e: any) {
+    return { revokedCount: 0, error: e.message };
+  }
+}
+
+/**
+ * Undo the stats sync for a revoked match share.
+ * Removes the ELO history entry and recalculates the recipient's stats without this match.
+ */
+async function undoStatsForRevokedMatch(
+  matchId: string,
+  recipientUserId: string
+): Promise<void> {
+  const supabase = getSupabaseClient();
+
+  // 1. Check if there is an ELO history entry for this match+player
+  const { data: eloEntry } = await supabase
+    .from('elo_history')
+    .select('id, elo_before, elo_delta')
+    .eq('player_id', recipientUserId)
+    .eq('match_id', matchId)
+    .limit(1)
+    .single();
+
+  if (!eloEntry) {
+    console.log('[MatchShare] No ELO entry found for undo, skipping');
+    return;
+  }
+
+  // 2. Revert ELO to before value
+  const revertedElo = eloEntry.elo_before;
+  await supabase
+    .from('players')
+    .update({ elo_rating: revertedElo })
+    .eq('id', recipientUserId);
+
+  // 3. Delete the ELO history entry
+  await supabase
+    .from('elo_history')
+    .delete()
+    .eq('id', eloEntry.id);
+
+  // 4. Fetch the match to reverse stats
+  const { data: match } = await supabase
+    .from('matches')
+    .select('team_a, team_b, winner, player_actions')
+    .eq('id', matchId)
+    .single();
+
+  if (!match) return;
+
+  const teamA = typeof match.team_a === 'string' ? JSON.parse(match.team_a) : match.team_a;
+  const teamB = typeof match.team_b === 'string' ? JSON.parse(match.team_b) : match.team_b;
+  const teamAPlayers: string[] = teamA?.players || [];
+  const teamBPlayers: string[] = teamB?.players || [];
+  const inTeamA = teamAPlayers.includes(recipientUserId);
+  const inTeamB = teamBPlayers.includes(recipientUserId);
+
+  if (!inTeamA && !inTeamB) return;
+
+  // 5. Fetch current player stats and decrement
+  const { data: player } = await supabase
+    .from('players')
+    .select('stats')
+    .eq('id', recipientUserId)
+    .single();
+
+  if (!player) return;
+
+  const stats = player.stats || {};
+  const won = (inTeamA && match.winner === 'A') || (inTeamB && match.winner === 'B');
+  const newMatchesPlayed = Math.max(0, (stats.matchesPlayed || 0) - 1);
+  const newWins = Math.max(0, (stats.wins || 0) - (won ? 1 : 0));
+  const newLosses = Math.max(0, (stats.losses || 0) - (won ? 0 : 1));
+  const newWinRate = newMatchesPlayed > 0 ? Math.round((newWins / newMatchesPlayed) * 100) : 0;
+
+  const updatedStats = {
+    ...stats,
+    matchesPlayed: newMatchesPlayed,
+    wins: newWins,
+    losses: newLosses,
+    winRate: newWinRate,
+  };
+
+  await supabase
+    .from('players')
+    .update({ stats: updatedStats })
+    .eq('id', recipientUserId);
+
+  console.log(`[MatchShare] Stats undo for ${recipientUserId}: reverted ELO to ${revertedElo}, stats to ${newWins}W/${newLosses}L`);
 }
 
 // ============================================
@@ -543,6 +696,58 @@ export async function getSharedChallengeIds(): Promise<{ challengeIds: string[];
   } catch (e: any) {
     return { challengeIds: [], error: e.message };
   }
+}
+
+/**
+ * Get pending share request count that are expired (older than 7 days).
+ * Auto-declines expired requests.
+ */
+export async function autoDeclineExpiredShareRequests(): Promise<number> {
+  const supabase = getSupabaseClient();
+  try {
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+
+    const { data: expired } = await supabase
+      .from('match_share_requests')
+      .select('id')
+      .eq('status', 'pending')
+      .lt('created_at', sevenDaysAgo.toISOString());
+
+    if (!expired || expired.length === 0) return 0;
+
+    for (const req of expired) {
+      await supabase
+        .from('match_share_requests')
+        .update({ status: 'declined', updated_at: new Date().toISOString() })
+        .eq('id', req.id);
+    }
+
+    console.log(`[MatchShare] Auto-declined ${expired.length} expired share request(s)`);
+    return expired.length;
+  } catch (e) {
+    console.log('[MatchShare] Auto-decline expired error:', e);
+    return 0;
+  }
+}
+
+/**
+ * Calculate remaining time before a share request expires (7 days from creation).
+ * Returns null if already expired or not pending.
+ */
+export function getShareRequestRemainingTime(
+  createdAt: string,
+  status: string
+): { daysLeft: number; hoursLeft: number; isExpired: boolean } | null {
+  if (status !== 'pending') return null;
+  const created = new Date(createdAt);
+  const expiresAt = new Date(created.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const now = new Date();
+  const diff = expiresAt.getTime() - now.getTime();
+  if (diff <= 0) return { daysLeft: 0, hoursLeft: 0, isExpired: true };
+  const daysLeft = Math.floor(diff / (24 * 60 * 60 * 1000));
+  const hoursLeft = Math.floor((diff % (24 * 60 * 60 * 1000)) / (60 * 60 * 1000));
+  return { daysLeft, hoursLeft, isExpired: false };
 }
 
 /**

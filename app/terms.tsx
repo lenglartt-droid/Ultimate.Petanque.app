@@ -53,6 +53,14 @@ export default function TermsScreen() {
       content: t('terms', 'sharingRulesContent'),
     },
     {
+      icon: 'timer-off',
+      color: '#F59E0B',
+      title: language === 'fr' ? 'Expiration & Revocation des partages' : 'Share Expiry & Revocation',
+      content: language === 'fr'
+        ? 'Les demandes de partage de matchs et defis expirent automatiquement apres 7 jours sans reponse du destinataire. Un compte a rebours est affiche au proprietaire et au destinataire. Le proprietaire peut revoquer un ou tous les partages a tout moment via la page detail du match. La revocation d\'un partage accepte annule automatiquement les changements de statistiques et d\'ELO precedemment synchronises au profil du destinataire. L\'annulation est irreversible : le destinataire perd l\'acces au match et ses stats sont recalculees sans ce match. Le partage en masse peut etre revoque d\'un seul geste via le bouton "Revoquer tout". Un avertissement est affiche avant l\'envoi d\'un partage a un joueur non-participant du match, l\'informant que ses stats et ELO ne seront pas mis a jour.'
+        : 'Match and challenge share requests expire automatically after 7 days without recipient response. A countdown is shown to both owner and recipient. The owner can revoke one or all shares at any time via the match detail page. Revoking an accepted share automatically undoes the stats and ELO changes previously synced to the recipient profile. The undo is irreversible: the recipient loses match access and their stats are recalculated without that match. Bulk revocation is available via the "Revoke all" button. A warning is shown before sending a share to a non-participant player, informing that their stats and ELO will not be updated.',
+    },
+    {
       icon: 'copyright',
       color: theme.warning,
       title: t('terms', 'intellectualPropertyTitle'),

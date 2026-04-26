@@ -34,6 +34,8 @@ import {
   acceptShareRequest,
   declineShareRequest,
   markShareRequestsSeen,
+  autoDeclineExpiredShareRequests,
+  getShareRequestRemainingTime,
   MatchShareRequest,
 } from '@/services/matchShareService';
 import { respondToAttestation, fetchAllMyAttestations } from '@/services/witnessService';
@@ -228,6 +230,8 @@ export default function NotificationsHubScreen() {
     if (!user?.id) return;
     const supabase = getSupabaseClient();
     try {
+      // Auto-decline expired share requests (7 days)
+      await autoDeclineExpiredShareRequests();
       const { requests } = await getReceivedShareRequests();
       setMatchRequests(requests);
       if (requests.length > 0) markShareRequestsSeen(requests.map(r => r.id));
@@ -571,6 +575,7 @@ export default function NotificationsHubScreen() {
                   const isPending = req.status === 'pending';
                   const isProcessing = processingIds.has(req.id);
                   const isMatch = req.itemType === 'match';
+                  const remaining = isPending ? getShareRequestRemainingTime(req.createdAt, req.status) : null;
                   return (
                     <Animated.View key={req.id} entering={FadeInDown.duration(250).delay(i * 30)}>
                       <View style={[s.card, !isPending && { opacity: 0.7 }]}>
@@ -581,6 +586,18 @@ export default function NotificationsHubScreen() {
                           <View style={{ flex: 1 }}>
                             <Text style={s.cardTitle}>{isMatch ? (fr ? 'Match partage' : 'Shared match') : (fr ? 'Defi partage' : 'Shared challenge')}</Text>
                             <Text style={s.cardMeta}>{req.senderName || (fr ? 'Joueur' : 'Player')} {req.itemSummary ? `• ${req.itemSummary}` : ''}</Text>
+                            {remaining ? (
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 3 }}>
+                                <MaterialIcons name="timer" size={10} color={remaining.daysLeft <= 1 ? '#EF4444' : '#F59E0B'} />
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: remaining.daysLeft <= 1 ? '#EF4444' : '#F59E0B' }}>
+                                  {remaining.isExpired
+                                    ? (fr ? 'Expire' : 'Expired')
+                                    : remaining.daysLeft > 0
+                                      ? `${remaining.daysLeft}${fr ? 'j' : 'd'} ${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`
+                                      : `${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`}
+                                </Text>
+                              </View>
+                            ) : null}
                           </View>
                           <View style={[s.permChip, { backgroundColor: (req.permission === 'write' ? theme.accent : theme.primary) + '12' }]}>
                             <MaterialIcons name={req.permission === 'write' ? 'edit' : 'visibility'} size={10} color={req.permission === 'write' ? theme.accent : theme.primary} />

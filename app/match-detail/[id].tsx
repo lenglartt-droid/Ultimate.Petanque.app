@@ -42,6 +42,7 @@ import { getEloRank, getEloColor, formatEloDelta, EloHistoryEntry } from '@/serv
 import { getSupabaseClient } from '@/template';
 import { Player } from '@/types/petanque';
 import { useAppData as useAppDataHook } from '@/contexts/AppContext';
+import { getShareRequestsForItem, revokeShareRequest, revokeAllShareRequests, getShareRequestRemainingTime, MatchShareRequest } from '@/services/matchShareService';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -58,6 +59,7 @@ export default function MatchDetailScreen() {
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
   const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
+  const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
   const { showAlert } = useAlert();
 
   const { players: allPlayers } = useAppDataHook();
@@ -92,6 +94,7 @@ export default function MatchDetailScreen() {
   useEffect(() => {
     if (!id) return;
     fetchAttestationsForItem('match', id).then(reqs => setWitnessRequests(reqs));
+    getShareRequestsForItem('match', id).then(({ requests }) => setShareRequests(requests)).catch(() => {});
   }, [id]);
 
   useEffect(() => {
@@ -115,7 +118,7 @@ export default function MatchDetailScreen() {
     loadEloDeltas();
   }, [id]);
 
-  const match: Match | undefined = useMemo(() => matches.find(m => m.id === id), [matches, id]);
+  const match: (Match & { userId?: string }) | undefined = useMemo(() => matches.find(m => m.id === id), [matches, id]);
 
   // H2H History: find all matches between same players
   const h2hData = useMemo(() => {
@@ -418,6 +421,141 @@ export default function MatchDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* Shared Match Badge Indicator */}
+        {shareRequests.length > 0 ? (
+          <View style={[s.card, { borderWidth: 1, borderColor: theme.primary + '25' }]}>
+            <View style={s.cardHeaderRow}>
+              <MaterialIcons name="people" size={16} color={theme.primary} />
+              <Text style={s.cardTitle}>{fr ? 'Partage du match' : 'Match Sharing'}</Text>
+              <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.primary + '12', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 }}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: theme.primary }}>
+                    {shareRequests.filter(r => r.status === 'accepted').length}/{shareRequests.length}
+                  </Text>
+                </View>
+                {match.userId === user?.id && shareRequests.length > 1 ? (
+                  <Pressable
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EF444412', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const hasAccepted = shareRequests.some(r => r.status === 'accepted');
+                      showAlert(
+                        fr ? 'Revoquer tous les partages ?' : 'Revoke all shares?',
+                        fr
+                          ? `${shareRequests.length} partage(s) seront supprimes.${hasAccepted ? ' Les stats synchronisees seront annulees.' : ''}`
+                          : `${shareRequests.length} share(s) will be removed.${hasAccepted ? ' Synced stats will be reverted.' : ''}`,
+                        [
+                          { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                          {
+                            text: fr ? 'Revoquer tout' : 'Revoke all',
+                            style: 'destructive',
+                            onPress: async () => {
+                              const { error: bulkErr } = await revokeAllShareRequests('match', match.id, { undoStats: hasAccepted });
+                              if (bulkErr) {
+                                showAlert(fr ? 'Erreur' : 'Error', bulkErr);
+                              } else {
+                                Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                setShareRequests([]);
+                              }
+                            },
+                          },
+                        ]
+                      );
+                    }}
+                    hitSlop={4}
+                  >
+                    <MaterialIcons name="delete-sweep" size={12} color="#EF4444" />
+                    <Text style={{ fontSize: 9, fontWeight: '700', color: '#EF4444' }}>{fr ? 'Tout' : 'All'}</Text>
+                  </Pressable>
+                ) : null}
+              </View>
+            </View>
+            {shareRequests.map(req => {
+              const statusConfig: Record<string, { icon: string; color: string; label: string }> = {
+                pending: { icon: 'schedule', color: '#F59E0B', label: fr ? 'En attente' : 'Pending' },
+                accepted: { icon: 'check-circle', color: '#10B981', label: fr ? 'Accepte' : 'Accepted' },
+                declined: { icon: 'cancel', color: '#EF4444', label: fr ? 'Refuse' : 'Declined' },
+              };
+              const cfg = statusConfig[req.status] || statusConfig.pending;
+              // Find player name from match teams
+              const allPids = [...(match.teamA.players || []), ...(match.teamB.players || [])];
+              const allNames = [...(match.teamA.playerNames || []), ...(match.teamB.playerNames || [])];
+              const pidIdx = allPids.findIndex(pid => {
+                const p = allPlayers.find(pl => pl.id === pid);
+                return p?.userId === req.recipientUserId;
+              });
+              const recipientName = pidIdx >= 0 ? allNames[pidIdx] : (req.recipientUserId?.slice(0, 8) || '?');
+              const isTeamA = pidIdx >= 0 && pidIdx < (match.teamA.players?.length || 0);
+              const teamColor = isTeamA ? theme.primary : theme.accent;
+              const remaining = getShareRequestRemainingTime(req.createdAt, req.status);
+              return (
+                <View key={req.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: theme.border + '40' }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: teamColor }} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }} numberOfLines={1}>{recipientName}</Text>
+                    {remaining ? (
+                      <Text style={{ fontSize: 9, color: remaining.daysLeft <= 1 ? '#EF4444' : theme.textMuted, fontWeight: '600', marginTop: 2 }}>
+                        {remaining.isExpired
+                          ? (fr ? 'Expire' : 'Expired')
+                          : remaining.daysLeft > 0
+                            ? `${remaining.daysLeft}${fr ? 'j' : 'd'} ${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`
+                            : `${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`}
+                      </Text>
+                    ) : null}
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: cfg.color + '12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }}>
+                    <MaterialIcons name={cfg.icon as any} size={12} color={cfg.color} />
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: cfg.color }}>{cfg.label}</Text>
+                  </View>
+                  <View style={{ backgroundColor: (req.permission === 'write' ? theme.accent : theme.textMuted) + '12', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8 }}>
+                    <MaterialIcons name={req.permission === 'write' ? 'edit' : 'visibility'} size={10} color={req.permission === 'write' ? theme.accent : theme.textMuted} />
+                  </View>
+                  {match.userId === user?.id ? (
+                    <Pressable
+                      style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#EF444415', alignItems: 'center', justifyContent: 'center' }}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        showAlert(
+                          fr ? 'Revoquer le partage ?' : 'Revoke share?',
+                          fr ? `${recipientName} ne pourra plus acceder a ce match.` : `${recipientName} will no longer have access to this match.`,
+                          [
+                            { text: fr ? 'Annuler' : 'Cancel', style: 'cancel' },
+                            {
+                              text: fr ? 'Revoquer' : 'Revoke',
+                              style: 'destructive',
+                              onPress: async () => {
+                                const isAccepted = req.status === 'accepted';
+                                const { error: revokeErr } = await revokeShareRequest(req.id, { undoStats: isAccepted });
+                                if (revokeErr) {
+                                  showAlert(fr ? 'Erreur' : 'Error', revokeErr);
+                                } else {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  setShareRequests(prev => prev.filter(r => r.id !== req.id));
+                                }
+                              },
+                            },
+                          ]
+                        );
+                      }}
+                      hitSlop={6}
+                    >
+                      <MaterialIcons name="close" size={14} color="#EF4444" />
+                    </Pressable>
+                  ) : null}
+                </View>
+              );
+            })}
+            {shareRequests.every(r => r.status === 'accepted') ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
+                <MaterialIcons name="verified" size={14} color="#10B981" />
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#10B981' }}>
+                  {fr ? 'Tous les participants ont accepte' : 'All participants accepted'}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
 
         {/* Unranked Match Badge (locally created players only) */}
         {isLocalOnlyMatch ? (
