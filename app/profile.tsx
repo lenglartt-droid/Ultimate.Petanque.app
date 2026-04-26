@@ -162,7 +162,7 @@ export default function ProfileScreen() {
   const [showShareSection, setShowShareSection] = useState(false);
   const [showConsentDetail, setShowConsentDetail] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({
-    account: true,
+    account: false,
     notifications: false,
     data: false,
     community: false,
@@ -1818,20 +1818,24 @@ export default function ProfileScreen() {
               ) : <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />}
             </Pressable>
 
-            <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/creator-note'); }}>
-              <View style={[styles.menuIcon, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="favorite" size={20} color={theme.error} /></View>
-              <View style={styles.menuItemContent}>
-                <Text style={styles.menuItemText}>{t('creatorNote', 'title')}</Text>
-              </View>
-              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
-            </Pressable>
-
             {/* Device Transfer */}
             <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/device-transfer' as any); }}>
               <View style={[styles.menuIcon, { backgroundColor: '#F59E0B' + '15' }]}><MaterialIcons name="swap-horiz" size={20} color="#F59E0B" /></View>
               <View style={styles.menuItemContent}>
                 <Text style={styles.menuItemText}>{language === 'fr' ? 'Transferer mon compte' : 'Transfer my account'}</Text>
                 <Text style={styles.menuItemSubtext}>{language === 'fr' ? 'Changer d\'appareil' : 'Change device'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
+            </Pressable>
+
+            <Pressable 
+              testID="delete-account-button"
+              style={[styles.menuItem, { marginTop: 8, borderWidth: 1, borderColor: theme.textMuted + '20' }]}
+              onPress={() => setShowDeleteModal(true)}
+            >
+              <View style={[styles.menuIcon, { backgroundColor: theme.textMuted + '15' }]}><MaterialIcons name="delete-forever" size={20} color={theme.textMuted} /></View>
+              <View style={styles.menuItemContent}>
+                <Text style={[styles.menuItemText, { color: theme.textMuted }]}>{t('profile', 'deleteAccount')}</Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
             </Pressable>
@@ -2114,7 +2118,7 @@ export default function ProfileScreen() {
           </View>
         )}
 
-        {/* Logout & Delete Account */}
+        {/* Logout & Creator Note */}
         {!isEditing && (
           <View style={styles.logoutSection}>
             <Pressable 
@@ -2134,12 +2138,17 @@ export default function ProfileScreen() {
             </Pressable>
 
             <Pressable 
-              testID="delete-account-button"
-              style={styles.deleteAccountButton}
-              onPress={() => setShowDeleteModal(true)}
+              style={styles.creatorNoteCard}
+              onPress={() => { Haptics.selectionAsync(); router.push('/creator-note'); }}
             >
-              <MaterialIcons name="delete-forever" size={18} color={theme.textMuted} />
-              <Text style={styles.deleteAccountButtonText}>{t('profile', 'deleteAccount')}</Text>
+              <View style={styles.creatorNoteIconWrap}>
+                <MaterialIcons name="favorite" size={22} color="#FFF" />
+              </View>
+              <View style={styles.creatorNoteContent}>
+                <Text style={styles.creatorNoteTitle}>{t('creatorNote', 'title')}</Text>
+                <Text style={styles.creatorNoteSubtitle}>{language === 'fr' ? 'Un mot personnel du fondateur' : 'A personal word from the founder'}</Text>
+              </View>
+              <MaterialIcons name="chevron-right" size={20} color={theme.error + '80'} />
             </Pressable>
           </View>
         )}
@@ -3091,6 +3100,38 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: theme.textMuted,
     textDecorationLine: 'underline',
+  },
+  creatorNoteCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 16,
+    backgroundColor: theme.error + '08',
+    borderRadius: theme.borderRadius.lg,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: theme.error + '20',
+  },
+  creatorNoteIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: theme.error,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  creatorNoteContent: {
+    flex: 1,
+  },
+  creatorNoteTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: theme.error,
+    marginBottom: 2,
+  },
+  creatorNoteSubtitle: {
+    fontSize: 12,
+    color: theme.textSecondary,
   },
   // Delete modal
   deleteModalContent: {

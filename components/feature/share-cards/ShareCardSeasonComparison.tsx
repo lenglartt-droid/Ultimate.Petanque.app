@@ -1,3 +1,4 @@
+
 /**
  * ShareCardSeasonComparison — Compares current vs previous season for social sharing.
  * Shows deltas for ELO, wins, win rate, carreaux, peak, matches.
@@ -99,17 +100,17 @@ export default function ShareCardSeasonComparison({
   if (isLandscape) {
     return (
       <View style={st.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="compare-arrows" size={10} color={ct.accent} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="compare-arrows" size={9} color={ct.accent} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
               {fr ? `SAISON ${current.year} vs ${previous.year}` : `SEASON ${current.year} vs ${previous.year}`}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: ct.textPrimary, marginBottom: 3 }}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
-              {clubName ? <Text style={{ fontSize: 8, color: ct.textSecondary, marginBottom: 3 }}>{clubName}</Text> : null}
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary, marginBottom: 2 }}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
+              {clubName ? <Text style={{ fontSize: 7, color: ct.textSecondary, marginBottom: 2 }}>{clubName}</Text> : null}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: improvementColor + '20', paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, alignSelf: 'flex-start' }}>
                 <MaterialIcons name={improvements >= 3 ? 'trending-up' : 'trending-flat'} size={10} color={improvementColor} />
                 <Text style={{ fontSize: 8, fontWeight: '700', color: improvementColor }}>{improvementLabel}</Text>
@@ -121,6 +122,11 @@ export default function ShareCardSeasonComparison({
                 <CompRow key={i} label={m.label} icon={m.icon} color={m.color} current={m.c} previous={m.p} suffix={m.suffix} compact />
               ))}
             </View>
+          </View>
+          {/* Content complete indicator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 2 }}>
+            <MaterialIcons name="verified" size={8} color="rgba(255,255,255,0.2)" />
+            <Text style={{ fontSize: 6, fontWeight: '600', color: 'rgba(255,255,255,0.2)' }}>{fr ? 'Contenu complet' : 'Complete'}</Text>
           </View>
           <ShareCardWatermark variant="light" size="sm" />
         </LinearGradient>
