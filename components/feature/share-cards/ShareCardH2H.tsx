@@ -258,22 +258,22 @@ export default function ShareCardH2H({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 14;
-  const titleSize = isStory ? 12 : 9;
-  const nameSize = isStory ? 18 : 13;
-  const scoreFontSize = isStory ? 40 : 28;
+  const pad = isStory ? 18 : 14;
+  const titleSize = isStory ? 10 : 9;
+  const nameSize = isStory ? 14 : 13;
+  const scoreFontSize = isStory ? 32 : 28;
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 52 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 16 : 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 8 : 6 }}>
           <MaterialIcons name="compare-arrows" size={isStory ? 16 : 12} color={ct.accent} />
           <Text style={{ fontSize: titleSize, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>HEAD TO HEAD</Text>
         </View>
 
         {/* Player names */}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: isStory ? 8 : 6, marginBottom: isStory ? 16 : 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: isStory ? 6 : 6, marginBottom: isStory ? 10 : 8 }}>
           <PlayerHeader player={playerA} side="left" ct={ct} compact={!isStory} />
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingTop: 4, paddingHorizontal: 2 }}>
             <View style={{ width: isStory ? 28 : 22, height: isStory ? 28 : 22, borderRadius: isStory ? 14 : 11, backgroundColor: ct.accent + '18', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: ct.accent + '30' }}>
@@ -284,8 +284,8 @@ export default function ShareCardH2H({
         </View>
 
         {/* Win record - big score */}
-        <View style={{ alignItems: 'center', marginBottom: isStory ? 20 : 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 16 : 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: isStory ? 16 : 12, paddingVertical: isStory ? 14 : 7, paddingHorizontal: isStory ? 24 : 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
+        <View style={{ alignItems: 'center', marginBottom: isStory ? 12 : 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 12 : 10, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: isStory ? 14 : 12, paddingVertical: isStory ? 10 : 7, paddingHorizontal: isStory ? 18 : 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }}>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: scoreFontSize, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.35)' }}>{record.winsA}</Text>
               <View style={{ width: isStory ? 24 : 18, height: 3, borderRadius: 1.5, backgroundColor: colorA, marginTop: 2, opacity: winnerSide === 'A' ? 1 : 0.2 }} />
@@ -301,12 +301,12 @@ export default function ShareCardH2H({
               <View style={{ width: isStory ? 24 : 18, height: 3, borderRadius: 1.5, backgroundColor: colorB, marginTop: 2, opacity: winnerSide === 'B' ? 1 : 0.2 }} />
             </View>
           </View>
-          <Text style={{ fontSize: isStory ? 10 : 7, color: 'rgba(255,255,255,0.25)', marginTop: isStory ? 6 : 3 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
+          <Text style={{ fontSize: isStory ? 8 : 7, color: 'rgba(255,255,255,0.25)', marginTop: isStory ? 4 : 3 }}>{record.totalMatches} {fr ? 'matchs joues' : 'matches played'}</Text>
         </View>
 
         {/* Trend line + Form indicator */}
         {recentH2H && recentH2H.length >= 2 ? (
-          <View style={{ alignItems: 'center', marginBottom: isStory ? 16 : 6, gap: isStory ? 8 : 3, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: isStory ? 12 : 8, paddingVertical: isStory ? 10 : 5, paddingHorizontal: isStory ? 12 : 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
+          <View style={{ alignItems: 'center', marginBottom: isStory ? 8 : 6, gap: isStory ? 4 : 3, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: isStory ? 10 : 8, paddingVertical: isStory ? 6 : 5, paddingHorizontal: isStory ? 10 : 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' }}>
             <Text style={{ fontSize: isStory ? 8 : 6, fontWeight: '700', color: 'rgba(255,255,255,0.2)', letterSpacing: 1 }}>{fr ? 'TENDANCE' : 'TREND'}</Text>
             <TrendLine results={recentH2H} colorA={colorA} colorB={colorB} compact={!isStory} />
             <FormBadge results={recentH2H} fr={fr} colorA={colorA} colorB={colorB} compact={!isStory} />
@@ -314,7 +314,7 @@ export default function ShareCardH2H({
         ) : null}
 
         {/* Comparison bars */}
-        <View style={{ marginBottom: isStory ? 14 : 6 }}>
+        <View style={{ marginBottom: isStory ? 8 : 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: isStory ? 4 : 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <View style={{ width: isStory ? 8 : 6, height: isStory ? 8 : 6, borderRadius: 4, backgroundColor: colorA }} />

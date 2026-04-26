@@ -8,7 +8,6 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Circle, Polyline as SvgPolyline, Line, Text as SvgText, G } from 'react-native-svg';
 import ShareCardWatermark from './ShareCardWatermark';
 import { CARD_COLOR_THEMES, type CardColorTheme, type ShareCardFormat } from '@/services/shareCardService';
 
@@ -79,18 +78,42 @@ export default function ShareCardSeason({
       x: padL + i * stepX,
       y: padT + iH - ((m.elo - minE) / range) * iH,
     }));
-    const polyline = pts.map(p => `${p.x},${p.y}`).join(' ');
     return (
-      <Svg width={w} height={h}>
-        <Line x1={padL} y1={padT + iH} x2={w - padR} y2={padT + iH} stroke="rgba(255,255,255,0.08)" strokeWidth={0.5} />
-        <SvgPolyline points={polyline} fill="none" stroke={ec} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      <View style={{ width: w, height: h, position: 'relative' }}>
+        {/* Baseline */}
+        <View style={{ position: 'absolute', top: padT + iH, left: padL, right: padR, height: 0.5, backgroundColor: 'rgba(255,255,255,0.08)' }} />
+        {/* Line segments */}
+        {pts.slice(1).map((p, i) => {
+          const p0 = pts[i];
+          const dx = p.x - p0.x;
+          const dy = p.y - p0.y;
+          const len = Math.sqrt(dx * dx + dy * dy);
+          const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+          return (
+            <View key={`l${i}`} style={{
+              position: 'absolute', left: p0.x, top: p0.y - 1,
+              width: len, height: 2, backgroundColor: ec, opacity: 0.9,
+              borderRadius: 1, transform: [{ rotate: `${angle}deg` }], transformOrigin: 'left center',
+            }} />
+          );
+        })}
+        {/* Dots */}
         {pts.map((p, i) => (
-          <Circle key={i} cx={p.x} cy={p.y} r={2.5} fill={ec} stroke="rgba(0,0,0,0.3)" strokeWidth={1} />
+          <View key={i} style={{
+            position: 'absolute', left: p.x - 2.5, top: p.y - 2.5,
+            width: 5, height: 5, borderRadius: 2.5, backgroundColor: ec,
+            borderWidth: 1, borderColor: 'rgba(0,0,0,0.3)',
+          }} />
         ))}
+        {/* Labels */}
         {showLabels ? monthlyElo.map((m, i) => (
-          <SvgText key={`l${i}`} x={pts[i].x} y={h - 1} fontSize="7" fill="rgba(255,255,255,0.4)" textAnchor="middle" fontWeight="600">{m.month}</SvgText>
+          <Text key={`t${i}`} style={{
+            position: 'absolute', left: pts[i].x - 10, top: h - 12,
+            width: 20, fontSize: 7, fontWeight: '600',
+            color: 'rgba(255,255,255,0.4)', textAlign: 'center',
+          }}>{m.month}</Text>
         )) : null}
-      </Svg>
+      </View>
     );
   };
 

@@ -7,7 +7,6 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import Svg, { Polyline, Circle, Line } from 'react-native-svg';
 import ShareCardWatermark from './ShareCardWatermark';
 import { CARD_COLOR_THEMES, type CardColorTheme, type ShareCardFormat } from '@/services/shareCardService';
 import { LeagueTier } from '@/services/globalRankingService';
@@ -48,33 +47,67 @@ function MiniEloChart({ data, width, height, tierColor }: { data: EloPoint[]; wi
   const minElo = Math.min(...elos) - 20;
   const maxElo = Math.max(...elos) + 20;
   const range = Math.max(maxElo - minElo, 30);
-  const padL = 2;
-  const padR = 2;
   const padT = 4;
   const padB = 4;
-  const gW = width - padL - padR;
   const gH = height - padT - padB;
-  const step = data.length > 1 ? gW / (data.length - 1) : gW;
+  const step = width / (data.length - 1);
 
-  const toX = (i: number) => padL + i * step;
   const toY = (elo: number) => padT + gH - ((elo - minElo) / range) * gH;
-
-  const points = data.map((d, i) => `${toX(i)},${toY(d.elo)}`).join(' ');
   const lastIdx = data.length - 1;
 
   return (
-    <Svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
+    <View style={{ width, height, position: 'relative' }}>
       {/* Grid lines */}
       {[0.25, 0.5, 0.75].map(pct => (
-        <Line key={pct} x1={padL} y1={padT + gH * pct} x2={width - padR} y2={padT + gH * pct} stroke="rgba(255,255,255,0.06)" strokeWidth={0.5} />
+        <View key={pct} style={{ position: 'absolute', top: padT + gH * pct, left: 0, right: 0, height: 0.5, backgroundColor: 'rgba(255,255,255,0.06)' }} />
       ))}
-      {/* Line */}
-      <Polyline points={points} fill="none" stroke={tierColor} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" opacity={0.8} />
-      {/* Last point */}
-      <Circle cx={toX(lastIdx)} cy={toY(data[lastIdx].elo)} r={4} fill={tierColor} stroke="#FFF" strokeWidth={1.5} />
-      {/* First point */}
-      <Circle cx={toX(0)} cy={toY(data[0].elo)} r={2.5} fill="rgba(255,255,255,0.4)" />
-    </Svg>
+      {/* Data points */}
+      {data.map((d, i) => {
+        const x = i * step;
+        const y = toY(d.elo);
+        const isLast = i === lastIdx;
+        const isFirst = i === 0;
+        const dotSize = isLast ? 8 : isFirst ? 5 : 4;
+        return (
+          <View key={i} style={{
+            position: 'absolute',
+            left: x - dotSize / 2,
+            top: y - dotSize / 2,
+            width: dotSize,
+            height: dotSize,
+            borderRadius: dotSize / 2,
+            backgroundColor: isLast ? tierColor : isFirst ? 'rgba(255,255,255,0.4)' : tierColor + '80',
+            borderWidth: isLast ? 1.5 : 0,
+            borderColor: isLast ? '#FFF' : 'transparent',
+          }} />
+        );
+      })}
+      {/* Connecting line segments using thin views */}
+      {data.slice(1).map((d, i) => {
+        const x1 = i * step;
+        const y1 = toY(data[i].elo);
+        const x2 = (i + 1) * step;
+        const y2 = toY(d.elo);
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const len = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        return (
+          <View key={`l${i}`} style={{
+            position: 'absolute',
+            left: x1,
+            top: y1 - 1,
+            width: len,
+            height: 2,
+            backgroundColor: tierColor,
+            opacity: 0.8,
+            borderRadius: 1,
+            transform: [{ rotate: `${angle}deg` }],
+            transformOrigin: 'left center',
+          }} />
+        );
+      })}
+    </View>
   );
 }
 
@@ -168,48 +201,48 @@ export default function ShareCardLeague({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 16;
-  const emblemSize = isStory ? 56 : 44;
-  const chartW = isStory ? 260 : 220;
-  const chartH = isStory ? 100 : 70;
+  const pad = isStory ? 18 : 16;
+  const emblemSize = isStory ? 48 : 44;
+  const chartW = isStory ? 240 : 220;
+  const chartH = isStory ? 80 : 70;
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 52 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 14 : 8 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 8 : 8 }}>
           <MaterialIcons name="leaderboard" size={isStory ? 14 : 12} color={leagueTier.color} />
           <Text style={{ fontSize: isStory ? 10 : 8, fontWeight: '800', letterSpacing: 1.5, color: leagueTier.color }}>{fr ? 'CLASSEMENT LIGUE' : 'LEAGUE RANKING'}</Text>
         </View>
 
         {/* League emblem + tier name */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 14 : 10, marginBottom: isStory ? 16 : 10 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 10 : 10, marginBottom: isStory ? 10 : 10 }}>
           <LinearGradient colors={tierGrad} style={{ width: emblemSize, height: emblemSize, borderRadius: emblemSize / 3, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' }}>
             <Text style={{ fontSize: emblemSize * 0.5 }}>{leagueTier.emblem}</Text>
           </LinearGradient>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: isStory ? 22 : 17, fontWeight: '900', color: ct.textPrimary, letterSpacing: -0.3 }}>{fr ? leagueTier.name.fr : leagueTier.name.en}</Text>
+            <Text style={{ fontSize: isStory ? 18 : 17, fontWeight: '900', color: ct.textPrimary, letterSpacing: -0.3 }}>{fr ? leagueTier.name.fr : leagueTier.name.en}</Text>
             <Text style={{ fontSize: isStory ? 14 : 12, fontWeight: '600', color: ct.textSecondary, marginTop: 2 }}>{playerName}</Text>
             {clubName ? <Text style={{ fontSize: isStory ? 11 : 9, fontWeight: '500', color: ct.textSecondary, marginTop: 1 }}>{clubName}</Text> : null}
           </View>
         </View>
 
         {/* ELO + World Rank row */}
-        <View style={{ flexDirection: 'row', gap: 6, marginBottom: isStory ? 14 : 10 }}>
-          <LinearGradient colors={tierGrad} style={[s.eloBadge, isStory && { paddingVertical: 10, paddingHorizontal: 16 }]}>
-            <Text style={{ fontSize: isStory ? 26 : 20, fontWeight: '900', color: '#FFF' }}>{elo}</Text>
+        <View style={{ flexDirection: 'row', gap: 5, marginBottom: isStory ? 10 : 10 }}>
+          <LinearGradient colors={tierGrad} style={[s.eloBadge, isStory && { paddingVertical: 8, paddingHorizontal: 14 }]}>
+            <Text style={{ fontSize: isStory ? 22 : 20, fontWeight: '900', color: '#FFF' }}>{elo}</Text>
             <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: 'rgba(255,255,255,0.6)' }}>ELO</Text>
           </LinearGradient>
           {worldRank ? (
             <View style={[s.rankBadge, isStory && { paddingVertical: 10, paddingHorizontal: 16 }]}>
               <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'Rang mondial' : 'World Rank'}</Text>
-              <Text style={{ fontSize: isStory ? 24 : 18, fontWeight: '900', color: ct.textPrimary }}>#{worldRank.toLocaleString()}</Text>
+              <Text style={{ fontSize: isStory ? 20 : 18, fontWeight: '900', color: ct.textPrimary }}>#{worldRank.toLocaleString()}</Text>
               {worldTotal ? <Text style={{ fontSize: isStory ? 8 : 6, fontWeight: '500', color: ct.textSecondary }}>{fr ? 'sur' : 'of'} {worldTotal.toLocaleString()}</Text> : null}
             </View>
           ) : null}
           <View style={[s.rankBadge, isStory && { paddingVertical: 10, paddingHorizontal: 16 }]}>
             <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '600', color: ct.textSecondary }}>{fr ? 'Victoires' : 'Win Rate'}</Text>
-            <Text style={{ fontSize: isStory ? 24 : 18, fontWeight: '900', color: '#22C55E' }}>{winRate}%</Text>
+            <Text style={{ fontSize: isStory ? 20 : 18, fontWeight: '900', color: '#22C55E' }}>{winRate}%</Text>
             <Text style={{ fontSize: isStory ? 8 : 6, fontWeight: '500', color: ct.textSecondary }}>{matchesPlayed} {fr ? 'matchs' : 'matches'}</Text>
           </View>
         </View>
@@ -229,7 +262,7 @@ export default function ShareCardLeague({
 
         {/* ELO Mini Chart */}
         {eloHistory.length >= 2 ? (
-          <View style={{ alignItems: 'center', marginBottom: isStory ? 14 : 8, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: isStory ? 10 : 6 }}>
+          <View style={{ alignItems: 'center', marginBottom: isStory ? 8 : 8, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: isStory ? 8 : 6 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4, alignSelf: 'flex-start' }}>
               <MaterialIcons name="show-chart" size={isStory ? 12 : 10} color={leagueTier.color} />
               <Text style={{ fontSize: isStory ? 9 : 7, fontWeight: '700', color: ct.textSecondary }}>{fr ? 'PROGRESSION' : 'PROGRESSION'}</Text>
@@ -245,7 +278,7 @@ export default function ShareCardLeague({
         ) : null}
 
         {/* Stats row */}
-        <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 10 : 6 }}>
+        <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 6 : 6 }}>
           <View style={s.miniStat}><Text style={{ fontSize: isStory ? 14 : 11, fontWeight: '900', color: ct.textPrimary }}>{matchesPlayed}</Text><Text style={{ fontSize: isStory ? 7 : 6, color: ct.textSecondary }}>{fr ? 'Matchs' : 'Matches'}</Text></View>
           <View style={s.miniStat}><Text style={{ fontSize: isStory ? 14 : 11, fontWeight: '900', color: '#22C55E' }}>{wins}</Text><Text style={{ fontSize: isStory ? 7 : 6, color: ct.textSecondary }}>{fr ? 'Victoires' : 'Wins'}</Text></View>
         </View>

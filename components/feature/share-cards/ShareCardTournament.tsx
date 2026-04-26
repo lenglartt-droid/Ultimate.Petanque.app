@@ -197,13 +197,13 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start', position: 'relative' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: isStory ? 18 : pad, paddingBottom: isStory ? 52 : 48, justifyContent: isStory ? 'center' : 'flex-start', position: 'relative' }}>
         <View style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(245,158,11,0.04)' }} />
 
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: isStory ? 12 : 8 }}>
-          <View style={{ backgroundColor: '#F59E0B20', width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialIcons name="emoji-events" size={isStory ? 20 : 17} color="#F59E0B" />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, marginBottom: isStory ? 8 : 8 }}>
+          <View style={{ backgroundColor: '#F59E0B20', width: isStory ? 30 : 34, height: isStory ? 30 : 34, borderRadius: 9, alignItems: 'center', justifyContent: 'center' }}>
+            <MaterialIcons name="emoji-events" size={isStory ? 17 : 17} color="#F59E0B" />
           </View>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>{fr ? 'TOURNOI' : 'TOURNAMENT'}</Text>
@@ -219,25 +219,25 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
         </View>
 
         {/* Tournament Name */}
-        <Text style={{ fontSize: nameSize, fontWeight: '900', color: ct.textPrimary, marginBottom: isStory ? 14 : 10, letterSpacing: -0.3, lineHeight: nameSize * 1.25, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
+        <Text style={{ fontSize: isStory ? 18 : nameSize, fontWeight: '900', color: ct.textPrimary, marginBottom: isStory ? 8 : 10, letterSpacing: -0.3, lineHeight: (isStory ? 18 : nameSize) * 1.25, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
 
         {/* Result Badge */}
         {resultCfg ? (
           <LinearGradient
             colors={[resultCfg.color + '18', resultCfg.color + '08']}
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1, borderColor: resultCfg.color + '30', borderRadius: 12, paddingVertical: isStory ? 10 : 8, paddingHorizontal: 12, marginBottom: isStory ? 14 : 10 }}
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 7, borderWidth: 1, borderColor: resultCfg.color + '30', borderRadius: 11, paddingVertical: isStory ? 7 : 8, paddingHorizontal: 10, marginBottom: isStory ? 8 : 10 }}
           >
-            <MaterialIcons name={resultCfg.icon as any} size={isStory ? 26 : 22} color={resultCfg.color} />
+            <MaterialIcons name={resultCfg.icon as any} size={isStory ? 20 : 22} color={resultCfg.color} />
             <View>
-              <Text style={{ fontSize: isStory ? 18 : 14, fontWeight: '800', color: resultCfg.color }}>{resultCfg.label}</Text>
+              <Text style={{ fontSize: isStory ? 14 : 14, fontWeight: '800', color: resultCfg.color }}>{resultCfg.label}</Text>
               {tournament.prizeWon ? <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8' }}>{tournament.prizeWon > 0 ? `+${tournament.prizeWon} \u20AC` : ''}</Text> : null}
             </View>
           </LinearGradient>
         ) : null}
 
         {/* Meta Grid */}
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 5, marginBottom: isStory ? 10 : 6 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 4, marginBottom: isStory ? 6 : 6 }}>
           <View style={s.metaItem}><MaterialIcons name="groups" size={10} color="#94A3B8" /><Text style={s.metaValue}>{tournament.format}</Text></View>
           <View style={s.metaItem}><MaterialIcons name="category" size={10} color="#94A3B8" /><Text style={s.metaValue}>{tournament.type}</Text></View>
           {tournament.participants > 0 ? <View style={s.metaItem}><MaterialIcons name="people" size={10} color="#94A3B8" /><Text style={s.metaValue}>{tournament.participants}/{tournament.maxParticipants}</Text></View> : null}
@@ -246,7 +246,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
 
         {/* Tags */}
         {(tournament.tournamentLevel || tournament.tournamentScope || tournament.prize) ? (
-          <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 12 : 8, flexWrap: 'wrap' }}>
+          <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 6 : 8, flexWrap: 'wrap' }}>
             {tournament.tournamentLevel ? <View style={{ backgroundColor: '#8B5CF615', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><Text style={{ fontSize: 9, fontWeight: '700', color: '#8B5CF6' }}>{tournament.tournamentLevel}</Text></View> : null}
             {tournament.tournamentScope ? <View style={{ backgroundColor: '#3B82F615', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><Text style={{ fontSize: 9, fontWeight: '700', color: '#3B82F6' }}>{tournament.tournamentScope}</Text></View> : null}
             {tournament.prize ? <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F59E0B15', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7 }}><MaterialIcons name="card-giftcard" size={9} color="#F59E0B" /><Text style={{ fontSize: 9, fontWeight: '700', color: '#F59E0B' }}>{tournament.prize}</Text></View> : null}
