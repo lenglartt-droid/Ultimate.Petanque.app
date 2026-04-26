@@ -7,6 +7,9 @@ import { getSupabaseClient } from '@/template';
 import { sendShareRequestNotification } from '@/services/notificationService';
 import { triggerServerPush } from '@/services/pushTokenService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { updateEloAfterMatch, getScoreMarginMultiplier } from '@/services/eloService';
+import { getMatchValidationWeight } from '@/services/trustScoreService';
+import { sendStatsSyncedNotification } from '@/services/notificationService';
 
 const LAST_SEEN_SHARE_REQUESTS_KEY = '@lastSeenShareRequestIds';
 
@@ -201,22 +204,234 @@ export async function getPendingShareRequestCount(): Promise<number> {
 
 /**
  * Accept a share request.
+ * When a match share is accepted, the recipient's player stats and ELO are
+ * recalculated to include this match (if they were a participant).
  */
 export async function acceptShareRequest(
   requestId: string
 ): Promise<{ error: string | null }> {
   const supabase = getSupabaseClient();
   try {
+    // Fetch the request details before updating
+    const { data: reqData, error: fetchErr } = await supabase
+      .from('match_share_requests')
+      .select('*')
+      .eq('id', requestId)
+      .single();
+
+    if (fetchErr || !reqData) return { error: fetchErr?.message || 'Request not found' };
+
     const { error } = await supabase
       .from('match_share_requests')
       .update({ status: 'accepted', updated_at: new Date().toISOString() })
       .eq('id', requestId);
 
     if (error) return { error: error.message };
+
+    // After accepting, sync stats for match shares (fire-and-forget)
+    if (reqData.item_type === 'match') {
+      syncStatsForAcceptedMatch(reqData.item_id, reqData.recipient_user_id).catch((e) => {
+        console.log('[MatchShare] Stats sync error (non-blocking):', e);
+      });
+    }
+
     return { error: null };
   } catch (e: any) {
     return { error: e.message };
   }
+}
+
+/**
+ * Sync the recipient's player stats after accepting a shared match.
+ * - Checks if the recipient is a participant in the match
+ * - Updates their player stats (wins, losses, matchesPlayed, winRate, etc.)
+ * - Recalculates ELO for the recipient based on this match
+ */
+async function syncStatsForAcceptedMatch(
+  matchId: string,
+  recipientUserId: string
+): Promise<void> {
+  const supabase = getSupabaseClient();
+
+  // 1. Fetch the match data
+  const { data: match, error: matchErr } = await supabase
+    .from('matches')
+    .select('*')
+    .eq('id', matchId)
+    .single();
+
+  if (matchErr || !match) {
+    console.log('[MatchShare] Could not fetch match for stats sync:', matchErr?.message);
+    return;
+  }
+
+  const teamA = typeof match.team_a === 'string' ? JSON.parse(match.team_a) : match.team_a;
+  const teamB = typeof match.team_b === 'string' ? JSON.parse(match.team_b) : match.team_b;
+  const teamAPlayers: string[] = teamA?.players || [];
+  const teamBPlayers: string[] = teamB?.players || [];
+  const winner: 'A' | 'B' = match.winner;
+
+  // 2. Find the recipient's player record (player.id === player.user_id for real profiles)
+  const { data: recipientPlayer } = await supabase
+    .from('players')
+    .select('id, user_id, stats, elo_rating')
+    .eq('id', recipientUserId)
+    .single();
+
+  if (!recipientPlayer || recipientPlayer.user_id !== recipientUserId) {
+    console.log('[MatchShare] Recipient has no real player profile, skipping sync');
+    return;
+  }
+
+  // 3. Check if recipient is actually in this match
+  const inTeamA = teamAPlayers.includes(recipientUserId);
+  const inTeamB = teamBPlayers.includes(recipientUserId);
+  if (!inTeamA && !inTeamB) {
+    console.log('[MatchShare] Recipient is not a participant in this match, skipping sync');
+    return;
+  }
+
+  // 4. Check if this match was already counted in recipient's stats
+  // by looking for existing elo_history entry
+  const { data: existingElo } = await supabase
+    .from('elo_history')
+    .select('id')
+    .eq('player_id', recipientUserId)
+    .eq('match_id', matchId)
+    .limit(1);
+
+  if (existingElo && existingElo.length > 0) {
+    console.log('[MatchShare] Match already counted in recipient ELO history, skipping');
+    return;
+  }
+
+  // 5. Update player stats
+  const won = (inTeamA && winner === 'A') || (inTeamB && winner === 'B');
+  const currentStats = recipientPlayer.stats || {
+    matchesPlayed: 0, wins: 0, losses: 0, winRate: 0,
+    tirRate: 0, pointRate: 0, carreauRate: 0,
+    avgPointsScored: 0, avgPointsConceded: 0,
+  };
+
+  const newMatchesPlayed = (currentStats.matchesPlayed || 0) + 1;
+  const newWins = (currentStats.wins || 0) + (won ? 1 : 0);
+  const newLosses = (currentStats.losses || 0) + (won ? 0 : 1);
+  const newWinRate = newMatchesPlayed > 0 ? Math.round((newWins / newMatchesPlayed) * 100) : 0;
+
+  const myScore = inTeamA ? (teamA?.score || 0) : (teamB?.score || 0);
+  const oppScore = inTeamA ? (teamB?.score || 0) : (teamA?.score || 0);
+  const prevTotalScored = (currentStats.avgPointsScored || 0) * (currentStats.matchesPlayed || 0);
+  const prevTotalConceded = (currentStats.avgPointsConceded || 0) * (currentStats.matchesPlayed || 0);
+  const newAvgScored = newMatchesPlayed > 0 ? Math.round(((prevTotalScored + myScore) / newMatchesPlayed) * 10) / 10 : 0;
+  const newAvgConceded = newMatchesPlayed > 0 ? Math.round(((prevTotalConceded + oppScore) / newMatchesPlayed) * 10) / 10 : 0;
+
+  // Merge player actions if available
+  let newTirRate = currentStats.tirRate || 0;
+  let newPointRate = currentStats.pointRate || 0;
+  let newCarreauRate = currentStats.carreauRate || 0;
+
+  const playerActions = match.player_actions;
+  if (playerActions && Array.isArray(playerActions)) {
+    const myAction = playerActions.find((pa: any) => pa.playerId === recipientUserId);
+    if (myAction?.actions) {
+      const a = myAction.actions;
+      // Weighted average with existing stats
+      const prevMatches = currentStats.matchesPlayed || 0;
+      if (a.tirs > 0) {
+        const matchTirRate = Math.round((a.tirsSuccess / a.tirs) * 100);
+        newTirRate = prevMatches > 0
+          ? Math.round((newTirRate * prevMatches + matchTirRate) / newMatchesPlayed)
+          : matchTirRate;
+      }
+      if (a.points > 0) {
+        const matchPointRate = Math.round((a.pointsSuccess / a.points) * 100);
+        newPointRate = prevMatches > 0
+          ? Math.round((newPointRate * prevMatches + matchPointRate) / newMatchesPlayed)
+          : matchPointRate;
+      }
+      if (a.tirs > 0 && a.carreaux > 0) {
+        const matchCarreauRate = Math.round((a.carreaux / a.tirs) * 100);
+        newCarreauRate = prevMatches > 0
+          ? Math.round((newCarreauRate * prevMatches + matchCarreauRate) / newMatchesPlayed)
+          : matchCarreauRate;
+      }
+    }
+  }
+
+  const updatedStats = {
+    ...currentStats,
+    matchesPlayed: newMatchesPlayed,
+    wins: newWins,
+    losses: newLosses,
+    winRate: newWinRate,
+    tirRate: newTirRate,
+    pointRate: newPointRate,
+    carreauRate: newCarreauRate,
+    avgPointsScored: newAvgScored,
+    avgPointsConceded: newAvgConceded,
+  };
+
+  await supabase
+    .from('players')
+    .update({ stats: updatedStats, last_match_date: match.date })
+    .eq('id', recipientUserId);
+
+  // 6. Update ELO via the standard service
+  const participantUserIds: string[] = match.participant_user_ids || [];
+  // Ensure at least 2 participants for ELO calculation
+  const effectiveParticipants = participantUserIds.length >= 2
+    ? participantUserIds
+    : [...new Set([...teamAPlayers, ...teamBPlayers])];
+
+  if (effectiveParticipants.length >= 2) {
+    try {
+      await updateEloAfterMatch(
+        matchId,
+        [recipientUserId], // Only update ELO for the recipient
+        inTeamA ? teamBPlayers : teamAPlayers, // Opponent team
+        inTeamA ? winner : (winner === 'A' ? 'B' : 'A') as 'A' | 'B', // Adjust winner perspective
+        effectiveParticipants,
+        teamA?.score,
+        teamB?.score,
+        playerActions
+      );
+    } catch (eloErr) {
+      console.log('[MatchShare] ELO update error (non-blocking):', eloErr);
+    }
+  }
+
+  // 7. Send local notification summarizing the stats sync
+  try {
+    const oldWinRate = currentStats.winRate || 0;
+    const teamANames = (teamA?.playerNames || []).join(', ') || 'Team A';
+    const teamBNames = (teamB?.playerNames || []).join(', ') || 'Team B';
+    const matchSummary = `${teamANames} vs ${teamBNames} (${teamA?.score || 0}-${teamB?.score || 0})`;
+
+    // Get ELO delta from the history we just inserted
+    let eloDelta = 0;
+    try {
+      const { data: eloRow } = await supabase
+        .from('elo_history')
+        .select('elo_delta')
+        .eq('player_id', recipientUserId)
+        .eq('match_id', matchId)
+        .limit(1)
+        .single();
+      if (eloRow) eloDelta = eloRow.elo_delta || 0;
+    } catch { /* silent */ }
+
+    await sendStatsSyncedNotification({
+      matchSummary,
+      eloDelta,
+      oldWinRate,
+      newWinRate,
+      won,
+    });
+  } catch (notifErr) {
+    console.log('[MatchShare] Stats sync notification error (non-blocking):', notifErr);
+  }
+
+  console.log(`[MatchShare] Stats synced for ${recipientUserId}: ${newWins}W/${newLosses}L (${newWinRate}%)`);
 }
 
 /**
