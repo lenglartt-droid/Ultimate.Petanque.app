@@ -104,7 +104,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           {/* Top header */}
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
@@ -197,7 +197,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between', position: 'relative' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start', position: 'relative' }}>
         <View style={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(245,158,11,0.04)' }} />
 
         {/* Header */}
@@ -328,7 +328,7 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 7, paddingVertical: 4, borderRadius: 7 },
   metaValue: { fontSize: 10, fontWeight: '600', color: '#CBD5E1CC', maxWidth: 80, flexShrink: 1 },
 });

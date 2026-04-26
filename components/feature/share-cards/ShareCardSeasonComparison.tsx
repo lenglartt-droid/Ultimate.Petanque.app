@@ -99,7 +99,7 @@ export default function ShareCardSeasonComparison({
   if (isLandscape) {
     return (
       <View style={st.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <MaterialIcons name="compare-arrows" size={10} color={ct.accent} />
             <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
@@ -134,7 +134,7 @@ export default function ShareCardSeasonComparison({
 
   return (
     <View style={st.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: 'flex-start' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: 'flex-start' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 10 : 6 }}>
           <MaterialIcons name="compare-arrows" size={isStory ? 14 : 11} color={ct.accent} />
@@ -202,5 +202,5 @@ export default function ShareCardSeasonComparison({
 }
 
 const st = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
 });

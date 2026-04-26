@@ -97,7 +97,7 @@ export default function ShareCardLeague({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <MaterialIcons name="leaderboard" size={10} color={leagueTier.color} />
             <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: leagueTier.color }}>{fr ? 'CLASSEMENT LIGUE' : 'LEAGUE RANKING'}</Text>
@@ -175,7 +175,7 @@ export default function ShareCardLeague({
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 14 : 8 }}>
           <MaterialIcons name="leaderboard" size={isStory ? 14 : 12} color={leagueTier.color} />
@@ -275,7 +275,7 @@ export default function ShareCardLeague({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
   eloBadge: { alignItems: 'center', justifyContent: 'center', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 14 },
   rankBadge: { flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 14, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statChip: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 6, borderWidth: 1 },

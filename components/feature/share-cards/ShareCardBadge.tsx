@@ -69,7 +69,7 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={[badge.color + '25', ct.gradients[0], ct.gradients[1]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1, padding: 14, flexDirection: 'row', alignItems: 'center' }}>
+        <LinearGradient colors={[badge.color + '25', ct.gradients[0], ct.gradients[1]]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={{ flex: 1, padding: 14, paddingBottom: 50, flexDirection: 'row', alignItems: 'center' }}>
           {/* Left: icon */}
           <View style={{ alignItems: 'center', marginRight: 14 }}>
             <View style={{ backgroundColor: badge.color + '20', width: 68, height: 68, borderRadius: 20, alignItems: 'center', justifyContent: 'center' }}>
@@ -126,7 +126,7 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={[badge.color + '25', ct.gradients[0], ct.gradients[1]]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={{ flex: 1, padding: pad, alignItems: 'center', justifyContent: 'center' }}>
+      <LinearGradient colors={[badge.color + '25', ct.gradients[0], ct.gradients[1]]} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, alignItems: 'center', justifyContent: 'center' }}>
         {/* Celebration label */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: isStory ? 20 : 12, justifyContent: 'center' }}>
           <MaterialIcons name="celebration" size={isStory ? 14 : 11} color={ct.accent} />
@@ -184,5 +184,5 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
 });

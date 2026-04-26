@@ -130,7 +130,7 @@ export default function ShareCardSeason({
   if (isLandscape) {
     return (
       <View style={st.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
             <MaterialIcons name="calendar-today" size={10} color={ct.accent} />
             <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
@@ -196,7 +196,7 @@ export default function ShareCardSeason({
 
   return (
     <View style={st.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: 'flex-start' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: 'flex-start' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 10 : 6 }}>
           <MaterialIcons name="calendar-today" size={isStory ? 14 : 11} color={ct.accent} />
@@ -310,7 +310,7 @@ export default function ShareCardSeason({
 }
 
 const st = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
   statBox: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statBoxSm: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
 });

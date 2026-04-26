@@ -1272,7 +1272,7 @@ export default function ShareCardScreen() {
           <View
             ref={cardRef}
             collapsable={false}
-            style={[st.cardWrapper, { width: cardWidth, minHeight: Math.max(200, cardHeight), maxHeight: cardHeight * 1.15 }]}
+            style={[st.cardWrapper, { width: cardWidth, height: Math.max(200, cardHeight) }]}
           >
             {renderCard()}
           </View>
