@@ -93,22 +93,22 @@ export default function ShareCardWeeklyDigest({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="date-range" size={10} color={ct.accent} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'BILAN HEBDO' : 'WEEKLY DIGEST'}</Text>
-            <Text style={{ fontSize: 7, fontWeight: '600', color: ct.textSecondary, marginLeft: 'auto' }}>{weekLabel}</Text>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="date-range" size={9} color={ct.accent} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'BILAN HEBDO' : 'WEEKLY DIGEST'}</Text>
+            <Text style={{ fontSize: 6, fontWeight: '600', color: ct.textSecondary, marginLeft: 'auto' }}>{weekLabel}</Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: player + rank */}
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-                <LinearGradient colors={tierGrad} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 15 }}>{leagueTier.emblem}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
+                <LinearGradient colors={tierGrad} style={{ width: 26, height: 26, borderRadius: 8, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 13 }}>{leagueTier.emblem}</Text>
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text>
-                  <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textSecondary }}>{currentElo} ELO</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text>
+                  <Text style={{ fontSize: 7, fontWeight: '600', color: ct.textSecondary }}>{currentElo} ELO</Text>
                 </View>
               </View>
               {weeklyRank ? (
@@ -152,26 +152,26 @@ export default function ShareCardWeeklyDigest({
   }
 
   // === STORY / SQUARE ===
-  const pad = isStory ? 24 : 16;
-  const titleSize = isStory ? 20 : 16;
-  const statFs = isStory ? 22 : 16;
+  const pad = isStory ? 18 : 16;
+  const titleSize = isStory ? 17 : 16;
+  const statFs = isStory ? 18 : 16;
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 52 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 8 : 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 5 : 6 }}>
           <MaterialIcons name="date-range" size={isStory ? 14 : 12} color={ct.accent} />
           <Text style={{ fontSize: isStory ? 10 : 8, fontWeight: '800', letterSpacing: 1.5, color: ct.accent }}>{fr ? 'BILAN HEBDO' : 'WEEKLY DIGEST'}</Text>
         </View>
 
         {/* Week label */}
-        <Text style={{ fontSize: isStory ? 12 : 10, fontWeight: '600', color: ct.textSecondary, marginBottom: isStory ? 12 : 8 }}>{weekLabel}</Text>
+        <Text style={{ fontSize: isStory ? 10 : 10, fontWeight: '600', color: ct.textSecondary, marginBottom: isStory ? 8 : 8 }}>{weekLabel}</Text>
 
         {/* Player + League */}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 12 : 10, marginBottom: isStory ? 18 : 12 }}>
-          <LinearGradient colors={tierGrad} style={{ width: isStory ? 50 : 40, height: isStory ? 50 : 40, borderRadius: isStory ? 16 : 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' }}>
-            <Text style={{ fontSize: isStory ? 26 : 20 }}>{leagueTier.emblem}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: isStory ? 10 : 10, marginBottom: isStory ? 12 : 12 }}>
+          <LinearGradient colors={tierGrad} style={{ width: isStory ? 42 : 40, height: isStory ? 42 : 40, borderRadius: isStory ? 14 : 13, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' }}>
+            <Text style={{ fontSize: isStory ? 22 : 20 }}>{leagueTier.emblem}</Text>
           </LinearGradient>
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: titleSize, fontWeight: '800', color: ct.textPrimary }}>{playerName}</Text>
@@ -189,14 +189,14 @@ export default function ShareCardWeeklyDigest({
         </View>
 
         {/* Main stats grid */}
-        <View style={{ flexDirection: 'row', gap: 5, marginBottom: isStory ? 12 : 8 }}>
+        <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 8 : 8 }}>
           <View style={s.statBox}><Text style={{ fontSize: statFs, fontWeight: '900', color: ct.textPrimary }}>{matchesPlayed}</Text><Text style={s.statLabel}>{fr ? 'Matchs' : 'Games'}</Text></View>
           <View style={[s.statBox, { borderColor: '#22C55E20' }]}><Text style={{ fontSize: statFs, fontWeight: '900', color: '#22C55E' }}>{wins}</Text><Text style={s.statLabel}>{fr ? 'Victoires' : 'Wins'}</Text></View>
           <View style={[s.statBox, { borderColor: '#22C55E20' }]}><Text style={{ fontSize: statFs, fontWeight: '900', color: '#22C55E' }}>{winRate}%</Text><Text style={s.statLabel}>{fr ? 'Win Rate' : 'Win Rate'}</Text></View>
         </View>
 
         {/* ELO delta + secondary stats */}
-        <View style={{ flexDirection: 'row', gap: 5, marginBottom: isStory ? 12 : 8 }}>
+        <View style={{ flexDirection: 'row', gap: 4, marginBottom: isStory ? 8 : 8 }}>
           <View style={[s.statBox, { borderColor: eloDelta >= 0 ? '#22C55E20' : '#EF444420' }]}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
               <MaterialIcons name={eloDelta >= 0 ? 'trending-up' : 'trending-down'} size={isStory ? 16 : 12} color={eloDelta >= 0 ? '#22C55E' : '#EF4444'} />
@@ -259,8 +259,8 @@ export default function ShareCardWeeklyDigest({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
-  statBox: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
+  statBox: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 10, paddingVertical: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statBoxSm: { flex: 1, alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
   statLabel: { fontSize: 8, fontWeight: '600', color: '#64748B', letterSpacing: 0.3 },
 });

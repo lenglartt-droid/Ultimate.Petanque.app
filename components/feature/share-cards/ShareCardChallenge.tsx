@@ -150,28 +150,28 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
           {/* Top header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <View style={{ backgroundColor: config.color + '20', width: 22, height: 22, borderRadius: 6, alignItems: 'center', justifyContent: 'center' }}>
-                <MaterialIcons name={config.icon as any} size={11} color={config.color} />
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <View style={{ backgroundColor: config.color + '20', width: 18, height: 18, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }}>
+                <MaterialIcons name={config.icon as any} size={9} color={config.color} />
               </View>
-              <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.textSecondary }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
-              <Text style={{ fontSize: 10, fontWeight: '800', color: config.color }}>{config.label[language]}</Text>
-              {is1v1 ? <View style={{ backgroundColor: '#EF444420', paddingHorizontal: 5, paddingVertical: 1.5, borderRadius: 5 }}><Text style={{ fontSize: 8, fontWeight: '800', color: '#EF4444' }}>1v1</Text></View> : null}
+              <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.textSecondary }}>{fr ? 'DEFI' : 'CHALLENGE'}</Text>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: config.color }}>{config.label[language]}</Text>
+              {is1v1 ? <View style={{ backgroundColor: '#EF444420', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 4 }}><Text style={{ fontSize: 7, fontWeight: '800', color: '#EF4444' }}>1v1</Text></View> : null}
             </View>
-            <Text style={{ fontSize: 8, color: ct.textSecondary }}>{dateStr}</Text>
+            <Text style={{ fontSize: 7, color: ct.textSecondary }}>{dateStr}</Text>
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: score */}
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <LinearGradient colors={config.gradient} style={{ width: 52, height: 52, borderRadius: 14, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 3 }}>
-                <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFF' }}>{isPrecision ? (challenge.totalPoints || 0) : successCount}</Text>
-                <Text style={{ fontSize: 9, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 6 }}>/{isPrecision ? (challenge.maxPoints || 75) : totalShots}</Text>
+              <LinearGradient colors={config.gradient} style={{ width: 44, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', marginBottom: 2 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFF' }}>{isPrecision ? (challenge.totalPoints || 0) : successCount}</Text>
+                <Text style={{ fontSize: 8, fontWeight: '600', color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>/{isPrecision ? (challenge.maxPoints || 75) : totalShots}</Text>
               </LinearGradient>
-              {!isPrecision ? <Text style={{ fontSize: 12, fontWeight: '900', color: config.color }}>{Math.round(successRate)}%</Text> : null}
+              {!isPrecision ? <Text style={{ fontSize: 10, fontWeight: '900', color: config.color }}>{Math.round(successRate)}%</Text> : null}
               {carreauCount > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 1 }}>
                   <MaterialIcons name="star" size={8} color="#F59E0B" />
@@ -188,10 +188,10 @@ export default function ShareCardChallenge({ challenge, playerName, eloRating, e
               ) : null}
             </View>
 
-            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 8 }} />
+            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
 
             {/* Right: details */}
-            <View style={{ flex: 1, justifyContent: 'center', gap: 3 }}>
+            <View style={{ flex: 1, justifyContent: 'center', gap: 2 }}>
               {hasAteliers ? (
                 <View style={{ gap: 0.5 }}>
                   <Text style={{ fontSize: 6, fontWeight: '700', color: ct.textSecondary, letterSpacing: 0.5 }}>ATELIERS</Text>

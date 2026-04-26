@@ -111,13 +111,13 @@ export default function ShareCardPalmares({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <MaterialIcons name="emoji-events" size={10} color="#FFD700" />
-              <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'PALMARES' : 'CAREER'}</Text>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialIcons name="emoji-events" size={9} color="#FFD700" />
+              <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'PALMARES' : 'CAREER'}</Text>
             </View>
-            {playerName ? <Text style={{ fontSize: 9, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text> : null}
+            {playerName ? <Text style={{ fontSize: 8, fontWeight: '700', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text> : null}
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
@@ -192,7 +192,7 @@ export default function ShareCardPalmares({
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: isStory ? 14 : 10 }}>
           <View style={{ backgroundColor: '#FFD70020', width: isStory ? 36 : 30, height: isStory ? 36 : 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
@@ -313,5 +313,5 @@ export default function ShareCardPalmares({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
 });

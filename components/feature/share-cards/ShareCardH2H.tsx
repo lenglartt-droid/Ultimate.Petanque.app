@@ -198,11 +198,11 @@ export default function ShareCardH2H({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 12, paddingBottom: 50, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
           {/* Title */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-            <MaterialIcons name="compare-arrows" size={10} color={ct.accent} />
-            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>HEAD TO HEAD</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+            <MaterialIcons name="compare-arrows" size={9} color={ct.accent} />
+            <Text style={{ fontSize: 6, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>HEAD TO HEAD</Text>
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
@@ -216,13 +216,13 @@ export default function ShareCardH2H({
                 <PlayerHeader player={playerB} side="right" ct={ct} compact />
               </View>
               {/* Score record */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 5, paddingHorizontal: 10 }}>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.4)' }}>{record.winsA}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.04)', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 8 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: winnerSide === 'A' ? colorA : 'rgba(255,255,255,0.4)' }}>{record.winsA}</Text>
                 <View style={{ alignItems: 'center' }}>
                   <Text style={{ fontSize: 6, fontWeight: '700', color: 'rgba(255,255,255,0.25)', letterSpacing: 0.5 }}>{fr ? 'VICTOIRES' : 'WINS'}</Text>
                   {record.draws > 0 ? <Text style={{ fontSize: 6, color: 'rgba(255,255,255,0.2)' }}>{record.draws} {fr ? 'nuls' : 'draws'}</Text> : null}
                 </View>
-                <Text style={{ fontSize: 18, fontWeight: '900', color: winnerSide === 'B' ? colorB : 'rgba(255,255,255,0.4)' }}>{record.winsB}</Text>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: winnerSide === 'B' ? colorB : 'rgba(255,255,255,0.4)' }}>{record.winsB}</Text>
               </View>
             </View>
 

@@ -130,36 +130,36 @@ export default function ShareCardLeague({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="leaderboard" size={10} color={leagueTier.color} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: leagueTier.color }}>{fr ? 'CLASSEMENT LIGUE' : 'LEAGUE RANKING'}</Text>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="leaderboard" size={9} color={leagueTier.color} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: leagueTier.color }}>{fr ? 'CLASSEMENT LIGUE' : 'LEAGUE RANKING'}</Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: league info */}
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <LinearGradient colors={tierGrad} style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 18 }}>{leagueTier.emblem}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                <LinearGradient colors={tierGrad} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 15 }}>{leagueTier.emblem}</Text>
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 13, fontWeight: '800', color: ct.textPrimary }}>{fr ? leagueTier.name.fr : leagueTier.name.en}</Text>
-                  <Text style={{ fontSize: 10, fontWeight: '600', color: ct.textSecondary }}>{playerName}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '800', color: ct.textPrimary }}>{fr ? leagueTier.name.fr : leagueTier.name.en}</Text>
+                  <Text style={{ fontSize: 9, fontWeight: '600', color: ct.textSecondary }}>{playerName}</Text>
                 </View>
               </View>
-              <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+              <View style={{ flexDirection: 'row', gap: 3, marginBottom: 3 }}>
                 <View style={[s.statChip, { borderColor: leagueTier.color + '25' }]}>
-                  <Text style={{ fontSize: 12, fontWeight: '900', color: leagueTier.color }}>{elo}</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: leagueTier.color }}>{elo}</Text>
                   <Text style={{ fontSize: 6, color: ct.textSecondary }}>ELO</Text>
                 </View>
                 {worldRank ? (
                   <View style={[s.statChip, { borderColor: 'rgba(255,255,255,0.08)' }]}>
-                    <Text style={{ fontSize: 12, fontWeight: '900', color: ct.textPrimary }}>#{worldRank}</Text>
+                    <Text style={{ fontSize: 11, fontWeight: '900', color: ct.textPrimary }}>#{worldRank}</Text>
                     <Text style={{ fontSize: 6, color: ct.textSecondary }}>{fr ? 'Mondial' : 'World'}</Text>
                   </View>
                 ) : null}
                 <View style={[s.statChip, { borderColor: '#22C55E25' }]}>
-                  <Text style={{ fontSize: 12, fontWeight: '900', color: '#22C55E' }}>{winRate}%</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '900', color: '#22C55E' }}>{winRate}%</Text>
                   <Text style={{ fontSize: 6, color: ct.textSecondary }}>{fr ? 'Victoires' : 'Win'}</Text>
                 </View>
               </View>
@@ -184,7 +184,7 @@ export default function ShareCardLeague({
             <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
             {/* Right: chart */}
             <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-              <MiniEloChart data={eloHistory.slice(-20)} width={160} height={70} tierColor={leagueTier.color} />
+              <MiniEloChart data={eloHistory.slice(-20)} width={150} height={60} tierColor={leagueTier.color} />
               {eloDelta !== 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginTop: 4 }}>
                   <MaterialIcons name={eloDelta > 0 ? 'trending-up' : 'trending-down'} size={10} color={eloDelta > 0 ? '#22C55E' : '#EF4444'} />

@@ -48,27 +48,27 @@ export default function ShareCardMilestone({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="emoji-events" size={10} color={milestoneColor} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: milestoneColor }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="emoji-events" size={9} color={milestoneColor} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: milestoneColor }}>
               {fr ? 'JALON ELO' : 'ELO MILESTONE'}
             </Text>
-            <Text style={{ fontSize: 7, fontWeight: '600', color: ct.textSecondary, marginLeft: 'auto' }}>{dateStr}</Text>
+            <Text style={{ fontSize: 6, fontWeight: '600', color: ct.textSecondary, marginLeft: 'auto' }}>{dateStr}</Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: milestone info */}
             <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <LinearGradient colors={tierGrad} style={{ width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 18 }}>{leagueTier.emblem}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                <LinearGradient colors={tierGrad} style={{ width: 30, height: 30, borderRadius: 10, alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 15 }}>{leagueTier.emblem}</Text>
                 </LinearGradient>
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text>
-                  <Text style={{ fontSize: 9, fontWeight: '600', color: ct.textSecondary }}>{clubName || ''}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{playerName}</Text>
+                  <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textSecondary }}>{clubName || ''}</Text>
                 </View>
               </View>
-              <Text style={{ fontSize: 11, fontWeight: '800', color: milestoneColor }} numberOfLines={1}>{milestoneLabel}</Text>
+              <Text style={{ fontSize: 10, fontWeight: '800', color: milestoneColor }} numberOfLines={1}>{milestoneLabel}</Text>
               {matchContext ? (
                 <Text style={{ fontSize: 8, fontWeight: '600', color: ct.textSecondary, marginTop: 2 }} numberOfLines={1}>{matchContext}</Text>
               ) : null}
@@ -76,8 +76,8 @@ export default function ShareCardMilestone({
             <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
             {/* Right: ELO + tier transition */}
             <View style={{ flex: 0.7, justifyContent: 'center', alignItems: 'center' }}>
-              <LinearGradient colors={tierGrad} style={{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 12, alignItems: 'center', marginBottom: 6 }}>
-                <Text style={{ fontSize: 22, fontWeight: '900', color: '#FFF' }}>{elo}</Text>
+              <LinearGradient colors={tierGrad} style={{ paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, alignItems: 'center', marginBottom: 4 }}>
+                <Text style={{ fontSize: 18, fontWeight: '900', color: '#FFF' }}>{elo}</Text>
                 <Text style={{ fontSize: 7, fontWeight: '600', color: 'rgba(255,255,255,0.6)' }}>ELO</Text>
               </LinearGradient>
               {eloDelta ? (
@@ -107,7 +107,7 @@ export default function ShareCardMilestone({
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: isStory ? 12 : 8 }}>
           <MaterialIcons name="emoji-events" size={isStory ? 14 : 12} color={milestoneColor} />
@@ -192,5 +192,5 @@ export default function ShareCardMilestone({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
 });

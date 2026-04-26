@@ -62,6 +62,7 @@ export default function ShareCardTeamSynergy({
   const isLandscape = format === 'landscape';
   const cardWidth = isStory ? 360 : isLandscape ? 560 : 400;
   const cardHeight = isStory ? 640 : isLandscape ? 315 : 400;
+  const lPad = isLandscape ? 14 : 20;
 
   const MEMBER_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6'];
 
@@ -160,7 +161,7 @@ export default function ShareCardTeamSynergy({
 }
 
 const st = StyleSheet.create({
-  card: { borderRadius: 24, overflow: 'hidden', padding: 20, paddingBottom: 52, position: 'relative' as const },
+  card: { borderRadius: 24, overflow: 'hidden', padding: 20, paddingBottom: 48, position: 'relative' as const },
   header: { flexDirection: 'row', alignItems: 'flex-start', gap: 14, marginBottom: 14 },
   title: { fontSize: 18, fontWeight: '800', letterSpacing: -0.3 },
   subtitle: { fontSize: 13, fontWeight: '500', marginTop: 2 },
