@@ -31,6 +31,8 @@ interface ShareRequestModalProps {
   senderName: string;
   itemSummary?: string;
   language?: string;
+  /** Team player IDs for wrong-share detection */
+  matchPlayerIds?: string[];
 }
 
 export default function ShareRequestModal({
@@ -42,6 +44,7 @@ export default function ShareRequestModal({
   senderName,
   itemSummary,
   language = 'fr',
+  matchPlayerIds,
 }: ShareRequestModalProps) {
   const { user } = useAuth();
   const fr = language === 'fr';
@@ -90,7 +93,10 @@ export default function ShareRequestModal({
     );
   }, []);
 
-  const handleSend = useCallback(async () => {
+  const [showNonParticipantWarning, setShowNonParticipantWarning] = useState(false);
+  const [nonParticipantNames, setNonParticipantNames] = useState<string[]>([]);
+
+  const doSend = useCallback(async () => {
     if (!itemId || !user?.id) return;
     const selected = linkedPlayers.filter(p => p.selected);
     if (selected.length === 0) {
@@ -117,6 +123,27 @@ export default function ShareRequestModal({
       onClose();
     }
   }, [itemId, user?.id, linkedPlayers, itemType, senderName, itemSummary, onClose]);
+
+  const handleSend = useCallback(async () => {
+    if (!itemId || !user?.id) return;
+    const selected = linkedPlayers.filter(p => p.selected);
+    if (selected.length === 0) {
+      onClose();
+      return;
+    }
+
+    // Check for non-participant recipients
+    if (matchPlayerIds && matchPlayerIds.length > 0) {
+      const nonParticipants = selected.filter(p => !matchPlayerIds.includes(p.playerId));
+      if (nonParticipants.length > 0) {
+        setNonParticipantNames(nonParticipants.map(p => p.playerName));
+        setShowNonParticipantWarning(true);
+        return;
+      }
+    }
+
+    await doSend();
+  }, [itemId, user?.id, linkedPlayers, matchPlayerIds, onClose, doSend]);
 
   const selectedCount = linkedPlayers.filter(p => p.selected).length;
   const hasLinkedPlayers = linkedPlayers.length > 0;
@@ -263,6 +290,43 @@ export default function ShareRequestModal({
                   </Text>
                 </View>
               </View>
+
+              {/* Non-participant Warning */}
+              {showNonParticipantWarning ? (
+                <View style={s.warningBanner}>
+                  <View style={s.warningIconBg}>
+                    <MaterialIcons name="warning" size={18} color="#D97706" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.warningTitle}>
+                      {fr ? 'Joueur(s) non-participant(s)' : 'Non-participant player(s)'}
+                    </Text>
+                    <Text style={s.warningText}>
+                      {nonParticipantNames.join(', ')}{' '}
+                      {fr
+                        ? 'ne fait pas partie de ce match. Ses stats et ELO ne seront PAS mis a jour.'
+                        : 'is not part of this match. Their stats and ELO will NOT be updated.'}
+                    </Text>
+                    <View style={s.warningActions}>
+                      <Pressable
+                        style={s.warningCancelBtn}
+                        onPress={() => setShowNonParticipantWarning(false)}
+                      >
+                        <Text style={s.warningCancelText}>{fr ? 'Modifier' : 'Edit'}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={s.warningConfirmBtn}
+                        onPress={() => {
+                          setShowNonParticipantWarning(false);
+                          doSend();
+                        }}
+                      >
+                        <Text style={s.warningConfirmText}>{fr ? 'Envoyer quand meme' : 'Send anyway'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
 
               {/* Actions */}
               <View style={s.actions}>
@@ -478,6 +542,66 @@ const s = StyleSheet.create({
   },
   sendText: {
     fontSize: 15,
+    fontWeight: '700',
+    color: '#FFF',
+  },
+  warningBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 12,
+    padding: 14,
+    backgroundColor: '#FFFBEB',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#FDE68A',
+  },
+  warningIconBg: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: '#FEF3C7',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  warningTitle: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#92400E',
+    marginBottom: 3,
+  },
+  warningText: {
+    fontSize: 12,
+    color: '#78350F',
+    lineHeight: 17,
+  },
+  warningActions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 10,
+  },
+  warningCancelBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#FFF',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#D97706',
+  },
+  warningCancelText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#D97706',
+  },
+  warningConfirmBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    backgroundColor: '#D97706',
+    borderRadius: 10,
+  },
+  warningConfirmText: {
+    fontSize: 12,
     fontWeight: '700',
     color: '#FFF',
   },

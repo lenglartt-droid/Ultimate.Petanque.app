@@ -104,28 +104,28 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
           {/* Top header */}
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <MaterialIcons name="emoji-events" size={10} color="#F59E0B" />
-              <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'TOURNOI' : 'TOURNAMENT'}</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialIcons name="emoji-events" size={9} color="#F59E0B" />
+              <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'TOURNOI' : 'TOURNAMENT'}</Text>
             </View>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <MaterialIcons name={status.icon as any} size={8} color={status.color} />
-              <Text style={{ fontSize: 7, fontWeight: '700', color: status.color }}>{tournament.status}</Text>
-              <Text style={{ fontSize: 8, color: ct.textSecondary }}>{dateStr}{endDateStr ? ` - ${endDateStr}` : ''}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialIcons name={status.icon as any} size={7} color={status.color} />
+              <Text style={{ fontSize: 6, fontWeight: '700', color: status.color }}>{tournament.status}</Text>
+              <Text style={{ fontSize: 7, color: ct.textSecondary }}>{dateStr}{endDateStr ? ` - ${endDateStr}` : ''}</Text>
             </View>
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: name + result */}
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: ct.textPrimary, marginBottom: 5, lineHeight: 17, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '900', color: ct.textPrimary, marginBottom: 3, lineHeight: 15, flexShrink: 1 }} numberOfLines={2}>{tournament.name}</Text>
               {resultCfg ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, borderColor: resultCfg.color + '30', borderRadius: 10, paddingVertical: 5, paddingHorizontal: 8, marginBottom: 5 }}>
-                  <MaterialIcons name={resultCfg.icon as any} size={14} color={resultCfg.color} />
-                  <Text style={{ fontSize: 11, fontWeight: '800', color: resultCfg.color }}>{resultCfg.label}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderWidth: 1, borderColor: resultCfg.color + '30', borderRadius: 8, paddingVertical: 4, paddingHorizontal: 6, marginBottom: 4 }}>
+                  <MaterialIcons name={resultCfg.icon as any} size={12} color={resultCfg.color} />
+                  <Text style={{ fontSize: 9, fontWeight: '800', color: resultCfg.color }}>{resultCfg.label}</Text>
                 </View>
               ) : null}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, flexWrap: 'wrap' }}>
@@ -147,10 +147,10 @@ export default function ShareCardTournament({ tournament, playerName, eloRating,
               </View>
             </View>
 
-            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 8 }} />
+            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
 
             {/* Right: meta */}
-            <View style={{ width: '28%', justifyContent: 'center', gap: 4 }}>
+            <View style={{ width: '28%', justifyContent: 'center', gap: 3 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 5, paddingVertical: 3, borderRadius: 6 }}>
                 <MaterialIcons name="groups" size={9} color="#94A3B8" />
                 <Text style={{ fontSize: 8, fontWeight: '600', color: '#CBD5E1CC' }}>{tournament.format}</Text>

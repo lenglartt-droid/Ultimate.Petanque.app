@@ -2521,6 +2521,7 @@ export default function NewMatchScreen() {
         senderName={selfPlayer?.name || t('match', 'myTeam')}
         itemSummary={`${teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ')} vs ${teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ')} (${teamAScore}-${teamBScore})`}
         language={language}
+        matchPlayerIds={[...getTeamPlayerIds(teamAPlayers), ...getTeamPlayerIds(teamBPlayers)].filter(id => id !== '1' && id !== '2')}
       />
 
       {/* Boules Set Picker Modal */}

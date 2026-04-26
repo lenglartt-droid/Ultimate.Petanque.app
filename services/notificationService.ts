@@ -305,6 +305,43 @@ export async function sendShareRequestNotification(params: {
 }
 
 /**
+ * Send immediate notification when shared match stats have been synced.
+ */
+export async function sendStatsSyncedNotification(params: {
+ matchSummary: string;
+ eloDelta: number;
+ oldWinRate: number;
+ newWinRate: number;
+ won: boolean;
+}): Promise<void> {
+  if (Platform.OS === 'web') return;
+  try {
+    const { matchSummary, eloDelta, oldWinRate, newWinRate, won } = params;
+    const eloStr = eloDelta >= 0 ? `+${eloDelta}` : `${eloDelta}`;
+    const icon = won ? '\u{2705}' : '\u{274C}';
+    const winRateStr = oldWinRate !== newWinRate
+      ? `${oldWinRate}% \u{2192} ${newWinRate}%`
+      : `${newWinRate}%`;
+    const title = `${icon} Stats mises a jour`;
+    const body = `${matchSummary}\nELO ${eloStr} | Win rate ${winRateStr}`;
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: { type: 'stats_synced' },
+        sound: 'default',
+        badge: 1,
+        ...(Platform.OS === 'android' && { channelId: 'share-requests' }),
+      },
+      trigger: null,
+    });
+  } catch (error) {
+    console.log('Error sending stats synced notification:', error);
+  }
+}
+
+/**
  * Add notification response listener
  */
 export function addNotificationResponseListener(
