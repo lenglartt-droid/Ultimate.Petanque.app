@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-03-20';
+const EFFECTIVE_DATE = '2026-04-25';
 
 export default function PrivacyPolicyScreen() {
   const insets = useSafeAreaInsets();
@@ -153,6 +153,38 @@ export default function PrivacyPolicyScreen() {
       color: theme.carreauColor,
       title: t('privacyExtended', 'sponsoredEventsTitle'),
       content: t('privacyExtended', 'sponsoredEventsContent'),
+    },
+    {
+      icon: 'near-me',
+      color: '#10B981',
+      title: language === 'fr' ? 'Geolocalisation GPS & Proximite' : 'GPS Geolocation & Proximity',
+      content: language === 'fr'
+        ? 'L\'application peut acceder a votre position GPS pour : (1) la recherche d\'equipiers a proximite dans le Team Builder, (2) les alertes de terrain actif pres de vous, (3) le reverse geocoding pour pre-remplir l\'adresse. Votre position exacte n\'est jamais stockee sur nos serveurs — seules les coordonnees des lieux (terrains, clubs) que vous creez sont enregistrees. Vous pouvez refuser l\'acces GPS a tout moment dans les parametres de votre appareil.'
+        : 'The app may access your GPS position for: (1) searching nearby teammates in Team Builder, (2) active terrain proximity alerts, (3) reverse geocoding to pre-fill addresses. Your exact position is never stored on our servers — only the coordinates of locations (terrains, clubs) you create are saved. You can deny GPS access at any time in your device settings.',
+    },
+    {
+      icon: 'map',
+      color: '#4285F4',
+      title: language === 'fr' ? 'Donnees Google Maps' : 'Google Maps Data',
+      content: language === 'fr'
+        ? 'Lors de la recherche d\'adresses, l\'application envoie votre saisie a l\'API Google Maps Places Autocomplete pour obtenir des suggestions. Quand vous selectionnez un resultat, les coordonnees GPS, l\'adresse structuree (rue, ville, code postal, region, pays) et la reference photo du lieu sont extraites. La reference photo peut etre utilisee pour afficher une miniature du lieu. Ces donnees de lieu sont soumises a la politique de confidentialite de Google (https://policies.google.com/privacy). Aucune donnee de votre compte Google n\'est accedee.'
+        : 'When searching addresses, the app sends your input to the Google Maps Places Autocomplete API for suggestions. When you select a result, GPS coordinates, structured address (street, city, postal code, region, country) and the place photo reference are extracted. The photo reference may be used to display a place thumbnail. This place data is subject to Google\'s privacy policy (https://policies.google.com/privacy). No data from your Google account is accessed.',
+    },
+    {
+      icon: 'fingerprint',
+      color: '#DC2626',
+      title: language === 'fr' ? 'Empreinte appareil & Anti-triche' : 'Device Fingerprint & Anti-Cheat',
+      content: language === 'fr'
+        ? 'Pour prevenir la triche et les comptes multiples, l\'application genere une empreinte numerique de votre appareil (hash combine de proprietes materielles comme le modele, l\'OS et des identifiants uniques). Cette empreinte est stockee dans notre base de donnees et associee a votre compte. Elle n\'est jamais partagee avec des tiers. En cas de changement d\'appareil, un systeme de transfert securise avec code a 6 caracteres et validation administrateur est disponible. L\'empreinte est supprimee si vous supprimez votre compte.'
+        : 'To prevent cheating and multiple accounts, the app generates a digital fingerprint of your device (combined hash of hardware properties like model, OS and unique identifiers). This fingerprint is stored in our database and linked to your account. It is never shared with third parties. For device changes, a secure transfer system with 6-character code and admin validation is available. The fingerprint is deleted if you delete your account.',
+    },
+    {
+      icon: 'groups',
+      color: '#22C55E',
+      title: language === 'fr' ? 'Donnees de formation d\'equipes' : 'Team Formation Data',
+      content: language === 'fr'
+        ? 'Le systeme de formation d\'equipes stocke : les invitations envoyees/recues (ID tournoi, noms des joueurs, statut), les equipes formees (membres, capitaine, format), les messages de chat d\'equipe et les reactions emoji. Les partenaires favoris sont stockes localement sur votre appareil via AsyncStorage et ne sont pas envoyes a nos serveurs. Le score de synergie est calcule localement a partir de vos matchs passes et n\'est pas stocke sur le serveur.'
+        : 'The team formation system stores: sent/received invitations (tournament ID, player names, status), formed teams (members, captain, format), team chat messages and emoji reactions. Favorite partners are stored locally on your device via AsyncStorage and are not sent to our servers. The synergy score is calculated locally from your past matches and is not stored on the server.',
     },
     {
       icon: 'update',

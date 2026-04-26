@@ -67,7 +67,7 @@ export default function ShareCardSponsoredEvent({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: 14, justifyContent: 'space-between' }}>
+        <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
           {/* Top: badge */}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
             <MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" />
@@ -139,7 +139,7 @@ export default function ShareCardSponsoredEvent({
 
   return (
     <View style={s.card}>
-      <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: pad, justifyContent: isStory ? 'center' : 'space-between' }}>
+      <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: pad, paddingBottom: isStory ? 56 : 48, justifyContent: isStory ? 'center' : 'flex-start' }}>
         {/* Header badge */}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: isStory ? 16 : 10 }}>
           <View style={{ width: isStory ? 32 : 26, height: isStory ? 32 : 26, borderRadius: isStory ? 10 : 8, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center' }}>
@@ -243,7 +243,7 @@ export default function ShareCardSponsoredEvent({
 }
 
 const s = StyleSheet.create({
-  card: { flex: 1, borderRadius: 20, overflow: 'hidden' },
+  card: { flex: 1, borderRadius: 20, overflow: 'hidden', position: 'relative' as const },
   infoPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   infoPillText: { fontSize: 9, fontWeight: '700', color: 'rgba(255,255,255,0.8)', flexShrink: 1 },
 });
