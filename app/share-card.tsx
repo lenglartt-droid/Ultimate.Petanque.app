@@ -1272,7 +1272,7 @@ export default function ShareCardScreen() {
           <View
             ref={cardRef}
             collapsable={false}
-            style={[st.cardWrapper, { width: cardWidth, height: Math.max(200, cardHeight) }]}
+            style={[st.cardWrapper, { width: cardWidth, minHeight: Math.max(200, cardHeight), maxHeight: cardHeight * 1.15 }]}
           >
             {renderCard()}
           </View>
@@ -1362,7 +1362,7 @@ const st = StyleSheet.create({
   themePreviewAccent: { width: '100%', height: 6, borderRadius: 3 },
   themeChipText: { fontSize: 9, fontWeight: '600', color: theme.textSecondary, textAlign: 'center' },
   cardPreviewContainer: { alignItems: 'center', marginBottom: 16 },
-  cardWrapper: { borderRadius: 20, overflow: 'hidden', ...theme.shadows.cardElevated },
+  cardWrapper: { borderRadius: 20, overflow: 'hidden', ...theme.shadows.cardElevated, backgroundColor: '#0F172A' },
   downloadSuccessBanner: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#22C55E15', paddingVertical: 10, borderRadius: 12, marginBottom: 8 },
   downloadSuccessText: { fontSize: 13, fontWeight: '600', color: '#22C55E' },
   bottomBar: { paddingHorizontal: 24, paddingVertical: 14, backgroundColor: theme.surface, borderTopWidth: 1, borderTopColor: theme.border },

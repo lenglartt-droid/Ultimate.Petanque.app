@@ -63,6 +63,14 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   const [recentPartners, setRecentPartners] = useState<Array<{ id: string; name: string; avatar?: string; club?: string; userId: string; count: number }>>([]);
   const [loadingPartners, setLoadingPartners] = useState(false);
 
+  // Synergy detail tooltip
+  const [synergyDetail, setSynergyDetail] = useState<{ name: string; userId: string; score: number; color: string; bgColor: string; label: string; breakdown: { winRate: number; frequency: number; elo: number; role: number } } | null>(null);
+
+  // Nearby filter state
+  const [nearbyMode, setNearbyMode] = useState(false);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [loadingLocation, setLoadingLocation] = useState(false);
+
   // Partner match history stats
   type PartnerStats = { wins: number; losses: number; total: number; winRate: number; lastDate: string | null };
   const partnerStatsCache = useRef<Map<string, PartnerStats>>(new Map());
@@ -107,6 +115,34 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
     const label = score >= 75 ? (fr ? 'Excellente' : 'Excellent') : score >= 50 ? (fr ? 'Bonne' : 'Good') : score >= 30 ? (fr ? 'Moyenne' : 'Average') : (fr ? 'Faible' : 'Low');
     return { score, color, bgColor, label, breakdown: { winRate: winRatePts, frequency: freqPts, elo: eloPts, role: rolePts } };
   }, [getPartnerMatchStats, user?.id, matches, fr]);
+
+  // Compute win rate history over last N shared matches for sparkline
+  const getSynergyHistory = useCallback((partnerUserId: string): number[] => {
+    if (!user?.id || matches.length === 0) return [];
+    const sharedMatches: { date: string; won: boolean }[] = [];
+    matches.forEach(m => {
+      const teamA = m.teamA as any;
+      const teamB = m.teamB as any;
+      const myInA = teamA?.playerIds?.includes(user.id);
+      const myInB = teamB?.playerIds?.includes(user.id);
+      const partnerInA = teamA?.playerIds?.includes(partnerUserId);
+      const partnerInB = teamB?.playerIds?.includes(partnerUserId);
+      const sameTeam = (myInA && partnerInA) || (myInB && partnerInB);
+      if (!sameTeam) return;
+      const myTeamLabel = myInA ? 'A' : 'B';
+      sharedMatches.push({ date: m.date, won: m.winner === myTeamLabel });
+    });
+    sharedMatches.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const last = sharedMatches.slice(-10);
+    if (last.length < 2) return [];
+    const history: number[] = [];
+    let wins = 0;
+    last.forEach((m, i) => {
+      if (m.won) wins++;
+      history.push(Math.round((wins / (i + 1)) * 100));
+    });
+    return history;
+  }, [user?.id, matches]);
 
   // Favorite partners
   const [favoritePartnerIds, setFavoritePartnerIds] = useState<Set<string>>(new Set());
@@ -368,8 +404,17 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
         };
       });
 
-      // Sort by distance (closest first) if tournament has location
-      if (hasLocation) {
+      // Sort by proximity: use user GPS location if nearbyMode, else tournament location
+      if (nearbyMode && userLocation) {
+        results = results.map((r: any) => {
+          if (r.location?.latitude && r.location?.longitude) {
+            r.distance = Math.round(haversineKm(userLocation.lat, userLocation.lng, r.location.latitude, r.location.longitude));
+          }
+          return r;
+        });
+      }
+      const shouldSort = (nearbyMode && userLocation) || hasLocation;
+      if (shouldSort) {
         results.sort((a: any, b: any) => {
           if (a.distance !== null && b.distance !== null) return a.distance - b.distance;
           if (a.distance !== null) return -1;
@@ -381,7 +426,7 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
       setSearchResults(results);
     } catch { setSearchResults([]); }
     setSearching(false);
-  }, [user?.id, filterRole, filterCity, filterEloMin, filterEloMax]);
+  }, [user?.id, filterRole, filterCity, filterEloMin, filterEloMax, nearbyMode, userLocation]);
 
   // Trigger search when filters change
   useEffect(() => {
@@ -469,6 +514,20 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   const alreadyInvitedIds = new Set(invitations.map(i => i.inviteeUserId));
   const isTeamComplete = team?.status === 'complete' || (acceptedInvites.length + 1 >= teamSize);
   const slotsRemaining = teamSize - 1 - acceptedInvites.length;
+
+  // Recommended partner: highest synergy score among eligible recent partners
+  const recommendedPartnerId = useMemo(() => {
+    if (recentPartners.length === 0 || !selectedTournament) return null;
+    const eligible = recentPartners.filter(rp => !alreadyInvitedIds.has(rp.userId));
+    if (eligible.length === 0) return null;
+    let bestId: string | null = null;
+    let bestScore = -1;
+    eligible.forEach(p => {
+      const syn = computeSynergyScore(p.userId);
+      if (syn.score > bestScore) { bestScore = syn.score; bestId = p.userId; }
+    });
+    return bestScore >= 40 ? bestId : null;
+  }, [recentPartners, selectedTournament, alreadyInvitedIds, computeSynergyScore]);
 
   return (
     <>
@@ -671,6 +730,35 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
               <View style={s.searchSection}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
                   <Text style={s.searchLabel}>{fr ? 'Inviter un joueur' : 'Invite a player'}</Text>
+                  <View style={{ flexDirection: 'row', gap: 6 }}>
+                  {/* Nearby chip */}
+                  <Pressable
+                    style={[s.nearbyChip, nearbyMode && { backgroundColor: '#10B981', borderColor: '#10B981' }]}
+                    onPress={async () => {
+                      if (nearbyMode) { setNearbyMode(false); return; }
+                      Haptics.selectionAsync();
+                      setLoadingLocation(true);
+                      try {
+                        const Location = require('@/services/location');
+                        const { status } = await Location.requestForegroundPermissionsAsync();
+                        if (status === 'granted') {
+                          const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                          setUserLocation({ lat: loc.coords.latitude, lng: loc.coords.longitude });
+                          setNearbyMode(true);
+                          handleSearch(search || ' ');
+                        }
+                      } catch { /* silent */ }
+                      setLoadingLocation(false);
+                    }}
+                    disabled={loadingLocation}
+                  >
+                    {loadingLocation ? (
+                      <ActivityIndicator size="small" color={nearbyMode ? '#FFF' : '#10B981'} />
+                    ) : (
+                      <MaterialIcons name="near-me" size={13} color={nearbyMode ? '#FFF' : '#10B981'} />
+                    )}
+                    <Text style={[s.nearbyChipText, nearbyMode && { color: '#FFF' }]}>{fr ? 'Proximite' : 'Nearby'}</Text>
+                  </Pressable>
                   <Pressable
                     style={[s.filterToggleBtn, showFilters && { backgroundColor: '#0F172A', borderColor: '#0F172A' }]}
                     onPress={() => { Haptics.selectionAsync(); setShowFilters(p => !p); }}
@@ -679,6 +767,7 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
                     <Text style={[s.filterToggleText, showFilters && { color: '#FFF' }]}>{fr ? 'Filtres' : 'Filters'}</Text>
                     {(filterRole || filterCity || filterEloMin) ? <View style={s.filterActiveDot} /> : null}
                   </Pressable>
+                  </View>
                 </View>
 
                 {/* Filter chips */}
@@ -781,16 +870,24 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
                           {(() => {
                             const synergy = computeSynergyScore(partner.userId);
                             const ps = getPartnerMatchStats(partner.userId);
+                            const isRecommended = recommendedPartnerId === partner.userId;
                             return (
                               <View style={{ gap: 3 }}>
-                                <View style={s.synergyRow}>
+                                {isRecommended ? (
+                                  <View style={s.recommendedBadge}>
+                                    <MaterialIcons name="auto-awesome" size={10} color="#D97706" />
+                                    <Text style={s.recommendedBadgeText}>{fr ? 'Recommande' : 'Recommended'}</Text>
+                                  </View>
+                                ) : null}
+                                <Pressable style={s.synergyRow} onPress={() => setSynergyDetail({ name: partner.name, userId: partner.userId, ...synergy })}>
                                   <View style={[s.synergyBadge, { backgroundColor: synergy.bgColor, borderColor: synergy.color + '30' }]}>
                                     <View style={[s.synergyRing, { borderColor: synergy.color }]}>
                                       <Text style={[s.synergyScoreText, { color: synergy.color }]}>{synergy.score}</Text>
                                     </View>
                                     <Text style={[s.synergyLabel, { color: synergy.color }]}>{synergy.label}</Text>
                                   </View>
-                                </View>
+                                  <MaterialIcons name="info-outline" size={12} color={synergy.color} style={{ marginLeft: 2 }} />
+                                </Pressable>
                                 {ps.total > 0 ? (
                                   <View style={s.partnerStatsRow}>
                                     <View style={s.partnerStatChip}>
@@ -889,14 +986,15 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
                               const ps = getPartnerMatchStats(player.userId);
                               return (
                                 <View style={{ gap: 3 }}>
-                                  <View style={s.synergyRow}>
+                                  <Pressable style={s.synergyRow} onPress={() => setSynergyDetail({ name: player.name, userId: player.userId, ...synergy })}>
                                     <View style={[s.synergyBadge, { backgroundColor: synergy.bgColor, borderColor: synergy.color + '30' }]}>
                                       <View style={[s.synergyRing, { borderColor: synergy.color }]}>
                                         <Text style={[s.synergyScoreText, { color: synergy.color }]}>{synergy.score}</Text>
                                       </View>
                                       <Text style={[s.synergyLabel, { color: synergy.color }]}>{synergy.label}</Text>
                                     </View>
-                                  </View>
+                                    <MaterialIcons name="info-outline" size={12} color={synergy.color} style={{ marginLeft: 2 }} />
+                                  </Pressable>
                                   {ps.total > 0 ? (
                                     <View style={s.partnerStatsRow}>
                                       <View style={s.partnerStatChip}>
@@ -989,6 +1087,110 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
             )}
           </ScrollView>
         </SafeAreaView>
+      </Modal>
+
+      {/* Synergy Detail Tooltip Modal */}
+      <Modal visible={synergyDetail !== null} animationType="fade" transparent onRequestClose={() => setSynergyDetail(null)}>
+        <Pressable style={s.synergyOverlay} onPress={() => setSynergyDetail(null)}>
+          <Pressable style={s.synergyTooltip} onPress={() => {}}>
+            {synergyDetail ? (
+              <>
+                <View style={s.synergyTooltipHeader}>
+                  <View style={[s.synergyTooltipScoreRing, { borderColor: synergyDetail.color }]}>
+                    <Text style={[s.synergyTooltipScoreNum, { color: synergyDetail.color }]}>{synergyDetail.score}</Text>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.synergyTooltipName}>{fr ? 'Synergie avec' : 'Synergy with'} {synergyDetail.name}</Text>
+                    <Text style={[s.synergyTooltipLabel, { color: synergyDetail.color }]}>{synergyDetail.label}</Text>
+                  </View>
+                  <Pressable onPress={() => setSynergyDetail(null)} hitSlop={8}>
+                    <MaterialIcons name="close" size={20} color="#94A3B8" />
+                  </Pressable>
+                </View>
+                <View style={s.synergyBreakdown}>
+                  {[
+                    { label: fr ? 'Taux de victoire' : 'Win Rate', value: synergyDetail.breakdown.winRate, max: 30, icon: 'emoji-events', color: '#22C55E' },
+                    { label: fr ? 'Frequence matchs' : 'Match Frequency', value: synergyDetail.breakdown.frequency, max: 25, icon: 'sports', color: '#3B82F6' },
+                    { label: fr ? 'Compatibilite ELO' : 'ELO Compatibility', value: synergyDetail.breakdown.elo, max: 25, icon: 'leaderboard', color: '#F59E0B' },
+                    { label: fr ? 'Complement. role' : 'Role Complement.', value: synergyDetail.breakdown.role, max: 20, icon: 'swap-horiz', color: '#7C3AED' },
+                  ].map((item, i) => (
+                    <View key={i} style={s.synergyBreakdownRow}>
+                      <View style={[s.synergyBreakdownIcon, { backgroundColor: item.color + '12' }]}>
+                        <MaterialIcons name={item.icon as any} size={14} color={item.color} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={s.synergyBreakdownLabel}>{item.label}</Text>
+                          <Text style={[s.synergyBreakdownValue, { color: item.color }]}>{item.value}/{item.max}</Text>
+                        </View>
+                        <View style={s.synergyBarTrack}>
+                          <View style={[s.synergyBarFill, { width: `${(item.value / item.max) * 100}%`, backgroundColor: item.color }]} />
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+                {/* Synergy History Sparkline */}
+                {(() => {
+                  const history = getSynergyHistory(synergyDetail.userId);
+                  if (history.length < 2) return null;
+                  const maxVal = Math.max(...history, 1);
+                  const chartW = 260;
+                  const chartH = 48;
+                  return (
+                    <View style={s.sparklineSection}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <MaterialIcons name="show-chart" size={14} color="#3B82F6" />
+                        <Text style={s.sparklineTitle}>{fr ? 'Evolution taux de victoire' : 'Win Rate Evolution'}</Text>
+                        <Text style={s.sparklineSub}>{fr ? `(${history.length} matchs)` : `(${history.length} matches)`}</Text>
+                      </View>
+                      <View style={{ width: chartW, height: chartH + 20, alignSelf: 'center' }}>
+                        {/* Grid lines */}
+                        {[0, 50, 100].map(pct => (
+                          <View key={pct} style={{ position: 'absolute', left: 20, right: 0, bottom: (pct / 100) * chartH + 8, height: StyleSheet.hairlineWidth, backgroundColor: '#E2E8F0' }} />
+                        ))}
+                        <Text style={{ position: 'absolute', left: 0, bottom: 4, fontSize: 8, color: '#94A3B8', fontWeight: '600' }}>0</Text>
+                        <Text style={{ position: 'absolute', left: 0, bottom: chartH / 2 + 4, fontSize: 8, color: '#94A3B8', fontWeight: '600' }}>50</Text>
+                        <Text style={{ position: 'absolute', left: 0, bottom: chartH + 2, fontSize: 8, color: '#94A3B8', fontWeight: '600' }}>100</Text>
+                        {/* Dots + connecting lines */}
+                        {history.map((val, i) => {
+                          const xStep = (chartW - 28) / (history.length - 1);
+                          const x = 20 + i * xStep;
+                          const y = chartH + 8 - (val / maxVal) * chartH;
+                          const dotColor = val >= 60 ? '#22C55E' : val >= 40 ? '#F59E0B' : '#EF4444';
+                          return (
+                            <React.Fragment key={i}>
+                              {i > 0 ? (
+                                <View style={{ position: 'absolute', left: 20 + (i - 1) * xStep, top: chartH + 8 - (history[i - 1] / maxVal) * chartH, width: xStep, height: 2, backgroundColor: '#3B82F620', transform: [{ rotate: `${Math.atan2((history[i - 1] - val) / maxVal * chartH, xStep) * 180 / Math.PI}deg` }], transformOrigin: 'left center' }} />
+                              ) : null}
+                              <View style={{ position: 'absolute', left: x - 4, top: y - 4, width: 8, height: 8, borderRadius: 4, backgroundColor: dotColor, borderWidth: 2, borderColor: '#FFF', zIndex: 2 }} />
+                              {i === history.length - 1 ? (
+                                <Text style={{ position: 'absolute', left: x - 10, top: y - 16, fontSize: 9, fontWeight: '800' as any, color: dotColor }}>{val}%</Text>
+                              ) : null}
+                            </React.Fragment>
+                          );
+                        })}
+                      </View>
+                      {/* Trend indicator */}
+                      {history.length >= 3 ? (() => {
+                        const diff = history[history.length - 1] - history[0];
+                        const trendIcon = diff > 5 ? 'trending-up' : diff < -5 ? 'trending-down' : 'trending-flat';
+                        const trendColor = diff > 5 ? '#22C55E' : diff < -5 ? '#EF4444' : '#94A3B8';
+                        const trendLabel = diff > 0 ? `+${diff}%` : `${diff}%`;
+                        return (
+                          <View style={[s.sparklineTrend, { backgroundColor: trendColor + '10', borderColor: trendColor + '25' }]}>
+                            <MaterialIcons name={trendIcon as any} size={14} color={trendColor} />
+                            <Text style={[s.sparklineTrendText, { color: trendColor }]}>{trendLabel} {fr ? 'sur la periode' : 'over period'}</Text>
+                          </View>
+                        );
+                      })() : null}
+                    </View>
+                  );
+                })()}
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
       </Modal>
 
       {/* My Teams Modal */}
@@ -1219,4 +1421,31 @@ const s = StyleSheet.create({
   teamsMemberDot: { width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   teamsMemberInitial: { fontSize: 10, fontWeight: '700', color: '#FFF' },
   teamsMemberName: { fontSize: 11, fontWeight: '600' },
+  // Synergy tooltip
+  synergyOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center' as any, alignItems: 'center' as any, padding: 24 },
+  synergyTooltip: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, width: '100%', maxWidth: 340, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 8 }, default: {} }) },
+  synergyTooltipHeader: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 12, marginBottom: 18 },
+  synergyTooltipScoreRing: { width: 48, height: 48, borderRadius: 24, borderWidth: 3, alignItems: 'center' as any, justifyContent: 'center' as any, backgroundColor: '#FFF' },
+  synergyTooltipScoreNum: { fontSize: 18, fontWeight: '900' as any },
+  synergyTooltipName: { fontSize: 14, fontWeight: '600' as any, color: '#0F172A' },
+  synergyTooltipLabel: { fontSize: 12, fontWeight: '700' as any, marginTop: 2 },
+  synergyBreakdown: { gap: 14 },
+  synergyBreakdownRow: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 10 },
+  synergyBreakdownIcon: { width: 30, height: 30, borderRadius: 8, alignItems: 'center' as any, justifyContent: 'center' as any },
+  synergyBreakdownLabel: { fontSize: 12, fontWeight: '600' as any, color: '#64748B' },
+  synergyBreakdownValue: { fontSize: 12, fontWeight: '800' as any },
+  synergyBarTrack: { height: 6, backgroundColor: '#F1F5F9', borderRadius: 3, overflow: 'hidden' as any },
+  synergyBarFill: { height: '100%' as any, borderRadius: 3 },
+  // Nearby chip
+  nearbyChip: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10, backgroundColor: '#10B98112', borderWidth: 1, borderColor: '#10B98130' },
+  nearbyChipText: { fontSize: 11, fontWeight: '700' as any, color: '#10B981' },
+  // Sparkline
+  sparklineSection: { marginTop: 18, paddingTop: 14, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  sparklineTitle: { fontSize: 12, fontWeight: '700' as any, color: '#0F172A' },
+  sparklineSub: { fontSize: 10, color: '#94A3B8', fontWeight: '500' as any },
+  sparklineTrend: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 6, alignSelf: 'center' as any, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginTop: 8 },
+  sparklineTrendText: { fontSize: 11, fontWeight: '700' as any },
+  // Recommended partner badge
+  recommendedBadge: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 4, alignSelf: 'flex-start' as any, backgroundColor: '#FEF3C7', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: '#F59E0B30', marginBottom: 2 },
+  recommendedBadgeText: { fontSize: 9, fontWeight: '800' as any, color: '#D97706', textTransform: 'uppercase' as any, letterSpacing: 0.3 },
 });

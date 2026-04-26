@@ -1783,11 +1783,13 @@ export default function ProfileScreen() {
         {/* Account Section */}
         {!isEditing && (
           <View style={styles.section}>
-            {/* ===== SECTION: COMPTE (always visible) ===== */}
-            <View style={[styles.accordionHeader, { marginTop: 0 }]}>
+            {/* ===== SECTION: COMPTE ===== */}
+            <Pressable style={[styles.accordionHeader, { marginTop: 0 }]} onPress={() => toggleSection('account')}>
               <Text style={styles.accordionTitle}>{language === 'fr' ? 'COMPTE' : 'ACCOUNT'}</Text>
-            </View>
+              <MaterialIcons name={expandedSections.account ? 'expand-less' : 'expand-more'} size={20} color={theme.textSecondary} />
+            </Pressable>
 
+            {expandedSections.account ? (
             <>
             <Pressable style={styles.menuItem} onPress={() => { Haptics.selectionAsync(); router.push('/password'); }}>
               <View style={[styles.menuIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="lock" size={20} color={theme.primary} /></View>
@@ -1835,6 +1837,7 @@ export default function ProfileScreen() {
             </Pressable>
 
             </>
+            ) : null}
 
             {/* ===== SECTION: INVITATIONS, NOTIFICATIONS & PARTAGE ===== */}
             <Pressable style={styles.accordionHeader} onPress={() => toggleSection('notifications')}>

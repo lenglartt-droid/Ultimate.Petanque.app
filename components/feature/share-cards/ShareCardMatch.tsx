@@ -540,7 +540,7 @@ export default function ShareCardMatch({ match, playerName, eloRating, eloRankLa
             ) : null}
           </View>
         </View>
-        <ShareCardWatermark variant="light" size="xs" />
+        <ShareCardWatermark variant="light" size="sm" />
       </LinearGradient>
     </View>
   );
