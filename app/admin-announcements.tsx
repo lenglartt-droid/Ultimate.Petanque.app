@@ -225,6 +225,15 @@ export default function AdminAnnouncementsScreen() {
     }).catch(() => {});
   }, []);
 
+  // Derived state (must be before useCallbacks that reference them)
+  const hasMessage = (titleFr.trim() || titleEn.trim()) && (messageFr.trim() || messageEn.trim());
+  const hasTarget = targetType === 'all'
+    || (targetType === 'rank' ? selectedRanks.length > 0 : false)
+    || (targetType === 'city' || targetType === 'club' ? targetValue.length > 0 : false)
+    || targetType === 'account_age'
+    || targetType === 'match_count'
+    || targetType === 'last_active';
+
   const saveCustomTemplate = useCallback(async () => {
     if (!templateName.trim() || !hasMessage) return;
     setSavingTemplate(true);
@@ -515,13 +524,6 @@ export default function AdminAnnouncementsScreen() {
     setRetentionSegment(campaign.id);
   }, []);
 
-  const hasMessage = (titleFr.trim() || titleEn.trim()) && (messageFr.trim() || messageEn.trim());
-  const hasTarget = targetType === 'all'
-    || (targetType === 'rank' ? selectedRanks.length > 0 : false)
-    || (targetType === 'city' || targetType === 'club' ? targetValue.length > 0 : false)
-    || targetType === 'account_age'
-    || targetType === 'match_count'
-    || targetType === 'last_active';
   const hasValidSchedule = useMemo(() => {
     if (!scheduleMode) return true;
     if (scheduleDate.length !== 10 || scheduleTime.length !== 5) return false;
@@ -1244,89 +1246,36 @@ export default function AdminAnnouncementsScreen() {
                 <MaterialIcons name={scheduleMode ? 'toggle-on' : 'toggle-off'} size={24} color={scheduleMode ? '#10B981' : '#CBD5E1'} />
               </Pressable>
               {scheduleMode ? (
-                <>
-                {/* Smart Scheduler */}
-                <Pressable
-                  style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#0EA5E908', borderWidth: 1, borderColor: '#0EA5E920', marginTop: 8, marginBottom: 8 }, smartScheduleLoading && { opacity: 0.5 }]}
-                  onPress={async () => {
-                    if (smartScheduleLoading) return;
-                    setSmartScheduleLoading(true);
-                    Haptics.selectionAsync();
-                    try {
-                      const supabase = (await import('@/template')).getSupabaseClient();
-                      const { data: annData } = await supabase.from('announcements').select('created_at, push_sent_count, push_error_count').eq('status', 'sent').order('created_at', { ascending: false }).limit(100);
-                      const hourScores = new Map<number, { sent: number; errors: number; count: number }>();
-                      for (let h = 0; h < 24; h++) hourScores.set(h, { sent: 0, errors: 0, count: 0 });
-                      (annData || []).forEach((a: any) => {
-                        const hour = new Date(a.created_at).getHours();
-                        const entry = hourScores.get(hour)!;
-                        entry.sent += (a.push_sent_count || 0);
-                        entry.errors += (a.push_error_count || 0);
-                        entry.count++;
-                      });
-                      const scored = Array.from(hourScores.entries()).map(([hour, d]) => {
-                        const deliveryRate = d.sent > 0 ? ((d.sent - d.errors) / d.sent) * 100 : 50;
-                        const volumeScore = Math.min(100, d.sent / Math.max(1, (annData || []).reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0) / 24) * 100);
-                        const score = Math.round(deliveryRate * 0.6 + volumeScore * 0.2 + (d.count > 0 ? 20 : 0));
-                        return { hour, score };
-                      }).sort((a, b) => b.score - a.score);
-                      setSmartSlots(scored.slice(0, 5));
-                      setShowSmartSlots(true);
-                      if (scored.length > 0) {
-                        const best = scored[0];
-                        const tomorrow = new Date();
-                        tomorrow.setDate(tomorrow.getDate() + 1);
-                        setScheduleDate(tomorrow.toISOString().slice(0, 10));
-                        setScheduleTime(`${String(best.hour).padStart(2, '0')}:00`);
-                      }
-                    } catch (e) { console.log('[SmartSchedule] Error:', e); }
-                    setSmartScheduleLoading(false);
-                  }}
-                  disabled={smartScheduleLoading}
-                >
-                  {smartScheduleLoading ? <ActivityIndicator size="small" color="#0EA5E9" /> : <MaterialIcons name="tips-and-updates" size={14} color="#0EA5E9" />}
-                  <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Recommander creneau optimal' : 'Recommend optimal slot'}</Text>
-                </Pressable>
-                {showSmartSlots && smartSlots.length > 0 ? (
-                  <View style={{ backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, marginBottom: 8, borderWidth: 1, borderColor: '#BAE6FD' }}>
-                    <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 }}>
-                      <MaterialIcons name="auto-awesome" size={14} color="#0EA5E9" />
-                      <Text style={{ fontSize: 11, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Creneaux optimaux (base sur l\'historique)' : 'Optimal slots (based on history)'}</Text>
+                <View style={{ marginTop: 8, gap: 8 }}>
+                  {/* Quick date presets */}
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', marginBottom: 6 }}>{fr ? 'Date rapide' : 'Quick date'}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                      {(() => {
+                        const presets = [];
+                        for (let i = 1; i <= 7; i++) {
+                          const d = new Date();
+                          d.setDate(d.getDate() + i);
+                          const iso = d.toISOString().slice(0, 10);
+                          const dayName = d.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short' });
+                          if (i <= 3 || i === 7) presets.push({ iso, label: i === 1 ? (fr ? 'Demain' : 'Tomorrow') : i === 7 ? (fr ? 'Dans 1 sem.' : 'In 1 week') : dayName });
+                        }
+                        return presets.map(p => {
+                          const isActive = scheduleDate === p.iso;
+                          return (
+                            <Pressable
+                              key={p.iso}
+                              style={[{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: isActive ? '#10B981' : '#F8FAFC', borderWidth: 1.5, borderColor: isActive ? '#10B981' : '#E2E8F0' }]}
+                              onPress={() => { Haptics.selectionAsync(); setScheduleDate(p.iso); }}
+                            >
+                              <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#FFF' : '#0F172A' }}>{p.label}</Text>
+                            </Pressable>
+                          );
+                        });
+                      })()}
                     </View>
-                    <View style={{ flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 }}>
-                      {smartSlots.map((slot, idx) => {
-                        const isSelected = scheduleTime === `${String(slot.hour).padStart(2, '0')}:00`;
-                        const scoreColor = slot.score >= 80 ? '#10B981' : slot.score >= 60 ? '#3B82F6' : '#D97706';
-                        return (
-                          <Pressable
-                            key={slot.hour}
-                            style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: isSelected ? scoreColor : '#FFF', borderWidth: 1.5, borderColor: isSelected ? scoreColor : '#E2E8F0' }]}
-                            onPress={() => {
-                              Haptics.selectionAsync();
-                              const tomorrow = new Date();
-                              tomorrow.setDate(tomorrow.getDate() + 1);
-                              setScheduleDate(tomorrow.toISOString().slice(0, 10));
-                              setScheduleTime(`${String(slot.hour).padStart(2, '0')}:00`);
-                            }}
-                          >
-                            {idx === 0 ? <MaterialIcons name="star" size={12} color={isSelected ? '#FFF' : '#F59E0B'} /> : null}
-                            <Text style={{ fontSize: 12, fontWeight: '700' as const, color: isSelected ? '#FFF' : '#0F172A' }}>{slot.hour}h</Text>
-                            <View style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : scoreColor + '15', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
-                              <Text style={{ fontSize: 8, fontWeight: '800' as const, color: isSelected ? '#FFF' : scoreColor }}>{slot.score}</Text>
-                            </View>
-                          </Pressable>
-                        );
-                      })}
-                    </View>
-                    <Text style={{ fontSize: 9, color: '#64748B', marginTop: 6, lineHeight: 13 }}>
-                      {fr ? 'Score base sur le taux de livraison, le volume et la frequence des envois passes a cette heure.' : 'Score based on delivery rate, volume and frequency of past sends at this hour.'}
-                    </Text>
-                  </View>
-                ) : null}
-                <View style={s.scheduleRow}>
-                  <View style={s.scheduleField}>
-                    <Text style={s.scheduleLabel}>{fr ? 'Date' : 'Date'}</Text>
-                    <View style={s.scheduleInputWrap}>
+                    {/* Manual date input fallback */}
+                    <View style={[s.scheduleInputWrap, { marginTop: 6 }]}>
                       <MaterialIcons name="calendar-today" size={14} color={scheduleDate ? '#10B981' : '#CBD5E1'} />
                       <TextInput
                         style={s.scheduleInput}
@@ -1339,9 +1288,26 @@ export default function AdminAnnouncementsScreen() {
                       />
                     </View>
                   </View>
-                  <View style={s.scheduleField}>
-                    <Text style={s.scheduleLabel}>{fr ? 'Heure' : 'Time'}</Text>
-                    <View style={s.scheduleInputWrap}>
+
+                  {/* Quick time presets */}
+                  <View>
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#94A3B8', marginBottom: 6 }}>{fr ? 'Heure rapide' : 'Quick time'}</Text>
+                    <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+                      {['08:00', '10:00', '12:00', '14:00', '17:00', '19:00', '20:30'].map(t => {
+                        const isActive = scheduleTime === t;
+                        return (
+                          <Pressable
+                            key={t}
+                            style={[{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, backgroundColor: isActive ? '#10B981' : '#F8FAFC', borderWidth: 1.5, borderColor: isActive ? '#10B981' : '#E2E8F0' }]}
+                            onPress={() => { Haptics.selectionAsync(); setScheduleTime(t); }}
+                          >
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: isActive ? '#FFF' : '#0F172A' }}>{t}</Text>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                    {/* Manual time input fallback */}
+                    <View style={[s.scheduleInputWrap, { marginTop: 6 }]}>
                       <MaterialIcons name="access-time" size={14} color={scheduleTime ? '#10B981' : '#CBD5E1'} />
                       <TextInput
                         style={s.scheduleInput}
@@ -1354,25 +1320,104 @@ export default function AdminAnnouncementsScreen() {
                       />
                     </View>
                   </View>
+
+                  {/* Smart Scheduler */}
+                  <Pressable
+                    style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 10, borderRadius: 10, backgroundColor: '#0EA5E908', borderWidth: 1, borderColor: '#0EA5E920' }, smartScheduleLoading && { opacity: 0.5 }]}
+                    onPress={async () => {
+                      if (smartScheduleLoading) return;
+                      setSmartScheduleLoading(true);
+                      Haptics.selectionAsync();
+                      try {
+                        const supabase = (await import('@/template')).getSupabaseClient();
+                        const { data: annData } = await supabase.from('announcements').select('created_at, push_sent_count, push_error_count').eq('status', 'sent').order('created_at', { ascending: false }).limit(100);
+                        const hourScores = new Map<number, { sent: number; errors: number; count: number }>();
+                        for (let h = 0; h < 24; h++) hourScores.set(h, { sent: 0, errors: 0, count: 0 });
+                        (annData || []).forEach((a: any) => {
+                          const hour = new Date(a.created_at).getHours();
+                          const entry = hourScores.get(hour)!;
+                          entry.sent += (a.push_sent_count || 0);
+                          entry.errors += (a.push_error_count || 0);
+                          entry.count++;
+                        });
+                        const scored = Array.from(hourScores.entries()).map(([hour, d]) => {
+                          const deliveryRate = d.sent > 0 ? ((d.sent - d.errors) / d.sent) * 100 : 50;
+                          const volumeScore = Math.min(100, d.sent / Math.max(1, (annData || []).reduce((s: number, a: any) => s + (a.push_sent_count || 0), 0) / 24) * 100);
+                          const score = Math.round(deliveryRate * 0.6 + volumeScore * 0.2 + (d.count > 0 ? 20 : 0));
+                          return { hour, score };
+                        }).sort((a, b) => b.score - a.score);
+                        setSmartSlots(scored.slice(0, 5));
+                        setShowSmartSlots(true);
+                        if (scored.length > 0) {
+                          const best = scored[0];
+                          const tomorrow = new Date();
+                          tomorrow.setDate(tomorrow.getDate() + 1);
+                          setScheduleDate(tomorrow.toISOString().slice(0, 10));
+                          setScheduleTime(`${String(best.hour).padStart(2, '0')}:00`);
+                        }
+                      } catch (e) { console.log('[SmartSchedule] Error:', e); }
+                      setSmartScheduleLoading(false);
+                    }}
+                    disabled={smartScheduleLoading}
+                  >
+                    {smartScheduleLoading ? <ActivityIndicator size="small" color="#0EA5E9" /> : <MaterialIcons name="tips-and-updates" size={14} color="#0EA5E9" />}
+                    <Text style={{ fontSize: 12, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Recommander creneau optimal' : 'Recommend optimal slot'}</Text>
+                  </Pressable>
+                  {showSmartSlots && smartSlots.length > 0 ? (
+                    <View style={{ backgroundColor: '#F0F9FF', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#BAE6FD' }}>
+                      <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, marginBottom: 8 }}>
+                        <MaterialIcons name="auto-awesome" size={14} color="#0EA5E9" />
+                        <Text style={{ fontSize: 11, fontWeight: '700' as const, color: '#0EA5E9' }}>{fr ? 'Creneaux optimaux (base sur l\'historique)' : 'Optimal slots (based on history)'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 6 }}>
+                        {smartSlots.map((slot, idx) => {
+                          const isSelected = scheduleTime === `${String(slot.hour).padStart(2, '0')}:00`;
+                          const scoreColor = slot.score >= 80 ? '#10B981' : slot.score >= 60 ? '#3B82F6' : '#D97706';
+                          return (
+                            <Pressable
+                              key={slot.hour}
+                              style={[{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: isSelected ? scoreColor : '#FFF', borderWidth: 1.5, borderColor: isSelected ? scoreColor : '#E2E8F0' }]}
+                              onPress={() => {
+                                Haptics.selectionAsync();
+                                const tomorrow = new Date();
+                                tomorrow.setDate(tomorrow.getDate() + 1);
+                                setScheduleDate(tomorrow.toISOString().slice(0, 10));
+                                setScheduleTime(`${String(slot.hour).padStart(2, '0')}:00`);
+                              }}
+                            >
+                              {idx === 0 ? <MaterialIcons name="star" size={12} color={isSelected ? '#FFF' : '#F59E0B'} /> : null}
+                              <Text style={{ fontSize: 12, fontWeight: '700' as const, color: isSelected ? '#FFF' : '#0F172A' }}>{slot.hour}h</Text>
+                              <View style={{ backgroundColor: isSelected ? 'rgba(255,255,255,0.25)' : scoreColor + '15', paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4 }}>
+                                <Text style={{ fontSize: 8, fontWeight: '800' as const, color: isSelected ? '#FFF' : scoreColor }}>{slot.score}</Text>
+                              </View>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                      <Text style={{ fontSize: 9, color: '#64748B', marginTop: 6, lineHeight: 13 }}>
+                        {fr ? 'Score base sur le taux de livraison, le volume et la frequence des envois passes a cette heure.' : 'Score based on delivery rate, volume and frequency of past sends at this hour.'}
+                      </Text>
+                    </View>
+                  ) : null}
+
+                  {/* Schedule countdown preview */}
+                  {scheduleDate.length === 10 && scheduleTime.length === 5 ? (() => {
+                    const schedMs = new Date(`${scheduleDate}T${scheduleTime}:00`).getTime();
+                    const nowMs = Date.now();
+                    if (isNaN(schedMs)) return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, backgroundColor: '#FEF2F2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}><MaterialIcons name="error-outline" size={12} color="#EF4444" /><Text style={{ fontSize: 10, color: '#EF4444', fontWeight: '600' }}>{fr ? 'Format de date invalide' : 'Invalid date format'}</Text></View>;
+                    if (schedMs <= nowMs) return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, backgroundColor: '#FEF2F2', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}><MaterialIcons name="error-outline" size={12} color="#EF4444" /><Text style={{ fontSize: 10, color: '#EF4444', fontWeight: '600' }}>{fr ? 'La date doit etre dans le futur' : 'Date must be in the future'}</Text></View>;
+                    const diffH = Math.round((schedMs - nowMs) / 3600000);
+                    const diffD = Math.floor(diffH / 24);
+                    const remaining = diffD > 0 ? `${diffD}${fr ? 'j' : 'd'} ${diffH % 24}h` : `${diffH}h`;
+                    return (
+                      <View style={s.schedulePreview}>
+                        <MaterialIcons name="timer" size={12} color="#10B981" />
+                        <Text style={s.schedulePreviewText}>{fr ? `Envoi dans ${remaining}` : `Sending in ${remaining}`}</Text>
+                      </View>
+                    );
+                  })() : null}
                 </View>
               ) : null}
-              </>
-              ) : null}
-              {scheduleMode && scheduleDate && scheduleTime ? (() => {
-                const schedMs = new Date(`${scheduleDate}T${scheduleTime}:00`).getTime();
-                const nowMs = Date.now();
-                if (isNaN(schedMs)) return <Text style={{ fontSize: 10, color: '#EF4444', marginTop: 4 }}>{fr ? 'Format invalide' : 'Invalid format'}</Text>;
-                if (schedMs <= nowMs) return <Text style={{ fontSize: 10, color: '#EF4444', marginTop: 4 }}>{fr ? 'La date doit etre dans le futur' : 'Date must be in the future'}</Text>;
-                const diffH = Math.round((schedMs - nowMs) / 3600000);
-                const diffD = Math.floor(diffH / 24);
-                const remaining = diffD > 0 ? `${diffD}j ${diffH % 24}h` : `${diffH}h`;
-                return (
-                  <View style={s.schedulePreview}>
-                    <MaterialIcons name="timer" size={12} color="#10B981" />
-                    <Text style={s.schedulePreviewText}>{fr ? `Envoi dans ${remaining}` : `Sending in ${remaining}`}</Text>
-                  </View>
-                );
-              })() : null}
             </View>
 
             {/* Title FR */}

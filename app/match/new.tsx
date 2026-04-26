@@ -2490,7 +2490,9 @@ export default function NewMatchScreen() {
           visible={showPostMatchShare}
           onClose={() => {
             setShowPostMatchShare(false);
-            setTimeout(() => router.replace('/(tabs)'), 100);
+            showInterstitial().finally(() => {
+              setTimeout(() => router.replace('/(tabs)'), 100);
+            });
           }}
           itemType="match"
           itemId={savedMatchIdForShare}
@@ -2508,7 +2510,9 @@ export default function NewMatchScreen() {
           if (savedMatchIdForShare) {
             setTimeout(() => setShowPostMatchShare(true), 300);
           } else {
-            setTimeout(() => router.replace('/(tabs)'), 100);
+            showInterstitial().finally(() => {
+              setTimeout(() => router.replace('/(tabs)'), 100);
+            });
           }
         }}
         itemType="match"
