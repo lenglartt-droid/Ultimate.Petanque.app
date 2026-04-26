@@ -67,17 +67,17 @@ export default function ShareCardSponsoredEvent({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
+        <LinearGradient colors={['#7C3AED', '#9333EA']} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
           {/* Top: badge */}
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-            <MaterialIcons name="campaign" size={10} color="rgba(255,255,255,0.7)" />
-            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>{fr ? 'DEFI SPONSORISE' : 'SPONSORED EVENT'}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+            <MaterialIcons name="campaign" size={9} color="rgba(255,255,255,0.7)" />
+            <Text style={{ fontSize: 6, fontWeight: '800', letterSpacing: 1, color: 'rgba(255,255,255,0.7)', textTransform: 'uppercase' }}>{fr ? 'DEFI SPONSORISE' : 'SPONSORED EVENT'}</Text>
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
             {/* Left: info */}
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 10 }}>
-              <Text style={{ fontSize: 14, fontWeight: '900', color: '#FFF', marginBottom: 4, flexShrink: 1 }} numberOfLines={2}>{title}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '900', color: '#FFF', marginBottom: 3, flexShrink: 1 }} numberOfLines={2}>{title}</Text>
               {ambassadorName ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 6 }}>
                   <MaterialIcons name="verified" size={9} color="rgba(255,255,255,0.6)" />
