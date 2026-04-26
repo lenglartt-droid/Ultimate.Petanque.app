@@ -50,13 +50,13 @@ export default function ShareCardEventLeaderboard({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-              <MaterialIcons name="leaderboard" size={10} color={ct.accent} />
-              <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'CLASSEMENT DEFIS' : 'EVENT LEADERBOARD'}</Text>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3 }}>
+              <MaterialIcons name="leaderboard" size={9} color={ct.accent} />
+              <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'CLASSEMENT DEFIS' : 'EVENT LEADERBOARD'}</Text>
             </View>
-            <Text style={{ fontSize: 8, color: ct.textSecondary }}>{totalEvents} {fr ? 'evenements' : 'events'} - {totalParticipants} {fr ? 'joueurs' : 'players'}</Text>
+            <Text style={{ fontSize: 7, color: ct.textSecondary }}>{totalEvents} {fr ? 'evenements' : 'events'} - {totalParticipants} {fr ? 'joueurs' : 'players'}</Text>
           </View>
 
           <View style={{ flexDirection: 'row', flex: 1 }}>
@@ -74,7 +74,7 @@ export default function ShareCardEventLeaderboard({
               ))}
             </View>
 
-            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 8 }} />
+            <View style={{ width: 1, backgroundColor: 'rgba(255,255,255,0.06)', marginHorizontal: 6 }} />
 
             {/* Right: current player rank + more entries */}
             <View style={{ width: '35%', justifyContent: 'center' }}>

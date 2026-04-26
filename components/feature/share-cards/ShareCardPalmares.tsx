@@ -179,6 +179,11 @@ export default function ShareCardPalmares({
               ))}
             </View>
           </View>
+          {/* Content complete indicator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 2 }}>
+            <MaterialIcons name="verified" size={8} color="rgba(255,255,255,0.2)" />
+            <Text style={{ fontSize: 6, fontWeight: '600', color: 'rgba(255,255,255,0.2)' }}>{fr ? 'Contenu complet' : 'Complete'}</Text>
+          </View>
           <ShareCardWatermark variant="light" size="sm" />
         </LinearGradient>
       </View>

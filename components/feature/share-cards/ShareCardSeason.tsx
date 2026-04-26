@@ -153,16 +153,16 @@ export default function ShareCardSeason({
   if (isLandscape) {
     return (
       <View style={st.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="calendar-today" size={10} color={ct.accent} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="calendar-today" size={9} color={ct.accent} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>
               {fr ? `SAISON ${year}` : `SEASON ${year}`}
             </Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <Text style={{ fontSize: 14, fontWeight: '800', color: ct.textPrimary, marginBottom: 4 }}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary, marginBottom: 3 }}>{playerName || (fr ? 'Joueur' : 'Player')}</Text>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: ec + '20', paddingHorizontal: 6, paddingVertical: 2.5, borderRadius: 6, alignSelf: 'flex-start', marginBottom: 4 }}>
                 <MaterialIcons name={(eloIcon as any) || 'diamond'} size={9} color={ec} />
                 <Text style={{ fontSize: 9, fontWeight: '700', color: ec }}>ELO {eloRating} {eloRankLabel || ''}</Text>
@@ -205,6 +205,11 @@ export default function ShareCardSeason({
               {/* Compact monthly table in landscape */}
               {renderMonthlyTable(true)}
             </View>
+          </View>
+          {/* Content complete indicator */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 2 }}>
+            <MaterialIcons name="verified" size={8} color="rgba(255,255,255,0.2)" />
+            <Text style={{ fontSize: 6, fontWeight: '600', color: 'rgba(255,255,255,0.2)' }}>{fr ? 'Contenu complet' : 'Complete'}</Text>
           </View>
           <ShareCardWatermark variant="light" size="sm" />
         </LinearGradient>
