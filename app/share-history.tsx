@@ -24,6 +24,8 @@ import { useAuth, getSupabaseClient } from '@/template';
 import { getSentShareRequests, getReceivedShareRequests, MatchShareRequest, getShareRequestRemainingTime } from '@/services/matchShareService';
 
 type FilterKey = 'all' | 'sent' | 'received' | 'pending' | 'accepted' | 'declined';
+type DateRange = 'all' | '7d' | '30d' | '3m';
+type SortKey = 'date' | 'elo';
 
 interface EnrichedRequest extends MatchShareRequest {
   direction: 'sent' | 'received';
@@ -42,6 +44,8 @@ export default function ShareHistoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [requests, setRequests] = useState<EnrichedRequest[]>([]);
   const [filter, setFilter] = useState<FilterKey>('all');
+  const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [sortBy, setSortBy] = useState<SortKey>('date');
 
   const loadData = useCallback(async () => {
     if (!user?.id) return;
@@ -149,13 +153,26 @@ export default function ShareHistoryScreen() {
 
   const filtered = useMemo(() => {
     let items = requests;
+    // Direction / status filter
     if (filter === 'sent') items = items.filter(r => r.direction === 'sent');
     if (filter === 'received') items = items.filter(r => r.direction === 'received');
     if (filter === 'pending') items = items.filter(r => r.status === 'pending');
     if (filter === 'accepted') items = items.filter(r => r.status === 'accepted');
     if (filter === 'declined') items = items.filter(r => r.status === 'declined');
+    // Date range filter
+    if (dateRange !== 'all') {
+      const now = Date.now();
+      const msMap: Record<string, number> = { '7d': 7 * 86400000, '30d': 30 * 86400000, '3m': 90 * 86400000 };
+      const cutoff = now - (msMap[dateRange] || 0);
+      items = items.filter(r => new Date(r.createdAt).getTime() >= cutoff);
+    }
+    // Sort
+    if (sortBy === 'elo') {
+      items = [...items].sort((a, b) => Math.abs(b.eloDelta || 0) - Math.abs(a.eloDelta || 0));
+    }
+    // else already sorted by date desc from loadData
     return items;
-  }, [requests, filter]);
+  }, [requests, filter, dateRange, sortBy]);
 
   // Summary stats
   const stats = useMemo(() => {
@@ -285,9 +302,44 @@ export default function ShareHistoryScreen() {
           })}
         </ScrollView>
 
+        {/* Date range + Sort row */}
+        <View style={s.filterRow}>
+          <View style={s.filterGroup}>
+            <MaterialIcons name="date-range" size={14} color={theme.textMuted} />
+            {(['all', '7d', '30d', '3m'] as DateRange[]).map(dr => {
+              const isActive = dateRange === dr;
+              const label = dr === 'all' ? (fr ? 'Tout' : 'All') : dr === '7d' ? '7j' : dr === '30d' ? '30j' : '3m';
+              return (
+                <Pressable
+                  key={dr}
+                  style={[s.miniChip, isActive && s.miniChipActive]}
+                  onPress={() => { Haptics.selectionAsync(); setDateRange(dr); }}
+                >
+                  <Text style={[s.miniChipText, isActive && s.miniChipTextActive]}>{label}</Text>
+                </Pressable>
+              );
+            })}
+          </View>
+          <Pressable
+            style={[s.sortBtn, sortBy === 'elo' && s.sortBtnActive]}
+            onPress={() => { Haptics.selectionAsync(); setSortBy(sortBy === 'elo' ? 'date' : 'elo'); }}
+          >
+            <MaterialIcons name={sortBy === 'elo' ? 'trending-up' : 'swap-vert'} size={14} color={sortBy === 'elo' ? '#FFF' : theme.textSecondary} />
+            <Text style={[s.sortBtnText, sortBy === 'elo' && s.sortBtnTextActive]}>
+              {sortBy === 'elo' ? 'ELO' : (fr ? 'Date' : 'Date')}
+            </Text>
+          </Pressable>
+        </View>
+
         {/* Results count */}
         <View style={s.resultCountRow}>
           <Text style={s.resultCount}>{filtered.length} {fr ? 'resultat(s)' : 'result(s)'}</Text>
+          {dateRange !== 'all' ? (
+            <Pressable style={s.clearDateBtn} onPress={() => setDateRange('all')} hitSlop={6}>
+              <MaterialIcons name="close" size={12} color={theme.primary} />
+              <Text style={s.clearDateBtnText}>{fr ? 'Toutes dates' : 'All dates'}</Text>
+            </Pressable>
+          ) : null}
         </View>
 
         {/* Request list */}
@@ -422,6 +474,20 @@ const s = StyleSheet.create({
   summaryItemLabel: { fontSize: 9, fontWeight: '600', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.3 },
   eloSummary: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 14, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 12, borderWidth: 1 },
   eloSummaryText: { fontSize: 13, fontWeight: '700' },
+
+  // Filter row
+  filterRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, marginBottom: 10, gap: 8 },
+  filterGroup: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, flex: 1 },
+  miniChip: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
+  miniChipActive: { backgroundColor: theme.primary, borderColor: theme.primary },
+  miniChipText: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary },
+  miniChipTextActive: { color: '#FFF' },
+  sortBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1, borderColor: theme.border },
+  sortBtnActive: { backgroundColor: '#0F172A', borderColor: '#0F172A' },
+  sortBtnText: { fontSize: 11, fontWeight: '700' as const, color: theme.textSecondary },
+  sortBtnTextActive: { color: '#FFF' },
+  clearDateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, marginLeft: 8, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, backgroundColor: theme.primary + '10' },
+  clearDateBtnText: { fontSize: 10, fontWeight: '600' as const, color: theme.primary },
 
   // Chips
   chipBar: { gap: 6, paddingBottom: 12 },
