@@ -35,6 +35,7 @@ import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } f
 import { logModification } from '@/services/modificationLogService';
 import EditConflictModal from '@/components/ui/EditConflictModal';
 import AttestationSection from '@/components/feature/AttestationSection';
+import { getShareRequestsForItem, detectLinkedPlayers, createShareRequests, MatchShareRequest } from '@/services/matchShareService';
 
 const CHALLENGE_LABELS: Record<string, Record<ChallengeType, string>> = {
   fr: { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs Sautee', precision: 'Precision' },
@@ -64,6 +65,11 @@ export default function ChallengeDetailScreen() {
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
 
+  // Quick share state
+  const [quickShareState, setQuickShareState] = useState<'idle' | 'loading' | 'sent' | 'no_accounts' | 'already_shared'>('idle');
+  const [quickShareCount, setQuickShareCount] = useState(0);
+  const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
+
   // Edit state
   const [isEditing, setIsEditing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -90,6 +96,58 @@ export default function ChallengeDetailScreen() {
       if (gold) setGoldSponsor(gold);
     });
   }, []);
+
+  // Load existing share requests for this challenge
+  useEffect(() => {
+    if (!id) return;
+    getShareRequestsForItem('challenge', id).then(({ requests }) => setShareRequests(requests)).catch(() => {});
+  }, [id]);
+
+  // Quick share with opponent handler (1v1 challenges)
+  const handleQuickShareWithOpponent = useCallback(async () => {
+    if (!challenge || !user?.id || !id || !challenge.opponentId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickShareState('loading');
+    try {
+      const playerIds = [challenge.opponentId].filter(Boolean) as string[];
+      const { linkedPlayers } = await detectLinkedPlayers(playerIds, user.id);
+      if (linkedPlayers.length === 0) {
+        setQuickShareState('no_accounts');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const alreadySharedIds = new Set(shareRequests.map(r => r.recipientUserId));
+      const newRecipients = linkedPlayers.filter(p => !alreadySharedIds.has(p.userId));
+      if (newRecipients.length === 0) {
+        setQuickShareState('already_shared');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const summary = `${typeLabel} - ${challenge.playerName || ''} vs ${challenge.opponentName || ''}`;
+      const senderName = user.username || user.email?.split('@')[0] || 'Joueur';
+      const { requests: newReqs, error } = await createShareRequests({
+        itemType: 'challenge',
+        itemId: id,
+        senderUserId: user.id,
+        senderName,
+        recipients: newRecipients.map(p => ({ userId: p.userId, permission: 'read' as const })),
+        itemSummary: summary,
+      });
+      if (error) {
+        showAlert(fr ? 'Erreur' : 'Error', error);
+        setQuickShareState('idle');
+        return;
+      }
+      setQuickShareCount(newReqs.length);
+      setShareRequests(prev => [...newReqs, ...prev]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setQuickShareState('sent');
+      setTimeout(() => setQuickShareState('idle'), 3000);
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+      setQuickShareState('idle');
+    }
+  }, [challenge, user, id, shareRequests, fr, showAlert]);
 
   const challenge: Challenge | undefined = useMemo(() => {
     return challenges.find(c => c.id === id);
@@ -324,7 +382,7 @@ export default function ChallengeDetailScreen() {
   }
 
   const cfg = CHALLENGE_ICONS[challenge.type] || CHALLENGE_ICONS['10_tirs'];
-  const typeLabel = CHALLENGE_LABELS[fr ? 'fr' : 'en'][challenge.type];
+  const typeLabel = CHALLENGE_LABELS[fr ? 'fr' : 'en'][challenge.type] || challenge.type;
   const is1v1 = challenge.mode === '1v1';
   const isPrecision = challenge.type === 'precision';
   const dateStr = new Date(challenge.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
@@ -475,6 +533,65 @@ export default function ChallengeDetailScreen() {
           </>
         ) : null}
       </View>
+
+      {/* Quick Share with Opponent (1v1 only) */}
+      {!isEditing && is1v1 && challenge.opponentId && !isShared ? (
+        <Pressable
+          style={[s.quickShareBtn, quickShareState === 'sent' && { borderColor: '#10B98140', backgroundColor: '#F0FDF4' }, quickShareState === 'loading' && { opacity: 0.7 }]}
+          onPress={handleQuickShareWithOpponent}
+          disabled={quickShareState === 'loading' || quickShareState === 'sent'}
+        >
+          {quickShareState === 'loading' ? (
+            <>
+              <ActivityIndicator size="small" color={theme.primary} />
+              <Text style={s.quickShareText}>{fr ? 'Detection du compte...' : 'Detecting account...'}</Text>
+            </>
+          ) : quickShareState === 'sent' ? (
+            <>
+              <View style={[s.quickShareIconBg, { backgroundColor: '#10B98115' }]}>
+                <MaterialIcons name="check-circle" size={20} color="#10B981" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.quickShareTitle, { color: '#10B981' }]}>{fr ? 'Demande envoyee !' : 'Request sent!'}</Text>
+                <Text style={s.quickShareSub}>{quickShareCount} {fr ? 'joueur(s) notifie(s)' : 'player(s) notified'}</Text>
+              </View>
+            </>
+          ) : quickShareState === 'no_accounts' ? (
+            <>
+              <View style={[s.quickShareIconBg, { backgroundColor: '#F59E0B15' }]}>
+                <MaterialIcons name="person-off" size={20} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.quickShareTitle, { color: '#F59E0B' }]}>{fr ? 'Aucun compte detecte' : 'No account detected'}</Text>
+                <Text style={s.quickShareSub}>{fr ? 'L\'adversaire n\'a pas de compte lie' : 'Opponent has no linked account'}</Text>
+              </View>
+            </>
+          ) : quickShareState === 'already_shared' ? (
+            <>
+              <View style={[s.quickShareIconBg, { backgroundColor: theme.primary + '15' }]}>
+                <MaterialIcons name="done-all" size={20} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={[s.quickShareTitle, { color: theme.primary }]}>{fr ? 'Deja partage' : 'Already shared'}</Text>
+                <Text style={s.quickShareSub}>{fr ? 'L\'adversaire a deja recu une demande' : 'Opponent already received a request'}</Text>
+              </View>
+            </>
+          ) : (
+            <>
+              <View style={[s.quickShareIconBg, { backgroundColor: '#22C55E15' }]}>
+                <MaterialIcons name="group-add" size={20} color="#22C55E" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.quickShareTitle}>{fr ? 'Partager avec l\'adversaire' : 'Share with opponent'}</Text>
+                <Text style={s.quickShareSub}>{fr ? 'Envoie automatique si compte detecte' : 'Auto-send if account detected'}</Text>
+              </View>
+              <View style={s.quickShareArrow}>
+                <MaterialIcons name="send" size={16} color="#22C55E" />
+              </View>
+            </>
+          )}
+        </Pressable>
+      ) : null}
 
       {/* Witness Attestation Section */}
       {!isEditing ? (
@@ -986,6 +1103,14 @@ const s = StyleSheet.create({
 
   deleteCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 16, backgroundColor: theme.error + '10', borderWidth: 1, borderColor: theme.error + '25' },
   deleteCtaText: { fontSize: 14, fontWeight: '600', color: theme.error },
+
+  // Quick share
+  quickShareBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#22C55E30', ...Platform.select({ ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
+  quickShareIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  quickShareTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  quickShareSub: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  quickShareText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  quickShareArrow: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const },
 
   // Edit action row
   editActionRow: { flexDirection: 'row', gap: 12, marginBottom: 8 },

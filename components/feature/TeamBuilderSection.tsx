@@ -197,7 +197,7 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
       const map: Record<string, boolean> = {};
       for (const t of teamableTournaments) {
         const val = await AsyncStorage.getItem(`team_deadline_${t.id}`);
-        map[t.id] = val === null ? true : val === 'enabled';
+        map[t.id] = val === null ? false : val === 'enabled';
       }
       setDeadlineEnabledMap(map);
     };
@@ -216,13 +216,13 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   }, []);
 
   const isDeadlineActive = useCallback((tournamentId: string, tournamentDate: string) => {
-    if (deadlineEnabledMap[tournamentId] === false) return { deadline: new Date(), daysLeft: 999, isPast: false, isUrgent: false };
+    if (deadlineEnabledMap[tournamentId] !== true) return { deadline: new Date(), daysLeft: 999, isPast: false, isUrgent: false };
     return getDeadlineInfo(tournamentDate);
   }, [deadlineEnabledMap, getDeadlineInfo]);
 
   const toggleDeadline = useCallback(async (tournamentId: string) => {
     Haptics.selectionAsync();
-    const current = deadlineEnabledMap[tournamentId] !== false;
+    const current = deadlineEnabledMap[tournamentId] === true;
     const newVal = !current;
     setDeadlineEnabledMap(prev => ({ ...prev, [tournamentId]: newVal }));
     await AsyncStorage.setItem(`team_deadline_${tournamentId}`, newVal ? 'enabled' : 'disabled');
@@ -711,16 +711,16 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
               {/* Deadline toggle - captain only */}
               {user?.id === (team?.creatorUserId || user?.id) && !isTeamComplete ? (
                 <View style={s.deadlineToggleRow}>
-                  <MaterialIcons name="timer" size={16} color={deadlineEnabledMap[selectedTournament?.id || ''] !== false ? '#D97706' : '#94A3B8'} />
+                  <MaterialIcons name="timer" size={16} color={deadlineEnabledMap[selectedTournament?.id || ''] === true ? '#D97706' : '#94A3B8'} />
                   <View style={{ flex: 1 }}>
                     <Text style={s.deadlineToggleLabel}>{fr ? 'Date limite formation' : 'Formation deadline'}</Text>
                     <Text style={s.deadlineToggleSub}>{fr ? 'Bloque les invitations 2j avant le tournoi' : 'Blocks invitations 2 days before tournament'}</Text>
                   </View>
                   <Switch
-                    value={deadlineEnabledMap[selectedTournament?.id || ''] !== false}
+                    value={deadlineEnabledMap[selectedTournament?.id || ''] === true}
                     onValueChange={() => selectedTournament && toggleDeadline(selectedTournament.id)}
                     trackColor={{ false: '#E2E8F0', true: '#F59E0B50' }}
-                    thumbColor={deadlineEnabledMap[selectedTournament?.id || ''] !== false ? '#F59E0B' : '#94A3B8'}
+                    thumbColor={deadlineEnabledMap[selectedTournament?.id || ''] === true ? '#F59E0B' : '#94A3B8'}
                   />
                 </View>
               ) : null}
