@@ -95,7 +95,6 @@ export default function TerrainDetailScreen() {
   const canEdit = !isReadOnly;
 
   const terrain = getTerrainById(id || '');
-  console.log(terrain);
 
   useEffect(() => {
     if (id) {

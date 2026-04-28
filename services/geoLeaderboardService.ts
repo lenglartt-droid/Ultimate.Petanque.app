@@ -247,6 +247,8 @@ export async function fetchGeoLeaderboard(): Promise<{
     const countries = buildEntries(countryMap, (k) => k);
     const continents = buildEntries(continentMap, (k) => k);
 
+    console.log(countries);
+
     return { cities: cityEntries, countries, continents, error: null };
   } catch (err: any) {
     console.error('[GeoLeaderboard] Error:', err);

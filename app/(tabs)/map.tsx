@@ -13,6 +13,8 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  KeyboardAvoidingView,
+  Keyboard
 } from 'react-native';
 // react-native-maps is loaded dynamically below (Platform !== 'web')
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -1911,8 +1913,8 @@ useEffect(() => {
         mapRef.current.animateToRegion({
           latitude: lat,
           longitude: lng,
-          latitudeDelta: 0.02,
-          longitudeDelta: 0.02,
+          latitudeDelta: 0.001,
+          longitudeDelta: 0.001,
         }, 600);
       }
       // Try to find and select the matching item
@@ -2001,7 +2003,7 @@ useEffect(() => {
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
         showsUserLocation showsMyLocationButton={false}
-        onPress={() => { setSelected(null); setSelectedPartner(null); }}
+        onPress={() => { Keyboard.dismiss(); setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
         mapPadding={{
           top: 50,    // Shifts UI down (good for search bars)
@@ -2378,214 +2380,216 @@ useEffect(() => {
         </Animated.View>
       ) : null}
 
-      {/* Bottom Panel */}
-      <View style={styles.bottomPanel}>
-        {/* Search bar (expandable) */}
-        {showSearch ? (
-          <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
-            <View style={styles.searchBar}>
-              <MaterialIcons name="search" size={18} color={theme.textMuted} />
-              <TextInput
-                style={styles.searchInput}
-                placeholder={language === 'fr' ? 'Ville, terrain, club, joueur...' : 'City, terrain, club, player...'}
-                placeholderTextColor={theme.textMuted}
-                value={search}
-                onChangeText={(text) => {
-                  setSearch(text);
-                  // Debounced suggestions
-                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                  if (text.trim().length < 2) { setSearchSuggestions([]); setShowSuggestions(false); return; }
-                  searchDebounceRef.current = setTimeout(() => {
-                    const q = text.toLowerCase().trim();
-                    const suggestions: { label: string; type: string; count?: number; lat?: number; lng?: number; icon?: string; color?: string }[] = [];
-                    // City suggestions
-                    const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
-                    [...ownData.terrains, ...ownData.clubs, ...ownData.players, ...pubData.terrains, ...pubData.clubs, ...pubData.players].forEach(item => {
-                      const city = item.city || item.location?.city;
-                      if (city && city.toLowerCase().includes(q)) {
-                        const existing = cityMap.get(city) || { count: 0 };
-                        existing.count++;
-                        if (!existing.lat && item.location?.latitude) { existing.lat = item.location.latitude; existing.lng = item.location.longitude; }
-                        cityMap.set(city, existing);
-                      }
-                    });
-                    cityMap.forEach((v, city) => {
-                      suggestions.push({ label: city, type: language === 'fr' ? 'Ville' : 'City', count: v.count, lat: v.lat, lng: v.lng, icon: 'location-city', color: '#3B82F6' });
-                    });
-                    // Item name suggestions (top 5)
-                    const nameMatches: typeof suggestions = [];
-                    const typeLabels: Record<string, { label: string; icon: string; color: string }> = {
-                      terrains: { label: language === 'fr' ? 'Terrain' : 'Terrain', icon: 'sports-soccer', color: theme.success },
-                      clubs: { label: 'Club', icon: 'home', color: theme.accent },
-                      players: { label: language === 'fr' ? 'Joueur' : 'Player', icon: 'person', color: theme.primary },
-                    };
-                    const addNameMatches = (items: any[], itemType: string) => {
-                      items.filter(it => it.name?.toLowerCase().includes(q)).slice(0, 3).forEach(it => {
-                        const tl = typeLabels[itemType];
-                        if (tl) nameMatches.push({ label: it.name, type: tl.label, lat: it.location?.latitude, lng: it.location?.longitude, icon: tl.icon, color: tl.color });
+      <KeyboardAvoidingView style={{flex:1}}
+        behavior={Platform.OS === 'ios' ? 'position' : 'height'}
+      >
+        <View style={styles.bottomPanel}>
+          {/* Search bar (expandable) */}
+          {showSearch ? (
+            <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
+              <View style={styles.searchBar}>
+                <MaterialIcons name="search" size={18} color={theme.textMuted} />
+                <TextInput
+                  style={styles.searchInput}
+                  placeholder={language === 'fr' ? 'Ville, terrain, club, joueur...' : 'City, terrain, club, player...'}
+                  placeholderTextColor={theme.textMuted}
+                  value={search}
+                  onChangeText={(text) => {
+                    setSearch(text);
+                    // Debounced suggestions
+                    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                    if (text.trim().length < 2) { setSearchSuggestions([]); setShowSuggestions(false); return; }
+                    searchDebounceRef.current = setTimeout(() => {
+                      const q = text.toLowerCase().trim();
+                      const suggestions: { label: string; type: string; count?: number; lat?: number; lng?: number; icon?: string; color?: string }[] = [];
+                      // City suggestions
+                      const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
+                      [...ownData.terrains, ...ownData.clubs, ...ownData.players, ...pubData.terrains, ...pubData.clubs, ...pubData.players].forEach(item => {
+                        const city = item.city || item.location?.city;
+                        if (city && city.toLowerCase().includes(q)) {
+                          const existing = cityMap.get(city) || { count: 0 };
+                          existing.count++;
+                          if (!existing.lat && item.location?.latitude) { existing.lat = item.location.latitude; existing.lng = item.location.longitude; }
+                          cityMap.set(city, existing);
+                        }
                       });
-                    };
-                    addNameMatches([...ownData.terrains, ...pubData.terrains], 'terrains');
-                    addNameMatches([...ownData.clubs, ...pubData.clubs], 'clubs');
-                    addNameMatches([...ownData.players, ...pubData.players], 'players');
-                    suggestions.push(...nameMatches.slice(0, 5));
-                    // Dedup
-                    const seen = new Set<string>();
-                    const deduped = suggestions.filter(s => { const key = `${s.label}-${s.type}`; if (seen.has(key)) return false; seen.add(key); return true; });
-                    setSearchSuggestions(deduped.slice(0, 8));
-                    setShowSuggestions(deduped.length > 0);
-                  }, 200);
-                }}
-                autoFocus
-              />
-              {search.length > 0 ? (
-                <Pressable onPress={() => { setSearch(''); setSearchSuggestions([]); setShowSuggestions(false); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+                      cityMap.forEach((v, city) => {
+                        suggestions.push({ label: city, type: language === 'fr' ? 'Ville' : 'City', count: v.count, lat: v.lat, lng: v.lng, icon: 'location-city', color: '#3B82F6' });
+                      });
+                      // Item name suggestions (top 5)
+                      const nameMatches: typeof suggestions = [];
+                      const typeLabels: Record<string, { label: string; icon: string; color: string }> = {
+                        terrains: { label: language === 'fr' ? 'Terrain' : 'Terrain', icon: 'sports-soccer', color: theme.success },
+                        clubs: { label: 'Club', icon: 'home', color: theme.accent },
+                        players: { label: language === 'fr' ? 'Joueur' : 'Player', icon: 'person', color: theme.primary },
+                      };
+                      const addNameMatches = (items: any[], itemType: string) => {
+                        items.filter(it => it.name?.toLowerCase().includes(q)).slice(0, 3).forEach(it => {
+                          const tl = typeLabels[itemType];
+                          if (tl) nameMatches.push({ label: it.name, type: tl.label, lat: it.location?.latitude, lng: it.location?.longitude, icon: tl.icon, color: tl.color });
+                        });
+                      };
+                      addNameMatches([...ownData.terrains, ...pubData.terrains], 'terrains');
+                      addNameMatches([...ownData.clubs, ...pubData.clubs], 'clubs');
+                      addNameMatches([...ownData.players, ...pubData.players], 'players');
+                      suggestions.push(...nameMatches.slice(0, 5));
+                      // Dedup
+                      const seen = new Set<string>();
+                      const deduped = suggestions.filter(s => { const key = `${s.label}-${s.type}`; if (seen.has(key)) return false; seen.add(key); return true; });
+                      setSearchSuggestions(deduped.slice(0, 8));
+                      setShowSuggestions(deduped.length > 0);
+                    }, 200);
+                  }}
+                  autoFocus
+                />
+                {search.length > 0 ? (
+                  <Pressable onPress={() => { setSearch(''); setSearchSuggestions([]); setShowSuggestions(false); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+                ) : null}
+              </View>
+              {/* Quick filter chips */}
+              {!search.trim() ? (
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChipsRow}>
+                  {[{ label: language === 'fr' ? 'Pres de moi' : 'Near me', icon: 'my-location', onPress: () => {
+                    if (mapRef.current) {
+                      mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
+                    }
+                  }},
+                  ...topCities.map(tc => ({
+                    label: tc.name, icon: 'location-city' as const,
+                    onPress: () => { setSearch(tc.name); if (tc.lat && tc.lng && mapRef.current) mapRef.current.animateToRegion({ latitude: tc.lat, longitude: tc.lng, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 500); },
+                  })),
+                  ].map((chip, i) => (
+                    <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
+                      <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />
+                      <Text style={styles.suggestionChipText}>{chip.label}</Text>
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : null}
+              {/* Suggestions dropdown */}
+              {showSuggestions && searchSuggestions.length > 0 ? (
+                <ScrollView style={styles.suggestionsContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                  {searchSuggestions.map((sug, idx) => (
+                    <Pressable
+                      key={`${sug.label}-${sug.type}-${idx}`}
+                      style={styles.suggestionItem}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setSearch(sug.label);
+                        setShowSuggestions(false);
+                        // Zoom to suggestion location if available
+                        if (sug.lat && sug.lng && mapRef.current) {
+                          mapRef.current.animateToRegion({
+                            latitude: sug.lat,
+                            longitude: sug.lng,
+                            latitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                            longitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                          }, 500);
+                        }
+                      }}
+                    >
+                      <View style={[styles.suggestionIcon, { backgroundColor: ((sug as any).color || theme.primary) + '12' }]}>
+                        <MaterialIcons name={((sug as any).icon || 'place') as any} size={16} color={(sug as any).color || theme.primary} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
+                        <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` • ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
+                      </View>
+                      {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
+                    </Pressable>
+                  ))}
+                </ScrollView>
+              ) : null}
+              {search.trim() && !showSuggestions ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
+            </Animated.View>
+          ) : null}
+
+
+
+          {/* Category filters */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
+            <FilterChip label={t('map', 'all')} icon="layers" isActive={filter === 'all'} onPress={() => handleFilterPress('all')} />
+            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+              <FilterChip key={k} label={MARKER_CONFIG[k].label} icon={MARKER_CONFIG[k].icon} isActive={filter === k} activeColor={MARKER_CONFIG[k].color} onPress={() => handleFilterPress(k)} />
+            ))}
+          </ScrollView>
+
+          {/* Terrain sub-filters: type & environment & characteristics */}
+          {filter === 'terrains' ? (
+            <TerrainSubFilters
+              terrainTypeFilter={terrainTypeFilter}
+              terrainEnvFilter={terrainEnvFilter}
+              terrainLightingFilter={terrainLightingFilter}
+              terrainCoveredFilter={terrainCoveredFilter}
+              terrainParkingFilter={terrainParkingFilter}
+              terrainToiletsFilter={terrainToiletsFilter}
+              terrainPublicAccessFilter={terrainPublicAccessFilter}
+              terrainMembersOnlyFilter={terrainMembersOnlyFilter}
+              terrainMultiCourtsFilter={terrainMultiCourtsFilter}
+              onTerrainTypePress={handleTerrainTypeToggle}
+              onTerrainEnvPress={handleTerrainEnvToggle}
+              onTerrainCharPress={handleTerrainCharToggle}
+              onClear={handleClearTerrainSubFilters}
+              count={counts.terrains}
+              language={language}
+            />
+          ) : null}
+
+          {/* Club sub-filters: facilities/equipment */}
+          {filter === 'clubs' ? (
+            <View style={styles.subFiltersContainer}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+                <View style={styles.subFilterLabel}>
+                  <MaterialIcons name="build" size={12} color={theme.textMuted} />
+                  <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Equipements' : 'Facilities'}</Text>
+                </View>
+                {(['Parking', 'Buvette', 'Toilettes', 'Eclairage', 'Boulodrome couvert', 'Vestiaires', 'Location de boules', 'Wi-Fi', 'Restaurant'] as const).map(fac => (
+                  <SubFilterChip key={fac} label={fac} isActive={clubFacilityFilter === fac} color={theme.accent} onPress={() => handleClubFacilityToggle(fac)} />
+                ))}
+              </ScrollView>
+              {clubFacilityFilter ? (
+                <View style={styles.subFilterActiveBar}>
+                  <Text style={styles.subFilterActiveText}>{counts.clubs} {language === 'fr' ? 'club(s) filtre(s)' : 'club(s) filtered'}</Text>
+                  <Pressable style={styles.subFilterClearBtn} onPress={handleClearClubSubFilters}>
+                    <MaterialIcons name="close" size={12} color={theme.primary} />
+                    <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                  </Pressable>
+                </View>
               ) : null}
             </View>
-            {/* Quick filter chips */}
-            {!search.trim() ? (
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChipsRow}>
-                {[{ label: language === 'fr' ? 'Pres de moi' : 'Near me', icon: 'my-location', onPress: () => {
-                  if (mapRef.current) {
-                    mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
-                  }
-                }},
-                ...topCities.map(tc => ({
-                  label: tc.name, icon: 'location-city' as const,
-                  onPress: () => { setSearch(tc.name); if (tc.lat && tc.lng && mapRef.current) mapRef.current.animateToRegion({ latitude: tc.lat, longitude: tc.lng, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 500); },
-                })),
-                ].map((chip, i) => (
-                  <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
-                    <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />
-                    <Text style={styles.suggestionChipText}>{chip.label}</Text>
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
-            {/* Suggestions dropdown */}
-            {showSuggestions && searchSuggestions.length > 0 ? (
-              <ScrollView style={styles.suggestionsContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                {searchSuggestions.map((sug, idx) => (
-                  <Pressable
-                    key={`${sug.label}-${sug.type}-${idx}`}
-                    style={styles.suggestionItem}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      setSearch(sug.label);
-                      setShowSuggestions(false);
-                      // Zoom to suggestion location if available
-                      if (sug.lat && sug.lng && mapRef.current) {
-                        mapRef.current.animateToRegion({
-                          latitude: sug.lat,
-                          longitude: sug.lng,
-                          latitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
-                          longitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
-                        }, 500);
-                      }
-                    }}
-                  >
-                    <View style={[styles.suggestionIcon, { backgroundColor: ((sug as any).color || theme.primary) + '12' }]}>
-                      <MaterialIcons name={((sug as any).icon || 'place') as any} size={16} color={(sug as any).color || theme.primary} />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
-                      <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` • ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
-                    </View>
-                    {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
-                  </Pressable>
-                ))}
-              </ScrollView>
-            ) : null}
-            {search.trim() && !showSuggestions ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
-          </Animated.View>
-        ) : null}
+          ) : null}
 
+          {/* Tournament sub-filters: format & status */}
+          {filter === 'tournaments' ? (
+            <TournamentSubFilters
+              tournamentFormatFilter={tournamentFormatFilter}
+              tournamentStatusFilter={tournamentStatusFilter}
+              onFormatPress={handleTournamentFormatToggle}
+              onStatusPress={handleTournamentStatusToggle}
+              onClear={handleClearTournamentSubFilters}
+              count={counts.tournaments}
+              language={language}
+            />
+          ) : null}
 
-
-        {/* Category filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-          <FilterChip label={t('map', 'all')} icon="layers" isActive={filter === 'all'} onPress={() => handleFilterPress('all')} />
-          {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-            <FilterChip key={k} label={MARKER_CONFIG[k].label} icon={MARKER_CONFIG[k].icon} isActive={filter === k} activeColor={MARKER_CONFIG[k].color} onPress={() => handleFilterPress(k)} />
-          ))}
-        </ScrollView>
-
-        {/* Terrain sub-filters: type & environment & characteristics */}
-        {filter === 'terrains' ? (
-          <TerrainSubFilters
-            terrainTypeFilter={terrainTypeFilter}
-            terrainEnvFilter={terrainEnvFilter}
-            terrainLightingFilter={terrainLightingFilter}
-            terrainCoveredFilter={terrainCoveredFilter}
-            terrainParkingFilter={terrainParkingFilter}
-            terrainToiletsFilter={terrainToiletsFilter}
-            terrainPublicAccessFilter={terrainPublicAccessFilter}
-            terrainMembersOnlyFilter={terrainMembersOnlyFilter}
-            terrainMultiCourtsFilter={terrainMultiCourtsFilter}
-            onTerrainTypePress={handleTerrainTypeToggle}
-            onTerrainEnvPress={handleTerrainEnvToggle}
-            onTerrainCharPress={handleTerrainCharToggle}
-            onClear={handleClearTerrainSubFilters}
-            count={counts.terrains}
-            language={language}
-          />
-        ) : null}
-
-        {/* Club sub-filters: facilities/equipment */}
-        {filter === 'clubs' ? (
-          <View style={styles.subFiltersContainer}>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-              <View style={styles.subFilterLabel}>
-                <MaterialIcons name="build" size={12} color={theme.textMuted} />
-                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Equipements' : 'Facilities'}</Text>
-              </View>
-              {(['Parking', 'Buvette', 'Toilettes', 'Eclairage', 'Boulodrome couvert', 'Vestiaires', 'Location de boules', 'Wi-Fi', 'Restaurant'] as const).map(fac => (
-                <SubFilterChip key={fac} label={fac} isActive={clubFacilityFilter === fac} color={theme.accent} onPress={() => handleClubFacilityToggle(fac)} />
-              ))}
-            </ScrollView>
-            {clubFacilityFilter ? (
-              <View style={styles.subFilterActiveBar}>
-                <Text style={styles.subFilterActiveText}>{counts.clubs} {language === 'fr' ? 'club(s) filtre(s)' : 'club(s) filtered'}</Text>
-                <Pressable style={styles.subFilterClearBtn} onPress={handleClearClubSubFilters}>
-                  <MaterialIcons name="close" size={12} color={theme.primary} />
-                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        ) : null}
-
-        {/* Tournament sub-filters: format & status */}
-        {filter === 'tournaments' ? (
-          <TournamentSubFilters
-            tournamentFormatFilter={tournamentFormatFilter}
-            tournamentStatusFilter={tournamentStatusFilter}
-            onFormatPress={handleTournamentFormatToggle}
-            onStatusPress={handleTournamentStatusToggle}
-            onClear={handleClearTournamentSubFilters}
-            count={counts.tournaments}
-            language={language}
-          />
-        ) : null}
-
-        {/* Player sub-filters: ELO rank, role & trust score */}
-        {filter === 'players' ? (
-          <PlayerSubFilters
-            eloRankFilter={eloRankFilter}
-            eloRangeFilter={eloRangeFilter}
-            trustFilter={trustFilter}
-            roleFilter={playerRoleFilter}
-            onEloRankPress={handleEloRankToggle}
-            onEloRangePress={handleEloRangeToggle}
-            onTrustPress={handleTrustToggle}
-            onRolePress={handlePlayerRoleToggle}
-            onClear={handleClearPlayerSubFilters}
-            count={counts.players}
-            language={language}
-          />
-        ) : null}
-      </View>
-
+          {/* Player sub-filters: ELO rank, role & trust score */}
+          {filter === 'players' ? (
+            <PlayerSubFilters
+              eloRankFilter={eloRankFilter}
+              eloRangeFilter={eloRangeFilter}
+              trustFilter={trustFilter}
+              roleFilter={playerRoleFilter}
+              onEloRankPress={handleEloRankToggle}
+              onEloRangePress={handleEloRangeToggle}
+              onTrustPress={handleTrustToggle}
+              onRolePress={handlePlayerRoleToggle}
+              onClear={handleClearPlayerSubFilters}
+              count={counts.players}
+              language={language}
+            />
+          ) : null}
+        </View>
+      </KeyboardAvoidingView>
       {/* Selected Card */}
       {selected ? (
         <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 155 }]}>
@@ -3119,7 +3123,7 @@ const styles = StyleSheet.create({
   subFilterClearText: { fontSize: 11, fontWeight: '600' as const, color: theme.primary },
 
   searchRowOuter: {
-    paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2,
+    paddingHorizontal: 12, paddingTop: 6, paddingBottom: 2,  position: 'relative',  zIndex: 50,             // ← add this
   },
   searchBar: {
     flexDirection: 'row', alignItems: 'center', backgroundColor: '#F1F5F9',
@@ -3127,7 +3131,13 @@ const styles = StyleSheet.create({
   },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary },
   searchCount: { fontSize: 11, color: theme.textSecondary, marginTop: 6, textAlign: 'center' },
-  suggestionsContainer: { backgroundColor: '#FFF', borderRadius: 12, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', maxHeight: 220, overflow: 'hidden' as const },
+  suggestionsContainer: { backgroundColor: '#FFF', borderRadius: 12, marginTop: 6, borderWidth: 1, borderColor: '#E2E8F0', maxHeight: 220, overflow: 'hidden' as const,
+    position: 'absolute',
+    bottom: '100%',         // ← anchors above search bar
+    left: 0,
+    right: 0,
+    zIndex: 100,
+   },
   suggestionItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
   suggestionIcon: { width: 32, height: 32, borderRadius: 10, alignItems: 'center' as const, justifyContent: 'center' as const },
   suggestionLabel: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
@@ -3497,4 +3507,11 @@ const styles = StyleSheet.create({
   clusterListItemType: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
   clusterListItemTypeText: { fontSize: 9, fontWeight: '700' as const },
   clusterListImportBtn: { padding: 4 },
+  keyboardAvoid: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    zIndex: 30,
+  },
 });

@@ -26,8 +26,8 @@ import { getSupabaseClient } from '@/template';
 const RECENT_SEARCHES_KEY = '@location_picker_recent_searches';
 const MAX_RECENT = 8;
 
+// const GOOGLE_API_KEY = '';
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
-
 export interface LocationData {
   address: string;
   city: string;
@@ -78,100 +78,153 @@ interface SearchResult {
 }
 
 // ============================================
-// Google Places Autocomplete
+// Places API (New) — Autocomplete
+// POST https://places.googleapis.com/v1/places:autocomplete
 // ============================================
 async function searchGooglePlaces(query: string, types?: string, lang: string = 'fr'): Promise<SearchResult[]> {
   if (!GOOGLE_API_KEY) return searchNominatimFallback(query);
   try {
-    const params = new URLSearchParams({
+    const body: Record<string, any> = {
       input: query,
-      key: GOOGLE_API_KEY,
-      language: lang,
-    });
-    if (types) params.set('types', types);
+      languageCode: lang,
+    };
+
+    // Map legacy type strings to new includedPrimaryTypes format
+    if (types === '(cities)') {
+      body.includedPrimaryTypes = ['locality', 'administrative_area_level_3'];
+    } else if (types === '(regions)') {
+      body.includedPrimaryTypes = ['postal_code'];
+    }
 
     const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/autocomplete/json?${params.toString()}`
+      'https://places.googleapis.com/v1/places:autocomplete',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Goog-Api-Key': GOOGLE_API_KEY,
+        },
+        body: JSON.stringify(body),
+      }
     );
-    if (!response.ok) return [];
-    const data = await response.json();
-    if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
-      console.log('[Google Places] Status:', data.status, data.error_message);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.log('[Google Places New] Autocomplete error:', response.status, errText);
       return [];
     }
 
-    return (data.predictions || []).map((p: any) => ({
-      id: p.place_id,
-      placeId: p.place_id,
-      address: p.structured_formatting?.main_text || '',
-      city: '',
-      country: '',
-      latitude: 0,
-      longitude: 0,
-      formattedAddress: p.description || '',
-    }));
+    const data = await response.json();
+    const suggestions = data.suggestions || [];
+
+    return suggestions
+      .filter((s: any) => s.placePrediction)
+      .map((s: any) => {
+        const p = s.placePrediction;
+        return {
+          id: p.placeId,
+          placeId: p.placeId,
+          address: p.structuredFormat?.mainText?.text || '',
+          city: '',
+          country: '',
+          latitude: 0,
+          longitude: 0,
+          formattedAddress: p.text?.text || p.structuredFormat?.mainText?.text || '',
+        };
+      });
   } catch (e) {
-    console.log('[Google Places] Search error:', e);
+    console.log('[Google Places New] Autocomplete exception:', e);
     return [];
   }
 }
 
-// Fetch full place details (lat/lng, address components) from a placeId
+// ============================================
+// Places API (New) — Place Details
+// GET https://places.googleapis.com/v1/places/{placeId}
+// ============================================
 async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Promise<SearchResult | null> {
   if (!GOOGLE_API_KEY) return null;
   try {
-    const params = new URLSearchParams({
-      place_id: placeId,
-      key: GOOGLE_API_KEY,
-      fields: 'geometry,address_components,formatted_address,name,photos',
-      language: lang,
-    });
-    const response = await fetch(
-      `https://maps.googleapis.com/maps/api/place/details/json?${params.toString()}`
-    );
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (data.status !== 'OK' || !data.result) return null;
+    const fields = [
+      'id',
+      'displayName',
+      'formattedAddress',
+      'location',
+      'addressComponents',
+      'photos',
+    ].join(',');
 
-    const result = data.result;
-    const components = result.address_components || [];
+    const response = await fetch(
+      `https://places.googleapis.com/v1/places/${placeId}?languageCode=${lang}`,
+      {
+        method: 'GET',
+        headers: {
+          'X-Goog-Api-Key': GOOGLE_API_KEY,
+          'X-Goog-FieldMask': fields,
+        },
+      }
+    );
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.log('[Google Places New] Details error:', response.status, errText);
+      return null;
+    }
+
+    const result = await response.json();
+    const components: any[] = result.addressComponents || [];
+
     const getComponent = (type: string) =>
-      components.find((c: any) => c.types?.includes(type))?.long_name || '';
+      components.find((c: any) => c.types?.includes(type))?.longText || '';
 
     const streetNumber = getComponent('street_number');
     const route = getComponent('route');
     const street = [streetNumber, route].filter(Boolean).join(' ');
-    const city = getComponent('locality') || getComponent('administrative_area_level_2') || getComponent('postal_town') || getComponent('sublocality_level_1') || '';
+    const city =
+      getComponent('locality') ||
+      getComponent('administrative_area_level_2') ||
+      getComponent('postal_town') ||
+      getComponent('sublocality_level_1') ||
+      '';
     const country = getComponent('country') || '';
     const postalCode = getComponent('postal_code') || '';
-    const region = getComponent('administrative_area_level_1') || getComponent('administrative_area_level_2') || '';
-    const lat = result.geometry?.location?.lat || 0;
-    const lng = result.geometry?.location?.lng || 0;
+    const region =
+      getComponent('administrative_area_level_1') ||
+      getComponent('administrative_area_level_2') ||
+      '';
+    const lat = result.location?.latitude || 0;
+    const lng = result.location?.longitude || 0;
 
-    // Extract first photo reference if available
-    const photoRef = result.photos?.[0]?.photo_reference || '';
+    // First photo reference (New API uses photo resource name)
+    const photoRef = result.photos?.[0]?.name || '';
 
     return {
       id: placeId,
       placeId,
-      address: street || result.name || '',
+      address: street || result.displayName?.text || '',
       city,
       country,
       latitude: lat,
       longitude: lng,
-      formattedAddress: result.formatted_address || '',
+      formattedAddress: result.formattedAddress || '',
       postalCode,
       region,
-      placeName: result.name || '',
+      placeName: result.displayName?.text || '',
       googlePhotoRef: photoRef || undefined,
     };
   } catch (e) {
-    console.log('[Google Places] Details error:', e);
+    console.log('[Google Places New] Details exception:', e);
     return null;
   }
 }
 
-// Google Geocoding API reverse geocode
+// ============================================
+// Geocoding API (New) — Reverse Geocode
+// POST https://maps.googleapis.com/maps/api/geocode/json
+// Note: Geocoding API has no "New" variant yet; it already works with
+// projects that only have "Places API (New)" if Geocoding API is enabled.
+// If you also see REQUEST_DENIED here, enable "Geocoding API" in GCP Console.
+// ============================================
 async function reverseGoogleGeocode(lat: number, lng: number, lang: string = 'fr'): Promise<SearchResult | null> {
   if (!GOOGLE_API_KEY) return reverseNominatimFallback(lat, lng);
   try {
@@ -185,7 +238,10 @@ async function reverseGoogleGeocode(lat: number, lng: number, lang: string = 'fr
     );
     if (!response.ok) return null;
     const data = await response.json();
-    if (data.status !== 'OK' || !data.results || data.results.length === 0) return null;
+    if (data.status !== 'OK' || !data.results || data.results.length === 0) {
+      console.log('[Geocoding API] Status:', data.status, data.error_message);
+      return null;
+    }
 
     const result = data.results[0];
     const components = result.address_components || [];
@@ -195,10 +251,17 @@ async function reverseGoogleGeocode(lat: number, lng: number, lang: string = 'fr
     const streetNumber = getComponent('street_number');
     const route = getComponent('route');
     const street = [streetNumber, route].filter(Boolean).join(' ');
-    const city = getComponent('locality') || getComponent('administrative_area_level_2') || getComponent('postal_town') || '';
+    const city =
+      getComponent('locality') ||
+      getComponent('administrative_area_level_2') ||
+      getComponent('postal_town') ||
+      '';
     const country = getComponent('country') || '';
     const postalCode = getComponent('postal_code') || '';
-    const region = getComponent('administrative_area_level_1') || getComponent('administrative_area_level_2') || '';
+    const region =
+      getComponent('administrative_area_level_1') ||
+      getComponent('administrative_area_level_2') ||
+      '';
 
     return {
       id: result.place_id || `${lat}-${lng}`,
@@ -207,12 +270,14 @@ async function reverseGoogleGeocode(lat: number, lng: number, lang: string = 'fr
       country,
       latitude: lat,
       longitude: lng,
-      formattedAddress: result.formatted_address || [street, city, country].filter(Boolean).join(', '),
+      formattedAddress:
+        result.formatted_address ||
+        [street, city, country].filter(Boolean).join(', '),
       postalCode,
       region,
     };
   } catch (e) {
-    console.log('[Google Geocode] Reverse error:', e);
+    console.log('[Geocoding API] Reverse error:', e);
     return null;
   }
 }
@@ -230,22 +295,35 @@ async function searchNominatimFallback(query: string): Promise<SearchResult[]> {
     if (!response.ok) return [];
     const data = await response.json();
     if (!Array.isArray(data)) return [];
-    return data.map((item: any) => {
-      const addr = item.address || {};
-      const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
-      const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
-      const country = addr.country || '';
-      return {
-        id: `${item.place_id}`,
-        address: street || item.name || '',
-        city,
-        country,
-        latitude: parseFloat(item.lat),
-        longitude: parseFloat(item.lon),
-        formattedAddress: [street, city, country].filter(Boolean).join(', ') || item.display_name || '',
-      };
-    }).filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude));
-  } catch { return []; }
+    return data
+      .map((item: any) => {
+        const addr = item.address || {};
+        const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
+        const city =
+          addr.city ||
+          addr.town ||
+          addr.village ||
+          addr.municipality ||
+          addr.hamlet ||
+          '';
+        const country = addr.country || '';
+        return {
+          id: `${item.place_id}`,
+          address: street || item.name || '',
+          city,
+          country,
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          formattedAddress:
+            [street, city, country].filter(Boolean).join(', ') ||
+            item.display_name ||
+            '',
+        };
+      })
+      .filter((r: SearchResult) => !isNaN(r.latitude) && !isNaN(r.longitude));
+  } catch {
+    return [];
+  }
 }
 
 async function reverseNominatimFallback(lat: number, lng: number): Promise<SearchResult | null> {
@@ -259,7 +337,13 @@ async function reverseNominatimFallback(lat: number, lng: number): Promise<Searc
     if (!item || item.error) return null;
     const addr = item.address || {};
     const street = [addr.house_number, addr.road].filter(Boolean).join(' ');
-    const city = addr.city || addr.town || addr.village || addr.municipality || addr.hamlet || '';
+    const city =
+      addr.city ||
+      addr.town ||
+      addr.village ||
+      addr.municipality ||
+      addr.hamlet ||
+      '';
     const country = addr.country || '';
     return {
       id: `${item.place_id || Date.now()}`,
@@ -270,7 +354,9 @@ async function reverseNominatimFallback(lat: number, lng: number): Promise<Searc
       longitude: parseFloat(item.lon),
       formattedAddress: [street, city, country].filter(Boolean).join(', '),
     };
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
 // Detect postal codes
@@ -354,7 +440,7 @@ export default function LocationPicker({
     return status === 'granted';
   };
 
-  // Search addresses using Google Places Autocomplete
+  // Search addresses using Places API (New)
   const searchAddresses = useCallback(async (query: string) => {
     if (!query.trim() || query.length < 3) {
       setSearchResults([]);
@@ -364,7 +450,6 @@ export default function LocationPicker({
     setIsSearching(true);
     try {
       if (GOOGLE_API_KEY) {
-        // Google Places Autocomplete
         let types: string | undefined;
         if (showCityOnly) {
           types = '(cities)';
@@ -373,7 +458,9 @@ export default function LocationPicker({
         }
 
         const results = await searchGooglePlaces(query, types, lang);
+        console.log(results);
         setSearchResults(results);
+        console.log(results);
       } else {
         // Fallback to Nominatim
         const results = await searchNominatimFallback(query);
@@ -428,7 +515,6 @@ export default function LocationPicker({
         accuracy: Location.Accuracy.Balanced,
       });
 
-      // Reverse geocode using Google or Nominatim fallback
       const geocodeResult = await reverseGoogleGeocode(
         location.coords.latitude,
         location.coords.longitude,
@@ -558,14 +644,12 @@ export default function LocationPicker({
         };
         onChange(newLocation);
 
-        // Save resolved result to recents
         const resolvedResult: SearchResult = { ...result, ...details };
         setRecentSearches(prev => {
           const filtered = prev.filter(r => r.id !== resolvedResult.id);
           return [resolvedResult, ...filtered].slice(0, MAX_RECENT);
         });
       } else {
-        // Fallback: use the result as-is
         onChange({
           address: result.address,
           city: result.city,
@@ -576,7 +660,6 @@ export default function LocationPicker({
         });
       }
     } else {
-      // Already resolved (from recents or Nominatim fallback)
       onChange({
         address: result.address,
         city: result.city,
@@ -1104,7 +1187,6 @@ const styles = StyleSheet.create({
   cityModeText: { fontSize: 12, fontWeight: '600', color: theme.primary },
   postalCodeIndicator: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginHorizontal: 16, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#0EA5E9' + '10', borderRadius: theme.borderRadius.full, alignSelf: 'center' },
   postalCodeText: { fontSize: 12, fontWeight: '600', color: '#0EA5E9' },
-  // My Places
   myPlacesSection: { backgroundColor: '#7C3AED08', borderRadius: theme.borderRadius.md, marginBottom: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#7C3AED15' },
   myPlacesHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, paddingHorizontal: 12, paddingTop: 10, paddingBottom: 6 },
   myPlacesTitle: { fontSize: 11, fontWeight: '700' as const, color: '#7C3AED', letterSpacing: 0.5, textTransform: 'uppercase' as const },

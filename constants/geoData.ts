@@ -40,8 +40,14 @@ export const CONTINENT_MAP: Record<string, string> = {
   'Wallis-et-Futuna': 'Oceania',
 };
 
+const normalizeCountry = (str: string) =>
+  str
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .trim();
+
 export function getContinent(country: string): string {
-  return CONTINENT_MAP[country] || 'Europe';
+  return CONTINENT_MAP[normalizeCountry(country)] || 'Europe';
 }
 
 /** Localized continent labels */
@@ -86,7 +92,7 @@ const COUNTRY_FLAGS: Record<string, string> = {
   'Bresil': '🇧🇷', 'Brazil': '🇧🇷', 'Argentine': '🇦🇷', 'Argentina': '🇦🇷',
   'Chili': '🇨🇱', 'Chile': '🇨🇱', 'Colombie': '🇨🇴', 'Colombia': '🇨🇴',
   'Thailande': '🇹🇭', 'Thailand': '🇹🇭', 'Japon': '🇯🇵', 'Japan': '🇯🇵',
-  'Chine': '🇨🇳', 'China': '🇨🇳', 'Vietnam': '🇻🇳', 'Viêt Nam': '🇻🇳',
+  'Chine': '🇨🇳', 'China': '🇨🇳', 'Vietnam': '🇻🇳',
   'Cambodge': '🇰🇭', 'Cambodia': '🇰🇭', 'Laos': '🇱🇦',
   'Inde': '🇮🇳', 'India': '🇮🇳', 'Coree du Sud': '🇰🇷', 'South Korea': '🇰🇷',
   'Liban': '🇱🇧', 'Lebanon': '🇱🇧', 'Israel': '🇮🇱',
@@ -97,7 +103,7 @@ const COUNTRY_FLAGS: Record<string, string> = {
 
 /** Get flag emoji for a country name. Returns empty string if not found. */
 export function getCountryFlag(country: string): string {
-  return COUNTRY_FLAGS[country] || '';
+  return COUNTRY_FLAGS[normalizeCountry(country)] || '';
 }
 
 /** Continent flag/emoji */

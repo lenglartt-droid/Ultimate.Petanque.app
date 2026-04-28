@@ -293,6 +293,7 @@ export default function TournamentDetailScreen() {
       const { data: urlData } = supabase.storage.from('terrain-photos').getPublicUrl(storagePath);
       const publicUrl = urlData.publicUrl;
       await updateTournament(tournament.id, { posterUrl: publicUrl } as any);
+
       setPosterUrl(publicUrl);
       setPosterType(fileExt === 'pdf' ? 'pdf' : 'image');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -3145,6 +3146,7 @@ const styles = StyleSheet.create({
   },
   visibilitySection: {
     marginBottom: 20,
+    marginTop: 20
   },
   visibilityCard: {
     flexDirection: 'row',

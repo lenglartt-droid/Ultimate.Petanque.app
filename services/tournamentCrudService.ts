@@ -115,6 +115,7 @@ export async function updateTournamentOp(
   const { supabase, userId, isConnected, tournaments, setTournaments, sharedItemPermissions } = deps;
   const oldTournament = tournaments.find(t => t.id === id);
 
+  console.log("updating tournament -----------");
   setTournaments(prev => prev.map(tournament =>
     tournament.id === id ? { ...tournament, ...updates } : tournament
   ));
@@ -154,7 +155,11 @@ export async function updateTournamentOp(
     if (updates.registrationCost !== undefined) dbUpdates.registration_cost = updates.registrationCost;
     if (updates.prizeWon !== undefined) dbUpdates.prize_won = updates.prizeWon;
     if (updates.finalResult !== undefined) dbUpdates.final_result = updates.finalResult;
-    if (updates.posterUrl !== undefined) dbUpdates.poster_url = updates.posterUrl;
+    
+// ✅ Only include poster_url when it was explicitly passed, and map undefined → null
+  if ('posterUrl' in updates) dbUpdates.poster_url = updates.posterUrl ?? null;
+
+    console.log(dbUpdates);
     dbUpdates.updated_at = new Date().toISOString();
 
     await supabase.from('tournaments').update(dbUpdates).eq('id', id);
@@ -205,6 +210,7 @@ export async function autoUpdateTournamentStatuses(
  supabase: any,
  userId: string | undefined,
 ): Promise<string[]> {
+  console.log("-------update auto tournaments--------")
  if (!userId) return [];
  const now = new Date();
  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate()); // midnight today

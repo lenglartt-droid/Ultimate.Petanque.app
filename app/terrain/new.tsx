@@ -94,7 +94,8 @@ export default function NewTerrainScreen() {
   const insets = useSafeAreaInsets();
   const { clubs } = useAppData();
   const { addTerrain } = useAppActions();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
+  
   const { showAlert } = useAlert();
   const { user } = useAuth();
   const [isSaving, setIsSaving] = useState(false);

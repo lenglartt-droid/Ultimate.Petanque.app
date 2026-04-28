@@ -442,7 +442,7 @@ export default function NewTournamentScreen() {
                 <View style={styles.chipGrid}>
                   {config.registrationTypes.map(reg => {
                     const isActive = registrationType === reg;
-                    return (<Pressable key={reg} style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]} onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}><Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{t('registrationTypes', reg)}</Text></Pressable>);
+                    return (<Pressable key={reg} style={[styles.chipOutline, isActive && styles.chipOutlineActiveWarn]} onPress={() => { Haptics.selectionAsync(); setRegistrationType(registrationType === reg ? undefined : reg); }}><Text style={[styles.chipOutlineText, isActive && styles.chipOutlineTextPrimary]}>{t('registrationTypes', reg)}</Text></Pressable>);
                   })}
                 </View>
               </View>
@@ -461,12 +461,12 @@ export default function NewTournamentScreen() {
             </Pressable>
             {showScopeSection ? (
               <View style={styles.accordionContent}>
-                <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                <View style={styles.chipGrid}>
                   {config.tournamentScopes.map(scope => {
                     const isActive = tournamentScope === scope;
-                    return (<Pressable key={scope} style={[styles.chipBtn, isActive && styles.chipBtnActiveAccent]} onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}><Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text></Pressable>);
+                    return (<Pressable key={scope} style={[styles.chipOutline, isActive && styles.chipOutlineActivePrimary]} onPress={() => { Haptics.selectionAsync(); setTournamentScope(tournamentScope === scope ? undefined : scope); }}><Text style={[styles.chipBtnText, isActive && styles.chipBtnTextAccent]}>{t('tournamentScopes', scope)}</Text></Pressable>);
                   })}
-                </ScrollView>
+                </View>
               </View>
             ) : null}
           </Animated.View>

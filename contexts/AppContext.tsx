@@ -154,7 +154,6 @@ interface AppContextType {
   deleteTerrain: (id: string) => Promise<void>;
   deleteClub: (id: string) => Promise<void>;
   deleteTournament: (id: string) => Promise<void>;
-  deleteBoulesSet: (id: string) => Promise<void>;
 
   // Favorites
   favoriteTerrainIds: string[];
@@ -402,6 +401,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       try {
         const cached = await loadFromCache();
         if (cached) {
+          console.log("------cache loading----------")
           if (!initialLoadDone.current) {
             if (cached.players.length > 0) setPlayers(cached.players);
             if (cached.clubs.length > 0) setClubs(cached.clubs);
@@ -772,7 +772,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
       if (tournamentsRes.data) {
         const dbTournaments = tournamentsRes.data.map(mapTournamentFromDb);
+        console.log("db tournaments")
+        console.log(dbTournaments);
         setTournaments(dbTournaments);
+      
         // Auto-update tournament statuses based on dates
         setTimeout(() => {
           autoUpdateTournamentStatuses(dbTournaments, setTournaments, supabase, user?.id).catch(() => {});
@@ -878,6 +881,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           if (!deletedByTable[sd.table_name]) deletedByTable[sd.table_name] = new Set();
           deletedByTable[sd.table_name].add(sd.item_id);
         });
+
         if (deletedByTable['players']) setPlayers(prev => prev.filter(p => !deletedByTable['players']!.has(p.id)));
         if (deletedByTable['clubs']) setClubs(prev => prev.filter(c => !deletedByTable['clubs']!.has(c.id)));
         if (deletedByTable['terrains']) setTerrains(prev => prev.filter(t => !deletedByTable['terrains']!.has(t.id)));
@@ -885,6 +889,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
         if (deletedByTable['matches']) setMatches(prev => prev.filter(m => !deletedByTable['matches']!.has(m.id)));
         if (deletedByTable['challenges']) setChallenges(prev => prev.filter(c => !deletedByTable['challenges']!.has(c.id)));
         if (deletedByTable['boules_sets']) setBoulesSets(prev => prev.filter(b => !deletedByTable['boules_sets']!.has(b.id)));
+
       }
 
       // Merge updates
@@ -896,6 +901,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (challengesRes.data && challengesRes.data.length > 0) setChallenges(prev => mergeRecords(prev, challengesRes.data!.map(mapChallengeFromDb)));
 
       await setLastSyncTimestamp(syncTimestamp);
+      
     } catch (error) {
       console.log('Delta sync error, falling back to full sync:', error);
       return loadData();
