@@ -107,29 +107,29 @@ export default function ShareCardClub({
   if (isLandscape) {
     return (
       <View style={s.card}>
-        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 14, paddingBottom: 50, justifyContent: 'space-between' }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-            <MaterialIcons name="home" size={10} color={ct.accent} />
-            <Text style={{ fontSize: 8, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>CLUB</Text>
+        <LinearGradient colors={ct.gradients} style={{ flex: 1, padding: 10, paddingBottom: 44, justifyContent: 'space-between' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 3 }}>
+            <MaterialIcons name="home" size={9} color={ct.accent} />
+            <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>CLUB</Text>
           </View>
           <View style={{ flexDirection: 'row', flex: 1 }}>
-            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 8 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 3 }}>
-                <Text style={{ fontSize: 14, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{clubName}</Text>
+            <View style={{ flex: 1, justifyContent: 'center', paddingRight: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 2 }}>
+                <Text style={{ fontSize: 12, fontWeight: '800', color: ct.textPrimary }} numberOfLines={1}>{clubName}</Text>
                 {isVerified ? <MaterialIcons name="verified" size={12} color="#2563EB" /> : null}
               </View>
               {city ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, marginBottom: 4 }}>
-                  <MaterialIcons name="place" size={9} color={ct.textSecondary} />
-                  <Text style={{ fontSize: 9, color: ct.textSecondary }}>{[city, country].filter(Boolean).join(', ')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginBottom: 3 }}>
+                  <MaterialIcons name="place" size={8} color={ct.textSecondary} />
+                  <Text style={{ fontSize: 8, color: ct.textSecondary }}>{[city, country].filter(Boolean).join(', ')}</Text>
                 </View>
               ) : null}
               <GeoRankBadges geoRank={geoRank} compact />
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 3, marginTop: 4 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 2, marginTop: 3 }}>
                 {(facilities || []).slice(0, 3).map((f, i) => (
-                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 4, paddingVertical: 1.5, borderRadius: 4 }}>
-                    <MaterialIcons name="check-circle" size={7} color="#10B981" />
-                    <Text style={{ fontSize: 7, fontWeight: '600', color: '#10B981' }}>{f}</Text>
+                  <View key={i} style={{ flexDirection: 'row', alignItems: 'center', gap: 1.5, backgroundColor: 'rgba(255,255,255,0.04)', paddingHorizontal: 3, paddingVertical: 1, borderRadius: 3 }}>
+                    <MaterialIcons name="check-circle" size={6} color="#10B981" />
+                    <Text style={{ fontSize: 6, fontWeight: '600', color: '#10B981' }}>{f}</Text>
                   </View>
                 ))}
               </View>

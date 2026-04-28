@@ -30,6 +30,9 @@ import { SimplifiedShotNotation, SimpleShotRecord } from '@/components';
 import { showInterstitial } from '@/services/adService';
 import { predictMatch, getEloRank, formatEloDelta, ELO_INITIAL } from '@/services/eloService';
 import { analyzePlayerRoles, getSuggestionColor, getRoleIcon, getRoleColor, RoleSuggestion } from '@/services/roleAnalysisService';
+import { detectLinkedPlayers, createShareRequests } from '@/services/matchShareService';
+import { useAuth } from '@/template';
+import { useAlert } from '@/template';
 
 // Tournament phases configuration - IDs are DB values (French), labels translated at display time
 const PHASE_IDS = {
@@ -155,6 +158,9 @@ export default function NewMatchScreen() {
   const { players, tournaments, matches, selfPlayer, terrains, boulesSets } = useAppData();
   const { addMatch } = useAppActions();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const { showAlert } = useAlert();
+  const fr = language === 'fr';
   
   const isRevanche = revanche === 'true';
   const seriesWinsA = parseInt(initialWinsA || '0');
@@ -250,6 +256,8 @@ export default function NewMatchScreen() {
   const [showShareRequestModal, setShowShareRequestModal] = useState(false);
   const [shareRequestItemId, setShareRequestItemId] = useState<string | null>(null);
   const [shareRequestPlayerIds, setShareRequestPlayerIds] = useState<string[]>([]);
+  const [quickShareWinnerState, setQuickShareWinnerState] = useState<'idle' | 'loading' | 'sent' | 'no_accounts'>('idle');
+  const [quickShareWinnerCount, setQuickShareWinnerCount] = useState(0);
   const localPlayersWarningShown = useRef(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -1141,6 +1149,44 @@ export default function NewMatchScreen() {
       menes, playerActions, seriesId, seriesWinsA, seriesWinsB, currentMatchNumber, isFinale,
       addMatch, isTournamentMode, matches, t, seriesCompletionInfo, getPlayerName]);
 
+  // Quick share handler for winner overlay
+  const handleQuickShareFromWinner = useCallback(async (matchId: string) => {
+    if (!user?.id || !matchId) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickShareWinnerState('loading');
+    try {
+      const allPids = [...getTeamPlayerIds(teamAPlayers), ...getTeamPlayerIds(teamBPlayers)].filter(id => id !== '1' && id !== '2');
+      const { linkedPlayers } = await detectLinkedPlayers(allPids, user.id);
+      if (linkedPlayers.length === 0) {
+        setQuickShareWinnerState('no_accounts');
+        return;
+      }
+      const teamANames = teamAPlayers.map(p => getPlayerName(p.playerId)).join(', ');
+      const teamBNames = teamBPlayers.map(p => getPlayerName(p.playerId)).join(', ');
+      const summary = `${teamANames} vs ${teamBNames} (${teamAScore}-${teamBScore})`;
+      const senderName = selfPlayer?.name || user.username || user.email?.split('@')[0] || 'Joueur';
+      const { requests: newReqs, error } = await createShareRequests({
+        itemType: 'match',
+        itemId: matchId,
+        senderUserId: user.id,
+        senderName,
+        recipients: linkedPlayers.map(p => ({ userId: p.userId, permission: 'read' as const })),
+        itemSummary: summary,
+      });
+      if (error) {
+        showAlert(fr ? 'Erreur' : 'Error', error);
+        setQuickShareWinnerState('idle');
+        return;
+      }
+      setQuickShareWinnerCount(newReqs.length);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setQuickShareWinnerState('sent');
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+      setQuickShareWinnerState('idle');
+    }
+  }, [user, teamAPlayers, teamBPlayers, teamAScore, teamBScore, selfPlayer, fr, showAlert]);
+
   const teamsReady = teamAPlayers.length > 0 || teamBPlayers.length > 0;
   const isMatchReady = teamAScore > 0 || teamBScore > 0;
 
@@ -1805,19 +1851,97 @@ export default function NewMatchScreen() {
                   )}
                   
                   <View style={styles.fsWinnerButtons}>
-                    <Pressable 
-                      style={styles.fsWinnerBtnPrimary}
-                      onPress={() => {
-                        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        setFullscreenMode(false);
-                        setHasExitedFullscreen(true);
-                        handleSaveMatch();
-                        setTimeout(() => router.replace('/(tabs)'), 100);
-                      }}
-                    >
-                      <MaterialIcons name="check" size={22} color="#FFF" />
-                      <Text style={styles.fsWinnerBtnText}>{t('match', 'saveAndFinish')}</Text>
-                    </Pressable>
+                    {/* Quick Share with Teammates — Primary CTA */}
+                    {!hasOnlyLocalPlayers() && quickShareWinnerState !== 'sent' ? (
+                      <Pressable 
+                        style={[styles.fsWinnerBtnQuickShare, quickShareWinnerState === 'loading' && { opacity: 0.7 }, quickShareWinnerState === 'no_accounts' && { borderColor: 'rgba(245,158,11,0.4)', backgroundColor: 'rgba(245,158,11,0.1)' }]}
+                        onPress={async () => {
+                          if (quickShareWinnerState === 'loading') return;
+                          if (quickShareWinnerState === 'no_accounts') {
+                            // Already checked, just save & exit
+                            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                            setFullscreenMode(false);
+                            setHasExitedFullscreen(true);
+                            handleSaveMatch();
+                            setTimeout(() => router.replace('/(tabs)'), 100);
+                            return;
+                          }
+                          // Save first, then quick share
+                          const newId = await addMatch({
+                            date: new Date().toISOString(), mode: isTournamentMode ? 'Tournoi' : 'Entraînement', format,
+                            tournamentId: linkedTournament?.id, tournamentName: linkedTournament?.name,
+                            tournamentPhase: isTournamentMode ? (selectedPhase || undefined) : undefined,
+                            tournamentBracket: isTournamentMode && selectedPhase !== 'Poules' ? selectedBracket || undefined : undefined,
+                            terrainId: selectedTerrainId || linkedTournament?.terrainId || undefined,
+                            terrainType: selectedTerrain?.type || linkedTournament?.terrainType || undefined,
+                            boulesSetId: selectedBoulesSetId || undefined,
+                            teamA: { players: getTeamPlayerIds(teamAPlayers).length > 0 ? getTeamPlayerIds(teamAPlayers) : ['1'], playerNames: teamAPlayers.map(p => getPlayerName(p.playerId)), playerRoles: teamAPlayers.map(p => ({ playerId: p.playerId, role: p.role })), score: teamAScore },
+                            teamB: { players: getTeamPlayerIds(teamBPlayers).length > 0 ? getTeamPlayerIds(teamBPlayers) : ['2'], playerNames: teamBPlayers.map(p => getPlayerName(p.playerId)), playerRoles: teamBPlayers.map(p => ({ playerId: p.playerId, role: p.role })), score: teamBScore },
+                            winner: teamAScore > teamBScore ? 'A' : 'B',
+                            duration: matchTime > 0 ? Math.round(matchTime / 60) : Math.floor(Math.random() * 30) + 30,
+                            menes: menes.map(m => ({ teamAPoints: m.teamAPoints, teamBPoints: m.teamBPoints, duration: m.duration })),
+                            playerActions: playerActions.length > 0 ? playerActions : undefined,
+                            seriesInfo: seriesId ? { seriesId, matchNumber: currentMatchNumber, winsBeforeThisMatch: { teamA: seriesWinsA, teamB: seriesWinsB }, isFinale, seriesComplete: (seriesWinsA + (teamAScore > teamBScore ? 1 : 0)) >= 2 || (seriesWinsB + (teamBScore > teamAScore ? 1 : 0)) >= 2, seriesWinner: ((seriesWinsA + (teamAScore > teamBScore ? 1 : 0)) >= 2 || (seriesWinsB + (teamBScore > teamAScore ? 1 : 0)) >= 2) ? ((seriesWinsA + (teamAScore > teamBScore ? 1 : 0)) >= 2 ? 'A' : 'B') : undefined } : undefined,
+                          });
+                          if (newId) {
+                            setSavedMatchIdForShare(newId);
+                            await handleQuickShareFromWinner(newId);
+                          }
+                        }}
+                        disabled={quickShareWinnerState === 'loading'}
+                      >
+                        {quickShareWinnerState === 'loading' ? (
+                          <>
+                            <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 2, borderColor: '#FFF', borderTopColor: 'transparent' }} />
+                            <Text style={styles.fsWinnerBtnQuickShareText}>{fr ? 'Detection des comptes...' : 'Detecting accounts...'}</Text>
+                          </>
+                        ) : quickShareWinnerState === 'no_accounts' ? (
+                          <>
+                            <MaterialIcons name="person-off" size={22} color="#F59E0B" />
+                            <Text style={[styles.fsWinnerBtnQuickShareText, { color: '#F59E0B' }]}>{fr ? 'Aucun compte - Sauvegarder' : 'No accounts - Save'}</Text>
+                          </>
+                        ) : (
+                          <>
+                            <MaterialIcons name="group-add" size={22} color="#FFF" />
+                            <Text style={styles.fsWinnerBtnQuickShareText}>{fr ? 'Partager avec les coequipiers' : 'Share with teammates'}</Text>
+                          </>
+                        )}
+                      </Pressable>
+                    ) : null}
+
+                    {/* Sent confirmation + save */}
+                    {quickShareWinnerState === 'sent' ? (
+                      <Pressable 
+                        style={[styles.fsWinnerBtnPrimary, { backgroundColor: '#10B981' }]}
+                        onPress={() => {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          setFullscreenMode(false);
+                          setHasExitedFullscreen(true);
+                          showInterstitial().finally(() => {
+                            router.replace('/(tabs)');
+                          });
+                        }}
+                      >
+                        <MaterialIcons name="check-circle" size={22} color="#FFF" />
+                        <Text style={styles.fsWinnerBtnText}>
+                          {quickShareWinnerCount > 0 ? `${quickShareWinnerCount} ${fr ? 'joueur(s) notifie(s)' : 'player(s) notified'} - ` : ''}{fr ? 'Terminer' : 'Finish'}
+                        </Text>
+                      </Pressable>
+                    ) : (
+                      <Pressable 
+                        style={styles.fsWinnerBtnPrimary}
+                        onPress={() => {
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          setFullscreenMode(false);
+                          setHasExitedFullscreen(true);
+                          handleSaveMatch();
+                          setTimeout(() => router.replace('/(tabs)'), 100);
+                        }}
+                      >
+                        <MaterialIcons name="check" size={22} color="#FFF" />
+                        <Text style={styles.fsWinnerBtnText}>{t('match', 'saveAndFinish')}</Text>
+                      </Pressable>
+                    )}
                     
                     {seriesCompletionInfo?.isComplete ? (
                       <Pressable 
@@ -3206,6 +3330,8 @@ const styles = StyleSheet.create({
   fsWinnerBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   fsWinnerBtnRevanche: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 16, backgroundColor: 'rgba(251, 191, 36, 0.15)', borderRadius: 20, borderWidth: 2, borderColor: 'rgba(251, 191, 36, 0.4)' },
   fsWinnerBtnRevancheText: { fontSize: 16, fontWeight: '700', color: theme.warning },
+  fsWinnerBtnQuickShare: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, paddingHorizontal: 32, paddingVertical: 18, backgroundColor: '#22C55E', borderRadius: 20, borderWidth: 2, borderColor: '#22C55E' },
+  fsWinnerBtnQuickShareText: { fontSize: 16, fontWeight: '700' as const, color: '#FFF' },
   fsWinnerBtnShare: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingHorizontal: 32, paddingVertical: 14, backgroundColor: 'rgba(255,255,255,0.12)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
   fsWinnerBtnShareText: { fontSize: 15, fontWeight: '600', color: 'rgba(255,255,255,0.9)' },
   fsWinnerSeriesInfo: { marginTop: 12, paddingHorizontal: 16, paddingVertical: 8, backgroundColor: 'rgba(255,255,255,0.1)', borderRadius: 12 },

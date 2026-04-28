@@ -51,6 +51,7 @@ import {
   cancelTournamentNotifications,
   sendTestNotification,
 } from '@/services/notificationService';
+import { detectLinkedPlayers, createShareRequests, getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
 
 // Phase IDs - DB values (French), translated at display time
 const PHASE_IDS = {
@@ -234,6 +235,11 @@ export default function TournamentDetailScreen() {
   const [togglingPublic, setTogglingPublic] = useState(false);
   const [showPublicPreview, setShowPublicPreview] = useState(false);
 
+  // Quick share state
+  const [quickShareState, setQuickShareState] = useState<'idle' | 'loading' | 'sent' | 'no_accounts' | 'already_shared'>('idle');
+  const [quickShareCount, setQuickShareCount] = useState(0);
+  const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
+
   // Poster state
   const [posterUrl, setPosterUrl] = useState<string | null>(null);
   const [posterType, setPosterType] = useState<'image' | 'pdf'>('image');
@@ -252,8 +258,66 @@ export default function TournamentDetailScreen() {
   useEffect(() => {
     if (id) {
       isSharedWithMe('tournament', id).then(shared => { setIsShared(shared); if (shared) recordShareView('tournament', id, 'tournament-detail'); });
+      getShareRequestsForItem('tournament', id).then(({ requests }) => setShareRequests(requests)).catch(() => {});
     }
   }, [id]);
+
+  // Quick share with tournament players
+  const handleQuickShareWithPlayers = useCallback(async () => {
+    if (!tournament || !user?.id || !id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickShareState('loading');
+    try {
+      // Collect all unique player IDs from tournament matches
+      const allPlayerIds = new Set<string>();
+      myMatches.forEach(m => {
+        [...(m.teamA.players || []), ...(m.teamB.players || [])].forEach(pid => {
+          if (pid !== '1' && pid !== '2') allPlayerIds.add(pid);
+        });
+      });
+      if (allPlayerIds.size === 0) {
+        setQuickShareState('no_accounts');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const { linkedPlayers } = await detectLinkedPlayers([...allPlayerIds], user.id);
+      if (linkedPlayers.length === 0) {
+        setQuickShareState('no_accounts');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const alreadySharedIds = new Set(shareRequests.map(r => r.recipientUserId));
+      const newRecipients = linkedPlayers.filter(p => !alreadySharedIds.has(p.userId));
+      if (newRecipients.length === 0) {
+        setQuickShareState('already_shared');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const senderName = user.username || user.email?.split('@')[0] || 'Joueur';
+      const summary = `${tournament.name} - ${t('formats', tournament.format)} (${myStats.wins}V/${myStats.losses}D)`;
+      const { requests: newReqs, error } = await createShareRequests({
+        itemType: 'match' as any,
+        itemId: id,
+        senderUserId: user.id,
+        senderName,
+        recipients: newRecipients.map(p => ({ userId: p.userId, permission: 'read' as const })),
+        itemSummary: summary,
+      });
+      if (error) {
+        showShareAlert(t('common', 'error'), error);
+        setQuickShareState('idle');
+        return;
+      }
+      setQuickShareCount(newReqs.length);
+      setShareRequests(prev => [...newReqs, ...prev]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setQuickShareState('sent');
+      setTimeout(() => setQuickShareState('idle'), 3000);
+    } catch (e: any) {
+      showShareAlert(t('common', 'error'), e.message);
+      setQuickShareState('idle');
+    }
+  }, [tournament, user, id, myMatches, shareRequests, myStats, t, showShareAlert]);
 
   useEffect(() => {
     if (tournament) setIsPublicState(tournament.isPublic ?? false);
@@ -1105,6 +1169,67 @@ export default function TournamentDetailScreen() {
             {posterUrl ? <Image source={{ uri: posterUrl }} style={{ width: '100%', height: '80%' }} contentFit="contain" transition={200} /> : null}
           </View>
         </Modal>
+
+        {/* Quick Share with Tournament Players */}
+        {canEdit && !isSharedItem && myMatches.length > 0 ? (
+          <Animated.View entering={FadeInDown.duration(300).delay(140)}>
+            <Pressable
+              style={[styles.quickShareBtn, quickShareState === 'sent' && styles.quickShareBtnSent, quickShareState === 'loading' && { opacity: 0.7 }]}
+              onPress={handleQuickShareWithPlayers}
+              disabled={quickShareState === 'loading' || quickShareState === 'sent'}
+            >
+              {quickShareState === 'loading' ? (
+                <>
+                  <ActivityIndicator size="small" color={theme.primary} />
+                  <Text style={styles.quickShareText}>{language === 'fr' ? 'Detection des comptes...' : 'Detecting accounts...'}</Text>
+                </>
+              ) : quickShareState === 'sent' ? (
+                <>
+                  <View style={[styles.quickShareIconBg, { backgroundColor: '#10B98115' }]}>
+                    <MaterialIcons name="check-circle" size={20} color="#10B981" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.quickShareTitle, { color: '#10B981' }]}>{language === 'fr' ? 'Demandes envoyees !' : 'Requests sent!'}</Text>
+                    <Text style={styles.quickShareSub}>{quickShareCount} {language === 'fr' ? 'joueur(s) notifie(s)' : 'player(s) notified'}</Text>
+                  </View>
+                </>
+              ) : quickShareState === 'no_accounts' ? (
+                <>
+                  <View style={[styles.quickShareIconBg, { backgroundColor: '#F59E0B15' }]}>
+                    <MaterialIcons name="person-off" size={20} color="#F59E0B" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.quickShareTitle, { color: '#F59E0B' }]}>{language === 'fr' ? 'Aucun compte detecte' : 'No accounts detected'}</Text>
+                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Les joueurs n\'ont pas de compte lie' : 'Players have no linked accounts'}</Text>
+                  </View>
+                </>
+              ) : quickShareState === 'already_shared' ? (
+                <>
+                  <View style={[styles.quickShareIconBg, { backgroundColor: theme.primary + '15' }]}>
+                    <MaterialIcons name="done-all" size={20} color={theme.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.quickShareTitle, { color: theme.primary }]}>{language === 'fr' ? 'Deja partage' : 'Already shared'}</Text>
+                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Tous les joueurs ont deja recu une demande' : 'All players already received a request'}</Text>
+                  </View>
+                </>
+              ) : (
+                <>
+                  <View style={[styles.quickShareIconBg, { backgroundColor: '#22C55E15' }]}>
+                    <MaterialIcons name="group-add" size={20} color="#22C55E" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.quickShareTitle}>{language === 'fr' ? 'Partager avec les coequipiers' : 'Share with teammates'}</Text>
+                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Envoie automatique aux joueurs avec un compte' : 'Auto-send to players with an account'}</Text>
+                  </View>
+                  <View style={styles.quickShareArrow}>
+                    <MaterialIcons name="send" size={16} color="#22C55E" />
+                  </View>
+                </>
+              )}
+            </Pressable>
+          </Animated.View>
+        ) : null}
 
         {/* Match Timeline */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>
@@ -3220,4 +3345,12 @@ const styles = StyleSheet.create({
   pvCancelText: { fontSize: 15, fontWeight: '600' as const, color: theme.textSecondary },
   pvConfirmBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, paddingVertical: 14, borderRadius: theme.borderRadius.md },
   pvConfirmText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+  // Quick share
+  quickShareBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#22C55E30', ...theme.shadows.card },
+  quickShareBtnSent: { borderColor: '#10B98140', backgroundColor: '#F0FDF4' },
+  quickShareIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  quickShareTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  quickShareSub: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  quickShareText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  quickShareArrow: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const },
 });

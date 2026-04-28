@@ -42,7 +42,7 @@ import { getEloRank, getEloColor, formatEloDelta, EloHistoryEntry } from '@/serv
 import { getSupabaseClient } from '@/template';
 import { Player } from '@/types/petanque';
 import { useAppData as useAppDataHook } from '@/contexts/AppContext';
-import { getShareRequestsForItem, revokeShareRequest, revokeAllShareRequests, getShareRequestRemainingTime, MatchShareRequest } from '@/services/matchShareService';
+import { getShareRequestsForItem, revokeShareRequest, revokeAllShareRequests, getShareRequestRemainingTime, MatchShareRequest, detectLinkedPlayers, createShareRequests } from '@/services/matchShareService';
 
 export default function MatchDetailScreen() {
   const insets = useSafeAreaInsets();
@@ -60,6 +60,8 @@ export default function MatchDetailScreen() {
   const [witnessRequests, setWitnessRequests] = useState<any[]>([]);
   const [exportingPdf, setExportingPdf] = useState(false);
   const [shareRequests, setShareRequests] = useState<MatchShareRequest[]>([]);
+  const [quickShareState, setQuickShareState] = useState<'idle' | 'loading' | 'sent' | 'no_accounts' | 'already_shared'>('idle');
+  const [quickShareCount, setQuickShareCount] = useState(0);
   const { showAlert } = useAlert();
 
   const { players: allPlayers } = useAppDataHook();
@@ -155,6 +157,55 @@ export default function MatchDetailScreen() {
     const avgScoreB = h2hMatches.length > 0 ? Math.round((totalScoreB / h2hMatches.length) * 10) / 10 : 0;
     return { matches: h2hMatches.slice(0, 10), myWins, oppWins, total: h2hMatches.length, avgScoreA, avgScoreB };
   }, [match, matches]);
+
+  // Quick share with teammates handler
+  const handleQuickShareWithTeammates = useCallback(async () => {
+    if (!match || !user?.id || !id) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setQuickShareState('loading');
+    try {
+      const allPlayerIds = [...(match.teamA.players || []), ...(match.teamB.players || [])];
+      const { linkedPlayers } = await detectLinkedPlayers(allPlayerIds, user.id);
+      if (linkedPlayers.length === 0) {
+        setQuickShareState('no_accounts');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      // Check which ones already have a share request
+      const alreadySharedIds = new Set(shareRequests.map(r => r.recipientUserId));
+      const newRecipients = linkedPlayers.filter(p => !alreadySharedIds.has(p.userId));
+      if (newRecipients.length === 0) {
+        setQuickShareState('already_shared');
+        setTimeout(() => setQuickShareState('idle'), 2500);
+        return;
+      }
+      const teamANames = (match.teamA.playerNames || []).join(', ');
+      const teamBNames = (match.teamB.playerNames || []).join(', ');
+      const summary = `${teamANames} vs ${teamBNames} (${match.teamA.score}-${match.teamB.score})`;
+      const senderName = user.username || user.email?.split('@')[0] || 'Joueur';
+      const { requests: newReqs, error } = await createShareRequests({
+        itemType: 'match',
+        itemId: id,
+        senderUserId: user.id,
+        senderName,
+        recipients: newRecipients.map(p => ({ userId: p.userId, permission: 'read' as const })),
+        itemSummary: summary,
+      });
+      if (error) {
+        showAlert(fr ? 'Erreur' : 'Error', error);
+        setQuickShareState('idle');
+        return;
+      }
+      setQuickShareCount(newReqs.length);
+      setShareRequests(prev => [...newReqs, ...prev]);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setQuickShareState('sent');
+      setTimeout(() => setQuickShareState('idle'), 3000);
+    } catch (e: any) {
+      showAlert(fr ? 'Erreur' : 'Error', e.message);
+      setQuickShareState('idle');
+    }
+  }, [match, user, id, shareRequests, fr, showAlert]);
 
   const sharedPermission = id ? getSharedPermission(id) : null;
   const isShared = id ? isSharedItem(id) : false;
@@ -422,6 +473,65 @@ export default function MatchDetailScreen() {
           ) : null}
         </View>
 
+        {/* Quick Share with Teammates */}
+        {match.userId === user?.id && !isLocalOnlyMatch ? (
+          <Pressable
+            style={[s.quickShareBtn, quickShareState === 'sent' && { borderColor: '#10B98140', backgroundColor: '#F0FDF4' }, quickShareState === 'loading' && { opacity: 0.7 }]}
+            onPress={handleQuickShareWithTeammates}
+            disabled={quickShareState === 'loading' || quickShareState === 'sent'}
+          >
+            {quickShareState === 'loading' ? (
+              <>
+                <ActivityIndicator size="small" color={theme.primary} />
+                <Text style={s.quickShareText}>{fr ? 'Detection des comptes...' : 'Detecting accounts...'}</Text>
+              </>
+            ) : quickShareState === 'sent' ? (
+              <>
+                <View style={[s.quickShareIconBg, { backgroundColor: '#10B98115' }]}>
+                  <MaterialIcons name="check-circle" size={20} color="#10B981" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.quickShareTitle, { color: '#10B981' }]}>{fr ? 'Demandes envoyees !' : 'Requests sent!'}</Text>
+                  <Text style={s.quickShareSub}>{quickShareCount} {fr ? 'joueur(s) notifie(s)' : 'player(s) notified'}</Text>
+                </View>
+              </>
+            ) : quickShareState === 'no_accounts' ? (
+              <>
+                <View style={[s.quickShareIconBg, { backgroundColor: '#F59E0B15' }]}>
+                  <MaterialIcons name="person-off" size={20} color="#F59E0B" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.quickShareTitle, { color: '#F59E0B' }]}>{fr ? 'Aucun compte detecte' : 'No accounts detected'}</Text>
+                  <Text style={s.quickShareSub}>{fr ? 'Les joueurs de ce match n\'ont pas de compte lie' : 'Players in this match have no linked accounts'}</Text>
+                </View>
+              </>
+            ) : quickShareState === 'already_shared' ? (
+              <>
+                <View style={[s.quickShareIconBg, { backgroundColor: theme.primary + '15' }]}>
+                  <MaterialIcons name="done-all" size={20} color={theme.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[s.quickShareTitle, { color: theme.primary }]}>{fr ? 'Deja partage' : 'Already shared'}</Text>
+                  <Text style={s.quickShareSub}>{fr ? 'Tous les joueurs ont deja recu une demande' : 'All players already received a request'}</Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={[s.quickShareIconBg, { backgroundColor: '#22C55E15' }]}>
+                  <MaterialIcons name="group-add" size={20} color="#22C55E" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={s.quickShareTitle}>{fr ? 'Partager avec les coequipiers' : 'Share with teammates'}</Text>
+                  <Text style={s.quickShareSub}>{fr ? 'Envoie automatique aux joueurs avec un compte' : 'Auto-send to players with an account'}</Text>
+                </View>
+                <View style={s.quickShareArrow}>
+                  <MaterialIcons name="send" size={16} color="#22C55E" />
+                </View>
+              </>
+            )}
+          </Pressable>
+        ) : null}
+
         {/* Shared Match Badge Indicator */}
         {shareRequests.length > 0 ? (
           <View style={[s.card, { borderWidth: 1, borderColor: theme.primary + '25' }]}>
@@ -554,6 +664,17 @@ export default function MatchDetailScreen() {
                 </Text>
               </View>
             ) : null}
+            {/* Link to share history */}
+            <Pressable
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border }}
+              onPress={() => { Haptics.selectionAsync(); router.push('/share-history' as any); }}
+            >
+              <MaterialIcons name="history" size={14} color={theme.primary} />
+              <Text style={{ fontSize: 11, fontWeight: '600', color: theme.primary }}>
+                {fr ? 'Voir l\'historique des partages' : 'View share history'}
+              </Text>
+              <MaterialIcons name="chevron-right" size={14} color={theme.primary} />
+            </Pressable>
           </View>
         ) : null}
 
@@ -1506,6 +1627,14 @@ const s = StyleSheet.create({
   shareCtaText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
   pdfCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 10, backgroundColor: '#EF4444', paddingVertical: 16, borderRadius: 18, ...Platform.select({ ios: { shadowColor: '#EF4444', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 12 }, android: { elevation: 3 }, default: {} }) },
   pdfCtaText: { fontSize: 15, fontWeight: '700' as const, color: '#FFF' },
+
+  // Quick share
+  quickShareBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: 18, padding: 16, marginBottom: 14, borderWidth: 1.5, borderColor: '#22C55E30', ...Platform.select({ ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
+  quickShareIconBg: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
+  quickShareTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  quickShareSub: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
+  quickShareText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
+  quickShareArrow: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const },
 
   // H2H Styles
   h2hSummary: { flexDirection: 'row' as const, alignItems: 'center' as const, marginBottom: 14, paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: theme.border },
