@@ -122,7 +122,9 @@ export default function ClubDetailScreen() {
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  const canEdit = !isReadOnly;
+  const isOwner = !!(user?.id && club?.userId && club.userId === user.id);
+  const isCoadmin = !!(user?.id && club && (club as any).adminUserIds?.includes(user.id));
+  const canEdit = !isReadOnly && (isOwner || isCoadmin);
   const supabase = getSupabaseClient();
 
   // Logo upload state
