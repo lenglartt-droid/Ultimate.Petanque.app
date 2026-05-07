@@ -2102,8 +2102,20 @@ useEffect(() => {
   );
 
   // Manage modal section renderer
+  const handleBatchTogglePublic = useCallback(async (table: 'players' | 'clubs' | 'terrains' | 'tournaments', items: any[], makePublic: boolean) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const toToggle = items.filter((i: any) => i.isPublic !== makePublic);
+    for (const item of toToggle) {
+      await handleTogglePublic(table, item.id, item.isPublic);
+    }
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+  }, [handleTogglePublic]);
+
   const renderManageSection = (table: 'players' | 'clubs' | 'terrains' | 'tournaments', items: any[], icon: string, color: string, label: string) => {
     if (items.length === 0) return null;
+    const publicCount = items.filter((i: any) => i.isPublic).length;
+    const allPublic = publicCount === items.length;
+    const allPrivate = publicCount === 0;
     return (
       <View style={styles.manageSection}>
         <View style={styles.manageSectionHeader}>
@@ -2112,9 +2124,29 @@ useEffect(() => {
           </View>
           <Text style={styles.manageSectionTitle}>{label}</Text>
           <Text style={styles.manageSectionCount}>
-            {items.filter((i: any) => i.isPublic).length}/{items.length}
+            {publicCount}/{items.length}
           </Text>
         </View>
+        {items.length > 1 ? (
+          <View style={styles.batchToggleRow}>
+            <Pressable
+              style={[styles.batchToggleBtn, allPublic && { opacity: 0.5 }]}
+              onPress={() => handleBatchTogglePublic(table, items, true)}
+              disabled={allPublic}
+            >
+              <MaterialIcons name="public" size={14} color={theme.success} />
+              <Text style={[styles.batchToggleBtnText, { color: theme.success }]}>{language === 'fr' ? 'Tout public' : 'All public'}</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.batchToggleBtn, allPrivate && { opacity: 0.5 }]}
+              onPress={() => handleBatchTogglePublic(table, items, false)}
+              disabled={allPrivate}
+            >
+              <MaterialIcons name="lock" size={14} color={theme.textSecondary} />
+              <Text style={[styles.batchToggleBtnText, { color: theme.textSecondary }]}>{language === 'fr' ? 'Tout masquer' : 'All private'}</Text>
+            </Pressable>
+          </View>
+        ) : null}
         {items.map((item: any) => (
           <View key={item.id} style={styles.manageItem}>
             <Text style={styles.manageItemName} numberOfLines={1}>{item.name}</Text>
@@ -3388,6 +3420,7 @@ const styles = StyleSheet.create({
   },
   batchToggleBtnActive: { backgroundColor: theme.primary },
   batchToggleText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
+  batchToggleBtnText: { fontSize: 12, fontWeight: '700' },
   batchToggleTextActive: { color: '#FFF' },
   // Partner popup
   partnerPopup: {

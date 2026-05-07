@@ -251,7 +251,8 @@ export default function TournamentDetailScreen() {
   const sharedPermission = getSharedPermission(id!);
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  const canEdit = !isReadOnly;
+  const isOwner = !!(user?.id && tournament && tournament.userId && tournament.userId === user.id);
+  const canEdit = !isReadOnly && isOwner;
 
 
 

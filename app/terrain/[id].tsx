@@ -92,7 +92,8 @@ export default function TerrainDetailScreen() {
   const sharedPermission = getSharedPermission(id || '');
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  const canEdit = !isReadOnly;
+  const isOwner = !!(user?.id && terrain && (terrain as any).userId && (terrain as any).userId === user.id);
+  const canEdit = !isReadOnly && isOwner;
 
   const terrain = getTerrainById(id || '');
 
