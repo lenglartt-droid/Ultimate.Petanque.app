@@ -592,6 +592,16 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             <Text style={s.geoCtaBtnText}>{language === 'fr' ? 'Classement Geo' : 'Geo Ranking'}</Text>
             <MaterialIcons name="arrow-forward" size={14} color="#3B82F6" />
           </Pressable>
+          <Pressable style={[s.geoCtaBtn, { borderTopWidth: 1, borderTopColor: theme.border + '40' }]} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
+            <MaterialIcons name="home" size={14} color="#F59E0B" />
+            <Text style={[s.geoCtaBtnText, { color: '#F59E0B' }]}>{language === 'fr' ? 'Clubs par Ville' : 'Clubs by City'}</Text>
+            <MaterialIcons name="arrow-forward" size={14} color="#F59E0B" />
+          </Pressable>
+          <Pressable style={[s.geoCtaBtn, { borderTopWidth: 1, borderTopColor: theme.border + '40' }]} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
+            <MaterialIcons name="compare-arrows" size={14} color="#9333EA" />
+            <Text style={[s.geoCtaBtnText, { color: '#9333EA' }]}>{language === 'fr' ? 'Comparer des Clubs' : 'Compare Clubs'}</Text>
+            <MaterialIcons name="arrow-forward" size={14} color="#9333EA" />
+          </Pressable>
         </View>
       </View>
     </View>

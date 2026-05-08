@@ -342,6 +342,75 @@ export async function sendStatsSyncedNotification(params: {
 }
 
 /**
+ * Send immediate local notification when nearby active terrains are detected.
+ * Includes deduplication: only sends once per 4 hours.
+ */
+export async function sendProximityTerrainNotification(params: {
+  terrains: { id: string; name: string; distance: number; activityLabel: string }[];
+  language?: string;
+}): Promise<boolean> {
+  if (Platform.OS === 'web') return false;
+  try {
+    const { terrains, language = 'fr' } = params;
+    if (terrains.length === 0) return false;
+
+    // Deduplication: check last sent time
+    const AsyncStorage = require('@react-native-async-storage/async-storage').default;
+    const PROXIMITY_NOTIF_KEY = '@proximity_push_last_sent';
+    const COOLDOWN = 4 * 60 * 60 * 1000; // 4 hours
+    const lastSent = await AsyncStorage.getItem(PROXIMITY_NOTIF_KEY);
+    if (lastSent && Date.now() - parseInt(lastSent, 10) < COOLDOWN) return false;
+
+    const fr = language === 'fr';
+    const first = terrains[0];
+    const distStr = first.distance < 1000 ? `${first.distance}m` : `${(first.distance / 1000).toFixed(1)}km`;
+    const title = fr
+      ? `\u{1F4CD} Terrain actif a ${distStr}`
+      : `\u{1F4CD} Active court ${distStr} away`;
+    const body = terrains.length === 1
+      ? `${first.name} — ${first.activityLabel}`
+      : fr
+        ? `${first.name} et ${terrains.length - 1} autre(s) terrain(s) avec activite`
+        : `${first.name} and ${terrains.length - 1} other court(s) with activity`;
+
+    if (Platform.OS === 'android') {
+      try {
+        await Notifications.setNotificationChannelAsync('proximity-alerts', {
+          name: fr ? 'Alertes de proximite' : 'Proximity alerts',
+          description: fr ? 'Terrains actifs pres de vous' : 'Active courts near you',
+          importance: Notifications.AndroidImportance.HIGH,
+          vibrationPattern: [0, 200, 100, 200],
+          lightColor: '#22C55E',
+          sound: 'default',
+        });
+      } catch { /* silent */ }
+    }
+
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        data: {
+          type: 'terrain_activity',
+          terrainId: first.id,
+          lat: String(first.distance), // used for navigation
+        },
+        sound: 'default',
+        badge: 1,
+        ...(Platform.OS === 'android' && { channelId: 'proximity-alerts' }),
+      },
+      trigger: null, // immediate
+    });
+
+    await AsyncStorage.setItem(PROXIMITY_NOTIF_KEY, String(Date.now()));
+    return true;
+  } catch (error) {
+    console.log('Error sending proximity notification:', error);
+    return false;
+  }
+}
+
+/**
  * Add notification response listener
  */
 export function addNotificationResponseListener(

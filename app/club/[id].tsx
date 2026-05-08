@@ -137,28 +137,41 @@ export default function ClubDetailScreen() {
   const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
   // const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375); // This variable `screenWidth2` is unused.
 
-  // Geo ranking state for club
+  // Geo ranking state for club (ranks this club among other clubs)
   const [clubGeoRank, setClubGeoRank] = React.useState<{ city?: { rank: number; total: number }; country?: { rank: number; total: number }; continent?: { rank: number; total: number }; world?: { rank: number; total: number } } | null>(null);
   React.useEffect(() => {
     if (!club) return;
-    fetchGeoLeaderboard().then(({ cities, countries, continents }) => {
+    // Fetch club leaderboard to rank this club among others
+    const { fetchClubLeaderboard, sortClubLeaderboard } = require('@/services/clubLeaderboardService');
+    fetchClubLeaderboard().then(({ clubs: allClubs }: any) => {
+      if (!allClubs || allClubs.length === 0) return;
+      const sorted = sortClubLeaderboard(allClubs, 'compositeScore');
       const result: any = {};
+      // City ranking: clubs in the same city
       if (club.city) {
-        const cityIdx = cities.findIndex(c => c.key.toLowerCase() === club.city.toLowerCase());
-        if (cityIdx >= 0) result.city = { rank: cityIdx + 1, total: cities.length };
+        const cityClubs = sorted.filter((c: any) => c.city?.toLowerCase() === club.city.toLowerCase());
+        const myIdx = cityClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+        if (myIdx >= 0) result.city = { rank: myIdx + 1, total: cityClubs.length };
+        else if (cityClubs.length > 0) result.city = { rank: cityClubs.length + 1, total: cityClubs.length + 1 };
       }
-      if (club.country) {
-        const countryIdx = countries.findIndex(c => c.key.toLowerCase() === club.country!.toLowerCase());
-        if (countryIdx >= 0) result.country = { rank: countryIdx + 1, total: countries.length };
-        const continent = getContinent(club.country);
-        if (continent) {
-          const contIdx = continents.findIndex(c => c.key === continent);
-          if (contIdx >= 0) result.continent = { rank: contIdx + 1, total: continents.length };
-        }
+      // Country ranking
+      const clubCountry = club.country || 'France';
+      const countryClubs = sorted.filter((c: any) => (c.country || 'France').toLowerCase() === clubCountry.toLowerCase());
+      const countryIdx = countryClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+      if (countryIdx >= 0) result.country = { rank: countryIdx + 1, total: countryClubs.length };
+      else if (countryClubs.length > 0) result.country = { rank: countryClubs.length + 1, total: countryClubs.length + 1 };
+      // Continent ranking
+      const continent = getContinent(clubCountry);
+      if (continent) {
+        const contClubs = sorted.filter((c: any) => getContinent(c.country || 'France') === continent);
+        const contIdx = contClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+        if (contIdx >= 0) result.continent = { rank: contIdx + 1, total: contClubs.length };
+        else if (contClubs.length > 0) result.continent = { rank: contClubs.length + 1, total: contClubs.length + 1 };
       }
-      // World: total clubs public count
-      const allPublic = cities.reduce((s, c) => s + c.playerCount, 0);
-      if (allPublic > 0) result.world = { rank: null, total: allPublic };
+      // World ranking
+      const worldIdx = sorted.findIndex((c: any) => c.id === club.id || c.name === club.name);
+      if (worldIdx >= 0) result.world = { rank: worldIdx + 1, total: sorted.length };
+      else result.world = { rank: sorted.length + 1, total: sorted.length + 1 };
       setClubGeoRank(Object.keys(result).length > 0 ? result : null);
     }).catch(() => {});
   }, [club?.id, club?.isPublic, club?.city, club?.country]);
