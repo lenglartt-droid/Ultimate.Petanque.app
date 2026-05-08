@@ -129,6 +129,7 @@ export interface Club {
 
 export interface Terrain {
   id: string;
+  userId?: string;
   name: string;
   address: string;
   city: string;
@@ -214,6 +215,7 @@ export interface TournamentTeam {
 
 export interface Tournament {
   id: string;
+  userId?: string;
   name: string;
   date: string;
   endDate?: string;

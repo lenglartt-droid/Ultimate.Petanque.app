@@ -483,15 +483,45 @@ export default function NewTournamentScreen() {
             </Pressable>
             {showParticipantsSection ? (
               <View style={styles.accordionContent}>
+                <View style={styles.participantsCountRow}>
+                  <Pressable
+                    style={styles.participantsCountBtn}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const current = parseInt(maxParticipants) || 1;
+                      if (current > 1) setMaxParticipants(String(current - 1));
+                    }}
+                  >
+                    <MaterialIcons name="remove" size={22} color={theme.textSecondary} />
+                  </Pressable>
+                  <TextInput
+                    style={styles.participantsCountInput}
+                    value={maxParticipants}
+                    onChangeText={(text) => {
+                      const cleaned = text.replace(/[^0-9]/g, '');
+                      setMaxParticipants(cleaned);
+                    }}
+                    keyboardType="number-pad"
+                    maxLength={4}
+                    selectTextOnFocus
+                  />
+                  <Pressable
+                    style={styles.participantsCountBtn}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const current = parseInt(maxParticipants) || 0;
+                      setMaxParticipants(String(current + 1));
+                    }}
+                  >
+                    <MaterialIcons name="add" size={22} color={theme.carreauColor} />
+                  </Pressable>
+                </View>
                 <View style={styles.participantsRow}>
                   {['8', '16', '24', '32', '48', '64', '128'].map(num => {
                     const isActive = maxParticipants === num;
                     return (<Pressable key={num} style={[styles.participantPill, isActive && styles.participantPillActive]} onPress={() => { Haptics.selectionAsync(); setMaxParticipants(num); }}><Text style={[styles.participantPillText, isActive && styles.participantPillTextActive]}>{num}</Text></Pressable>);
                   })}
                 </View>
-
-
-
               </View>
             ) : null}
           </Animated.View>
@@ -719,7 +749,10 @@ const styles = StyleSheet.create({
   customInputField: { flex: 1, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: theme.textPrimary },
 
   // Participants
-  participantsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  participantsCountRow: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 16, marginBottom: 14 },
+  participantsCountBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: theme.backgroundSecondary, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: theme.border },
+  participantsCountInput: { fontSize: 28, fontWeight: '800' as const, color: theme.carreauColor, width: 80, textAlign: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, paddingVertical: 8, borderWidth: 1.5, borderColor: theme.carreauColor + '30' },
+  participantsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' as const },
   participantPill: { minWidth: 44, alignItems: 'center', paddingVertical: 10, paddingHorizontal: 14, backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.full, borderWidth: 1.5, borderColor: 'transparent' },
   participantPillActive: { borderColor: theme.carreauColor, backgroundColor: theme.carreauColor + '10' },
   participantPillText: { fontSize: 14, fontWeight: '700', color: theme.textSecondary },
