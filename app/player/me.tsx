@@ -31,6 +31,7 @@ import GlobalRankBadge from '@/components/feature/player/GlobalRankBadge';
 import EloSparkline from '@/components/feature/player/EloSparkline';
 import { getCountryFlag, getContinentFlag, getContinentLabel } from '@/constants/geoData';
 import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+import ProfileCompletenessCard from '@/components/feature/ProfileCompletenessCard';
 
 // ============================================
 // Mini Radar Chart for preferences
@@ -526,6 +527,11 @@ export default function MyPlayerCardScreen() {
                 />
               </View>
 
+              {/* ── PROFILE COMPLETENESS ── */}
+              <View style={{ width: '100%', marginTop: 6 }}>
+                <ProfileCompletenessCard player={selfPlayer} language={language} compact />
+              </View>
+
               {/* ── BLOC 2c: GEO RANKING (between ELO and LIEU) ── */}
               {geoRank && (geoRank.city || geoRank.country || geoRank.continent) ? (
                 <Pressable style={s.geoRankRow} onPress={() => router.push('/leaderboard-geo' as any)}>
@@ -536,25 +542,25 @@ export default function MyPlayerCardScreen() {
                   </View>
                   <View style={s.geoRankBadges}>
                     {geoRank.continent ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#F59E0B25' }]}>
+                      <Pressable style={[s.geoRankBadge, { borderColor: '#F59E0B25' }]} onPress={() => router.push({ pathname: '/city-leaderboard', params: { type: 'continent', value: geoRank.continent!.name } } as any)}>
                         <Text style={{ fontSize: 12 }}>{getContinentFlag(geoRank.continent.name)}</Text>
                         <Text style={[s.geoRankBadgeRank, { color: geoRank.continent.rank <= 3 ? '#F59E0B' : theme.textSecondary }]}>#{geoRank.continent.rank}</Text>
                         <Text style={s.geoRankBadgeTotal}>/{geoRank.continent.total}</Text>
-                      </View>
+                      </Pressable>
                     ) : null}
                     {geoRank.country ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#10B98125' }]}>
+                      <Pressable style={[s.geoRankBadge, { borderColor: '#10B98125' }]} onPress={() => router.push({ pathname: '/city-leaderboard', params: { type: 'country', value: geoRank.country!.name } } as any)}>
                         <Text style={{ fontSize: 12 }}>{getCountryFlag(geoRank.country.name)}</Text>
                         <Text style={[s.geoRankBadgeRank, { color: geoRank.country.rank <= 3 ? '#F59E0B' : '#10B981' }]}>#{geoRank.country.rank}</Text>
                         <Text style={s.geoRankBadgeTotal}>/{geoRank.country.total}</Text>
-                      </View>
+                      </Pressable>
                     ) : null}
                     {geoRank.city ? (
-                      <View style={[s.geoRankBadge, { borderColor: '#3B82F625' }]}>
+                      <Pressable style={[s.geoRankBadge, { borderColor: '#3B82F625' }]} onPress={() => router.push({ pathname: '/city-leaderboard', params: { city: geoRank.city!.name } } as any)}>
                         <MaterialIcons name="location-city" size={12} color="#3B82F6" />
                         <Text style={[s.geoRankBadgeRank, { color: geoRank.city.rank <= 3 ? '#F59E0B' : '#3B82F6' }]}>#{geoRank.city.rank}</Text>
                         <Text style={s.geoRankBadgeTotal}>/{geoRank.city.total}</Text>
-                      </View>
+                      </Pressable>
                     ) : null}
                   </View>
                 </Pressable>
