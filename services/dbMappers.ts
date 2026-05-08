@@ -65,7 +65,7 @@ export function mapClubFromDb(c: any): Club {
 
 export function mapTerrainFromDb(t: any): Terrain {
   return {
-    id: t.id, name: t.name, address: t.address, city: t.city,
+    id: t.id, userId: t.user_id || undefined, name: t.name, address: t.address, city: t.city,
     location: t.location || { latitude: 0, longitude: 0, country: 'France' }, type: t.type,
     description: t.description, facilities: t.facilities || [], photos: t.photos || [],
     clubId: t.club_id, clubName: t.club_name, isPublic: t.is_public ?? true,
@@ -78,7 +78,7 @@ export function mapTerrainFromDb(t: any): Terrain {
 
 export function mapTournamentFromDb(t: any): Tournament {
   return {
-    id: t.id, name: t.name, date: t.date, endDate: t.end_date,
+    id: t.id, userId: t.user_id || undefined, name: t.name, date: t.date, endDate: t.end_date,
     type: t.type, format: t.format, location: t.location,
     terrainId: t.terrain_id, terrainName: t.terrain_name, terrainType: t.terrain_type,
     clubId: t.club_id, clubName: t.club_name, status: t.status,

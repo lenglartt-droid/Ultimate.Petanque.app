@@ -168,6 +168,7 @@ export default function DirectoryScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [showRealUsersOnly, setShowRealUsersOnly] = useState(false);
   const [showActiveNow, setShowActiveNow] = useState(false);
+  const [visibilityFilter, setVisibilityFilter] = useState<'all' | 'public' | 'private'>('all');
   // Pagination state
   const PAGE_SIZE = 30;
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
@@ -332,7 +333,7 @@ export default function DirectoryScreen() {
   // Reset pagination when tab or filters change
   useEffect(() => {
     setVisibleCount(PAGE_SIZE);
-  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter, sortCriteria]);
+  }, [activeTab, searchQuery, filters, showRealUsersOnly, showActiveNow, distanceFilter, sortCriteria, visibilityFilter]);
 
   // Reset sort when tab changes
   useEffect(() => {
@@ -694,7 +695,8 @@ export default function DirectoryScreen() {
       const matchesTerrain = filters.playerTerrain === 'all' || p.terrainName === filters.playerTerrain;
       const matchesRealUser = !showRealUsersOnly || (selfPlayer && p.id === selfPlayer.id) || (p.isPublic === true);
       const matchesDist = isWithinDistance(p.location?.latitude, p.location?.longitude);
-      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist;
+      const matchesVisibility = visibilityFilter === 'all' || (visibilityFilter === 'public' ? p.isPublic === true : p.isPublic !== true);
+      return matchesSearch && matchesClub && matchesCity && matchesCountry && matchesLevel && matchesRole && matchesEloRank && matchesExperience && matchesTerrain && matchesRealUser && matchesDist && matchesVisibility;
     });
     
     // Apply multi-criteria sort or fallback to distance sort
@@ -731,7 +733,7 @@ export default function DirectoryScreen() {
       }
     }
     return result;
-  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds]);
+  }, [players, searchQuery, filters, selfPlayer, showRealUsersOnly, user?.id, isWithinDistance, distanceFilter, userLocation, haversineDistance, sortCriteria, applyMultiSort, partnerUserIds, visibilityFilter]);
 
   // Counts for tabs
   const counts = useMemo(() => ({
@@ -761,7 +763,8 @@ export default function DirectoryScreen() {
         }
       })();
       const matchesDist = isWithinDistance(c.location?.latitude, c.location?.longitude);
-      return matchesSearch && matchesCity && matchesCountry && matchesEquipment && matchesMembersRange && matchesDist;
+      const matchesVisibility = visibilityFilter === 'all' || (visibilityFilter === 'public' ? c.isPublic === true : c.isPublic !== true);
+      return matchesSearch && matchesCity && matchesCountry && matchesEquipment && matchesMembersRange && matchesDist && matchesVisibility;
     });
     // Apply multi-criteria sort or fallback to distance sort
     if (sortCriteria.length > 0) {
@@ -812,7 +815,8 @@ export default function DirectoryScreen() {
       const matchesToilets = filters.terrainToilets === 'all' ||
         (filters.terrainToilets === 'yes' ? tr.toilets : !tr.toilets);
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
-      return matchesSearch && matchesType && matchesCity && matchesCountry && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist;
+      const matchesVisibility = visibilityFilter === 'all' || (visibilityFilter === 'public' ? tr.isPublic === true : tr.isPublic !== true);
+      return matchesSearch && matchesType && matchesCity && matchesCountry && matchesLighting && matchesCovered && matchesEnvironment && matchesAccess && matchesParking && matchesToilets && matchesDist && matchesVisibility;
     });
     // Apply multi-criteria sort or fallback
     if (sortCriteria.length > 0) {
@@ -894,7 +898,8 @@ export default function DirectoryScreen() {
         }
       })();
       const matchesDist = isWithinDistance(tr.location?.latitude, tr.location?.longitude);
-      return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity && matchesDate && matchesDist;
+      const matchesVisibility = visibilityFilter === 'all' || (visibilityFilter === 'public' ? (tr as any).isPublic === true : (tr as any).isPublic !== true);
+      return matchesSearch && matchesStatus && matchesFormat && matchesLevel && matchesCategory && matchesRegistration && matchesScope && matchesCity && matchesDate && matchesDist && matchesVisibility;
     });
     if (sortCriteria.length > 0) {
       return applyMultiSort(result);
@@ -1073,17 +1078,17 @@ export default function DirectoryScreen() {
   }, [selfPlayer, getSharedPermission, partnerUserIds, t, language, handleInviteToMeetup, user]);
 
   const renderClub = useCallback(({ item }: { item: Club }) => {
-    return <MemoizedClubCard item={item} favoriteClubIds={favoriteClubIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} />;
-  }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language]);
+    return <MemoizedClubCard item={item} favoriteClubIds={favoriteClubIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} userId={user?.id} />;
+  }, [favoriteClubIds, getSharedPermission, partnerUserIds, t, language, user?.id]);
 
   const renderTerrain = useCallback(({ item }: { item: Terrain }) => {
     const activityInfo = terrainActivityMap.get(item.id) || undefined;
-    return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} />;
-  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, terrainActivityMap]);
+    return <MemoizedTerrainCard item={item} favoriteTerrainIds={favoriteTerrainIds} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getTerrainTypeConfig={getTerrainTypeConfig} activityInfo={activityInfo} userId={user?.id} />;
+  }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, terrainActivityMap, user?.id]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
-    return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} />;
-  }, [getSharedPermission, t, language]);
+    return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} userId={user?.id} />;
+  }, [getSharedPermission, t, language, user?.id]);
 
   const renderEvent = useCallback(({ item }: { item: any }) => {
     return <MemoizedEventCard item={item} language={language} />;
@@ -1526,6 +1531,17 @@ export default function DirectoryScreen() {
                 onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any); }}
               >
                 <MaterialIcons name="map" size={16} color="#FFF" />
+              </Pressable>
+            ) : null}
+            {activeTab !== 'events' ? (
+              <Pressable
+                style={[styles.headerRealUserBtn, visibilityFilter !== 'all' && { backgroundColor: visibilityFilter === 'public' ? theme.success : theme.textMuted, borderWidth: 2, borderColor: 'rgba(255,255,255,0.4)' }]}
+                onPress={() => {
+                  Haptics.selectionAsync();
+                  setVisibilityFilter(prev => prev === 'all' ? 'public' : prev === 'public' ? 'private' : 'all');
+                }}
+              >
+                <MaterialIcons name={visibilityFilter === 'public' ? 'public' : visibilityFilter === 'private' ? 'lock' : 'visibility'} size={16} color={visibilityFilter !== 'all' ? '#FFF' : 'rgba(255,255,255,0.7)'} />
               </Pressable>
             ) : null}
             <Pressable
@@ -2612,10 +2628,11 @@ const MapLinkButton = React.memo(({ lat, lng, name }: { lat: number; lng: number
   );
 });
 
-const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermission, partnerUserIds, t, language }: {
+const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermission, partnerUserIds, t, language, userId }: {
   item: Club; favoriteClubIds: string[]; getSharedPermission: (id: string) => string | null;
-  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string; language: string;
+  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string; language: string; userId?: string;
 }) => {
+  const isOwner = !!(userId && item.userId && item.userId === userId);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const isFavorite = favoriteClubIds.includes(item.id);
@@ -2636,6 +2653,12 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
       <View style={styles.itemContent}>
         <View style={styles.itemHeader}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {isOwner ? (
+            <View style={styles.ownerBadge}>
+              <MaterialIcons name="person" size={9} color={theme.accent} />
+              <Text style={styles.ownerBadgeText}>{language === 'fr' ? 'Moi' : 'Mine'}</Text>
+            </View>
+          ) : null}
           {item.isVerified ? (
             <View style={styles.clubVerifiedBadge}>
               <MaterialIcons name="verified" size={14} color="#2563EB" />
@@ -2668,13 +2691,15 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
   );
 });
 
-const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig, activityInfo }: {
+const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig, activityInfo, userId }: {
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
   partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
   activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number; isActiveNow?: boolean; activeNowLabel?: string; habitualScore?: number };
+  userId?: string;
 }) => {
   const typeConfig = getTerrainTypeConfig(item.type);
+  const isOwner = !!(userId && item.userId && item.userId === userId);
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
@@ -2700,6 +2725,12 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
       <View style={styles.itemContent}>
         <View style={styles.itemHeader}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {isOwner ? (
+            <View style={styles.ownerBadge}>
+              <MaterialIcons name="person" size={9} color={theme.success} />
+              <Text style={[styles.ownerBadgeText, { color: theme.success }]}>{language === 'fr' ? 'Moi' : 'Mine'}</Text>
+            </View>
+          ) : null}
           {hasSponsor ? (
             <View style={styles.sponsorBadge}>
               <MaterialIcons name="handshake" size={10} color="#2563EB" />
@@ -2757,10 +2788,11 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   );
 });
 
-const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, language, getStatusLabel }: {
+const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, language, getStatusLabel, userId }: {
   item: Tournament; getSharedPermission: (id: string) => string | null;
-  t: (s: string, k: string) => string; language: string; getStatusLabel: (s: string) => string;
+  t: (s: string, k: string) => string; language: string; getStatusLabel: (s: string) => string; userId?: string;
 }) => {
+  const isOwner = !!(userId && item.userId && item.userId === userId);
   const statusConfig: Record<string, { bg: string; color: string }> = {
     'À venir': { bg: theme.primary + '15', color: theme.primary },
     'En cours': { bg: theme.warning + '15', color: theme.warning },
@@ -2780,6 +2812,12 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
       <View style={styles.itemContent}>
         <View style={styles.itemHeader}>
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
+          {isOwner ? (
+            <View style={styles.ownerBadge}>
+              <MaterialIcons name="person" size={9} color={theme.carreauColor} />
+              <Text style={[styles.ownerBadgeText, { color: theme.carreauColor }]}>{language === 'fr' ? 'Moi' : 'Mine'}</Text>
+            </View>
+          ) : null}
           {hasSponsor ? (
             <View style={styles.sponsorBadge}>
               <MaterialIcons name="handshake" size={10} color="#2563EB" />
@@ -3880,6 +3918,22 @@ const styles = StyleSheet.create({
     justifyContent: 'center' as const,
     borderWidth: 1,
     borderColor: '#2563EB25',
+  },
+  ownerBadge: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 3,
+    backgroundColor: theme.accent + '10',
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: theme.accent + '25',
+  },
+  ownerBadgeText: {
+    fontSize: 9,
+    fontWeight: '700' as const,
+    color: theme.accent,
   },
   mapLinkBtn: {
     width: 30,

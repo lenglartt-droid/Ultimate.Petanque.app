@@ -514,7 +514,7 @@ const pMarkerStyles = StyleSheet.create({
 // CLUSTER MARKER COMPONENT
 // ============================================
 // Animated pulse ring for active-now markers
-const ActiveNowPulse = React.memo(() => {
+const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) => {
   const pulse1 = useSharedValue(0);
   const pulse2 = useSharedValue(0);
 
@@ -552,17 +552,20 @@ const ActiveNowPulse = React.memo(() => {
 
   return (
     <>
-      <Animated.View style={[styles.activeNowPulseRing, ring1Style]} />
-      <Animated.View style={[styles.activeNowPulseRing, ring2Style]} />
+      <Animated.View style={[styles.activeNowPulseRing, { borderColor: color }, ring1Style]} />
+      <Animated.View style={[styles.activeNowPulseRing, { borderColor: color }, ring2Style]} />
     </>
   );
 });
 
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; sponsorColor?: string | null }) => (
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null }) => {
+  const pulseColor = isLive ? '#EF4444' : '#22C55E';
+  const showPulse = isActiveNow || isLive;
+  return (
   <View style={styles.markerWrapper}>
-    {isActiveNow ? <ActiveNowPulse /> : null}
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, isActiveNow && { borderColor: '#22C55E', borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null]}>
-      <MaterialIcons name={icon as any} size={isActiveNow ? 16 : 14} color="#FFF" />
+    {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, showPulse && { borderColor: pulseColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null]}>
+      <MaterialIcons name={icon as any} size={showPulse ? 16 : 14} color="#FFF" />
     </View>
     {sponsorColor ? (
       <View style={[styles.sponsorBadge, { backgroundColor: sponsorColor }]}>
@@ -582,7 +585,8 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
       </View>
     ) : null}
   </View>
-));
+  );
+});
 
 const CLUSTER_COLOR_MAP: Record<string, string> = {
   terrains: theme.success,
@@ -1884,14 +1888,22 @@ useEffect(() => {
   }, [paramFilter, paramActiveNow]);
 
   // Compute active-now terrain IDs from useTerrainActivity hook
+  // Separate truly LIVE terrains (red dot always visible) from habitual ones (green, only when mode on)
+  const [liveTerrainIds, setLiveTerrainIds] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     const activeIds = new Set<string>();
+    const liveIds = new Set<string>();
     terrainActivityMap.forEach((info, terrainId) => {
-      if (info.isActiveNow || info.habitualScore > 10) {
+      if (info.isActiveNow) {
+        liveIds.add(terrainId);
+        activeIds.add(terrainId);
+      } else if (info.habitualScore > 10) {
         activeIds.add(terrainId);
       }
     });
     setActiveNowTerrainIds(activeIds);
+    setLiveTerrainIds(liveIds);
   }, [terrainActivityMap]);
 
   // Access matches for active-now computation
@@ -2057,7 +2069,7 @@ useEffect(() => {
                 ) : ((item.itemType === 'clubs' && item.logo)? (
                   <ClubMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
                 ) :
-                  <SingleMarkerView color={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id)}  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
+                  <SingleMarkerView color={item.itemType === 'terrains' && liveTerrainIds.has(item.id) ? '#EF4444' : (activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color)} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) && !liveTerrainIds.has(item.id)} isLive={item.itemType === 'terrains' && liveTerrainIds.has(item.id)} sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
                 )}
               </MarkerComponent>
             );
@@ -3201,7 +3213,7 @@ const styles = StyleSheet.create({
   sponsorBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
   sponsorBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF' },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
-  activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' },
+  activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' } as any,
   // Cluster markers
   clusterOuter: {
     position: 'absolute' as const,

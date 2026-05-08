@@ -51,6 +51,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchActivityFeed } from '@/services/activityFeedService';
 import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@/services/terrainProximityService';
 import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
+import { sendProximityTerrainNotification } from '@/services/notificationService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -352,7 +353,14 @@ export default function HomeScreen() {
       if (!prefs.terrain_proximity) return;
       const radius = prefs.terrain_proximity_radius || 3000;
       const { terrains: nearby } = await findNearbyActiveTerrains(radius, language);
-      if (nearby.length > 0) setNearbyTerrains(nearby);
+      if (nearby.length > 0) {
+        setNearbyTerrains(nearby);
+        // Send local push notification for proximity alert
+        sendProximityTerrainNotification({
+          terrains: nearby.map(t => ({ id: t.id, name: t.name, distance: t.distance, activityLabel: t.activityLabel })),
+          language,
+        }).catch(() => {});
+      }
     } catch { /* silent */ }
   }, [language]);
 
@@ -603,12 +611,25 @@ export default function HomeScreen() {
                     </View>
                     {t.hasMeetupToday ? <View style={st.proximityMeetupDot}><MaterialIcons name="event" size={9} color="#FFF" /></View> : null}
                     {t.hasTournamentToday ? <View style={st.proximityTournamentDot}><MaterialIcons name="emoji-events" size={9} color="#FFF" /></View> : null}
+                    <Pressable
+                      style={st.proximityMapBtn}
+                      onPress={(e) => {
+                        e.stopPropagation?.();
+                        router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(t.latitude), lng: String(t.longitude), name: t.name } } as any);
+                      }}
+                      hitSlop={6}
+                    >
+                      <MaterialIcons name="map" size={14} color="#16A34A" />
+                    </Pressable>
                   </View>
                 </Pressable>
               ))}
               <Pressable
                 style={st.proximityCta}
-                onPress={() => router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any)}
+                onPress={() => {
+                  const closest = nearbyTerrains[0];
+                  router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(closest.latitude), lng: String(closest.longitude), name: closest.name } } as any);
+                }}
               >
                 <MaterialIcons name="map" size={16} color="#FFF" />
                 <Text style={st.proximityCtaText}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
@@ -1200,6 +1221,7 @@ const st = StyleSheet.create({
   proximityDistText: { fontSize: 10, fontWeight: '700' as const, color: '#16A34A' },
   proximityMeetupDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#3B82F6', alignItems: 'center' as const, justifyContent: 'center' as const },
   proximityTournamentDot: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#F59E0B', alignItems: 'center' as const, justifyContent: 'center' as const },
+  proximityMapBtn: { width: 28, height: 28, borderRadius: 14, backgroundColor: '#DCFCE7', alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1, borderColor: '#BBF7D0' },
   proximityCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#22C55E', paddingVertical: 12, borderRadius: 12, marginTop: 6 },
   proximityCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
 
