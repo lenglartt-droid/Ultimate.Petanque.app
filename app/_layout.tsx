@@ -1011,6 +1011,20 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="club-compare" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="club-city-ranking" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="club-analytics" 
                 options={{ 
                   presentation: 'card',

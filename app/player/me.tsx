@@ -438,6 +438,11 @@ export default function MyPlayerCardScreen() {
                 {selfPlayer.nickname ? <Text style={s.heroNickname}>"{selfPlayer.nickname}"</Text> : null}
               </View>
 
+              {/* ── PROFILE COMPLETENESS ── */}
+              <View style={{ width: '100%', marginTop: 6 }}>
+                <ProfileCompletenessCard player={selfPlayer} language={language} compact />
+              </View>
+
               {/* ── BLOC 2: JEU ── */}
               <View style={s.heroSectionBlock}>
                 <View style={s.heroSectionBlockHeader}>
@@ -525,11 +530,6 @@ export default function MyPlayerCardScreen() {
                   language={language}
                   compact
                 />
-              </View>
-
-              {/* ── PROFILE COMPLETENESS ── */}
-              <View style={{ width: '100%', marginTop: 6 }}>
-                <ProfileCompletenessCard player={selfPlayer} language={language} compact />
               </View>
 
               {/* ── BLOC 2c: GEO RANKING (between ELO and LIEU) ── */}
