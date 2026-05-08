@@ -32,6 +32,35 @@ interface ChangelogEntry {
 
 const CHANGELOG: ChangelogEntry[] = [
   {
+    version: '1.56.0',
+    date: '2026-05-08',
+    type: 'minor',
+    highlights: [
+      { icon: 'security', text: 'Anti-cheat unifie : tous les classements (global, geo, boules) filtrent par 3 matchs multi-joueurs', color: '#DC2626' },
+      { icon: 'visibility', text: 'Preview mode : Top 3 joueurs et geo affichent les non-qualifies avec badge NON OFFICIEL', color: '#F59E0B' },
+      { icon: 'remove-circle', text: 'Bouton Geo supprime de la section Classement Clubs (redondant avec MiniGeoRankingWidget)', color: '#64748B' },
+      { icon: 'edit', text: 'Fix terrain edit : isOwner etait calcule avant la declaration de terrain (toujours false)', color: '#EF4444' },
+      { icon: 'sports-baseball', text: 'Classement boules : filtre anti-triche corrige (utilisait total matchs au lieu de multi-joueurs)', color: '#7C3AED' },
+      { icon: 'public', text: 'Geo leaderboard preview : donnees non officielles quand aucun joueur ne qualifie', color: '#3B82F6' },
+      { icon: 'bar-chart', text: 'Progression personnelle (X/3 matchs) dans MiniGeoRankingWidget et MiniRankingWidget', color: '#22C55E' },
+      { icon: 'policy', text: 'FAQ, CGU, politique de confidentialite et changelog mis a jour pour v1.56.0', color: '#64748B' },
+    ],
+    details: [
+      'globalRankingService: fetchGlobalRankings filtre desormais par JOIN user_profiles + minimum 3 matchs multi-joueurs (participant_user_ids >= 2)',
+      'globalRankingService: nouveau fetchGlobalRankingsPreview sans seuil de matchs pour afficher les joueurs en mode preview',
+      'MiniRankingWidget: Top 3 vide affiche les meilleurs joueurs non qualifies avec badge jaune NON OFFICIEL et bandeau explicatif',
+      'MiniRankingWidget: bouton Geo supprime de la section Classement Clubs (redondant avec MiniGeoRankingWidget au-dessus), 2 boutons restants (Par Ville, Comparer) en flex equitable',
+      'MiniGeoRankingWidget: affiche preview data avec badge Apercu et tag NON OFFICIEL sur chaque carte quand aucun joueur qualifie',
+      'MiniGeoRankingWidget: compteur progression personnel (X/3 matchs) dans bandeau bleu ou jaune selon contexte',
+      'geoLeaderboardService: nouveau fetchGeoLeaderboardPreview sans filtre minimum matchs pour preview non officiel',
+      'boulesLeaderboardService: corrige pour filtrer par JOIN user_profiles ET minimum 3 matchs multi-joueurs (remplace ancien filtre total matchs)',
+      'terrain/[id].tsx: isOwner et canEdit deplaces apres la declaration de const terrain (corrige TDZ silencieux)',
+      'FAQ mise a jour: questions geo ranking, anti-triche et classement officiel ajoutees/corrigees',
+      'CGU mise a jour: section classement officiel clarifie les conditions (3 matchs multi-joueurs minimum)',
+      'Politique de confidentialite: section preview data ajoutee (donnees non officielles temporaires)',
+    ],
+  },
+  {
     version: '1.55.0',
     date: '2026-05-08',
     type: 'minor',
