@@ -10,6 +10,7 @@
  */
 import { getSupabaseClient } from '@/template';
 import { getEloRank, ELO_RANKS, ELO_INITIAL } from './eloService';
+import { LEADERBOARD_MIN_MATCHES } from './leaderboardService';
 
 // ============================================
 // LEAGUE TIER DEFINITIONS
@@ -93,9 +94,14 @@ export async function fetchGlobalRankings(params: {
   const supabase = getSupabaseClient();
 
   try {
+    // Step 1: Get authenticated user IDs from user_profiles
+    const { data: authUsers } = await supabase.from('user_profiles').select('id');
+    const authIdSet = new Set((authUsers || []).map((u: any) => u.id));
+
+    // Step 2: Fetch all public players (self-players only: id === user_id)
     let query = supabase
       .from('players')
-      .select('id, name, avatar, club, city, country, role, elo_rating, stats, is_public', { count: 'exact' })
+      .select('id, user_id, name, avatar, club, city, country, role, elo_rating, stats, is_public')
       .eq('is_public', true)
       .order('elo_rating', { ascending: false });
 
@@ -118,13 +124,49 @@ export async function fetchGlobalRankings(params: {
       }
     }
 
-    query = query.range(offset, offset + limit - 1);
-
-    const { data, error, count } = await query;
+    const { data: rawPlayers, error } = await query;
 
     if (error) return { players: [], total: 0, error: error.message };
 
-    const players: RankedPlayer[] = (data || []).map((p: any, idx: number) => {
+    // Step 3: Filter to only real authenticated self-players
+    const realPlayers = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+
+    // Step 4: Count multi-player matches per player (anti-cheat)
+    const realPlayerIds = realPlayers.map((p: any) => p.id);
+    const multiPlayerCountMap = new Map<string, number>();
+
+    if (realPlayerIds.length > 0) {
+      const { data: allMatches } = await supabase
+        .from('matches')
+        .select('team_a, team_b, participant_user_ids');
+
+      if (allMatches) {
+        for (const m of allMatches) {
+          const participantIds: string[] = m.participant_user_ids || [];
+          if (participantIds.length < 2) continue;
+          const teamAPlayers: string[] = m.team_a?.players || [];
+          const teamBPlayers: string[] = m.team_b?.players || [];
+          const allMatchPlayers = [...teamAPlayers, ...teamBPlayers];
+          for (const pid of allMatchPlayers) {
+            if (realPlayerIds.includes(pid)) {
+              multiPlayerCountMap.set(pid, (multiPlayerCountMap.get(pid) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    // Step 5: Only include players meeting minimum multi-player match threshold
+    const qualifiedPlayers = realPlayers.filter((p: any) => {
+      const count = multiPlayerCountMap.get(p.id) || 0;
+      return count >= LEADERBOARD_MIN_MATCHES;
+    });
+
+    // Step 6: Apply pagination on filtered results
+    const total = qualifiedPlayers.length;
+    const paginated = qualifiedPlayers.slice(offset, offset + limit);
+
+    const players: RankedPlayer[] = paginated.map((p: any, idx: number) => {
       const stats = p.stats || {};
       const mp = stats.matchesPlayed || 0;
       const w = stats.wins || 0;
@@ -146,7 +188,7 @@ export async function fetchGlobalRankings(params: {
       };
     });
 
-    return { players, total: count || 0, error: null };
+    return { players, total, error: null };
   } catch (e: any) {
     return { players: [], total: 0, error: e.message || 'Failed to fetch rankings' };
   }
@@ -161,27 +203,19 @@ export async function fetchPlayerGlobalRank(playerId: string): Promise<{ rank: n
     // Get the player's ELO
     const { data: player } = await supabase
       .from('players')
-      .select('elo_rating, is_public')
+      .select('elo_rating, is_public, user_id')
       .eq('id', playerId)
       .single();
 
     if (!player || !player.is_public) return { rank: null, total: 0, error: null };
 
-    // Count how many public players have higher ELO
-    const { count: aboveCount } = await supabase
-      .from('players')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_public', true)
-      .gt('elo_rating', player.elo_rating);
+    // Fetch all qualified players to compute rank accurately
+    const { players: allQualified } = await fetchGlobalRankings({ limit: 10000, offset: 0 });
 
-    // Total public players
-    const { count: totalCount } = await supabase
-      .from('players')
-      .select('id', { count: 'exact', head: true })
-      .eq('is_public', true);
+    const rank = allQualified.findIndex(p => p.id === playerId) + 1;
+    const total = allQualified.length;
 
-    const rank = (aboveCount || 0) + 1;
-    return { rank, total: totalCount || 0, error: null };
+    return { rank: rank > 0 ? rank : null, total, error: null };
   } catch (e: any) {
     return { rank: null, total: 0, error: e.message };
   }
