@@ -571,6 +571,8 @@ export function buildTerrainDbPayload(terrain: Record<string, any>): Record<stri
     lighting: terrain.lighting,
     covered: terrain.covered,
     environment: terrain.environment || 'outdoor',
+    parking: terrain.parking ?? false,
+    toilets: terrain.toilets ?? false,
   };
 }
 
@@ -657,6 +659,7 @@ export function buildUpdateDbPayload(table: string, updates: Record<string, any>
       isPublic: 'is_public', publicAccess: 'public_access',
       courtsCount: 'courts_count', lighting: 'lighting',
       covered: 'covered', environment: 'environment',
+      parking: 'parking', toilets: 'toilets',
     },
     challenges: {
       type: 'type', mode: 'mode', date: 'date',

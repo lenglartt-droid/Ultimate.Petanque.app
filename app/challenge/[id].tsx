@@ -891,7 +891,7 @@ export default function ChallengeDetailScreen() {
 
 
             {/* Delete */}
-            {!isReadOnly ? (
+            {!isReadOnly && !isShared ? (
               <Pressable style={({ pressed }) => [s.deleteCta, pressed && { opacity: 0.85 }]} onPress={handleDelete}>
                 <MaterialIcons name="delete-outline" size={18} color={theme.error} />
                 <Text style={s.deleteCtaText}>{fr ? 'Supprimer' : 'Delete'}</Text>
