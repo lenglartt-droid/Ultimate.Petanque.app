@@ -506,7 +506,34 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
     );
   }, [team, fr, selectedTournament, loadTeamData]);
 
-  if (teamableTournaments.length === 0) return null;
+  if (teamableTournaments.length === 0) {
+    // Show empty state with create tournament prompt
+    return (
+      <View style={s.container}>
+        <View style={s.header}>
+          <View style={s.headerIcon}>
+            <MaterialIcons name="groups" size={18} color="#22C55E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={s.headerTitle}>{fr ? 'Former une equipe' : 'Team Up'}</Text>
+            <Text style={s.headerSub}>{fr ? 'Invitez des partenaires pour vos tournois' : 'Invite partners for your tournaments'}</Text>
+          </View>
+        </View>
+        <View style={{ alignItems: 'center', paddingVertical: 16 }}>
+          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 12, lineHeight: 19 }}>
+            {fr ? 'Creez un tournoi en Doublette ou Triplette pour commencer a former votre equipe.' : 'Create a Doubles or Triples tournament to start building your team.'}
+          </Text>
+          <Pressable
+            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#22C55E', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 }}
+            onPress={() => router.push('/tournament/new' as any)}
+          >
+            <MaterialIcons name="add" size={18} color="#FFF" />
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Creer un tournoi' : 'Create tournament'}</Text>
+          </Pressable>
+        </View>
+      </View>
+    );
+  }
 
   const teamSize = selectedTournament ? getTeamSize(selectedTournament.format) : 2;
   const acceptedInvites = invitations.filter(i => i.status === 'accepted');
