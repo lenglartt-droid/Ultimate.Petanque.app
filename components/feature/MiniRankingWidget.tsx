@@ -174,8 +174,8 @@ function MiniRankingWidget() {
       {top3.length >= 3 ? (
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.top3Section}>
           <View style={s.top3Header}>
-            <MaterialIcons name="public" size={13} color={theme.textMuted} />
-            <Text style={s.top3Title}>{fr ? 'Top Mondial' : 'World Top'}</Text>
+            <MaterialIcons name="emoji-events" size={13} color="#F59E0B" />
+            <Text style={s.top3Title}>{fr ? 'Top Joueurs' : 'Top Players'}</Text>
           </View>
           <View style={s.top3Row}>
             {top3.map((p, idx) => {
@@ -216,7 +216,48 @@ function MiniRankingWidget() {
             })}
           </View>
         </Animated.View>
-      ) : null}
+      ) : (
+        <View style={s.top3EmptySection}>
+          <View style={s.top3Header}>
+            <MaterialIcons name="emoji-events" size={13} color="#F59E0B" />
+            <Text style={s.top3Title}>{fr ? 'Top Joueurs' : 'Top Players'}</Text>
+          </View>
+          <View style={s.top3EmptyContent}>
+            <MaterialIcons name="leaderboard" size={24} color={theme.textMuted} />
+            <Text style={s.top3EmptyText}>
+              {fr ? 'Jouez 3 matchs multi-joueurs pour apparaitre ici' : 'Play 3 multi-player matches to appear here'}
+            </Text>
+          </View>
+        </View>
+      )}
+
+      {/* ── CLUBS SECTION ── */}
+      <View style={s.clubsSection}>
+        <View style={s.clubsSectionHeader}>
+          <MaterialIcons name="home" size={13} color="#D97706" />
+          <Text style={s.clubsSectionTitle}>{fr ? 'Classement Clubs' : 'Club Rankings'}</Text>
+        </View>
+        <View style={s.quickLinksRow}>
+          <Pressable style={s.quickLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
+            <View style={[s.quickLinkIcon, { backgroundColor: '#F59E0B18' }]}>
+              <MaterialIcons name="location-city" size={14} color="#F59E0B" />
+            </View>
+            <Text style={[s.quickLinkText, { color: '#F59E0B' }]}>{fr ? 'Par Ville' : 'By City'}</Text>
+          </Pressable>
+          <Pressable style={s.quickLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
+            <View style={[s.quickLinkIcon, { backgroundColor: '#9333EA18' }]}>
+              <MaterialIcons name="compare-arrows" size={14} color="#9333EA" />
+            </View>
+            <Text style={[s.quickLinkText, { color: '#9333EA' }]}>{fr ? 'Comparer' : 'Compare'}</Text>
+          </Pressable>
+          <Pressable style={s.quickLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
+            <View style={[s.quickLinkIcon, { backgroundColor: '#3B82F618' }]}>
+              <MaterialIcons name="public" size={14} color="#3B82F6" />
+            </View>
+            <Text style={[s.quickLinkText, { color: '#3B82F6' }]}>Geo</Text>
+          </Pressable>
+        </View>
+      </View>
 
       {/* Footer CTA */}
       <Animated.View entering={FadeIn.duration(300).delay(250)} style={s.footer}>
@@ -291,6 +332,22 @@ const s = StyleSheet.create({
   top3Medal: { position: 'absolute', bottom: -4, right: -4, width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFF', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#E2E8F0' },
   top3Name: { fontSize: 11, fontWeight: '600', color: theme.textPrimary, maxWidth: 70, textAlign: 'center' },
   top3Elo: { fontSize: 13, fontWeight: '800', marginTop: 1 },
+
+  // Clubs Section
+  clubsSection: { borderTopWidth: 1, borderTopColor: theme.border + '40', paddingTop: 10 },
+  clubsSectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, marginBottom: 6 },
+  clubsSectionTitle: { fontSize: 11, fontWeight: '700', color: '#D97706', textTransform: 'uppercase', letterSpacing: 0.5 },
+
+  // Top 3 empty state
+  top3EmptySection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
+  top3EmptyContent: { alignItems: 'center', paddingVertical: 14, gap: 6 },
+  top3EmptyText: { fontSize: 11, color: theme.textMuted, textAlign: 'center', maxWidth: 200, lineHeight: 16 },
+
+  // Quick Links
+  quickLinksRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },
+  quickLinkBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, backgroundColor: theme.backgroundSecondary, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border + '60' },
+  quickLinkIcon: { width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  quickLinkText: { fontSize: 11, fontWeight: '700' },
 
   // Footer
   footer: { borderTopWidth: 1, borderTopColor: theme.border },

@@ -39,6 +39,22 @@ export type LeaderboardPeriod = 'all' | '7d' | '30d' | '3m' | '6m' | '1y' | 'sea
 
 export const LEADERBOARD_MIN_MATCHES = 3;
 
+/**
+ * Fetch the count of multi-player matches (participant_user_ids >= 2) for a user.
+ * Used for qualification progress display.
+ */
+export async function fetchMultiPlayerMatchCount(userId: string): Promise<number> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data, error } = await supabase
+      .from('matches')
+      .select('id, participant_user_ids')
+      .eq('user_id', userId);
+    if (error || !data) return 0;
+    return data.filter((m: any) => (m.participant_user_ids || []).length >= 2).length;
+  } catch { return 0; }
+}
+
 /** Compute date range for a given period */
 export function getPeriodDateRange(period: LeaderboardPeriod): { from: Date | null; to: Date | null; label: string } {
   if (period === 'all') return { from: null, to: null, label: 'All time' };
