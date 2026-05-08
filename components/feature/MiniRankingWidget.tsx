@@ -28,9 +28,8 @@ import {
   getLeagueTier,
   getLeagueProgress,
   LEAGUE_TIERS,
-} from '@/services/globalRankingService';
-import {
   fetchGlobalRankings,
+  fetchGlobalRankingsPreview,
   RankedPlayer,
 } from '@/services/globalRankingService';
 import { getEloColor } from '@/services/eloService';
@@ -44,6 +43,7 @@ function MiniRankingWidget() {
 
   const [myRank, setMyRank] = useState<{ rank: number | null; total: number } | null>(null);
   const [top3, setTop3] = useState<RankedPlayer[]>([]);
+  const [isPreview, setIsPreview] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const elo = selfPlayer?.eloRating || 1000;
@@ -63,7 +63,18 @@ function MiniRankingWidget() {
       }
       const [rankingsResult, rankResult] = await Promise.all(promises);
       if (!mounted) return;
-      if (rankingsResult?.players) setTop3(rankingsResult.players);
+      if (rankingsResult?.players && rankingsResult.players.length >= 3) {
+        setTop3(rankingsResult.players);
+        setIsPreview(false);
+      } else {
+        // Fallback: load preview (no match threshold)
+        const previewResult = await fetchGlobalRankingsPreview({ limit: 3 });
+        if (!mounted) return;
+        if (previewResult?.players && previewResult.players.length > 0) {
+          setTop3(previewResult.players);
+          setIsPreview(true);
+        }
+      }
       if (rankResult) setMyRank({ rank: rankResult.rank, total: rankResult.total });
       setLoading(false);
     };
@@ -171,12 +182,26 @@ function MiniRankingWidget() {
       </Animated.View>
 
       {/* Top 3 Players Preview */}
-      {top3.length >= 3 ? (
+      {top3.length > 0 ? (
         <Animated.View entering={FadeInDown.duration(400).delay(150)} style={s.top3Section}>
           <View style={s.top3Header}>
             <MaterialIcons name="emoji-events" size={13} color="#F59E0B" />
             <Text style={s.top3Title}>{fr ? 'Top Joueurs' : 'Top Players'}</Text>
+            {isPreview ? (
+              <View style={s.top3PreviewBadge}>
+                <MaterialIcons name="visibility" size={9} color="#92400E" />
+                <Text style={s.top3PreviewBadgeText}>{fr ? 'Apercu' : 'Preview'}</Text>
+              </View>
+            ) : null}
           </View>
+          {isPreview ? (
+            <View style={s.top3PreviewNotice}>
+              <MaterialIcons name="info-outline" size={11} color="#92400E" />
+              <Text style={s.top3PreviewNoticeText}>
+                {fr ? '3 matchs multi-joueurs requis pour officialiser' : '3 multi-player matches required to qualify'}
+              </Text>
+            </View>
+          ) : null}
           <View style={s.top3Row}>
             {top3.map((p, idx) => {
               const medals = ['🥇', '🥈', '🥉'];
@@ -195,22 +220,25 @@ function MiniRankingWidget() {
                     {p.avatar ? (
                       <Image
                         source={{ uri: p.avatar }}
-                        style={s.top3Avatar}
+                        style={[s.top3Avatar, isPreview && { opacity: 0.7 }]}
                         contentFit="cover"
                         transition={200}
                         cachePolicy="memory-disk"
                       />
                     ) : (
-                      <View style={[s.top3Avatar, { backgroundColor: tierP.color + '20', alignItems: 'center', justifyContent: 'center' }]}>
+                      <View style={[s.top3Avatar, { backgroundColor: tierP.color + '20', alignItems: 'center', justifyContent: 'center' }, isPreview && { opacity: 0.7 }]}>
                         <Text style={{ fontSize: 12, fontWeight: '700', color: tierP.color }}>{p.name.charAt(0)}</Text>
                       </View>
                     )}
                     <View style={s.top3Medal}>
                       <Text style={{ fontSize: 10 }}>{medals[idx]}</Text>
                     </View>
+                    {isPreview ? (
+                      <View style={s.top3UnofficialDot} />
+                    ) : null}
                   </View>
-                  <Text style={s.top3Name} numberOfLines={1}>{p.name.split(' ')[0]}</Text>
-                  <Text style={[s.top3Elo, { color: tierP.color }]}>{p.eloRating}</Text>
+                  <Text style={[s.top3Name, isPreview && { color: theme.textSecondary }]} numberOfLines={1}>{p.name.split(' ')[0]}</Text>
+                  <Text style={[s.top3Elo, { color: isPreview ? theme.textMuted : tierP.color }]}>{p.eloRating}</Text>
                 </Pressable>
               );
             })}
@@ -336,6 +364,13 @@ const s = StyleSheet.create({
   top3EmptySection: { paddingHorizontal: 16, paddingTop: 12, paddingBottom: 4 },
   top3EmptyContent: { alignItems: 'center', paddingVertical: 14, gap: 6 },
   top3EmptyText: { fontSize: 11, color: theme.textMuted, textAlign: 'center', maxWidth: 200, lineHeight: 16 },
+
+  // Top 3 preview badge
+  top3PreviewBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#FEF3C7', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 6, marginLeft: 6 },
+  top3PreviewBadgeText: { fontSize: 9, fontWeight: '800', color: '#92400E', letterSpacing: 0.3 },
+  top3PreviewNotice: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#FEF3C7', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 5, marginBottom: 8, borderWidth: 1, borderColor: '#FDE68A' },
+  top3PreviewNoticeText: { fontSize: 10, fontWeight: '600', color: '#92400E', flex: 1 },
+  top3UnofficialDot: { position: 'absolute', top: -2, left: -2, width: 10, height: 10, borderRadius: 5, backgroundColor: '#FDE68A', borderWidth: 1.5, borderColor: '#F59E0B' },
 
   // Quick Links
   quickLinksRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 14, paddingVertical: 10 },

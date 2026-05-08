@@ -195,6 +195,62 @@ export async function fetchGlobalRankings(params: {
 }
 
 // ============================================
+// FETCH GLOBAL RANKINGS PREVIEW (no match threshold)
+// ============================================
+export async function fetchGlobalRankingsPreview(params: {
+  limit?: number;
+  offset?: number;
+}): Promise<{ players: RankedPlayer[]; total: number; error: string | null }> {
+  const { limit = 3, offset = 0 } = params;
+  const supabase = getSupabaseClient();
+
+  try {
+    const { data: authUsers } = await supabase.from('user_profiles').select('id');
+    const authIdSet = new Set((authUsers || []).map((u: any) => u.id));
+
+    const { data: rawPlayers, error } = await supabase
+      .from('players')
+      .select('id, user_id, name, avatar, club, city, country, role, elo_rating, stats, is_public')
+      .eq('is_public', true)
+      .order('elo_rating', { ascending: false });
+
+    if (error) return { players: [], total: 0, error: error.message };
+
+    // Only real authenticated self-players (no match threshold)
+    const realPlayers = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+
+    const total = realPlayers.length;
+    const paginated = realPlayers.slice(offset, offset + limit);
+
+    const players: RankedPlayer[] = paginated.map((p: any, idx: number) => {
+      const stats = p.stats || {};
+      const mp = stats.matchesPlayed || 0;
+      const w = stats.wins || 0;
+      return {
+        id: p.id,
+        name: p.name,
+        avatar: p.avatar,
+        club: p.club,
+        city: p.city,
+        country: p.country || 'France',
+        role: p.role || 'Milieu',
+        eloRating: p.elo_rating || ELO_INITIAL,
+        matchesPlayed: mp,
+        wins: w,
+        winRate: mp > 0 ? Math.round((w / mp) * 100) : 0,
+        globalRank: offset + idx + 1,
+        leagueTier: getLeagueTier(p.elo_rating || ELO_INITIAL),
+        isPublic: p.is_public,
+      };
+    });
+
+    return { players, total, error: null };
+  } catch (e: any) {
+    return { players: [], total: 0, error: e.message || 'Failed to fetch preview rankings' };
+  }
+}
+
+// ============================================
 // FETCH PLAYER GLOBAL RANK
 // ============================================
 export async function fetchPlayerGlobalRank(playerId: string): Promise<{ rank: number | null; total: number; error: string | null }> {

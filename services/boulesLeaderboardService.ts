@@ -50,6 +50,10 @@ export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promis
   const usePeriod = period && period !== 'all';
 
   try {
+    // Step 1: Get authenticated user IDs from user_profiles
+    const { data: authUsers } = await supabase.from('user_profiles').select('id');
+    const authIdSet = new Set((authUsers || []).map((u: any) => u.id));
+
     // Fetch public players with boules info
     const { data, error } = await supabase
       .from('players')
@@ -57,6 +61,38 @@ export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promis
       .eq('is_public', true);
 
     if (error) return { entries: [], error: error.message };
+
+    // Step 2: Filter to only real authenticated self-players
+    const realPlayers = (data || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+
+    // Step 3: Count multi-player matches per player (anti-cheat)
+    const realPlayerIds = realPlayers.map((p: any) => p.id);
+    const multiPlayerCountMap = new Map<string, number>();
+    if (realPlayerIds.length > 0) {
+      const { data: allMatchesData } = await supabase
+        .from('matches')
+        .select('team_a, team_b, participant_user_ids');
+      if (allMatchesData) {
+        for (const m of allMatchesData) {
+          const participantIds: string[] = m.participant_user_ids || [];
+          if (participantIds.length < 2) continue;
+          const teamAPlayers: string[] = m.team_a?.players || [];
+          const teamBPlayers: string[] = m.team_b?.players || [];
+          const allMatchPlayers = [...teamAPlayers, ...teamBPlayers];
+          for (const pid of allMatchPlayers) {
+            if (realPlayerIds.includes(pid)) {
+              multiPlayerCountMap.set(pid, (multiPlayerCountMap.get(pid) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    // Step 4: Only keep players with minimum multi-player matches
+    const qualifiedPlayers = realPlayers.filter((p: any) => {
+      const count = multiPlayerCountMap.get(p.id) || 0;
+      return count >= LEADERBOARD_MIN_MATCHES;
+    });
 
     // If period filter, fetch matches within range and recompute per-player stats
     let periodStatsMap: Map<string, { matchesPlayed: number; wins: number; winRate: number; tirRate: number; pointRate: number; carreauRate: number }> | null = null;
@@ -75,7 +111,7 @@ export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promis
 
         if (matchesData && matchesData.length > 0) {
           periodStatsMap = new Map();
-          const playerIds = new Set((data || []).map((p: any) => p.id));
+          const playerIds = new Set(qualifiedPlayers.map((p: any) => p.id));
 
           for (const m of matchesData) {
             const teamAPlayers: string[] = m.team_a?.players || [];
@@ -123,7 +159,7 @@ export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promis
 
     const entries: PlayerBoulesData[] = [];
 
-    for (const p of data || []) {
+    for (const p of qualifiedPlayers) {
       const boules = p.boules || {};
       const brand = boules.brand;
       if (!brand) continue;
@@ -147,7 +183,6 @@ export async function fetchBoulesLeaderboard(period?: LeaderboardPeriod): Promis
         });
       } else {
         const stats = p.stats || {};
-        if ((stats.matchesPlayed || 0) < LEADERBOARD_MIN_MATCHES) continue;
         entries.push({
           userId: p.user_id,
           brand: brand,
