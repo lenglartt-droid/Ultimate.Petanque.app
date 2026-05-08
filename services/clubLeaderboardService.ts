@@ -41,56 +41,61 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
       clubMap.set(p.club, existing);
     }
 
-    // Try to fetch club details (logo, city) for matched clubs
+    // Try to fetch club details (logo, city) for matched clubs AND public clubs without leaderboard players
     const supabase = getSupabaseClient();
-    const clubNames = [...clubMap.keys()];
-    let clubDetails = new Map<string, { logo?: string; city?: string; country?: string; id?: string }>();
+    let clubDetails = new Map<string, { logo?: string; city?: string; country?: string; id?: string; membersCount?: number }>();
 
-    if (clubNames.length > 0) {
-      try {
-        const { data: clubsData } = await supabase
-          .from('clubs')
-          .select('id, name, logo, city, country')
-          .eq('is_public', true);
+    try {
+      const { data: clubsData } = await supabase
+        .from('clubs')
+        .select('id, name, logo, city, country, members_count')
+        .eq('is_public', true);
 
-        if (clubsData) {
-          for (const c of clubsData) {
-            clubDetails.set(c.name, {
-              id: c.id,
-              logo: c.logo || undefined,
-              city: c.city || undefined,
-              country: c.country || undefined,
-            });
+      if (clubsData) {
+        for (const c of clubsData) {
+          clubDetails.set(c.name, {
+            id: c.id,
+            logo: c.logo || undefined,
+            city: c.city || undefined,
+            country: c.country || undefined,
+            membersCount: c.members_count || 0,
+          });
+          // Add public clubs that have no leaderboard players to the map
+          if (!clubMap.has(c.name)) {
+            clubMap.set(c.name, []);
           }
         }
-      } catch { /* silent */ }
-    }
+      }
+    } catch { /* silent */ }
 
     const clubs: LeaderboardClub[] = [];
 
     for (const [clubName, clubPlayers] of clubMap) {
-      if (clubPlayers.length === 0) continue;
 
-      const totalMatches = clubPlayers.reduce((sum, p) => sum + p.stats.matchesPlayed, 0);
-      const totalWins = clubPlayers.reduce((sum, p) => sum + p.stats.wins, 0);
-      const totalLosses = clubPlayers.reduce((sum, p) => sum + p.stats.losses, 0);
+      const detail = clubDetails.get(clubName);
 
-      const avgWinRate = Math.round(clubPlayers.reduce((sum, p) => sum + p.stats.winRate, 0) / clubPlayers.length);
-      const avgTirRate = Math.round(
+      // For clubs with no leaderboard players, show basic info from clubs table
+      const totalMatches = clubPlayers.length > 0 ? clubPlayers.reduce((sum, p) => sum + p.stats.matchesPlayed, 0) : 0;
+      const totalWins = clubPlayers.length > 0 ? clubPlayers.reduce((sum, p) => sum + p.stats.wins, 0) : 0;
+      const totalLosses = clubPlayers.length > 0 ? clubPlayers.reduce((sum, p) => sum + p.stats.losses, 0) : 0;
+
+      const avgWinRate = clubPlayers.length > 0 ? Math.round(clubPlayers.reduce((sum, p) => sum + p.stats.winRate, 0) / clubPlayers.length) : 0;
+      const avgTirRate = clubPlayers.length > 0 ? Math.round(
         clubPlayers.filter(p => p.stats.tirRate > 0).reduce((sum, p) => sum + p.stats.tirRate, 0) /
         Math.max(1, clubPlayers.filter(p => p.stats.tirRate > 0).length)
-      );
-      const avgPointRate = Math.round(
+      ) : 0;
+      const avgPointRate = clubPlayers.length > 0 ? Math.round(
         clubPlayers.filter(p => p.stats.pointRate > 0).reduce((sum, p) => sum + p.stats.pointRate, 0) /
         Math.max(1, clubPlayers.filter(p => p.stats.pointRate > 0).length)
-      );
-      const avgCarreauRate = Math.round(
+      ) : 0;
+      const avgCarreauRate = clubPlayers.length > 0 ? Math.round(
         clubPlayers.filter(p => p.stats.carreauRate > 0).reduce((sum, p) => sum + p.stats.carreauRate, 0) /
         Math.max(1, clubPlayers.filter(p => p.stats.carreauRate > 0).length)
-      );
+      ) : 0;
 
       // Activity score: normalize based on matches per player (max 50 matches/player → 100)
-      const activityScore = Math.min(100, Math.round((totalMatches / clubPlayers.length / 50) * 100));
+      const effectivePlayerCount = Math.max(clubPlayers.length, 1);
+      const activityScore = Math.min(100, Math.round((totalMatches / effectivePlayerCount / 50) * 100));
 
       // Composite score: weighted combination
       const compositeScore = Math.round(
@@ -99,8 +104,6 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
         avgCarreauRate * 0.20 +
         activityScore * 0.15
       );
-
-      const detail = clubDetails.get(clubName);
 
       // Top 3 players by win rate
       const topPlayers = [...clubPlayers]
@@ -114,7 +117,7 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
         city: detail?.city || clubPlayers[0]?.city,
         country: detail?.country || clubPlayers[0]?.country,
         logo: detail?.logo,
-        playerCount: clubPlayers.length,
+        playerCount: clubPlayers.length > 0 ? clubPlayers.length : (detail?.membersCount || 0),
         totalMatches,
         stats: {
           avgWinRate,
@@ -140,7 +143,9 @@ export function sortClubLeaderboard(clubs: LeaderboardClub[], sortBy: ClubLeader
     switch (sortBy) {
       case 'compositeScore':
         if (b.stats.compositeScore !== a.stats.compositeScore) return b.stats.compositeScore - a.stats.compositeScore;
-        return b.totalMatches - a.totalMatches;
+        if (b.stats.avgWinRate !== a.stats.avgWinRate) return b.stats.avgWinRate - a.stats.avgWinRate;
+        if (b.totalMatches !== a.totalMatches) return b.totalMatches - a.totalMatches;
+        return a.name.localeCompare(b.name);
       case 'avgWinRate':
         if (b.stats.avgWinRate !== a.stats.avgWinRate) return b.stats.avgWinRate - a.stats.avgWinRate;
         return b.totalMatches - a.totalMatches;

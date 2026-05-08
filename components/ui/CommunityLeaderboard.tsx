@@ -475,11 +475,27 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             </>
           )
         ) : activeTab === 'clubs' ? (
-          sortedClubs.length === 0 ? (
-            <View style={s.center}><MaterialIcons name="home" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noClubs')}</Text></View>
-          ) : (
-            <>
-              {sortedClubs.slice(0, 5).map((club, idx) => {
+          <>
+            {/* Quick access links — inline at top of clubs tab */}
+            <View style={s.clubQuickLinksRow}>
+              <Pressable style={s.clubQuickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
+                <MaterialIcons name="location-city" size={15} color="#F59E0B" />
+                <Text style={[s.clubQuickLinkText, { color: '#F59E0B' }]}>{language === 'fr' ? 'Par Ville' : 'By City'}</Text>
+              </Pressable>
+              <Pressable style={s.clubQuickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
+                <MaterialIcons name="compare-arrows" size={15} color="#9333EA" />
+                <Text style={[s.clubQuickLinkText, { color: '#9333EA' }]}>{language === 'fr' ? 'Comparer' : 'Compare'}</Text>
+              </Pressable>
+              <Pressable style={s.clubQuickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
+                <MaterialIcons name="public" size={15} color="#3B82F6" />
+                <Text style={[s.clubQuickLinkText, { color: '#3B82F6' }]}>Geo</Text>
+              </Pressable>
+            </View>
+            {sortedClubs.length === 0 ? (
+              <View style={s.center}><MaterialIcons name="home" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noClubs')}</Text></View>
+            ) : (
+              <>
+                {sortedClubs.slice(0, 5).map((club, idx) => {
                 const rank = idx + 1;
                 const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#C0C0C0', 3: '#CD7F32' };
                 const mc = medalColors[rank];
@@ -509,8 +525,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                   </Pressable>
                 );
               })}
-            </>
-          )
+              </>
+            )}
+          </>
         ) : activeTab === 'events' ? (
           eventEntries.length === 0 ? (
             <View style={s.center}><MaterialIcons name="campaign" size={40} color={theme.textMuted} /><Text style={s.emptyTitle}>{t('leaderboard', 'noEvents')}</Text></View>
@@ -581,22 +598,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           )
         )}
 
-        {/* Quick access links — always visible above CTA */}
-        <View style={s.quickLinksRow}>
-          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
-            <MaterialIcons name="home" size={14} color="#F59E0B" />
-            <Text style={[s.quickLinkText, { color: '#F59E0B' }]}>{language === 'fr' ? 'Clubs par Ville' : 'Clubs by City'}</Text>
-          </Pressable>
-          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
-            <MaterialIcons name="compare-arrows" size={14} color="#9333EA" />
-            <Text style={[s.quickLinkText, { color: '#9333EA' }]}>{language === 'fr' ? 'Comparer' : 'Compare'}</Text>
-          </Pressable>
-          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
-            <MaterialIcons name="public" size={14} color="#3B82F6" />
-            <Text style={[s.quickLinkText, { color: '#3B82F6' }]}>Geo</Text>
-          </Pressable>
-        </View>
-
         {/* CTA */}
         <View style={s.ctaRow}>
           <Pressable style={s.ctaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}>
@@ -607,16 +608,6 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
             <MaterialIcons name="public" size={14} color="#3B82F6" />
             <Text style={s.geoCtaBtnText}>{language === 'fr' ? 'Classement Geo' : 'Geo Ranking'}</Text>
             <MaterialIcons name="arrow-forward" size={14} color="#3B82F6" />
-          </Pressable>
-          <Pressable style={[s.geoCtaBtn, { borderTopWidth: 1, borderTopColor: theme.border + '40' }]} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
-            <MaterialIcons name="home" size={14} color="#F59E0B" />
-            <Text style={[s.geoCtaBtnText, { color: '#F59E0B' }]}>{language === 'fr' ? 'Clubs par Ville' : 'Clubs by City'}</Text>
-            <MaterialIcons name="arrow-forward" size={14} color="#F59E0B" />
-          </Pressable>
-          <Pressable style={[s.geoCtaBtn, { borderTopWidth: 1, borderTopColor: theme.border + '40' }]} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
-            <MaterialIcons name="compare-arrows" size={14} color="#9333EA" />
-            <Text style={[s.geoCtaBtnText, { color: '#9333EA' }]}>{language === 'fr' ? 'Comparer des Clubs' : 'Compare Clubs'}</Text>
-            <MaterialIcons name="arrow-forward" size={14} color="#9333EA" />
           </Pressable>
         </View>
       </View>
@@ -714,9 +705,9 @@ const s = StyleSheet.create({
   noteText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
 
   // CTA
-  quickLinksRow: { flexDirection: 'row' as const, gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
-  quickLinkBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, backgroundColor: theme.backgroundSecondary, paddingVertical: 10, borderRadius: 12 },
-  quickLinkText: { fontSize: 11, fontWeight: '700' as const },
+  clubQuickLinksRow: { flexDirection: 'row' as const, gap: 6, marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: theme.border + '30' },
+  clubQuickLinkBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, backgroundColor: theme.backgroundSecondary, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border + '40' },
+  clubQuickLinkText: { fontSize: 11, fontWeight: '700' as const },
   ctaRow: { marginTop: 8, borderTopWidth: 1, borderTopColor: theme.border, gap: 0 },
   ctaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border + '50' },
   ctaBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#F59E0B' },
