@@ -219,7 +219,30 @@ function LeaderboardHub() {
         ) : null}
       </LinearGradient>
 
-
+      {/* ===== QUICK ACCESS LINKS — Always visible, right under header ===== */}
+      <View style={s.quickLinksRowTop}>
+        <Pressable style={s.quickLinkBtnTop} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
+          <View style={[s.quickLinkIconCircle, { backgroundColor: '#F59E0B18' }]}>
+            <MaterialIcons name="location-city" size={15} color="#F59E0B" />
+          </View>
+          <Text style={[s.quickLinkTextTop, { color: '#F59E0B' }]}>{isFr ? 'Par Ville' : 'By City'}</Text>
+          <MaterialIcons name="chevron-right" size={14} color="#F59E0B50" />
+        </Pressable>
+        <Pressable style={s.quickLinkBtnTop} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
+          <View style={[s.quickLinkIconCircle, { backgroundColor: '#9333EA18' }]}>
+            <MaterialIcons name="compare-arrows" size={15} color="#9333EA" />
+          </View>
+          <Text style={[s.quickLinkTextTop, { color: '#9333EA' }]}>{isFr ? 'Comparer' : 'Compare'}</Text>
+          <MaterialIcons name="chevron-right" size={14} color="#9333EA50" />
+        </Pressable>
+        <Pressable style={s.quickLinkBtnTop} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
+          <View style={[s.quickLinkIconCircle, { backgroundColor: '#3B82F618' }]}>
+            <MaterialIcons name="public" size={15} color="#3B82F6" />
+          </View>
+          <Text style={[s.quickLinkTextTop, { color: '#3B82F6' }]}>Geo</Text>
+          <MaterialIcons name="chevron-right" size={14} color="#3B82F650" />
+        </Pressable>
+      </View>
 
       {/* ===== CONTENT ===== */}
       <View style={s.content}>
@@ -1035,5 +1058,46 @@ const s = StyleSheet.create({
     width: 1,
     height: 20,
     backgroundColor: theme.border,
+  },
+
+  // Quick links row — positioned under header for visibility
+  quickLinksRowTop: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFC',
+    borderBottomWidth: 1,
+    borderBottomColor: theme.border + '30',
+  },
+  quickLinkBtnTop: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    backgroundColor: '#FFF',
+    paddingVertical: 12,
+    paddingHorizontal: 8,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: theme.border + '60',
+    ...Platform.select({
+      ios: { shadowColor: '#0F172A', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.06, shadowRadius: 4 },
+      android: { elevation: 1 },
+      default: {},
+    }),
+  },
+  quickLinkIconCircle: {
+    width: 26,
+    height: 26,
+    borderRadius: 13,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quickLinkTextTop: {
+    fontSize: 11,
+    fontWeight: '700',
+    flex: 1,
   },
 });

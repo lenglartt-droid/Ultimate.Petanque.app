@@ -4,6 +4,7 @@
  */
 import { getSupabaseClient } from '@/template';
 import { getContinent } from '@/constants/geoData';
+import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 
 export interface GeoEntry {
   key: string; // city name, country name, or continent key
@@ -64,6 +65,8 @@ export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: P
     const result: PlayerGeoRank = { city: null, country: null, continent: null };
 
     // Helper: filter to only real user profiles (player.id === player.user_id)
+    // Note: For individual player geo rank, we don't apply the 3-match filter
+    // because this is used to show a player their own rank even during qualification
     const filterRealProfiles = (players: any[]) => players.filter(p => p.user_id && p.id === p.user_id);
 
     // City rank
@@ -142,7 +145,44 @@ export async function fetchGeoLeaderboard(): Promise<{
     // Filter to only REAL authenticated user profiles:
     // 1. player.id === player.user_id (self-player)
     // 2. player.id exists in user_profiles (confirmed auth account)
-    const players = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+    const realPlayers = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+
+    // ANTI-CHEAT: Only include players with minimum multi-player matches
+    // Fetch matches with participant_user_ids to count multi-player matches per player
+    const realPlayerIds = realPlayers.map((p: any) => p.id);
+    let multiPlayerCountMap = new Map<string, number>();
+    if (realPlayerIds.length > 0) {
+      const { data: matchesData } = await supabase
+        .from('matches')
+        .select('id, team_a, team_b, participant_user_ids')
+        .or(realPlayerIds.map(id => `team_a->>players.cs.${id}`).join(','));
+
+      // Simpler approach: fetch all matches and count per player
+      const { data: allMatches } = await supabase
+        .from('matches')
+        .select('team_a, team_b, participant_user_ids');
+
+      if (allMatches) {
+        for (const m of allMatches) {
+          const participantIds: string[] = m.participant_user_ids || [];
+          if (participantIds.length < 2) continue;
+          const teamAPlayers: string[] = m.team_a?.players || [];
+          const teamBPlayers: string[] = m.team_b?.players || [];
+          const allMatchPlayers = [...teamAPlayers, ...teamBPlayers];
+          for (const pid of allMatchPlayers) {
+            if (realPlayerIds.includes(pid)) {
+              multiPlayerCountMap.set(pid, (multiPlayerCountMap.get(pid) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    // Only include players meeting minimum multi-player match threshold
+    const players = realPlayers.filter((p: any) => {
+      const count = multiPlayerCountMap.get(p.id) || 0;
+      return count >= LEADERBOARD_MIN_MATCHES;
+    });
 
     // Fetch trust scores for all public players
     const playerIds = players.map((p: any) => p.id);
