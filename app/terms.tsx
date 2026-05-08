@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-04-25';
+const EFFECTIVE_DATE = '2026-05-08';
 
 export default function TermsScreen() {
   const insets = useSafeAreaInsets();
@@ -193,6 +193,14 @@ export default function TermsScreen() {
       content: language === 'fr'
         ? 'Le systeme de formation d\'equipes permet aux joueurs d\'inviter des partenaires pour les tournois (Doublette/Triplette). Le capitaine peut activer/desactiver la date limite de formation (2 jours avant le tournoi). Le score de synergie (0-100) est calcule automatiquement a partir du taux de victoire, de la frequence de matchs, de la compatibilite ELO et de la complementarite de role. Les equipes formees disposent d\'un chat integre avec reactions emoji. Le capitaine peut dissoudre l\'equipe ou retirer des membres. Les invitations de tournoi expirent automatiquement apres la date limite. Les partenaires favoris sont stockes localement sur l\'appareil.'
         : 'The team formation system allows players to invite partners for tournaments (Doubles/Triples). The captain can enable/disable the formation deadline (2 days before tournament). The synergy score (0-100) is automatically calculated from win rate, match frequency, ELO compatibility and role complementarity. Formed teams have a built-in chat with emoji reactions. The captain can dissolve the team or remove members. Tournament invitations expire automatically after the deadline. Favorite partners are stored locally on device.',
+    },
+    {
+      icon: 'leaderboard',
+      color: '#F59E0B',
+      title: language === 'fr' ? 'Classement officiel & Qualification' : 'Official Ranking & Qualification',
+      content: language === 'fr'
+        ? 'Pour apparaitre dans les classements officiels (global, geographique, boules), un joueur doit remplir 3 conditions : (1) disposer d\'un compte authentifie (profil dans user_profiles), (2) avoir son profil public active, (3) avoir complete au minimum 3 matchs multi-joueurs (matchs avec au moins 2 participant_user_ids distincts authentifies). Les joueurs ne remplissant pas ces criteres peuvent apparaitre en mode "Apercu" avec un badge NON OFFICIEL mais ne sont pas comptabilises dans les rangs reels. Ce seuil garantit que seuls les joueurs ayant joue contre de vrais adversaires authentifies influencent les classements.'
+        : 'To appear in official rankings (global, geographic, boules), a player must meet 3 conditions: (1) have an authenticated account (profile in user_profiles), (2) have public profile enabled, (3) have completed at least 3 multi-player matches (matches with at least 2 distinct authenticated participant_user_ids). Players not meeting these criteria may appear in "Preview" mode with an UNOFFICIAL badge but are not counted in actual ranks. This threshold ensures only players who have played against real authenticated opponents influence rankings.',
     },
     {
       icon: 'fingerprint',

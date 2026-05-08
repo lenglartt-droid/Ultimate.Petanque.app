@@ -877,6 +877,13 @@ function getAmbassadorFaq(fr: boolean): FAQCategory[] {
             : 'From ambassador portal or Challenges page. Choose challenge type, date, court, max participants. A code and QR code are generated. Participants join via code, public list or QR. Results are validated by present witnesses.',
         },
         {
+          id: 'aa2b',
+          q: fr ? 'Comment participer a mon propre evenement sponsorise ?' : 'How do I participate in my own sponsored event?',
+          a: fr
+            ? 'En tant que createur, vous etes organisateur mais pas automatiquement participant. Pour y participer : ouvrez la page de votre evenement et appuyez sur le bouton "Participer" (le meme que les autres joueurs voient). Vous serez alors inscrit dans la liste des participants et pourrez soumettre votre resultat comme n importe quel autre joueur. Les deux roles (organisateur + participant) sont independants et cumulables.'
+            : 'As creator, you are the organizer but not automatically a participant. To participate: open your event page and tap the "Join" button (the same one other players see). You will then be listed among participants and can submit your result like any other player. Both roles (organizer + participant) are independent and can be combined.',
+        },
+        {
           id: 'aa3',
           q: fr ? 'Quelles sources d\'XP pour un ambassadeur ?' : 'What XP sources for an ambassador?',
           a: fr
