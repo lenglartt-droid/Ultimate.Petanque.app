@@ -355,6 +355,49 @@ export default function EditPlayerScreen() {
           {/* 3. Localisation */}
           <SectionCard title={t('player', 'locationLabel')} icon="my-location" color={theme.primaryLight} delay={100} required>
             <LocationPicker label="" value={location} onChange={setLocation} placeholder={t('player', 'searchCity')} showCityOnly />
+            {/* GPS update button */}
+            <Pressable
+              style={styles.gpsUpdateBtn}
+              onPress={async () => {
+                try {
+                  Haptics.selectionAsync();
+                  const Location = require('@/services/location');
+                  const { status } = await Location.getForegroundPermissionsAsync();
+                  if (status !== 'granted') {
+                    const { status: newStatus } = await Location.requestForegroundPermissionsAsync();
+                    if (newStatus !== 'granted') {
+                      Alert.alert(t('common', 'error'), language === 'fr' ? 'Permission de localisation refusee' : 'Location permission denied');
+                      return;
+                    }
+                  }
+                  const position = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+                  const [result] = await Location.reverseGeocodeAsync({ latitude: position.coords.latitude, longitude: position.coords.longitude });
+                  if (result) {
+                    const newCity = result.city || result.subregion || result.region || '';
+                    const newCountry = result.country || location.country || 'France';
+                    setLocation({
+                      address: result.street ? `${result.street}, ${newCity}` : newCity,
+                      city: newCity,
+                      country: newCountry,
+                      latitude: position.coords.latitude,
+                      longitude: position.coords.longitude,
+                    });
+                    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                  }
+                } catch (e) {
+                  console.log('[GPS] Error:', e);
+                  Alert.alert(t('common', 'error'), language === 'fr' ? 'Impossible de recuperer la position GPS' : 'Unable to get GPS position');
+                }
+              }}
+            >
+              <View style={[styles.autoFillIcon, { backgroundColor: '#3B82F615' }]}>
+                <MaterialIcons name="my-location" size={16} color="#3B82F6" />
+              </View>
+              <Text style={[styles.autoFillText, { color: '#3B82F6' }]}>
+                {language === 'fr' ? 'Utiliser ma position GPS actuelle' : 'Use my current GPS location'}
+              </Text>
+              <MaterialIcons name="gps-fixed" size={16} color="#3B82F6" />
+            </Pressable>
             {(() => {
               const empty = !location.latitude && !location.longitude;
               if (!empty) return null;
@@ -746,6 +789,7 @@ const styles = StyleSheet.create({
   pickerPlaceholderText: { flex: 1, fontSize: 15, color: theme.textMuted },
 
   // Auto-fill
+  gpsUpdateBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: '#3B82F608', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#3B82F620' },
   autoFillBtn: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.primary + '08', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 10, borderWidth: 1, borderColor: theme.primary + '20', borderStyle: 'dashed' as any },
   autoFillIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   autoFillText: { flex: 1, fontSize: 13, fontWeight: '600', color: theme.primary },

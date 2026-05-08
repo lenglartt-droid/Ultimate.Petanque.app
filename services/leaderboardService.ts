@@ -85,7 +85,18 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
   const usePeriod = period && period !== 'all';
 
   try {
-    // Always fetch public players
+    // Fetch only real user profiles — INNER JOIN ensures player.id exists in user_profiles
+    // This prevents ANY locally created player (opponent cards) from appearing,
+    // even if they somehow have is_public=true or matching user_id.
+    const { data: authUserIds, error: authError } = await supabase
+      .from('user_profiles')
+      .select('id');
+
+    if (authError) return { players: [], error: authError.message };
+
+    const authIdSet = new Set((authUserIds || []).map((u: any) => u.id));
+
+    // Fetch public players
     const { data: playersData, error: playersError } = await supabase
       .from('players')
       .select('id, user_id, name, nickname, avatar, club, role, level, country, location, stats, boules, terrain_name, created_at, elo_rating')
@@ -244,11 +255,16 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       }
     }
 
-    // Filter: only include real user profiles (player.id === player.user_id)
-    // and players who meet the minimum match threshold
+    // Filter: only include REAL authenticated users
+    // A player qualifies ONLY if:
+    // 1. player.id === player.user_id (self-player, not a tracking card)
+    // 2. player.id exists in user_profiles table (confirmed auth account)
+    // 3. Meets minimum match threshold with anti-cheat validated matches
     const filteredData = (playersData || []).filter((p: any) => {
       // Exclude locally created players (tracking cards) from leaderboard
       if (!p.user_id || p.id !== p.user_id) return false;
+      // CRITICAL: Verify player.id is an actual authenticated user
+      if (!authIdSet.has(p.id)) return false;
       if (playerStatsMap) {
         const ps = playerStatsMap.get(p.id);
         return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;

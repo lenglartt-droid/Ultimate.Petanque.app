@@ -129,14 +129,20 @@ export async function fetchGeoLeaderboard(): Promise<{
   const supabase = getSupabaseClient();
 
   try {
-    // Fetch all public players with stats — include user_id to filter real profiles
+    // Fetch auth user IDs to verify real accounts
+    const { data: authUsers } = await supabase.from('user_profiles').select('id');
+    const authIdSet = new Set((authUsers || []).map((u: any) => u.id));
+
+    // Fetch all public players with stats
     const { data: rawPlayers, error } = await supabase
       .from('players')
       .select('id, user_id, name, city, country, elo_rating, stats, is_public')
       .eq('is_public', true);
 
-    // Filter to only real user profiles (player.id === player.user_id)
-    const players = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id);
+    // Filter to only REAL authenticated user profiles:
+    // 1. player.id === player.user_id (self-player)
+    // 2. player.id exists in user_profiles (confirmed auth account)
+    const players = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
 
     // Fetch trust scores for all public players
     const playerIds = players.map((p: any) => p.id);

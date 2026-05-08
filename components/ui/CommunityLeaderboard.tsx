@@ -405,6 +405,9 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         <Text style={[s.playerName, isMe && { color: theme.primary }]} numberOfLines={1}>
                           {p.name}{isMe ? ` (${t('leaderboard', 'you')})` : ''}
                         </Text>
+                        <View style={s.verifiedBadge}>
+                          <MaterialIcons name="verified-user" size={10} color="#22C55E" />
+                        </View>
                         {p.isAmbassador ? <MaterialIcons name="verified" size={12} color="#7C3AED" /> : p.isPremium ? <MaterialIcons name="star" size={11} color="#A8B4C0" /> : null}
                       </View>
                       {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
@@ -652,6 +655,7 @@ const s = StyleSheet.create({
   podiumName: { fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary, maxWidth: 80, textAlign: 'center' as const },
   podiumFlag: { fontSize: 12, lineHeight: 14 },
   podiumStat: { fontSize: 13, fontWeight: '800' as const, color: '#F59E0B' },
+  verifiedBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#22C55E15', alignItems: 'center' as const, justifyContent: 'center' as const },
   podiumBar: { width: '80%', borderRadius: 6, alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingBottom: 6, marginTop: 4 },
   podiumBarText: { fontSize: 14 },
 

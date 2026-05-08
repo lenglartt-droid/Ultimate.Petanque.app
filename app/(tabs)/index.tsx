@@ -52,6 +52,7 @@ import { fetchActivityFeed } from '@/services/activityFeedService';
 import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@/services/terrainProximityService';
 import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 import { sendProximityTerrainNotification } from '@/services/notificationService';
+import { checkCityChange, markCityPromptShown, CityChangeDetection } from '@/services/autoCityDetectionService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -220,6 +221,11 @@ export default function HomeScreen() {
   const [proximityDismissed, setProximityDismissed] = useState(false);
   const proximityLoadedRef = React.useRef(false);
 
+  // Auto-city detection
+  const [cityChange, setCityChange] = useState<CityChangeDetection | null>(null);
+  const [cityChangeDismissed, setCityChangeDismissed] = useState(false);
+  const [cityUpdating, setCityUpdating] = useState(false);
+
   // Gold partner carousel
   const [goldCarouselIndex, setGoldCarouselIndex] = useState(0);
   const goldFadeAnim = React.useRef(new RNAnimated.Value(1)).current;
@@ -336,12 +342,26 @@ export default function HomeScreen() {
           loadUpcomingEvents(),
           loadFeedUnread(),
         ]);
-        // Phase 3: Proximity check (needs location permission, defer further)
-        setTimeout(() => loadProximityAlert(), 2000);
+        // Phase 3: Proximity check + city detection (needs location permission, defer further)
+        setTimeout(() => { loadProximityAlert(); checkAutoCityDetection(); }, 2000);
       }, 1500);
     };
     loadCritical();
-  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert]);
+  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
+
+  // Auto-city detection
+  const checkAutoCityDetection = useCallback(async () => {
+    if (!selfPlayer) return;
+    try {
+      const result = await checkCityChange({
+        playerCity: selfPlayer.location?.city || null,
+        playerCountry: selfPlayer.country || 'France',
+        playerLocationLat: selfPlayer.location?.latitude || null,
+        playerLocationLng: selfPlayer.location?.longitude || null,
+      });
+      if (result?.detected) setCityChange(result);
+    } catch { /* silent */ }
+  }, [selfPlayer]);
 
   // Load nearby active terrains (proximity alert)
   const loadProximityAlert = useCallback(async () => {
@@ -487,6 +507,7 @@ export default function HomeScreen() {
     s.push({ key: 'hero', data: ['hero'] });
     s.push({ key: 'actions', data: ['actions'] });
     if (nearbyTerrains.length > 0 && !proximityDismissed) s.push({ key: 'proximity' as SectionKey, data: ['proximity' as SectionKey] });
+    if (cityChange && !cityChangeDismissed) s.push({ key: 'cityChange' as SectionKey, data: ['cityChange' as SectionKey] });
     // Geographic Ranking Widget — above full leaderboard
     s.push({ key: 'geoRanking', data: ['geoRanking'] });
     // Leaderboard Hub — prominent position
@@ -514,7 +535,7 @@ export default function HomeScreen() {
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
-  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed]);
+  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -599,6 +620,71 @@ export default function HomeScreen() {
             <MiniRankingWidget />
           </View>
         );
+
+      // ===== CITY CHANGE ALERT =====
+      case 'cityChange' as SectionKey:
+        return cityChange && !cityChangeDismissed ? (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={st.cityChangeCard}>
+              <Pressable style={st.cityChangeClose} onPress={() => { setCityChangeDismissed(true); markCityPromptShown(); }} hitSlop={8}>
+                <MaterialIcons name="close" size={16} color="#2563EB" />
+              </Pressable>
+              <View style={st.cityChangeHeader}>
+                <View style={st.cityChangeIconBg}>
+                  <MaterialIcons name="flight" size={22} color="#2563EB" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.cityChangeTitle}>{language === 'fr' ? 'Vous avez demenage ?' : 'Have you moved?'}</Text>
+                  <Text style={st.cityChangeSub}>
+                    {language === 'fr'
+                      ? `Vous etes a ${cityChange.distanceKm}km de ${cityChange.oldCity}`
+                      : `You are ${cityChange.distanceKm}km from ${cityChange.oldCity}`}
+                  </Text>
+                </View>
+              </View>
+              <Text style={st.cityChangeDesc}>
+                {language === 'fr'
+                  ? `Votre position actuelle correspond a ${cityChange.newCity} (${cityChange.newCountry}). Mettre a jour votre ville pour apparaitre dans le bon classement geographique ?`
+                  : `Your current location matches ${cityChange.newCity} (${cityChange.newCountry}). Update your city to appear in the correct geographic ranking?`}
+              </Text>
+              <View style={st.cityChangeActions}>
+                <Pressable
+                  style={st.cityChangeCta}
+                  disabled={cityUpdating}
+                  onPress={async () => {
+                    if (!selfPlayer || !cityChange) return;
+                    setCityUpdating(true);
+                    try {
+                      const { updatePlayer } = require('@/contexts/AppContext').useAppActions;
+                      // Direct update via supabase
+                      const { getSupabaseClient } = require('@/template');
+                      const sb = getSupabaseClient();
+                      await sb.from('players').update({
+                        city: cityChange.newCity,
+                        country: cityChange.newCountry,
+                        location: { ...selfPlayer.location, city: cityChange.newCity, latitude: cityChange.latitude, longitude: cityChange.longitude },
+                      }).eq('id', selfPlayer.id);
+                      setCityChangeDismissed(true);
+                      markCityPromptShown();
+                    } catch { /* silent */ }
+                    setCityUpdating(false);
+                  }}
+                >
+                  <MaterialIcons name="check" size={16} color="#FFF" />
+                  <Text style={st.cityChangeCtaText}>
+                    {cityUpdating ? '...' : (language === 'fr' ? `Passer a ${cityChange.newCity}` : `Switch to ${cityChange.newCity}`)}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={st.cityChangeSkip}
+                  onPress={() => { setCityChangeDismissed(true); markCityPromptShown(); }}
+                >
+                  <Text style={st.cityChangeSkipText}>{language === 'fr' ? 'Non merci' : 'No thanks'}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null;
 
       // ===== PROXIMITY ALERT =====
       case 'proximity' as SectionKey:
@@ -1009,6 +1095,7 @@ export default function HomeScreen() {
     totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t, eloDecayWarning, placementInfo,
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors, goldPartners, goldCarouselIndex,
     now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
+    cityChange, cityChangeDismissed, cityUpdating,
   ]);
 
   const keyExtractor = useCallback((item: SectionKey) => item, []);
@@ -1231,6 +1318,20 @@ const st = StyleSheet.create({
   seasonStatDivider: { width: 1, height: 24, backgroundColor: 'rgba(255,255,255,0.1)' },
   seasonBarWrap: { flexDirection: 'row' as const, height: 6, borderRadius: 3, overflow: 'hidden' as const, backgroundColor: 'rgba(255,255,255,0.08)' },
   seasonBarFill: { height: '100%' as any, borderRadius: 3 },
+
+  // CITY CHANGE ALERT
+  cityChangeCard: { backgroundColor: '#EFF6FF', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BFDBFE', position: 'relative' as const },
+  cityChangeClose: { position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#2563EB12', alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10 },
+  cityChangeHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 10, paddingRight: 32 },
+  cityChangeIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#2563EB18', alignItems: 'center' as const, justifyContent: 'center' as const },
+  cityChangeTitle: { fontSize: 15, fontWeight: '700' as const, color: '#1E3A8A' },
+  cityChangeSub: { fontSize: 11, fontWeight: '600' as const, color: '#2563EB', marginTop: 2 },
+  cityChangeDesc: { fontSize: 13, color: '#1E40AF', lineHeight: 19, marginBottom: 14 },
+  cityChangeActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  cityChangeCta: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12 },
+  cityChangeCtaText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+  cityChangeSkip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563EB12' },
+  cityChangeSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#2563EB' },
 
   // PROXIMITY ALERT
   proximityCard: { backgroundColor: '#F0FDF4', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BBF7D0', position: 'relative' as const },
