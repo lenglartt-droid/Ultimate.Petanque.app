@@ -25,6 +25,7 @@ import { router } from 'expo-router';
 import { checkTempDataExpiry } from '@/services/retentionNotificationService';
 import { checkFavoriteTerrainActivity } from '@/services/terrainActivityNotificationService';
 import { checkTeamDeadlineReminders } from '@/services/teamInvitationService';
+import { registerBackgroundProximityTask } from '@/services/backgroundProximityService';
 import * as Linking from 'expo-linking';
 import { findEventByCode } from '@/services/sponsoredEventService';
 
@@ -169,6 +170,14 @@ function LayoutInner() {
     const timer = setTimeout(() => {
       checkTeamDeadlineReminders().catch(() => {});
     }, 8000); // Delay 8s after mount
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Register background proximity check task
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      registerBackgroundProximityTask().catch(() => {});
+    }, 10000); // Delay 10s after mount
     return () => clearTimeout(timer);
   }, []);
 
