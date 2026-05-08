@@ -176,7 +176,7 @@ export default function TournamentDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { tournamentNotifications, loading: appLoading } = useAppData();
-  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, refreshData } = useAppActions();
+  const { getTournamentById, getClubById, getTerrainById, getMatchesByTournament, updateTournament, deleteTournament, toggleTournamentNotification, isTournamentNotificationEnabled, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -1279,6 +1279,37 @@ export default function TournamentDetailScreen() {
                     {isPublicState ? t('map', 'publicLabel') : t('map', 'privateLabel')}
                   </Text>
                 </View>
+              </Pressable>
+            </View>
+          )}
+
+          {/* Delete Tournament - only for owner */}
+          {canEdit && !isSharedItem && (
+            <View style={styles.deleteTournamentSection}>
+              <Pressable
+                style={styles.deleteTournamentBtn}
+                onPress={() => {
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  Alert.alert(
+                    language === 'fr' ? 'Supprimer ce tournoi ?' : 'Delete this tournament?',
+                    language === 'fr' ? 'Cette action est irreversible. Tous les matchs associes seront dissocies.' : 'This action is irreversible. All associated matches will be unlinked.',
+                    [
+                      { text: t('common', 'cancel'), style: 'cancel' },
+                      { text: t('common', 'delete'), style: 'destructive', onPress: async () => {
+                        try {
+                          await deleteTournament(tournament.id);
+                          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                          router.back();
+                        } catch (e: any) {
+                          Alert.alert(t('common', 'error'), e.message || 'Delete failed');
+                        }
+                      }},
+                    ]
+                  );
+                }}
+              >
+                <MaterialIcons name="delete-outline" size={18} color={theme.error} />
+                <Text style={styles.deleteTournamentBtnText}>{language === 'fr' ? 'Supprimer ce tournoi' : 'Delete this tournament'}</Text>
               </Pressable>
             </View>
           )}
@@ -3354,4 +3385,8 @@ const styles = StyleSheet.create({
   quickShareSub: { fontSize: 11, color: theme.textSecondary, marginTop: 2 },
   quickShareText: { fontSize: 13, fontWeight: '600' as const, color: theme.textSecondary },
   quickShareArrow: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const },
+  // Delete tournament
+  deleteTournamentSection: { marginTop: 24, paddingTop: 20, borderTopWidth: 1, borderTopColor: theme.border },
+  deleteTournamentBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: theme.error + '08', paddingVertical: 16, borderRadius: theme.borderRadius.lg, borderWidth: 1, borderColor: theme.error + '20' },
+  deleteTournamentBtnText: { fontSize: 15, fontWeight: '600' as const, color: theme.error },
 });

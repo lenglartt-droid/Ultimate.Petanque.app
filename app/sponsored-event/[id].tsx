@@ -10,7 +10,7 @@ import { useAuth, useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import {
   getSponsoredEvent, getEventParticipants, getMyParticipationStatus,
-  registerForEvent, declineEvent, attestAsWitness, publishResults,
+  registerForEvent, declineEvent, withdrawFromEvent, attestAsWitness, publishResults,
   cancelSponsoredEvent, inviteUsersToEvent, reinviteUser, SponsoredEvent, SponsoredEventParticipant,
 } from '@/services/sponsoredEventService';
 import { getSupabaseClient } from '@/template';
@@ -168,6 +168,23 @@ export default function SponsoredEventDetailScreen() {
     await declineEvent(id);
     setMyStatus('declined');
     loadData();
+  };
+
+  const handleWithdraw = async () => {
+    if (!id) return;
+    showAlert(
+      language === 'fr' ? 'Se desinscrire ?' : 'Withdraw?',
+      language === 'fr' ? 'Vous serez retire de la liste des participants.' : 'You will be removed from the participant list.',
+      [
+        { text: language === 'fr' ? 'Annuler' : 'Cancel', style: 'cancel' },
+        { text: language === 'fr' ? 'Confirmer' : 'Confirm', style: 'destructive', onPress: async () => {
+          const { error } = await withdrawFromEvent(id);
+          if (error) { showAlert(language === 'fr' ? 'Erreur' : 'Error', error); return; }
+          setMyStatus(null);
+          loadData();
+        }},
+      ]
+    );
   };
 
   const handleAttest = async (participantId: string) => {
@@ -611,6 +628,11 @@ export default function SponsoredEventDetailScreen() {
               <View style={s.registeredBadge}>
                 <MaterialIcons name="check-circle" size={20} color={theme.success} />
                 <Text style={s.registeredText}>{language === 'fr' ? 'Vous etes inscrit' : 'You are registered'}</Text>
+                {myStatus === 'accepted' ? (
+                  <Pressable style={s.withdrawBtn} onPress={handleWithdraw}>
+                    <Text style={s.withdrawBtnText}>{language === 'fr' ? 'Se desinscrire' : 'Withdraw'}</Text>
+                  </Pressable>
+                ) : null}
               </View>
             ) : myStatus === 'declined' ? (
               <View style={s.declinedBadge}>
@@ -1198,8 +1220,10 @@ const s = StyleSheet.create({
   registerBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   declineBtn: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 16, borderRadius: 16, backgroundColor: '#F1F5F9' },
   declineBtnText: { fontSize: 14, fontWeight: '600', color: theme.textSecondary },
-  registeredBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.success + '10', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: theme.success + '20' },
-  registeredText: { fontSize: 15, fontWeight: '600', color: theme.success },
+  registeredBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.success + '10', borderRadius: 14, padding: 16, borderWidth: 1, borderColor: theme.success + '20', flexWrap: 'wrap' as const },
+  registeredText: { fontSize: 15, fontWeight: '600', color: theme.success, flex: 1 },
+  withdrawBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.error + '10', borderRadius: 8, borderWidth: 1, borderColor: theme.error + '20' },
+  withdrawBtnText: { fontSize: 12, fontWeight: '600', color: theme.error },
   declinedBadge: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F1F5F9', borderRadius: 14, padding: 16 },
   declinedText: { fontSize: 15, fontWeight: '600', color: theme.textMuted, flex: 1 },
   reRegisterBtn: { paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.primary + '10', borderRadius: 8 },

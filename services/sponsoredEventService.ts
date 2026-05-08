@@ -386,6 +386,26 @@ export async function registerForEvent(eventId: string): Promise<{ error: string
   }
 }
 
+/** Withdraw from event (unregister) */
+export async function withdrawFromEvent(eventId: string): Promise<{ error: string | null }> {
+  try {
+    const supabase = getSupabaseClient();
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData?.user?.id) return { error: 'Non authentifie' };
+
+    const { error } = await supabase
+      .from('sponsored_event_participants')
+      .delete()
+      .eq('event_id', eventId)
+      .eq('user_id', userData.user.id);
+
+    if (error) return { error: error.message };
+    return { error: null };
+  } catch (e: any) {
+    return { error: e.message };
+  }
+}
+
 /** Decline participation */
 export async function declineEvent(eventId: string): Promise<{ error: string | null }> {
   try {
