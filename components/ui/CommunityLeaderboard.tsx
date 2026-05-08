@@ -408,6 +408,12 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                         <View style={s.verifiedBadge}>
                           <MaterialIcons name="verified-user" size={10} color="#22C55E" />
                         </View>
+                        {p.stats.matchesPlayed >= 3 ? (
+                          <View style={s.antiCheatBadge}>
+                            <MaterialIcons name="shield" size={8} color="#3B82F6" />
+                            <Text style={s.antiCheatText}>{p.stats.matchesPlayed}</Text>
+                          </View>
+                        ) : null}
                         {p.isAmbassador ? <MaterialIcons name="verified" size={12} color="#7C3AED" /> : p.isPremium ? <MaterialIcons name="star" size={11} color="#A8B4C0" /> : null}
                       </View>
                       {p.club ? <Text style={s.playerClub} numberOfLines={1}>{p.club}</Text> : null}
@@ -656,6 +662,8 @@ const s = StyleSheet.create({
   podiumFlag: { fontSize: 12, lineHeight: 14 },
   podiumStat: { fontSize: 13, fontWeight: '800' as const, color: '#F59E0B' },
   verifiedBadge: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#22C55E15', alignItems: 'center' as const, justifyContent: 'center' as const },
+  antiCheatBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, backgroundColor: '#3B82F610', paddingHorizontal: 4, paddingVertical: 1, borderRadius: 6 },
+  antiCheatText: { fontSize: 8, fontWeight: '700' as const, color: '#3B82F6' },
   podiumBar: { width: '80%', borderRadius: 6, alignItems: 'center' as const, justifyContent: 'flex-end' as const, paddingBottom: 6, marginTop: 4 },
   podiumBarText: { fontSize: 14 },
 

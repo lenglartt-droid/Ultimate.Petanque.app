@@ -628,6 +628,94 @@ export default function AdminAntiCheatScreen() {
         </View>
       ) : null}
 
+      {/* ============ MATCH VALIDATION RATIO (per player) ============ */}
+      {!loading && players.length > 0 ? (() => {
+        // Compute validated vs local match ratio from players data
+        const playersWithDetails = players.filter((p: any) => p.details);
+        const totalAnalyzed = playersWithDetails.length;
+        const highLocalRatio = playersWithDetails.filter((p: any) => {
+          const mp = p.details?.multiPlayerRatio || 0;
+          return mp < 30 && (p.details?.totalMatches || p.details?.matchesPlayed || 0) >= 5;
+        });
+        const avgMultiPlayerRatio = totalAnalyzed > 0
+          ? Math.round(playersWithDetails.reduce((s: number, p: any) => s + (p.details?.multiPlayerRatio || 0), 0) / totalAnalyzed)
+          : 0;
+
+        return (
+          <View style={st.deviceSection}>
+            <View style={st.deviceHeaderRow}>
+              <View style={[st.deviceIcon, { backgroundColor: '#3B82F615' }]}>
+                <MaterialIcons name="fact-check" size={18} color="#3B82F6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={st.deviceTitle}>{isFr ? 'Ratio Matchs Valides' : 'Validated Match Ratio'}</Text>
+                <Text style={st.deviceSubtitle}>{isFr ? 'Matchs multi-joueurs vs solo' : 'Multi-player vs solo matches'}</Text>
+              </View>
+              <View style={{ alignItems: 'center', backgroundColor: avgMultiPlayerRatio >= 50 ? '#22C55E15' : '#EF444415', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10 }}>
+                <Text style={{ fontSize: 16, fontWeight: '900', color: avgMultiPlayerRatio >= 50 ? '#22C55E' : '#EF4444' }}>{avgMultiPlayerRatio}%</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'moy. multi' : 'avg multi'}</Text>
+              </View>
+            </View>
+
+            {/* Summary stats */}
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 12 }}>
+              <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#3B82F6' }}>{totalAnalyzed}</Text>
+                <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Analyses' : 'Analyzed'}</Text>
+              </View>
+              <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#EF4444' }}>{highLocalRatio.length}</Text>
+                <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', textAlign: 'center' }}>{isFr ? '<30% multi' : '<30% multi'}</Text>
+              </View>
+              <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 10 }}>
+                <Text style={{ fontSize: 18, fontWeight: '800', color: '#22C55E' }}>{totalAnalyzed - highLocalRatio.length}</Text>
+                <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', textAlign: 'center' }}>{isFr ? 'Conformes' : 'Compliant'}</Text>
+              </View>
+            </View>
+
+            {/* Ratio distribution bar */}
+            {totalAnalyzed > 0 ? (
+              <View style={{ marginTop: 10, height: 10, flexDirection: 'row', borderRadius: 5, overflow: 'hidden', backgroundColor: theme.backgroundSecondary }}>
+                <View style={{ flex: Math.max(totalAnalyzed - highLocalRatio.length, 0.1), backgroundColor: '#22C55E', borderRadius: 5 }} />
+                <View style={{ flex: Math.max(highLocalRatio.length, 0.1), backgroundColor: '#EF4444' }} />
+              </View>
+            ) : null}
+
+            {/* Top offenders (high local ratio) */}
+            {highLocalRatio.length > 0 ? (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {isFr ? 'Joueurs a forte proportion solo' : 'High solo ratio players'}
+                </Text>
+                {highLocalRatio.slice(0, 5).map((p: any) => (
+                  <Pressable
+                    key={p.id}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 6 }}
+                    onPress={() => { setSelectedPlayer(p); setAdminNotes(p.adminNotes || ''); }}
+                  >
+                    <View style={{ width: 28, height: 28, borderRadius: 8, backgroundColor: '#EF444415', alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>{p.details?.multiPlayerRatio || 0}%</Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.textPrimary }}>{p.playerName || p.playerId.substring(0, 8)}</Text>
+                      <Text style={{ fontSize: 10, color: theme.textMuted }}>
+                        {p.details?.totalMatches || p.details?.matchesPlayed || 0} {isFr ? 'matchs' : 'matches'} • {p.details?.uniqueOpponents || 0} {isFr ? 'adversaires' : 'opponents'}
+                      </Text>
+                    </View>
+                    <View style={[st.scoreCircle, { width: 36, height: 36, borderWidth: 2, borderColor: getTrustScoreColor(p.trustScore) }]}>
+                      <Text style={[st.scoreText, { fontSize: 12, color: getTrustScoreColor(p.trustScore) }]}>{p.trustScore}</Text>
+                    </View>
+                  </Pressable>
+                ))}
+                {highLocalRatio.length > 5 ? (
+                  <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 4 }}>+{highLocalRatio.length - 5} {isFr ? 'autres' : 'more'}</Text>
+                ) : null}
+              </View>
+            ) : null}
+          </View>
+        );
+      })() : null}
+
       {/* ============ ANTI-CHEAT WEEKLY ANALYTICS ============ */}
       <View style={st.deviceSection}>
         <Pressable

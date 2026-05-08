@@ -218,8 +218,16 @@ export async function fetchGeoLeaderboard(): Promise<{
           flag: getFlag ? getFlag(key) : undefined,
         });
       }
-      // Sort by composite score: players * avgElo
-      return entries.sort((a, b) => (b.playerCount * b.avgElo) - (a.playerCount * a.avgElo));
+      // Sort by composite score: players * avgElo, with tiebreakers
+      return entries.sort((a, b) => {
+        const scoreA = a.playerCount * a.avgElo;
+        const scoreB = b.playerCount * b.avgElo;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        if (b.avgElo !== a.avgElo) return b.avgElo - a.avgElo;
+        if (b.avgWinRate !== a.avgWinRate) return b.avgWinRate - a.avgWinRate;
+        if (b.totalMatches !== a.totalMatches) return b.totalMatches - a.totalMatches;
+        return a.key.localeCompare(b.key);
+      });
     };
 
     // Build city entries using cityMap (needs slightly different handling)
@@ -248,12 +256,18 @@ export async function fetchGeoLeaderboard(): Promise<{
         flag: undefined,
       });
     }
-    cityEntries.sort((a, b) => (b.playerCount * b.avgElo) - (a.playerCount * a.avgElo));
+    cityEntries.sort((a, b) => {
+      const scoreA = a.playerCount * a.avgElo;
+      const scoreB = b.playerCount * b.avgElo;
+      if (scoreB !== scoreA) return scoreB - scoreA;
+      if (b.avgElo !== a.avgElo) return b.avgElo - a.avgElo;
+      if (b.avgWinRate !== a.avgWinRate) return b.avgWinRate - a.avgWinRate;
+      if (b.totalMatches !== a.totalMatches) return b.totalMatches - a.totalMatches;
+      return a.key.localeCompare(b.key);
+    });
 
     const countries = buildEntries(countryMap, (k) => k);
     const continents = buildEntries(continentMap, (k) => k);
-
-    console.log(countries);
 
     return { cities: cityEntries, countries, continents, error: null };
   } catch (err: any) {

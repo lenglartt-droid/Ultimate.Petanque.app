@@ -58,8 +58,6 @@ function GeoCard({ entry, rank, tab, isFr, sortKey }: { entry: GeoEntry; rank: n
       ? getContinentFlag(entry.key)
       : null;
   
-  console.log(entry.key);
-
   const displayLabel = tab === 'continents'
     ? getContinentLabel(entry.key, isFr)
     : entry.label;
@@ -124,14 +122,41 @@ function GeoCard({ entry, rank, tab, isFr, sortKey }: { entry: GeoEntry; rank: n
           ) : null}
         </View>
       </Pressable>
-      {entry.topPlayer ? (
-        <View style={styles.topPlayerRow}>
-          <MaterialIcons name="star" size={12} color="#F59E0B" />
-          <Text style={styles.topPlayerText}>
-            {isFr ? 'Meilleur' : 'Best'}: {entry.topPlayer.name} ({entry.topPlayer.elo} ELO)
-          </Text>
-        </View>
-      ) : null}
+      <View style={styles.topPlayerRow}>
+        {entry.topPlayer ? (
+          <>
+            <MaterialIcons name="star" size={12} color="#F59E0B" />
+            <Text style={styles.topPlayerText}>
+              {isFr ? 'Meilleur' : 'Best'}: {entry.topPlayer.name} ({entry.topPlayer.elo} ELO)
+            </Text>
+          </>
+        ) : null}
+        {tab === 'cities' ? (
+          <Pressable
+            style={styles.clubRankBtn}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              router.push({ pathname: '/club-city-ranking', params: { city: entry.key } } as any);
+            }}
+            hitSlop={6}
+          >
+            <MaterialIcons name="home" size={11} color="#F59E0B" />
+            <Text style={styles.clubRankBtnText}>{isFr ? 'Clubs' : 'Clubs'}</Text>
+          </Pressable>
+        ) : tab === 'countries' ? (
+          <Pressable
+            style={styles.clubRankBtn}
+            onPress={(e) => {
+              e.stopPropagation?.();
+              router.push({ pathname: '/club-city-ranking', params: { country: entry.key } } as any);
+            }}
+            hitSlop={6}
+          >
+            <MaterialIcons name="home" size={11} color="#F59E0B" />
+            <Text style={styles.clubRankBtnText}>{isFr ? 'Clubs' : 'Clubs'}</Text>
+          </Pressable>
+        ) : null}
+      </View>
     </Animated.View>
   );
 }
@@ -515,5 +540,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 6,
     paddingHorizontal: 58, paddingBottom: 10,
   },
-  topPlayerText: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic' },
+  topPlayerText: { fontSize: 11, color: theme.textMuted, fontStyle: 'italic', flex: 1 },
+  clubRankBtn: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+    backgroundColor: '#F59E0B12', paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: 8, borderWidth: 1, borderColor: '#F59E0B25',
+  },
+  clubRankBtnText: { fontSize: 10, fontWeight: '700', color: '#F59E0B' },
 });
