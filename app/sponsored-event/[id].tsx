@@ -605,7 +605,7 @@ export default function SponsoredEventDetailScreen() {
         ) : null}
 
         {/* Registration CTA */}
-        {!isCreator && !isPast && event.status !== 'cancelled' ? (
+        {!isPast && event.status !== 'cancelled' ? (
           <View style={s.ctaSection}>
             {myStatus === 'accepted' || myStatus === 'completed' ? (
               <View style={s.registeredBadge}>
@@ -918,6 +918,8 @@ export default function SponsoredEventDetailScreen() {
               </Pressable>
             </View>
 
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.shareScrollContent}>
+
             {/* Event preview */}
             <View style={s.sharePreview}>
               <LinearGradient colors={['#7C3AED', '#9333EA']} style={s.sharePreviewGradient}>
@@ -1026,6 +1028,8 @@ export default function SponsoredEventDetailScreen() {
                   : 'Players can join by entering the code in the Sponsored Events tab.'}
               </Text>
             </View>
+
+            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -1262,7 +1266,8 @@ const s = StyleSheet.create({
   reminderLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textSecondary },
   // Share modal
   shareOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
-  shareContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32 },
+  shareContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '90%' },
+  shareScrollContent: { paddingBottom: 16 },
   shareHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   shareHeaderTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
   shareCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },

@@ -507,7 +507,7 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   }, [team, fr, selectedTournament, loadTeamData]);
 
   if (teamableTournaments.length === 0) {
-    // Show empty state with create tournament prompt
+    // Show motivating empty state with create tournament prompt
     return (
       <View style={s.container}>
         <View style={s.header}>
@@ -519,17 +519,39 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
             <Text style={s.headerSub}>{fr ? 'Invitez des partenaires pour vos tournois' : 'Invite partners for your tournaments'}</Text>
           </View>
         </View>
-        <View style={{ alignItems: 'center', paddingVertical: 16 }}>
-          <Text style={{ fontSize: 13, color: '#64748B', textAlign: 'center', marginBottom: 12, lineHeight: 19 }}>
-            {fr ? 'Creez un tournoi en Doublette ou Triplette pour commencer a former votre equipe.' : 'Create a Doubles or Triples tournament to start building your team.'}
+        <View style={s.emptyStateWrap}>
+          <View style={s.emptyStateIconRing}>
+            <MaterialIcons name="emoji-events" size={28} color="#22C55E" />
+          </View>
+          <Text style={s.emptyStateTitle}>
+            {fr ? 'Pret a jouer en equipe ?' : 'Ready to play as a team?'}
+          </Text>
+          <Text style={s.emptyStateDesc}>
+            {fr
+              ? 'Creez un tournoi en Doublette ou Triplette, puis invitez vos coequipiers preferes. L\u2019app calcule automatiquement votre synergie !'
+              : 'Create a Doubles or Triples tournament, then invite your favorite teammates. The app automatically calculates your synergy!'}
           </Text>
           <Pressable
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#22C55E', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 12 }}
-            onPress={() => router.push('/tournament/new' as any)}
+            style={({ pressed }) => [s.emptyStateCTA, pressed && { opacity: 0.85, transform: [{ scale: 0.97 }] }]}
+            onPress={() => { Haptics.selectionAsync(); router.push('/tournament/new' as any); }}
           >
             <MaterialIcons name="add" size={18} color="#FFF" />
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Creer un tournoi' : 'Create tournament'}</Text>
+            <Text style={s.emptyStateCTAText}>{fr ? 'Creer un tournoi' : 'Create tournament'}</Text>
           </Pressable>
+          <View style={s.emptyStateHints}>
+            <View style={s.emptyStateHintRow}>
+              <MaterialIcons name="check-circle" size={12} color="#22C55E" />
+              <Text style={s.emptyStateHintText}>{fr ? 'Score de synergie avec vos partenaires' : 'Synergy score with your partners'}</Text>
+            </View>
+            <View style={s.emptyStateHintRow}>
+              <MaterialIcons name="check-circle" size={12} color="#22C55E" />
+              <Text style={s.emptyStateHintText}>{fr ? 'Chat d\u2019equipe integre' : 'Built-in team chat'}</Text>
+            </View>
+            <View style={s.emptyStateHintRow}>
+              <MaterialIcons name="check-circle" size={12} color="#22C55E" />
+              <Text style={s.emptyStateHintText}>{fr ? 'Notifications d\u2019acceptation en temps reel' : 'Real-time acceptance notifications'}</Text>
+            </View>
+          </View>
         </View>
       </View>
     );
@@ -1310,6 +1332,15 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
 
 const s = StyleSheet.create({
   container: { backgroundColor: '#FFF', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#22C55E20', ...Platform.select({ ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.08, shadowRadius: 8 }, android: { elevation: 2 }, default: {} }) },
+  emptyStateWrap: { alignItems: 'center', paddingVertical: 20, paddingHorizontal: 8 },
+  emptyStateIconRing: { width: 56, height: 56, borderRadius: 28, backgroundColor: '#22C55E12', alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#22C55E25', marginBottom: 14 },
+  emptyStateTitle: { fontSize: 17, fontWeight: '800', color: '#0F172A', textAlign: 'center', marginBottom: 8 },
+  emptyStateDesc: { fontSize: 13, color: '#64748B', textAlign: 'center', lineHeight: 20, marginBottom: 16, paddingHorizontal: 8 },
+  emptyStateCTA: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#22C55E', paddingHorizontal: 24, paddingVertical: 14, borderRadius: 14, ...Platform.select({ ios: { shadowColor: '#22C55E', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6 }, android: { elevation: 3 }, default: {} }) },
+  emptyStateCTAText: { fontSize: 15, fontWeight: '700', color: '#FFF' },
+  emptyStateHints: { marginTop: 18, gap: 8, alignSelf: 'stretch', paddingHorizontal: 16 },
+  emptyStateHintRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  emptyStateHintText: { fontSize: 12, color: '#64748B', fontWeight: '500' },
   header: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 },
   headerIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#22C55E15', alignItems: 'center', justifyContent: 'center' },
   headerTitle: { fontSize: 15, fontWeight: '700', color: '#0F172A' },
