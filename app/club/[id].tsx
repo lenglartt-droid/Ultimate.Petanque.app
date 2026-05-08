@@ -538,6 +538,12 @@ export default function ClubDetailScreen() {
             <MaterialIcons name="share" size={22} color={theme.success} />
           </Pressable>
           <Pressable
+            style={[styles.shareButton, { backgroundColor: '#9333EA10' }]}
+            onPress={() => { Haptics.selectionAsync(); router.push({ pathname: '/club-compare', params: { clubA: club.id } } as any); }}
+          >
+            <MaterialIcons name="compare-arrows" size={22} color="#9333EA" />
+          </Pressable>
+          <Pressable
             style={[styles.favoriteButton, isFavorite && styles.favoriteButtonActive]}
             onPress={handleToggleFavorite}
           >

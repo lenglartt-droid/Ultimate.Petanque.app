@@ -56,7 +56,7 @@ export async function addPlayerOp(
       handedness: player.handedness,
       terrain_id: player.terrainId,
       terrain_name: player.terrainName,
-      is_public: player.isPublic ?? true,
+      is_public: player.isPublic ?? false,
       show_contact_public: player.showContactPublic ?? false,
       stats: player.stats,
     }).select().single();

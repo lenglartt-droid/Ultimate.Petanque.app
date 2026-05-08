@@ -581,6 +581,22 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           )
         )}
 
+        {/* Quick access links — always visible above CTA */}
+        <View style={s.quickLinksRow}>
+          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-city-ranking' as any); }}>
+            <MaterialIcons name="home" size={14} color="#F59E0B" />
+            <Text style={[s.quickLinkText, { color: '#F59E0B' }]}>{language === 'fr' ? 'Clubs par Ville' : 'Clubs by City'}</Text>
+          </Pressable>
+          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/club-compare' as any); }}>
+            <MaterialIcons name="compare-arrows" size={14} color="#9333EA" />
+            <Text style={[s.quickLinkText, { color: '#9333EA' }]}>{language === 'fr' ? 'Comparer' : 'Compare'}</Text>
+          </Pressable>
+          <Pressable style={s.quickLinkBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
+            <MaterialIcons name="public" size={14} color="#3B82F6" />
+            <Text style={[s.quickLinkText, { color: '#3B82F6' }]}>Geo</Text>
+          </Pressable>
+        </View>
+
         {/* CTA */}
         <View style={s.ctaRow}>
           <Pressable style={s.ctaBtn} onPress={() => { Haptics.selectionAsync(); router.push('/leaderboard' as any); }}>
@@ -698,7 +714,10 @@ const s = StyleSheet.create({
   noteText: { flex: 1, fontSize: 11, color: theme.textMuted, lineHeight: 16 },
 
   // CTA
-  ctaRow: { marginTop: 12, borderTopWidth: 1, borderTopColor: theme.border, gap: 0 },
+  quickLinksRow: { flexDirection: 'row' as const, gap: 6, marginTop: 12, paddingTop: 10, borderTopWidth: 1, borderTopColor: theme.border + '40' },
+  quickLinkBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, backgroundColor: theme.backgroundSecondary, paddingVertical: 10, borderRadius: 12 },
+  quickLinkText: { fontSize: 11, fontWeight: '700' as const },
+  ctaRow: { marginTop: 8, borderTopWidth: 1, borderTopColor: theme.border, gap: 0 },
   ctaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.border + '50' },
   ctaBtnText: { fontSize: 14, fontWeight: '700' as const, color: '#F59E0B' },
   geoCtaBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 12 },
