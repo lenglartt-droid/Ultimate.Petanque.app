@@ -207,7 +207,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
           <View style={{ flex: 1 }}>
             <Text style={s.headerTitle}>{t('leaderboard', 'title')}</Text>
             <Text style={s.headerCount}>
-              {activeTab === 'players' ? `${filteredSorted.length} ${t('leaderboard', 'publicPlayersCount')}`
+              {activeTab === 'players' ? `${filteredSorted.length} ${language === 'fr' ? 'joueurs verifies' : 'verified players'}`
                 : activeTab === 'clubs' ? `${sortedClubs.length} ${t('leaderboard', 'publicClubsCount')}`
                 : activeTab === 'boules' ? `${boulesEntries.length} ${t('leaderboard', 'publicBoulesCount')}`
                 : `${eventEntries.length} ${t('leaderboard', 'publicEventsCount')}`}
