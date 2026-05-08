@@ -92,10 +92,10 @@ export default function TerrainDetailScreen() {
   const sharedPermission = getSharedPermission(id || '');
   const isSharedItem = sharedPermission !== null;
   const isReadOnly = sharedPermission === 'read';
-  const isOwner = !!(user?.id && terrain && (terrain as any).userId && (terrain as any).userId === user.id);
-  const canEdit = !isReadOnly && isOwner;
 
   const terrain = getTerrainById(id || '');
+  const isOwner = !!(user?.id && terrain && terrain.userId && terrain.userId === user.id);
+  const canEdit = !isReadOnly && isOwner;
 
   useEffect(() => {
     if (id) {

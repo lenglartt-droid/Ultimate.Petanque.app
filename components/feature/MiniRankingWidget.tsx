@@ -250,12 +250,6 @@ function MiniRankingWidget() {
             </View>
             <Text style={[s.quickLinkText, { color: '#9333EA' }]}>{fr ? 'Comparer' : 'Compare'}</Text>
           </Pressable>
-          <Pressable style={s.quickLinkBtn} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push('/leaderboard-geo' as any); }}>
-            <View style={[s.quickLinkIcon, { backgroundColor: '#3B82F618' }]}>
-              <MaterialIcons name="public" size={14} color="#3B82F6" />
-            </View>
-            <Text style={[s.quickLinkText, { color: '#3B82F6' }]}>Geo</Text>
-          </Pressable>
         </View>
       </View>
 

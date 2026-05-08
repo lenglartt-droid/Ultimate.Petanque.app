@@ -123,6 +123,91 @@ export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: P
   }
 }
 
+/**
+ * Fetch geo leaderboard in PREVIEW mode (no minimum match filter).
+ * Used to show unofficial rankings when no fully qualified players exist.
+ */
+export async function fetchGeoLeaderboardPreview(): Promise<{
+  cities: GeoEntry[];
+  countries: GeoEntry[];
+  continents: GeoEntry[];
+  error: string | null;
+}> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data: authUsers } = await supabase.from('user_profiles').select('id');
+    const authIdSet = new Set((authUsers || []).map((u: any) => u.id));
+
+    const { data: rawPlayers, error } = await supabase
+      .from('players')
+      .select('id, user_id, name, city, country, elo_rating, stats, is_public')
+      .eq('is_public', true);
+
+    if (error) throw error;
+
+    // Only real authenticated self-players (no match threshold)
+    const players = (rawPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id && authIdSet.has(p.id));
+
+    if (players.length === 0) {
+      return { cities: [], countries: [], continents: [], error: null };
+    }
+
+    const cityMap = new Map<string, { players: PlayerRow[]; country: string }>();
+    const countryMap = new Map<string, PlayerRow[]>();
+    const continentMap = new Map<string, PlayerRow[]>();
+
+    for (const p of players as PlayerRow[]) {
+      const country = p.country || 'France';
+      const city = p.city || null;
+      const continent = getContinent(country);
+      if (city) {
+        if (!cityMap.has(city)) cityMap.set(city, { players: [], country });
+        cityMap.get(city)!.players.push(p);
+      }
+      if (!countryMap.has(country)) countryMap.set(country, []);
+      countryMap.get(country)!.push(p);
+      if (!continentMap.has(continent)) continentMap.set(continent, []);
+      continentMap.get(continent)!.push(p);
+    }
+
+    const buildEntries = (map: Map<string, PlayerRow[]>): GeoEntry[] => {
+      const entries: GeoEntry[] = [];
+      for (const [key, group] of map.entries()) {
+        const totalMatches = group.reduce((sum, p) => sum + (p.stats?.matchesPlayed || 0), 0);
+        const avgElo = Math.round(group.reduce((sum, p) => sum + (p.elo_rating || 1000), 0) / group.length);
+        const totalWinRate = group.reduce((sum, p) => sum + (p.stats?.winRate || 0), 0);
+        const avgWinRate = Math.round((totalWinRate / group.length) * 10) / 10;
+        const topPlayer = group.reduce((best, p) => (p.elo_rating || 1000) > (best.elo_rating || 1000) ? p : best, group[0]);
+        entries.push({ key, label: key, playerCount: group.length, avgElo, totalMatches, avgWinRate, avgTrustScore: 50, topPlayer: { name: topPlayer.name, elo: topPlayer.elo_rating || 1000 } });
+      }
+      return entries.sort((a, b) => {
+        const scoreA = a.playerCount * a.avgElo;
+        const scoreB = b.playerCount * b.avgElo;
+        if (scoreB !== scoreA) return scoreB - scoreA;
+        return b.avgElo - a.avgElo;
+      });
+    };
+
+    const cityEntries: GeoEntry[] = [];
+    for (const [city, { players: group }] of cityMap.entries()) {
+      const totalMatches = group.reduce((sum, p) => sum + (p.stats?.matchesPlayed || 0), 0);
+      const avgElo = Math.round(group.reduce((sum, p) => sum + (p.elo_rating || 1000), 0) / group.length);
+      const totalWinRate = group.reduce((sum, p) => sum + (p.stats?.winRate || 0), 0);
+      const avgWinRate = Math.round((totalWinRate / group.length) * 10) / 10;
+      const topPlayer = group.reduce((best, p) => (p.elo_rating || 1000) > (best.elo_rating || 1000) ? p : best, group[0]);
+      cityEntries.push({ key: city, label: city, playerCount: group.length, avgElo, totalMatches, avgWinRate, avgTrustScore: 50, topPlayer: { name: topPlayer.name, elo: topPlayer.elo_rating || 1000 } });
+    }
+    cityEntries.sort((a, b) => (b.playerCount * b.avgElo) - (a.playerCount * a.avgElo));
+
+    const countries2 = buildEntries(countryMap);
+    const continents2 = buildEntries(continentMap);
+
+    return { cities: cityEntries, countries: countries2, continents: continents2, error: null };
+  } catch (err: any) {
+    return { cities: [], countries: [], continents: [], error: err.message || 'Preview failed' };
+  }
+}
+
 export async function fetchGeoLeaderboard(): Promise<{
   cities: GeoEntry[];
   countries: GeoEntry[];
