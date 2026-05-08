@@ -176,7 +176,11 @@ function LayoutInner() {
   // Register background proximity check task
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      registerBackgroundProximityTask().catch(() => {});
+      try {
+        registerBackgroundProximityTask().catch(() => {});
+      } catch (e) {
+        console.log('[Layout] Background proximity registration skipped:', e);
+      }
     }, 10000); // Delay 10s after mount
     return () => clearTimeout(timer);
   }, []);
