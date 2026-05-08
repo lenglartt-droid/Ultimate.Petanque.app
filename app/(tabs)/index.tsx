@@ -518,8 +518,8 @@ export default function HomeScreen() {
     s.push({ key: 'sponsor', data: ['sponsor'] });
     // Season summary moved to History page
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
-    // Team Builder (before timeline)
-    if (tournaments.length > 0) s.push({ key: 'teamBuilder' as SectionKey, data: ['teamBuilder' as SectionKey] });
+    // Team Builder (always visible — shows create prompt if no tournaments)
+    s.push({ key: 'teamBuilder' as SectionKey, data: ['teamBuilder' as SectionKey] });
     s.push({ key: 'timeline', data: ['timeline'] });
     // Ad banner after timeline — first natural break point
     s.push({ key: 'adBanner1', data: ['adBanner1'] });

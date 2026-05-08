@@ -24,6 +24,7 @@ import { useAuth, useAlert } from '@/template';
 import ShareModal from '@/components/ui/ShareModal';
 import { toggleItemPublic } from '@/services/publicItemsService';
 import { getEloRank, ELO_INITIAL } from '@/services/eloService';
+import { LEADERBOARD_MIN_MATCHES, fetchMultiPlayerMatchCount } from '@/services/leaderboardService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { fetchPlayerGeoRank, PlayerGeoRank } from '@/services/geoLeaderboardService';
@@ -105,6 +106,13 @@ export default function MyPlayerCardScreen() {
   const [previewShowContacts, setPreviewShowContacts] = React.useState(false);
   const [ambassadorData, setAmbassadorData] = React.useState<Ambassador | null>(null);
   const [geoRank, setGeoRank] = React.useState<PlayerGeoRank | null>(null);
+
+  // Leaderboard qualification
+  const [multiPlayerMatchCount, setMultiPlayerMatchCount] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!user?.id) return;
+    fetchMultiPlayerMatchCount(user.id).then(setMultiPlayerMatchCount).catch(() => {});
+  }, [user?.id]);
 
   // ELO history for sparkline
   const [eloHistory, setEloHistory] = React.useState<any[]>([]);
@@ -442,6 +450,32 @@ export default function MyPlayerCardScreen() {
               <View style={{ width: '100%', marginTop: 6 }}>
                 <ProfileCompletenessCard player={selfPlayer} language={language} compact />
               </View>
+
+              {/* ── LEADERBOARD QUALIFICATION ── */}
+              {multiPlayerMatchCount !== null && multiPlayerMatchCount < LEADERBOARD_MIN_MATCHES && isPublic ? (
+                <Pressable style={s.qualificationCard} onPress={() => router.push('/leaderboard' as any)}>
+                  <View style={s.qualificationHeader}>
+                    <View style={s.qualificationIconBg}>
+                      <MaterialIcons name="leaderboard" size={16} color="#D97706" />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.qualificationTitle}>{language === 'fr' ? 'Qualification Classement' : 'Leaderboard Qualification'}</Text>
+                      <Text style={s.qualificationSub}>{multiPlayerMatchCount}/{LEADERBOARD_MIN_MATCHES} {language === 'fr' ? 'matchs multi-joueurs' : 'multi-player matches'}</Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={18} color="#D97706" />
+                  </View>
+                  <View style={s.qualificationBarTrack}>
+                    <View style={[s.qualificationBarFill, { width: `${(multiPlayerMatchCount / LEADERBOARD_MIN_MATCHES) * 100}%` }]} />
+                  </View>
+                  <Text style={s.qualificationHint}>
+                    {multiPlayerMatchCount === 0
+                      ? (language === 'fr' ? 'Partagez un match avec un joueur reel pour commencer' : 'Share a match with a real player to start')
+                      : multiPlayerMatchCount === 2
+                        ? (language === 'fr' ? 'Encore 1 match ! Vous y etes presque' : 'Just 1 more match! Almost there')
+                        : (language === 'fr' ? `Encore ${LEADERBOARD_MIN_MATCHES - multiPlayerMatchCount} match(s) pour apparaitre` : `${LEADERBOARD_MIN_MATCHES - multiPlayerMatchCount} more match(es) to appear`)}
+                  </Text>
+                </Pressable>
+              ) : null
 
               {/* ── BLOC 2: JEU ── */}
               <View style={s.heroSectionBlock}>
@@ -1446,6 +1480,16 @@ const s = StyleSheet.create({
   geoRankBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
   geoRankBadgeRank: { fontSize: 15, fontWeight: '800' as const },
   geoRankBadgeTotal: { fontSize: 11, fontWeight: '600' as const, color: theme.textMuted },
+
+  // Leaderboard Qualification Card
+  qualificationCard: { width: '100%' as any, backgroundColor: '#FEF3C7', borderRadius: 14, padding: 14, marginTop: 10, borderWidth: 1.5, borderColor: '#FDE68A' },
+  qualificationHeader: { flexDirection: 'row' as any, alignItems: 'center' as any, gap: 10, marginBottom: 10 },
+  qualificationIconBg: { width: 32, height: 32, borderRadius: 9, backgroundColor: '#F59E0B18', alignItems: 'center' as any, justifyContent: 'center' as any },
+  qualificationTitle: { fontSize: 13, fontWeight: '700' as any, color: '#78350F' },
+  qualificationSub: { fontSize: 11, fontWeight: '600' as any, color: '#D97706', marginTop: 1 },
+  qualificationBarTrack: { height: 8, backgroundColor: '#FDE68A', borderRadius: 4, overflow: 'hidden' as any, marginBottom: 8 },
+  qualificationBarFill: { height: '100%' as any, backgroundColor: '#D97706', borderRadius: 4 },
+  qualificationHint: { fontSize: 11, color: '#92400E', textAlign: 'center' as any, lineHeight: 16 },
 
   // Edit button
   editProfileBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 18, borderRadius: theme.borderRadius.md, marginTop: 4, ...theme.shadows.card },
