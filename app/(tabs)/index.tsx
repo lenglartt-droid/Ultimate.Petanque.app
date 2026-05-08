@@ -364,6 +364,34 @@ export default function HomeScreen() {
     } catch { /* silent */ }
   }, [language]);
 
+  // Foreground auto-refresh proximity every 5 minutes
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      try {
+        const prefs = await loadNotificationPreferences();
+        if (!prefs.terrain_proximity) return;
+        const radius = prefs.terrain_proximity_radius || 3000;
+        const { terrains: nearby } = await findNearbyActiveTerrains(radius, language);
+        if (nearby.length > 0) {
+          setNearbyTerrains(nearby);
+          setProximityDismissed(false);
+          // Send push only for new terrains not already shown
+          const existingIds = new Set(nearbyTerrains.map(t => t.id));
+          const newTerrains = nearby.filter(t => !existingIds.has(t.id));
+          if (newTerrains.length > 0) {
+            sendProximityTerrainNotification({
+              terrains: newTerrains.map(t => ({ id: t.id, name: t.name, distance: t.distance, activityLabel: t.activityLabel })),
+              language,
+            }).catch(() => {});
+          }
+        } else {
+          setNearbyTerrains([]);
+        }
+      } catch { /* silent */ }
+    }, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [language, nearbyTerrains]);
+
   // Load feed unread count
   const loadFeedUnread = useCallback(async () => {
     try {
