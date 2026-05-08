@@ -47,7 +47,40 @@ function MiniGeoRankingWidget() {
     );
   }
 
-  if (!topCity && !topCountry && !topContinent) return null;
+  // Always show navigation buttons even if no qualified players yet
+  if (!topCity && !topCountry && !topContinent) {
+    return (
+      <View style={s.container}>
+        <View style={s.header}>
+          <View style={s.headerLeft}>
+            <MaterialIcons name="public" size={18} color="#3B82F6" />
+            <Text style={s.headerTitle}>{fr ? 'Classement Geographique' : 'Geographic Ranking'}</Text>
+          </View>
+        </View>
+        <View style={s.row}>
+          {[
+            { label: fr ? 'Top Ville' : 'Top City', icon: 'location-city', color: '#3B82F6', gradient: ['#1E40AF', '#3B82F6'] as [string, string], tab: 'cities' },
+            { label: fr ? 'Top Pays' : 'Top Country', icon: 'flag', color: '#10B981', gradient: ['#047857', '#10B981'] as [string, string], tab: 'countries' },
+            { label: fr ? 'Top Continent' : 'Top Continent', icon: 'public', color: '#F59E0B', gradient: ['#B45309', '#F59E0B'] as [string, string], tab: 'continents' },
+          ].map((item, idx) => (
+            <Pressable
+              key={idx}
+              style={({ pressed }) => [s.card, pressed && { opacity: 0.9, transform: [{ scale: 0.97 }] }]}
+              onPress={() => router.push({ pathname: '/leaderboard-geo', params: { tab: item.tab } } as any)}
+            >
+              <LinearGradient colors={item.gradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={s.cardGradient}>
+                <Text style={s.cardLabel}>{item.label}</Text>
+                <View style={[s.cardIconWrap, { marginBottom: 8 }]}>
+                  <MaterialIcons name={item.icon as any} size={16} color="#FFF" />
+                </View>
+                <Text style={s.cardEmptyText}>{fr ? 'A venir' : 'Coming'}</Text>
+              </LinearGradient>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+    );
+  }
 
   const items: { label: string; entry: GeoEntry; icon: string; color: string; gradient: [string, string]; flag?: string }[] = [];
 
@@ -162,4 +195,5 @@ const s = StyleSheet.create({
   cardStatDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.2)' },
   cardTop: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   cardTopText: { fontSize: 10, fontWeight: '600', color: 'rgba(255,255,255,0.7)', flex: 1 },
+  cardEmptyText: { fontSize: 11, fontWeight: '600', color: 'rgba(255,255,255,0.5)', textAlign: 'center' },
 });
