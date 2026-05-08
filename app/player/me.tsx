@@ -475,7 +475,7 @@ export default function MyPlayerCardScreen() {
                         : (language === 'fr' ? `Encore ${LEADERBOARD_MIN_MATCHES - multiPlayerMatchCount} match(s) pour apparaitre` : `${LEADERBOARD_MIN_MATCHES - multiPlayerMatchCount} more match(es) to appear`)}
                   </Text>
                 </Pressable>
-              ) : null
+              ) : null}
 
               {/* ── BLOC 2: JEU ── */}
               <View style={s.heroSectionBlock}>

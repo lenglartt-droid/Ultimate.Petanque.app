@@ -524,7 +524,6 @@ export async function checkTeamDeadlineReminders(): Promise<void> {
     const tournamentMap = new Map<string, { name: string; date: string }>();
     tournaments.forEach((t: any) => tournamentMap.set(t.id, { name: t.name, date: t.date }));
 
-    const DEADLINE_DAYS = 2;
     const now = new Date();
     const today = now.toISOString().slice(0, 10);
 
@@ -532,10 +531,11 @@ export async function checkTeamDeadlineReminders(): Promise<void> {
       const tInfo = tournamentMap.get(team.tournament_id);
       if (!tInfo) continue;
 
-      const deadline = new Date(new Date(tInfo.date).getTime() - DEADLINE_DAYS * 86400000);
-      const daysLeft = Math.ceil((deadline.getTime() - now.getTime()) / 86400000);
+      const tournamentDate = new Date(tInfo.date);
+      const daysUntilTournament = Math.ceil((tournamentDate.getTime() - now.getTime()) / 86400000);
 
-      if (daysLeft <= 0 || daysLeft > 3) continue;
+      // Notify if tournament is within 3 days and team is incomplete
+      if (daysUntilTournament <= 0 || daysUntilTournament > 3) continue;
 
       // Check if already sent today for this team
       const storageKey = `team_deadline_${team.id}_${today}`;
@@ -554,7 +554,7 @@ export async function checkTeamDeadlineReminders(): Promise<void> {
             targetUserId: user.id,
             tournamentName: tInfo.name,
             teamId: team.id,
-            daysLeft,
+            daysLeft: daysUntilTournament,
             slotsLeft,
             format: team.format,
           },
