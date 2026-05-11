@@ -49,6 +49,8 @@ export default function SponsoredEventDetailScreen() {
   const [showNewBadge, setShowNewBadge] = useState(false);
   const [pollInterval, setPollInterval] = useState<ReturnType<typeof setInterval> | null>(null);
 
+  const shareSheetHeight = useMemo(() => Math.round(Dimensions.get('window').height * 0.88), []);
+
   const isCreator = event?.creatorUserId === user?.id;
   const acceptedCount = participants.filter(p => p.status === 'accepted' || p.status === 'completed').length;
   const completedCount = participants.filter(p => p.status === 'completed').length;
@@ -932,7 +934,7 @@ export default function SponsoredEventDetailScreen() {
       {/* Share Options Modal */}
       <Modal visible={showShareModal} animationType="slide" transparent onRequestClose={() => setShowShareModal(false)}>
         <View style={s.shareOverlay}>
-          <View style={s.shareContent}>
+          <View style={[s.shareContent, { height: shareSheetHeight }]}>
             <View style={s.shareHeader}>
               <Text style={s.shareHeaderTitle}>{language === 'fr' ? 'Partager le defi' : 'Share challenge'}</Text>
               <Pressable style={s.shareCloseBtn} onPress={() => setShowShareModal(false)}>
@@ -940,7 +942,13 @@ export default function SponsoredEventDetailScreen() {
               </Pressable>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={s.shareScrollContent}>
+            <ScrollView
+              style={s.shareBodyScroll}
+              contentContainerStyle={[s.shareScrollContent, { paddingBottom: Math.max(insets.bottom, 12) + 20 }]}
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
 
             {/* Event preview */}
             <View style={s.sharePreview}>
@@ -1290,8 +1298,17 @@ const s = StyleSheet.create({
   reminderLabel: { flex: 1, fontSize: 14, fontWeight: '500', color: theme.textSecondary },
   // Share modal
   shareOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' as const },
-  shareContent: { backgroundColor: '#FFF', borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingBottom: 32, maxHeight: '90%' },
-  shareScrollContent: { paddingBottom: 16 },
+  shareContent: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    width: '100%' as const,
+    flexDirection: 'column' as const,
+    overflow: 'hidden' as const,
+  },
+  /** Bounded flex child so ScrollView scrolls instead of growing past the sheet. */
+  shareBodyScroll: { flex: 1, minHeight: 0 },
+  shareScrollContent: { flexGrow: 1 },
   shareHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#E2E8F0' },
   shareHeaderTitle: { fontSize: 18, fontWeight: '700' as const, color: theme.textPrimary },
   shareCloseBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#F1F5F9', alignItems: 'center' as const, justifyContent: 'center' as const },

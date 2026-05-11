@@ -2085,17 +2085,27 @@ export default function DirectoryScreen() {
                               await updateTournament(lt.id, { terrainId: target.id, terrainName: mergedTarget.name } as any);
                             }
                             await saveMergeLog({ mergeType: 'terrain', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: reassigned });
-                            await deleteTerrain(source.id);
+                            const { error: delTerrainErr } = await deleteTerrain(source.id);
+                            if (delTerrainErr) {
+                              showAlert(t('common', 'error'), delTerrainErr);
+                              return;
+                            }
                           } else if (dup.type === 'player') {
                             await saveMergeLog({ mergeType: 'player', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: [] });
                             await deletePlayer(source.id);
                           } else if (dup.type === 'tournament') {
                             await saveMergeLog({ mergeType: 'tournament', targetId: target.id, targetName: mergedTarget.name, sourceId: source.id, sourceName: source.name, sourceSnapshot: source, reassignedRelations: [] });
-                            await deleteTournament(source.id);
+                            const { error: delTournamentErr } = await deleteTournament(source.id);
+                            if (delTournamentErr) {
+                              showAlert(t('common', 'error'), delTournamentErr);
+                              return;
+                            }
                           }
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                           setDismissedPairs(prev => new Set([...prev, dup.pairKey]));
-                        } catch (e) { /* silent */ }
+                        } catch (e) {
+                          showAlert(t('common', 'error'), e instanceof Error ? e.message : String(e));
+                        }
                         setQuickMerging(null);
                       }}
                       disabled={quickMerging === dup.pairKey}

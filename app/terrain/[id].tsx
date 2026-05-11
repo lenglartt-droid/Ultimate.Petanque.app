@@ -60,7 +60,7 @@ interface TerrainCommunityStats {
 export default function TerrainDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const insets = useSafeAreaInsets();
-  const { tournaments, loading: appLoading } = useAppData();
+  const { tournaments, loading: appLoading, matches: allMatches, players: allPlayers } = useAppData();
   const { getTerrainById, deleteTerrain, updateTerrain, isFavoriteTerrain, toggleFavoriteTerrain, getSharedPermission, setItemPublic, refreshData } = useAppActions();
   const [refreshing, setRefreshing] = useState(false);
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -154,10 +154,17 @@ export default function TerrainDetailScreen() {
           text: t('common', 'delete'),
           style: 'destructive',
           onPress: async () => {
-            if (terrain) {
-              await deleteTerrain(terrain.id);
+            if (!terrain) return;
+            try {
+              const { error } = await deleteTerrain(terrain.id);
+              if (error) {
+                showAlert(t('common', 'error'), error);
+                return;
+              }
               Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
               router.back();
+            } catch (e: any) {
+              showAlert(t('common', 'error'), e?.message || String(e));
             }
           },
         },
@@ -165,43 +172,9 @@ export default function TerrainDetailScreen() {
     );
   };
 
-  if (!terrain) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
-          <Pressable style={styles.backButton} onPress={() => router.back()}>
-            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
-          </Pressable>
-          <Text style={styles.headerTitle}>{t('terrain', 'terrainDetails')}</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        {appLoading ? (
-          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-            <ActivityIndicator size="large" color={theme.primary} />
-          </View>
-        ) : (
-          <View style={styles.emptyContainer}>
-            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
-            <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
-          </View>
-        )}
-      </SafeAreaView>
-    );
-  }
-
-  const typeConfig = config.terrainTypes.find(tc => tc.id === terrain.type) || config.terrainTypes[0];
-  
-  const typeColors: Record<string, { bg: string; text: string; light: string }> = {
-    'Stabilisé': { bg: theme.primary, text: '#FFF', light: theme.primary + '15' },
-    'Graviers': { bg: theme.warning, text: '#FFF', light: theme.warning + '15' },
-    'Sable': { bg: '#F59E0B', text: '#FFF', light: '#F59E0B15' },
-    'Cailloux': { bg: theme.textSecondary, text: '#FFF', light: theme.textSecondary + '15' },
-    'Terre battue': { bg: theme.success, text: '#FFF', light: theme.success + '15' },
-  };
-  const colors = typeColors[terrain.type] || typeColors['Stabilisé'];
-
   // Get tournaments at this terrain, sorted by status then date
   const terrainTournaments = React.useMemo(() => {
+    if (!terrain?.id) return [];
     const statusOrder: Record<string, number> = { 'En cours': 0, 'À venir': 1, 'Terminé': 2 };
     return tournaments
       .filter(t => t.terrainId === terrain.id)
@@ -211,7 +184,7 @@ export default function TerrainDetailScreen() {
         if (sa !== sb) return sa - sb;
         return new Date(b.date).getTime() - new Date(a.date).getTime();
       });
-  }, [tournaments, terrain.id]);
+  }, [tournaments, terrain?.id]);
 
   // Meetups state
   const [meetups, setMeetups] = useState<Meetup[]>([]);
@@ -237,9 +210,6 @@ export default function TerrainDetailScreen() {
 
   // Clubs using this terrain (many-to-many: clubs.terrain_id + terrain.club_id)
   const [linkedClubs, setLinkedClubs] = useState<{ id: string; name: string; city?: string; logo?: string }[]>([]);
-
-  // Compute terrain statistics from matches
-  const { matches: allMatches, players: allPlayers } = useAppData();
 
   // Peak hours by day of week
   const [peakHours, setPeakHours] = useState<{ day: number; hours: number[]; peakHour: number; matchCount: number }[]>([]);
@@ -492,8 +462,42 @@ export default function TerrainDetailScreen() {
     }
   }, [terrain?.id, terrain?.clubId, terrain?.clubName]);
 
-  // Check if terrain has photos
-  const hasPhotos = terrain.photos && terrain.photos.length > 0;
+  if (!terrain) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.header}>
+          <Pressable style={styles.backButton} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={styles.headerTitle}>{t('terrain', 'terrainDetails')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        {appLoading ? (
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActivityIndicator size="large" color={theme.primary} />
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <MaterialIcons name="error-outline" size={64} color={theme.textMuted} />
+            <Text style={styles.emptyText}>{t('terrain', 'terrainNotFound')}</Text>
+          </View>
+        )}
+      </SafeAreaView>
+    );
+  }
+
+  const typeConfig = config.terrainTypes.find(tc => tc.id === terrain.type) || config.terrainTypes[0];
+
+  const typeColors: Record<string, { bg: string; text: string; light: string }> = {
+    'Stabilisé': { bg: theme.primary, text: '#FFF', light: theme.primary + '15' },
+    'Graviers': { bg: theme.warning, text: '#FFF', light: theme.warning + '15' },
+    'Sable': { bg: '#F59E0B', text: '#FFF', light: '#F59E0B15' },
+    'Cailloux': { bg: theme.textSecondary, text: '#FFF', light: theme.textSecondary + '15' },
+    'Terre battue': { bg: theme.success, text: '#FFF', light: theme.success + '15' },
+  };
+  const colors = typeColors[terrain.type] || typeColors['Stabilisé'];
+
+  const hasPhotos = !!(terrain.photos && terrain.photos.length > 0);
 
   const openMaps = () => {
     const latitude = terrain.location?.latitude || 0;

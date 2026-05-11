@@ -128,7 +128,7 @@ interface AppContextType {
   addMatch: (match: Omit<Match, 'id'>) => Promise<string | null>;
   addPlayer: (player: Omit<Player, 'id'>) => Promise<void>;
   addClub: (club: Omit<Club, 'id'>) => Promise<void>;
-  addTournament: (tournament: Omit<Tournament, 'id'>) => Promise<void>;
+  addTournament: (tournament: Omit<Tournament, 'id'>) => Promise<{ error: string | null }>;
   addChallenge: (challenge: Omit<Challenge, 'id'>) => Promise<string | null>;
   addTerrain: (terrain: Omit<Terrain, 'id'>) => Promise<void>;
 
@@ -151,9 +151,9 @@ interface AppContextType {
   deleteMatch: (id: string) => Promise<void>;
   deletePlayer: (id: string) => Promise<void>;
   deleteChallenge: (id: string) => Promise<void>;
-  deleteTerrain: (id: string) => Promise<void>;
+  deleteTerrain: (id: string) => Promise<{ error: string | null }>;
   deleteClub: (id: string) => Promise<void>;
-  deleteTournament: (id: string) => Promise<void>;
+  deleteTournament: (id: string) => Promise<{ error: string | null }>;
 
   // Favorites
   favoriteTerrainIds: string[];
@@ -530,10 +530,26 @@ export function AppProvider({ children }: { children: ReactNode }) {
     deleteClubOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setClubs, setTerrains });
 
   const deleteTournament = async (id: string) =>
-    deleteTournamentOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setTournaments, setMatches });
+    deleteTournamentOp(id, {
+      supabase,
+      userId: user?.id,
+      isConnected: isConnectedRef.current,
+      tournaments,
+      matches,
+      setTournaments,
+      setMatches,
+    });
 
   const deleteTerrain = async (id: string) =>
-    deleteTerrainOp(id, { supabase, userId: user?.id, isConnected: isConnectedRef.current, setTerrains, setFavoriteTerrainIds });
+    deleteTerrainOp(id, {
+      supabase,
+      userId: user?.id,
+      isConnected: isConnectedRef.current,
+      terrains,
+      favoriteTerrainIds,
+      setTerrains,
+      setFavoriteTerrainIds,
+    });
 
   const addBoulesSet = async (set: Omit<BoulesSet, 'id'>) =>
     addBoulesSetOp(set, { supabase, userId: user?.id, boulesSets, setBoulesSets, syncPrimaryBoulesToPlayer });

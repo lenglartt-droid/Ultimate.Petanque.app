@@ -177,22 +177,36 @@ export default function NewTournamentScreen() {
     if (selectedDate) setEndDate(selectedDate);
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired')); return; }
     if (!terrainId && !manualLocation.city.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorLocationRequired')); return; }
     const selectedClub = clubs.find(c => c.id === clubId);
     const terrain = terrains.find(t => t.id === terrainId);
-    addTournament({
-      name: name.trim(), date: date.toISOString(), type, format,
-      location: { name: terrain?.name || manualLocation.address.trim() || manualLocation.city.trim(), city: terrain?.city || manualLocation.city.trim(), latitude: terrain?.location.latitude || manualLocation.latitude, longitude: terrain?.location.longitude || manualLocation.longitude },
-      terrainId: terrain?.id, terrainName: terrain?.name, terrainType: terrain?.type,
-      clubId, clubName: selectedClub?.name, status: getStatusFromDate(date, endDate),
-      endDate: endDate ? endDate.toISOString() : undefined, participants: 0, maxParticipants: parseInt(maxParticipants) || 32,
-      prize: prize.trim() || undefined, description: description.trim() || undefined,
-      tournamentLevel, tournamentCategory, registrationType, tournamentScope,
-      registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back();
+    try {
+      const { error } = await addTournament({
+        name: name.trim(), date: date.toISOString(), type, format,
+        location: {
+          name: terrain?.name || manualLocation.address.trim() || manualLocation.city.trim(),
+          city: terrain?.city || manualLocation.city.trim(),
+          latitude: terrain?.location?.latitude ?? manualLocation.latitude,
+          longitude: terrain?.location?.longitude ?? manualLocation.longitude,
+        },
+        terrainId: terrain?.id, terrainName: terrain?.name, terrainType: terrain?.type,
+        clubId, clubName: selectedClub?.name, status: getStatusFromDate(date, endDate),
+        endDate: endDate ? endDate.toISOString() : undefined, participants: 0, maxParticipants: parseInt(maxParticipants) || 32,
+        prize: prize.trim() || undefined, description: description.trim() || undefined,
+        tournamentLevel, tournamentCategory, registrationType, tournamentScope,
+        registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
+      });
+      if (error) {
+        Alert.alert(t('common', 'error'), error);
+        return;
+      }
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (e: any) {
+      Alert.alert(t('common', 'error'), e?.message || String(e));
+    }
   };
 
   return (

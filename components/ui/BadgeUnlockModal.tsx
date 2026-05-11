@@ -3,7 +3,7 @@
  * All content is centered using flexbox. Animations do not displace anchor point.
  */
 import React, { useEffect } from 'react';
-import { View, Text, Pressable, StyleSheet, Modal, Dimensions, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Modal, Platform } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import Animated, {
   FadeIn,
@@ -28,8 +28,6 @@ interface Props {
   language: 'fr' | 'en';
   onClose: () => void;
 }
-
-const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get('window');
 
 export default function BadgeUnlockModal({ visible, badgeId, language, onClose }: Props) {
   const badge = BADGES.find(b => b.id === badgeId);
@@ -136,59 +134,61 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
             </Animated.View>
           </View>
 
-          {/* Centered content */}
-          <View style={[s.centeredContent, { paddingBottom: insets.bottom + 16 }]}>
-            {/* Glow ring */}
-            <View style={s.iconArea}>
-              <Animated.View style={[s.glowRing, { borderColor: badge.color, shadowColor: badge.color }, glowStyle]} />
+          {/* Centered column: flex bookends keep hero + CTA visually balanced */}
+          <View style={[s.centeredContent, { paddingBottom: insets.bottom + 12 }]}>
+            <View style={s.flexBookend} />
+            <View style={s.heroColumn}>
+              {/* Glow ring */}
+              <View style={s.iconArea}>
+                <Animated.View style={[s.glowRing, { borderColor: badge.color, shadowColor: badge.color }, glowStyle]} />
 
-              {/* Badge icon with pulse */}
-              <Animated.View style={[s.iconContainer, { backgroundColor: badge.color + '15' }, pulseStyle]}>
-                <View style={[s.iconRing, { borderColor: badge.color + '35' }]}>
-                  <View style={[s.iconInner, { backgroundColor: badge.color }]}>
-                    <MaterialIcons name={badge.icon as any} size={48} color="#FFF" />
+                {/* Badge icon with pulse */}
+                <Animated.View style={[s.iconContainer, { backgroundColor: badge.color + '15' }, pulseStyle]}>
+                  <View style={[s.iconRing, { borderColor: badge.color + '35' }]}>
+                    <View style={[s.iconInner, { backgroundColor: badge.color }]}>
+                      <MaterialIcons name={badge.icon as any} size={48} color="#FFF" />
+                    </View>
                   </View>
-                </View>
+                </Animated.View>
+              </View>
+
+              {/* Unlock label */}
+              <Animated.View entering={FadeInUp.duration(500).delay(150)} style={s.unlockLabelWrap}>
+                <LinearGradient
+                  colors={['#F59E0B22', '#F59E0B08']}
+                  style={s.unlockLabelGradient}
+                >
+                  <Text style={s.unlockLabel}>
+                    {isFr ? 'BADGE DEBLOQUE !' : 'BADGE UNLOCKED!'}
+                  </Text>
+                </LinearGradient>
+              </Animated.View>
+
+              {/* Badge name — regular Text inside Animated.View so textAlign centers reliably */}
+              <Animated.View entering={FadeInUp.duration(500).delay(250)} style={s.textBlock}>
+                <Text style={[s.badgeName, { color: badge.color }]}>{getBadgeName(badgeId, language)}</Text>
+              </Animated.View>
+
+              {/* Category chip */}
+              <Animated.View entering={FadeIn.duration(400).delay(350)} style={[s.catChip, { backgroundColor: badge.color + '15', borderColor: badge.color + '30' }]}>
+                <Text style={[s.catChipText, { color: badge.color }]}>{catLabel}</Text>
+              </Animated.View>
+
+              {/* Description */}
+              <Animated.View entering={FadeIn.duration(400).delay(400)} style={s.textBlock}>
+                <Text style={s.badgeDesc}>{getBadgeDescription(badgeId, language)}</Text>
+              </Animated.View>
+
+              {/* XP reward */}
+              <Animated.View entering={FadeIn.duration(400).delay(500)} style={s.xpRewardOuter}>
+                <Animated.View style={[s.xpReward, { borderColor: badge.color + '30' }, shimmerStyle]}>
+                  <MaterialIcons name="bolt" size={24} color="#FCD34D" />
+                  <Text style={s.xpRewardText}>+{badge.xpReward} XP</Text>
+                </Animated.View>
               </Animated.View>
             </View>
 
-            {/* Unlock label */}
-            <Animated.View entering={FadeInUp.duration(500).delay(150)} style={s.unlockLabelWrap}>
-              <LinearGradient
-                colors={['#F59E0B22', '#F59E0B08']}
-                style={s.unlockLabelGradient}
-              >
-                <Text style={s.unlockLabel}>
-                  {isFr ? 'BADGE DEBLOQUE !' : 'BADGE UNLOCKED!'}
-                </Text>
-              </LinearGradient>
-            </Animated.View>
-
-            {/* Badge name */}
-            <Animated.Text entering={FadeInUp.duration(500).delay(250)} style={[s.badgeName, { color: badge.color }]}>
-              {getBadgeName(badgeId, language)}
-            </Animated.Text>
-
-            {/* Category chip */}
-            <Animated.View entering={FadeIn.duration(400).delay(350)} style={[s.catChip, { backgroundColor: badge.color + '15', borderColor: badge.color + '30' }]}>
-              <Text style={[s.catChipText, { color: badge.color }]}>{catLabel}</Text>
-            </Animated.View>
-
-            {/* Description */}
-            <Animated.Text entering={FadeIn.duration(400).delay(400)} style={s.badgeDesc}>
-              {getBadgeDescription(badgeId, language)}
-            </Animated.Text>
-
-            {/* XP reward */}
-            <Animated.View entering={FadeIn.duration(400).delay(500)}>
-              <Animated.View style={[s.xpReward, { borderColor: badge.color + '30' }, shimmerStyle]}>
-                <MaterialIcons name="bolt" size={24} color="#FCD34D" />
-                <Text style={s.xpRewardText}>+{badge.xpReward} XP</Text>
-              </Animated.View>
-            </Animated.View>
-
-            {/* Spacer */}
-            <View style={{ flex: 1, minHeight: 20 }} />
+            <View style={s.flexBookend} />
 
             {/* Close button */}
             <Animated.View entering={FadeIn.duration(400).delay(600)} style={s.closeBtnWrap}>
@@ -235,13 +235,28 @@ const s = StyleSheet.create({
   particle: {
     position: 'absolute',
   },
-  // Main centered content
+  // Main column: full width + flex bookends vertically center the hero block
   centeredContent: {
     flex: 1,
+    width: '100%',
+    flexDirection: 'column',
+    paddingHorizontal: 24,
+    paddingTop: 48,
+  },
+  flexBookend: {
+    flex: 1,
+    minHeight: 8,
+  },
+  heroColumn: {
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 32,
-    paddingTop: 60,
+  },
+  textBlock: {
+    width: '100%',
+    maxWidth: 320,
+    alignItems: 'center',
   },
   // Icon area
   iconArea: {
@@ -291,6 +306,8 @@ const s = StyleSheet.create({
   // Text content
   unlockLabelWrap: {
     marginBottom: 16,
+    alignSelf: 'center',
+    maxWidth: '100%',
   },
   unlockLabelGradient: {
     paddingHorizontal: 24,
@@ -298,6 +315,8 @@ const s = StyleSheet.create({
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F59E0B30',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   unlockLabel: {
     fontSize: 13,
@@ -313,7 +332,7 @@ const s = StyleSheet.create({
     marginBottom: 10,
     lineHeight: 32,
     letterSpacing: -0.3,
-    maxWidth: 300,
+    width: '100%',
   },
   catChip: {
     paddingHorizontal: 14,
@@ -321,23 +340,30 @@ const s = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
     marginBottom: 14,
+    alignSelf: 'center',
   },
   catChipText: {
     fontSize: 12,
     fontWeight: '700',
     letterSpacing: 0.5,
+    textAlign: 'center',
   },
   badgeDesc: {
     fontSize: 15,
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     lineHeight: 23,
-    maxWidth: 300,
     marginBottom: 20,
+    width: '100%',
+  },
+  xpRewardOuter: {
+    alignSelf: 'center',
+    marginBottom: 4,
   },
   xpReward: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 10,
     backgroundColor: '#F59E0B12',
     paddingHorizontal: 28,
@@ -353,6 +379,8 @@ const s = StyleSheet.create({
   closeBtnWrap: {
     width: '100%',
     maxWidth: 320,
+    alignSelf: 'center',
+    flexShrink: 0,
   },
   closeBtn: {
     flexDirection: 'row',

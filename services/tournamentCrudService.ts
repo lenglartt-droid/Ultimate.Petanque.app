@@ -17,27 +17,34 @@ interface TournamentCrudDeps {
   sharedItemPermissions: Record<string, 'read' | 'write'>;
 }
 
+function tournamentInsertErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
+    return (err as any).message;
+  }
+  return String(err ?? 'Unknown error');
+}
+
 export async function addTournamentOp(
   tournament: Omit<Tournament, 'id'>,
   deps: TournamentCrudDeps
-): Promise<void> {
+): Promise<{ error: string | null }> {
   const { supabase, userId, isConnected, setTournaments } = deps;
 
   if (!userId) {
     const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
     setTournaments(prev => [...prev, newTournament]);
-    return;
+    return { error: null };
   }
 
   if (!isConnected) {
     const tempId = `temp_${Date.now()}`;
     enqueueOperation({ type: 'insert', table: 'tournaments', dbPayload: buildTournamentDbPayload(tournament), tempId });
     setTournaments(prev => [...prev, { ...tournament, id: tempId }]);
-    return;
+    return { error: null };
   }
 
   try {
-    const { data, error } = await supabase.from('tournaments').insert({
+    const row: Record<string, unknown> = {
       user_id: userId,
       name: tournament.name,
       date: tournament.date,
@@ -64,8 +71,12 @@ export async function addTournamentOp(
       tournament_scope: tournament.tournamentScope,
       registration_cost: tournament.registrationCost,
       prize_won: tournament.prizeWon,
-      poster_url: tournament.posterUrl,
-    }).select().single();
+    };
+    if (tournament.posterUrl != null && tournament.posterUrl !== '') {
+      row.poster_url = tournament.posterUrl;
+    }
+
+    const { data, error } = await supabase.from('tournaments').insert(row).select().single();
 
     if (error) throw error;
 
@@ -100,10 +111,10 @@ export async function addTournamentOp(
       };
       setTournaments(prev => [...prev, newTournament]);
     }
+    return { error: null };
   } catch (error) {
     console.log('Error adding tournament:', error);
-    const newTournament: Tournament = { ...tournament, id: Date.now().toString() };
-    setTournaments(prev => [...prev, newTournament]);
+    return { error: tournamentInsertErrorMessage(error) };
   }
 }
 
@@ -281,31 +292,49 @@ export async function autoUpdateTournamentStatuses(
 
 export async function deleteTournamentOp(
   id: string,
-  deps: Pick<TournamentCrudDeps, 'supabase' | 'userId' | 'isConnected' | 'setTournaments' | 'setMatches'>
-): Promise<void> {
-  const { supabase, userId, isConnected, setTournaments, setMatches } = deps;
+  deps: Pick<TournamentCrudDeps, 'supabase' | 'userId' | 'isConnected' | 'setTournaments' | 'setMatches' | 'tournaments' | 'matches'>
+): Promise<{ error: string | null }> {
+  const { supabase, userId, isConnected, setTournaments, setMatches, tournaments, matches } = deps;
+  const removedTournament = tournaments.find(t => t.id === id);
+  const matchSnapshots = matches
+    .filter(m => m.tournamentId === id)
+    .map(m => ({ id: m.id, tournamentId: m.tournamentId, tournamentName: m.tournamentName }));
+
   setTournaments(prev => prev.filter(tournament => tournament.id !== id));
   setMatches(prev => prev.map(m =>
     m.tournamentId === id ? { ...m, tournamentId: undefined, tournamentName: undefined } : m
   ));
 
-  if (!userId) return;
+  if (!userId) return { error: null };
 
   if (!isConnected) {
     enqueueOperation({ type: 'delete', table: 'tournaments', itemId: id });
-    return;
+    return { error: null };
   }
 
   try {
-    // Unlink matches from this tournament in DB
-    await supabase.from('matches').update({
+    const { error: unlinkError } = await supabase.from('matches').update({
       tournament_id: null,
       tournament_name: null,
       updated_at: new Date().toISOString(),
     }).eq('tournament_id', id);
-    // Delete the tournament
-    await supabase.from('tournaments').delete().eq('id', id);
+    if (unlinkError) throw unlinkError;
+
+    const { error: deleteError } = await supabase.from('tournaments').delete().eq('id', id);
+    if (deleteError) throw deleteError;
+    return { error: null };
   } catch (error) {
     console.log('Error deleting tournament:', error);
+    const msg = tournamentInsertErrorMessage(error);
+    if (removedTournament) {
+      setTournaments(prev => (prev.some(t => t.id === removedTournament.id) ? prev : [...prev, removedTournament]));
+    }
+    if (matchSnapshots.length > 0) {
+      setMatches(prev => prev.map(m => {
+        const snap = matchSnapshots.find(s => s.id === m.id);
+        return snap ? { ...m, tournamentId: snap.tournamentId, tournamentName: snap.tournamentName } : m;
+      }));
+    }
+    return { error: msg };
   }
 }

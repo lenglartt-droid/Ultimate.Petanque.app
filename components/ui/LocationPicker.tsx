@@ -39,6 +39,7 @@ export interface LocationData {
   region?: string;
   placeName?: string;
   placeId?: string;
+  /** Places API (New): `photos[0].name` (e.g. `places/ChIJ…/photos/Aw…`). Not a legacy `photo_reference`. */
   googlePhotoRef?: string;
 }
 

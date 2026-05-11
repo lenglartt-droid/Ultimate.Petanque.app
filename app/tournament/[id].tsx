@@ -1297,11 +1297,15 @@ export default function TournamentDetailScreen() {
                       { text: t('common', 'cancel'), style: 'cancel' },
                       { text: t('common', 'delete'), style: 'destructive', onPress: async () => {
                         try {
-                          await deleteTournament(tournament.id);
+                          const { error } = await deleteTournament(tournament.id);
+                          if (error) {
+                            Alert.alert(t('common', 'error'), error);
+                            return;
+                          }
                           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                           router.back();
                         } catch (e: any) {
-                          Alert.alert(t('common', 'error'), e.message || 'Delete failed');
+                          Alert.alert(t('common', 'error'), e?.message || 'Delete failed');
                         }
                       }},
                     ]

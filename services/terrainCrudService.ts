@@ -12,6 +12,8 @@ interface TerrainCrudDeps {
   userId: string | undefined;
   isConnected: boolean;
   terrains: Terrain[];
+  /** Used by deleteTerrainOp for favorite rollback; optional for add/update. */
+  favoriteTerrainIds?: string[];
   setTerrains: React.Dispatch<React.SetStateAction<Terrain[]>>;
   setFavoriteTerrainIds: React.Dispatch<React.SetStateAction<string[]>>;
   sharedItemPermissions: Record<string, 'read' | 'write'>;
@@ -151,24 +153,44 @@ export async function updateTerrainOp(
   }
 }
 
+function terrainOpErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object' && 'message' in err && typeof (err as any).message === 'string') {
+    return (err as any).message;
+  }
+  return String(err ?? 'Unknown error');
+}
+
 export async function deleteTerrainOp(
   id: string,
-  deps: Pick<TerrainCrudDeps, 'supabase' | 'userId' | 'isConnected' | 'setTerrains' | 'setFavoriteTerrainIds'>
-): Promise<void> {
-  const { supabase, userId, isConnected, setTerrains, setFavoriteTerrainIds } = deps;
+  deps: Pick<TerrainCrudDeps, 'supabase' | 'userId' | 'isConnected' | 'setTerrains' | 'setFavoriteTerrainIds' | 'terrains'> & { favoriteTerrainIds: string[] }
+): Promise<{ error: string | null }> {
+  const { supabase, userId, isConnected, setTerrains, setFavoriteTerrainIds, terrains, favoriteTerrainIds } = deps;
+  const removedTerrain = terrains.find(t => t.id === id);
+  const wasFavorite = favoriteTerrainIds.includes(id);
+
   setTerrains(prev => prev.filter(terrain => terrain.id !== id));
   setFavoriteTerrainIds(prev => prev.filter(fid => fid !== id));
 
-  if (!userId) return;
+  if (!userId) return { error: null };
 
   if (!isConnected) {
     enqueueOperation({ type: 'delete', table: 'terrains', itemId: id });
-    return;
+    return { error: null };
   }
 
   try {
-    await supabase.from('terrains').delete().eq('id', id);
+    const { error } = await supabase.from('terrains').delete().eq('id', id);
+    if (error) throw error;
+    return { error: null };
   } catch (error) {
     console.log('Error deleting terrain:', error);
+    const msg = terrainOpErrorMessage(error);
+    if (removedTerrain) {
+      setTerrains(prev => (prev.some(t => t.id === removedTerrain.id) ? prev : [...prev, removedTerrain]));
+    }
+    if (wasFavorite) {
+      setFavoriteTerrainIds(prev => (prev.includes(id) ? prev : [...prev, id]));
+    }
+    return { error: msg };
   }
 }

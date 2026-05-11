@@ -37,3 +37,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+package-lock.json
+android/
+.expo/
+__tests__/unit/crudServices.test.ts

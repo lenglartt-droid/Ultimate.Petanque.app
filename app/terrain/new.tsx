@@ -41,10 +41,19 @@ let lastPhotoRef: string | undefined;
 
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
 
-// Build Google Places Photo URL from reference
-function getGooglePhotoUrl(photoRef: string, maxWidth: number = 800): string {
-  if (!GOOGLE_API_KEY || !photoRef) return '';
-  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxWidth}&photo_reference=${photoRef}&key=${GOOGLE_API_KEY}`;
+/**
+ * Build a URL that loads in `<Image />` for a Google place photo.
+ * - Places API (New) returns `photos[].name` like `places/ChIJ…/photos/Aw…` → use Place Photos (New) media endpoint.
+ * - Legacy `photo_reference` strings (no `places/` prefix) → classic Place Photo API.
+ * @see https://developers.google.com/maps/documentation/places/web-service/place-photos
+ */
+function getGooglePlacePhotoDisplayUrl(photoRef: string, maxPx: number = 1200): string {
+  const key = GOOGLE_API_KEY;
+  if (!key || !photoRef.trim()) return '';
+  if (photoRef.startsWith('places/')) {
+    return `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=${maxPx}&maxHeightPx=${maxPx}&key=${encodeURIComponent(key)}`;
+  }
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxPx}&photo_reference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent(key)}`;
 }
 
 // ============================================
@@ -127,7 +136,7 @@ export default function NewTerrainScreen() {
     lastPhotoRef = loc.googlePhotoRef;
     // Auto-fetch Google Places photo if no user photos yet
     if (loc.googlePhotoRef && GOOGLE_API_KEY) {
-      const url = getGooglePhotoUrl(loc.googlePhotoRef);
+      const url = getGooglePlacePhotoDisplayUrl(loc.googlePhotoRef);
       if (url) setGooglePhotoUrl(url);
     } else {
       setGooglePhotoUrl('');

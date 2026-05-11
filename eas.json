@@ -13,7 +13,6 @@
         "image": "latest"
       },
       "distribution": "internal",
-      "installCommand": "pnpm install --no-frozen-lockfile",
       "env": {
         "EXPO_NO_TELEMETRY": "1"
       }
@@ -24,7 +23,6 @@
         "image": "latest"
       },
       "autoIncrement": true,
-      "installCommand": "pnpm install --no-frozen-lockfile",
       "env": {
         "EXPO_NO_TELEMETRY": "1"
       }

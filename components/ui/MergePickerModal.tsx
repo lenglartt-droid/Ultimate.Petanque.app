@@ -207,18 +207,27 @@ export default function MergePickerModal({ visible, onClose, itemType, currentIt
           await updateTournament(lt.id, { terrainId: targetId, terrainName: targetItem.name } as any);
         }
         await saveMergeLog({ mergeType: 'terrain', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: reassigned });
-        await deleteTerrain(sourceId);
+        const { error: delTerrainErr } = await deleteTerrain(sourceId);
+        if (delTerrainErr) {
+          showAlert(t('common', 'error'), delTerrainErr);
+          return;
+        }
       } else if (type === 'player') {
         await saveMergeLog({ mergeType: 'player', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: [] });
         await deletePlayer(sourceId);
       } else if (type === 'tournament') {
         await saveMergeLog({ mergeType: 'tournament', targetId, targetName: targetItem.name, sourceId, sourceName: (sourceItem as any)?.name || '', sourceSnapshot: sourceItem as any || {}, reassignedRelations: [] });
-        await deleteTournament(sourceId);
+        const { error: delTournamentErr } = await deleteTournament(sourceId);
+        if (delTournamentErr) {
+          showAlert(t('common', 'error'), delTournamentErr);
+          return;
+        }
       }
     } catch (e) {
       console.log('Error reassigning relations:', e);
+      showAlert(t('common', 'error'), e instanceof Error ? e.message : String(e));
     }
-  }, [deleteSourceAfterMerge, players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament, deleteClub, deleteTerrain, deletePlayer, deleteTournament]);
+  }, [deleteSourceAfterMerge, players, clubs, terrains, tournaments, updatePlayer, updateClub, updateTerrain, updateTournament, deleteClub, deleteTerrain, deletePlayer, deleteTournament, showAlert, t]);
 
   const handleApplyMerge = useCallback(async (selections: Record<string, 'mine' | 'public'>) => {
     if (!currentItem || !selectedItem || !selectedItemId) return;
