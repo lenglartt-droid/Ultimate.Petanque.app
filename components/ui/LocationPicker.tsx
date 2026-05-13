@@ -41,6 +41,8 @@ export interface LocationData {
   placeId?: string;
   /** Places API (New): `photos[0].name` (e.g. `places/ChIJ…/photos/Aw…`). Not a legacy `photo_reference`. */
   googlePhotoRef?: string;
+  /** All photo references from Places API */
+  googlePhotoRefs?: string[];
 }
 
 interface MyPlace {
@@ -76,6 +78,7 @@ interface SearchResult {
   region?: string;
   placeName?: string;
   googlePhotoRef?: string;
+  googlePhotoRefs?: string[];
 }
 
 // ============================================
@@ -198,6 +201,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
 
     // First photo reference (New API uses photo resource name)
     const photoRef = result.photos?.[0]?.name || '';
+    const photoRefs: string[] = (result.photos || []).map((p: any) => p.name).filter(Boolean);
 
     return {
       id: placeId,
@@ -212,6 +216,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
       region,
       placeName: result.displayName?.text || '',
       googlePhotoRef: photoRef || undefined,
+      googlePhotoRefs: photoRefs.length > 0 ? photoRefs : undefined,
     };
   } catch (e) {
     console.log('[Google Places New] Details exception:', e);
@@ -642,6 +647,7 @@ export default function LocationPicker({
           placeName: details.placeName,
           placeId: details.placeId,
           googlePhotoRef: details.googlePhotoRef,
+          googlePhotoRefs: details.googlePhotoRefs,
         };
         onChange(newLocation);
 

@@ -127,19 +127,26 @@ export default function NewTerrainScreen() {
   const [nameSuggestion, setNameSuggestion] = useState<string>('');
 
   // Google Places auto-photo
-  const [googlePhotoUrl, setGooglePhotoUrl] = useState<string>('');
+  const [googlePhotoUrls, setGooglePhotoUrls] = useState<string[]>([]);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
+  const [selectedGooglePhotos, setSelectedGooglePhotos] = useState<Set<number>>(new Set());
 
   const handleLocationChange = useCallback((loc: LocationData) => {
     setLocation(loc);
     lastPlaceId = loc.placeId;
     lastPhotoRef = loc.googlePhotoRef;
-    // Auto-fetch Google Places photo if no user photos yet
-    if (loc.googlePhotoRef && GOOGLE_API_KEY) {
+    // Auto-fetch Google Places photos
+    if (loc.googlePhotoRefs && loc.googlePhotoRefs.length > 0 && GOOGLE_API_KEY) {
+      const urls = loc.googlePhotoRefs
+        .slice(0, 10)
+        .map(ref => getGooglePlacePhotoDisplayUrl(ref))
+        .filter(Boolean);
+      setGooglePhotoUrls(urls);
+    } else if (loc.googlePhotoRef && GOOGLE_API_KEY) {
       const url = getGooglePlacePhotoDisplayUrl(loc.googlePhotoRef);
-      if (url) setGooglePhotoUrl(url);
+      setGooglePhotoUrls(url ? [url] : []);
     } else {
-      setGooglePhotoUrl('');
+      setGooglePhotoUrls([]);
     }
     // Generate name suggestion from Google Places result
     if (loc.placeName && loc.placeName !== loc.address) {
@@ -262,19 +269,20 @@ export default function NewTerrainScreen() {
                   </Pressable>
                 </View>
               ))}
-              {/* Google Places auto-photo suggestion */}
-              {photos.length === 0 && googlePhotoUrl ? (
+              {/* Google Places photos suggestion */}
+              {photos.length < 5 && googlePhotoUrls.length > 0 ? (
                 <Pressable
                   style={styles.googlePhotoSuggestion}
                   onPress={() => {
                     Haptics.selectionAsync();
+                    setSelectedGooglePhotos(new Set());
                     setShowPhotoPreview(true);
                   }}
                 >
-                  <Image source={{ uri: googlePhotoUrl }} style={styles.photoImage} contentFit="cover" transition={200} />
+                  <Image source={{ uri: googlePhotoUrls[0] }} style={styles.photoImage} contentFit="cover" transition={200} />
                   <View style={styles.googlePhotoBadge}>
-                    <MaterialIcons name="visibility" size={12} color="#FFF" />
-                    <Text style={styles.googlePhotoBadgeText}>{t('common', 'preview') || 'Preview'}</Text>
+                    <MaterialIcons name="photo-library" size={12} color="#FFF" />
+                    <Text style={styles.googlePhotoBadgeText}>{googlePhotoUrls.length} photo{googlePhotoUrls.length > 1 ? 's' : ''}</Text>
                   </View>
                 </Pressable>
               ) : null}
@@ -578,29 +586,62 @@ export default function NewTerrainScreen() {
         </View>
       </KeyboardAvoidingView>
 
-      {/* Google Photo Preview Modal */}
+      {/* Google Places Photos Gallery Modal */}
       <Modal visible={showPhotoPreview} animationType="fade" transparent onRequestClose={() => setShowPhotoPreview(false)}>
         <View style={styles.photoPreviewOverlay}>
-          <View style={styles.photoPreviewCard}>
+          <View style={styles.photoGalleryCard}>
             <View style={styles.photoPreviewHeader}>
-              <MaterialIcons name="photo-camera" size={20} color="#4285F4" />
-              <Text style={styles.photoPreviewTitle}>{language === 'fr' ? 'Photo Google Places' : 'Google Places Photo'}</Text>
+              <MaterialIcons name="photo-library" size={20} color="#4285F4" />
+              <Text style={styles.photoPreviewTitle}>
+                {language === 'fr' ? `Photos Google Places (${googlePhotoUrls.length})` : `Google Places Photos (${googlePhotoUrls.length})`}
+              </Text>
               <Pressable onPress={() => setShowPhotoPreview(false)} hitSlop={8}>
                 <MaterialIcons name="close" size={22} color={theme.textMuted} />
               </Pressable>
             </View>
-            <View style={styles.photoPreviewImageWrap}>
-              <Image source={{ uri: googlePhotoUrl }} style={styles.photoPreviewImage} contentFit="cover" transition={300} />
-            </View>
-            <Text style={styles.photoPreviewDesc}>
-              {language === 'fr' ? 'Utiliser cette photo comme miniature du terrain ?' : 'Use this photo as terrain thumbnail?'}
+            <Text style={styles.photoGalleryDesc}>
+              {language === 'fr'
+                ? `Sélectionnez les photos à ajouter (max ${5 - photos.length})`
+                : `Select photos to add (max ${5 - photos.length})`}
             </Text>
+            <ScrollView style={styles.photoGalleryScroll} contentContainerStyle={styles.photoGalleryGrid} showsVerticalScrollIndicator={false}>
+              {googlePhotoUrls.map((url, index) => {
+                const isSelected = selectedGooglePhotos.has(index);
+                const maxReached = !isSelected && selectedGooglePhotos.size >= (5 - photos.length);
+                return (
+                  <Pressable
+                    key={index}
+                    style={[styles.photoGalleryItem, isSelected && styles.photoGalleryItemSelected, maxReached && styles.photoGalleryItemDisabled]}
+                    onPress={() => {
+                      if (maxReached) return;
+                      Haptics.selectionAsync();
+                      setSelectedGooglePhotos(prev => {
+                        const next = new Set(prev);
+                        if (next.has(index)) next.delete(index);
+                        else next.add(index);
+                        return next;
+                      });
+                    }}
+                  >
+                    <Image source={{ uri: url }} style={styles.photoGalleryImage} contentFit="cover" transition={200} />
+                    <View style={styles.photoGalleryCheck}>
+                      {isSelected ? (
+                        <MaterialIcons name="check-circle" size={24} color="#4285F4" />
+                      ) : (
+                        <View style={styles.photoGalleryCheckEmpty} />
+                      )}
+                    </View>
+                    {maxReached ? <View style={styles.photoGalleryDisabledOverlay} /> : null}
+                  </Pressable>
+                );
+              })}
+            </ScrollView>
             <View style={styles.photoPreviewActions}>
               <Pressable
                 style={styles.photoPreviewSkipBtn}
                 onPress={() => {
                   setShowPhotoPreview(false);
-                  setGooglePhotoUrl('');
+                  setGooglePhotoUrls([]);
                   Haptics.selectionAsync();
                 }}
               >
@@ -608,16 +649,27 @@ export default function NewTerrainScreen() {
                 <Text style={styles.photoPreviewSkipText}>{language === 'fr' ? 'Ignorer' : 'Skip'}</Text>
               </Pressable>
               <Pressable
-                style={styles.photoPreviewUseBtn}
+                style={[styles.photoPreviewUseBtn, selectedGooglePhotos.size === 0 && { opacity: 0.5 }]}
                 onPress={() => {
-                  setPhotos(prev => [...prev, googlePhotoUrl].slice(0, 5));
-                  setGooglePhotoUrl('');
+                  if (selectedGooglePhotos.size === 0) return;
+                  const selectedUrls = Array.from(selectedGooglePhotos)
+                    .sort((a, b) => a - b)
+                    .map(i => googlePhotoUrls[i]);
+                  setPhotos(prev => [...prev, ...selectedUrls].slice(0, 5));
+                  setGooglePhotoUrls([]);
                   setShowPhotoPreview(false);
                   Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
                 }}
+                disabled={selectedGooglePhotos.size === 0}
               >
-                <MaterialIcons name="check-circle" size={16} color="#FFF" />
-                <Text style={styles.photoPreviewUseText}>{language === 'fr' ? 'Utiliser cette photo' : 'Use this photo'}</Text>
+                <MaterialIcons name="add-photo-alternate" size={16} color="#FFF" />
+                <Text style={styles.photoPreviewUseText}>
+                  {selectedGooglePhotos.size === 0
+                    ? (language === 'fr' ? 'Sélectionner' : 'Select')
+                    : language === 'fr'
+                      ? `Ajouter ${selectedGooglePhotos.size} photo${selectedGooglePhotos.size > 1 ? 's' : ''}`
+                      : `Add ${selectedGooglePhotos.size} photo${selectedGooglePhotos.size > 1 ? 's' : ''}`}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -807,13 +859,21 @@ const styles = StyleSheet.create({
   continueCreateBtnText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   // Photo preview modal
   photoPreviewOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center' as const, alignItems: 'center' as const, padding: 24 },
-  photoPreviewCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, width: '100%', maxWidth: 360, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 8 }, default: {} }) },
-  photoPreviewHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 16 },
+  photoGalleryCard: { backgroundColor: '#FFF', borderRadius: 20, padding: 20, width: '100%', maxWidth: 400, ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.15, shadowRadius: 16 }, android: { elevation: 8 }, default: {} }) },
+  photoPreviewHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
   photoPreviewTitle: { flex: 1, fontSize: 16, fontWeight: '700' as const, color: theme.textPrimary },
-  photoPreviewImageWrap: { borderRadius: 14, overflow: 'hidden' as const, marginBottom: 14, borderWidth: 1, borderColor: theme.border },
-  photoPreviewImage: { width: '100%', aspectRatio: 4 / 3 },
-  photoPreviewDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' as const, lineHeight: 19, marginBottom: 16 },
-  photoPreviewActions: { flexDirection: 'row' as const, gap: 10 },
+  photoGalleryDesc: { fontSize: 13, color: theme.textSecondary, textAlign: 'center' as const, marginBottom: 12 },
+  photoGalleryScroll: { maxHeight: 380 },
+  photoGalleryGrid: { flexDirection: 'row' as const, flexWrap: 'wrap' as const, gap: 8, paddingBottom: 8 },
+  photoGalleryItem: { width: '47%' as any, aspectRatio: 1, borderRadius: 12, overflow: 'hidden' as const, position: 'relative' as const, borderWidth: 2.5, borderColor: 'transparent' },
+  photoGalleryItemSelected: { borderColor: '#4285F4' },
+  photoGalleryItemDisabled: { opacity: 0.4 },
+  photoGalleryImage: { width: '100%', height: '100%' },
+  photoGalleryCheck: { position: 'absolute' as const, top: 6, right: 6 },
+  photoGalleryCheckSelected: {},
+  photoGalleryCheckEmpty: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: '#FFF', backgroundColor: 'rgba(0,0,0,0.3)' },
+  photoGalleryDisabledOverlay: { position: 'absolute' as const, top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(255,255,255,0.5)' },
+  photoPreviewActions: { flexDirection: 'row' as const, gap: 10, marginTop: 12 },
   photoPreviewSkipBtn: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 13, borderRadius: 12, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
   photoPreviewSkipText: { fontSize: 14, fontWeight: '600' as const, color: theme.textSecondary },
   photoPreviewUseBtn: { flex: 2, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 6, paddingVertical: 13, borderRadius: 12, backgroundColor: '#4285F4' },
