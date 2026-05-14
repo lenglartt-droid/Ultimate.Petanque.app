@@ -15,7 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
-const EFFECTIVE_DATE = '2026-04-25';
+const EFFECTIVE_DATE = '2026-05-08';
 
 export default function PrivacyPolicyScreen() {
   const insets = useSafeAreaInsets();
@@ -185,6 +185,14 @@ export default function PrivacyPolicyScreen() {
       content: language === 'fr'
         ? 'Pour prevenir la triche et les comptes multiples, l\'application genere une empreinte numerique de votre appareil (hash combine de proprietes materielles comme le modele, l\'OS et des identifiants uniques). Cette empreinte est stockee dans notre base de donnees et associee a votre compte. Elle n\'est jamais partagee avec des tiers. En cas de changement d\'appareil, un systeme de transfert securise avec code a 6 caracteres et validation administrateur est disponible. L\'empreinte est supprimee si vous supprimez votre compte.'
         : 'To prevent cheating and multiple accounts, the app generates a digital fingerprint of your device (combined hash of hardware properties like model, OS and unique identifiers). This fingerprint is stored in our database and linked to your account. It is never shared with third parties. For device changes, a secure transfer system with 6-character code and admin validation is available. The fingerprint is deleted if you delete your account.',
+    },
+    {
+      icon: 'preview',
+      color: '#F59E0B',
+      title: language === 'fr' ? 'Donnees de classement en mode Apercu' : 'Preview Mode Ranking Data',
+      content: language === 'fr'
+        ? 'Lorsqu\'aucun joueur ne remplit les criteres de qualification (3 matchs multi-joueurs minimum), les classements (global, geographique, boules) affichent des donnees en mode "Apercu" (non officiel). Ces donnees sont identiques aux donnees publiques des joueurs (nom, ELO, ville, pays) mais ne sont pas utilisees pour le calcul officiel des rangs. Le mode apercu sert uniquement a donner une indication visuelle aux joueurs en cours de qualification. Aucune donnee supplementaire n\'est collectee pour cette fonctionnalite.'
+        : 'When no player meets the qualification criteria (minimum 3 multi-player matches), rankings (global, geographic, boules) display data in "Preview" (unofficial) mode. This data is identical to players\' public data (name, ELO, city, country) but is not used for official rank calculation. Preview mode only serves to give a visual indication to players during qualification. No additional data is collected for this feature.',
     },
     {
       icon: 'groups',

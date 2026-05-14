@@ -146,8 +146,8 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
   const [nonPersonalized, setNonPersonalized] = useState(true);
   const [goldSponsor, setGoldSponsor] = useState<Ambassador | null>(null);
   const [goldLoaded, setGoldLoaded] = useState(false);
-  let isPremium = false;
-  try { isPremium = useAppUI().isPremium; } catch { /* outside provider */ }
+  const appUI = useAppUI();
+  const isPremium = appUI.isPremium;
 
   useEffect(() => {
     // Load gold sponsor first, then ads module as fallback
