@@ -37,8 +37,10 @@ export interface PlayerGeoRank {
 /**
  * Fetch a specific player's geographic ranking (city, country, continent).
  * Returns the player's rank position in each geographic level.
+ * Only players with 3+ multi-player matches are included in the ranking pool.
+ * Also returns the target player's multi-player match count for progress UI.
  */
-export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: PlayerGeoRank | null; error: string | null }> {
+export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: PlayerGeoRank | null; multiPlayerMatchCount: number; error: string | null }> {
   const supabase = getSupabaseClient();
 
   try {
@@ -50,76 +52,92 @@ export async function fetchPlayerGeoRank(playerId: string): Promise<{ geoRank: P
       .single();
 
     if (tpError || !targetPlayer) {
-      return { geoRank: null, error: tpError?.message || 'Player not found' };
+      return { geoRank: null, multiPlayerMatchCount: 0, error: tpError?.message || 'Player not found' };
     }
 
     if (!targetPlayer.is_public) {
-      return { geoRank: null, error: null };
+      return { geoRank: null, multiPlayerMatchCount: 0, error: null };
     }
 
-    const playerElo = targetPlayer.elo_rating || 1000;
     const playerCity = targetPlayer.city || null;
     const playerCountry = targetPlayer.country || 'France';
     const playerContinent = getContinent(playerCountry);
 
-    const result: PlayerGeoRank = { city: null, country: null, continent: null };
+    // Fetch all public real-profile players
+    const { data: allPublicPlayers } = await supabase
+      .from('players')
+      .select('id, user_id, city, country, elo_rating')
+      .eq('is_public', true)
+      .order('elo_rating', { ascending: false });
 
-    // Helper: filter to only real user profiles (player.id === player.user_id)
-    // Note: For individual player geo rank, we don't apply the 3-match filter
-    // because this is used to show a player their own rank even during qualification
-    const filterRealProfiles = (players: any[]) => players.filter(p => p.user_id && p.id === p.user_id);
+    const realPlayers = (allPublicPlayers || []).filter((p: any) => p.user_id && p.id === p.user_id);
+    const realPlayerIds = realPlayers.map((p: any) => p.id);
+
+    // Count multi-player matches per player (participant_user_ids >= 2)
+    const multiPlayerCountMap = new Map<string, number>();
+    if (realPlayerIds.length > 0) {
+      const { data: allMatches } = await supabase
+        .from('matches')
+        .select('team_a, team_b, participant_user_ids');
+
+      if (allMatches) {
+        for (const m of allMatches) {
+          const participantIds: string[] = m.participant_user_ids || [];
+          if (participantIds.length < 2) continue;
+          const teamAPlayers: string[] = m.team_a?.players || [];
+          const teamBPlayers: string[] = m.team_b?.players || [];
+          const allMatchPlayers = [...teamAPlayers, ...teamBPlayers];
+          for (const pid of allMatchPlayers) {
+            if (realPlayerIds.includes(pid)) {
+              multiPlayerCountMap.set(pid, (multiPlayerCountMap.get(pid) || 0) + 1);
+            }
+          }
+        }
+      }
+    }
+
+    const targetMultiPlayerCount = multiPlayerCountMap.get(playerId) || 0;
+
+    // If the target player is not qualified, return null geo rank with progress info
+    if (targetMultiPlayerCount < LEADERBOARD_MIN_MATCHES) {
+      return { geoRank: null, multiPlayerMatchCount: targetMultiPlayerCount, error: null };
+    }
+
+    // Filter to only qualified players (3+ multi-player matches)
+    const qualifiedPlayers = realPlayers.filter((p: any) => {
+      const count = multiPlayerCountMap.get(p.id) || 0;
+      return count >= LEADERBOARD_MIN_MATCHES;
+    });
+
+    const result: PlayerGeoRank = { city: null, country: null, continent: null };
 
     // City rank
     if (playerCity) {
-      const { data: cityPlayers } = await supabase
-        .from('players')
-        .select('id, user_id, elo_rating')
-        .eq('city', playerCity)
-        .eq('is_public', true)
-        .order('elo_rating', { ascending: false });
-
-      const realCityPlayers = filterRealProfiles(cityPlayers || []);
-      if (realCityPlayers.length > 0) {
-        const rank = realCityPlayers.findIndex(p => p.id === playerId) + 1;
-        result.city = { name: playerCity, rank: rank > 0 ? rank : realCityPlayers.length, total: realCityPlayers.length };
+      const cityPlayers = qualifiedPlayers.filter((p: any) => p.city === playerCity);
+      if (cityPlayers.length > 0) {
+        const rank = cityPlayers.findIndex((p: any) => p.id === playerId) + 1;
+        result.city = { name: playerCity, rank: rank > 0 ? rank : cityPlayers.length, total: cityPlayers.length };
       }
     }
 
     // Country rank
-    const { data: countryPlayers } = await supabase
-      .from('players')
-      .select('id, user_id, elo_rating')
-      .eq('country', playerCountry)
-      .eq('is_public', true)
-      .order('elo_rating', { ascending: false });
-
-    const realCountryPlayers = filterRealProfiles(countryPlayers || []);
-    if (realCountryPlayers.length > 0) {
-      const rank = realCountryPlayers.findIndex(p => p.id === playerId) + 1;
-      result.country = { name: playerCountry, rank: rank > 0 ? rank : realCountryPlayers.length, total: realCountryPlayers.length };
+    const countryPlayers = qualifiedPlayers.filter((p: any) => (p.country || 'France') === playerCountry);
+    if (countryPlayers.length > 0) {
+      const rank = countryPlayers.findIndex((p: any) => p.id === playerId) + 1;
+      result.country = { name: playerCountry, rank: rank > 0 ? rank : countryPlayers.length, total: countryPlayers.length };
     }
 
-    // Continent rank — need all public players in the continent
-    // Get all countries in same continent
-    const { data: continentPlayers } = await supabase
-      .from('players')
-      .select('id, user_id, country, elo_rating')
-      .eq('is_public', true)
-      .order('elo_rating', { ascending: false });
-
-    if (continentPlayers && continentPlayers.length > 0) {
-      const realContinentPlayers = filterRealProfiles(continentPlayers);
-      const sameContinent = realContinentPlayers.filter(p => getContinent(p.country || 'France') === playerContinent);
-      if (sameContinent.length > 0) {
-        const rank = sameContinent.findIndex(p => p.id === playerId) + 1;
-        result.continent = { name: playerContinent, rank: rank > 0 ? rank : sameContinent.length, total: sameContinent.length };
-      }
+    // Continent rank
+    const continentPlayers = qualifiedPlayers.filter((p: any) => getContinent(p.country || 'France') === playerContinent);
+    if (continentPlayers.length > 0) {
+      const rank = continentPlayers.findIndex((p: any) => p.id === playerId) + 1;
+      result.continent = { name: playerContinent, rank: rank > 0 ? rank : continentPlayers.length, total: continentPlayers.length };
     }
 
-    return { geoRank: result, error: null };
+    return { geoRank: result, multiPlayerMatchCount: targetMultiPlayerCount, error: null };
   } catch (err: any) {
     console.error('[GeoRank] Error:', err);
-    return { geoRank: null, error: err.message || 'Failed to fetch geo rank' };
+    return { geoRank: null, multiPlayerMatchCount: 0, error: err.message || 'Failed to fetch geo rank' };
   }
 }
 

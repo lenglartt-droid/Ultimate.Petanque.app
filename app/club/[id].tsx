@@ -146,32 +146,41 @@ export default function ClubDetailScreen() {
     fetchClubLeaderboard().then(({ clubs: allClubs }: any) => {
       if (!allClubs || allClubs.length === 0) return;
       const sorted = sortClubLeaderboard(allClubs, 'compositeScore');
+      // Only rank clubs that have at least one qualified member (compositeScore > 0)
+      const qualified = sorted.filter((c: any) => c.stats?.compositeScore > 0);
       const result: any = {};
+      // Check if THIS club is qualified
+      const thisClubEntry = sorted.find((c: any) => c.id === club.id || c.name === club.name);
+      const isQualified = thisClubEntry && thisClubEntry.stats?.compositeScore > 0;
+      if (!isQualified) {
+        setClubGeoRank(null);
+        return;
+      }
       // City ranking: clubs in the same city
       if (club.city) {
-        const cityClubs = sorted.filter((c: any) => c.city?.toLowerCase() === club.city.toLowerCase());
+        const cityClubs = qualified.filter((c: any) => c.city?.toLowerCase() === club.city.toLowerCase());
         const myIdx = cityClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
         if (myIdx >= 0) result.city = { rank: myIdx + 1, total: cityClubs.length };
         else if (cityClubs.length > 0) result.city = { rank: cityClubs.length + 1, total: cityClubs.length + 1 };
       }
       // Country ranking
       const clubCountry = club.country || 'France';
-      const countryClubs = sorted.filter((c: any) => (c.country || 'France').toLowerCase() === clubCountry.toLowerCase());
+      const countryClubs = qualified.filter((c: any) => (c.country || 'France').toLowerCase() === clubCountry.toLowerCase());
       const countryIdx = countryClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
       if (countryIdx >= 0) result.country = { rank: countryIdx + 1, total: countryClubs.length };
       else if (countryClubs.length > 0) result.country = { rank: countryClubs.length + 1, total: countryClubs.length + 1 };
       // Continent ranking
       const continent = getContinent(clubCountry);
       if (continent) {
-        const contClubs = sorted.filter((c: any) => getContinent(c.country || 'France') === continent);
+        const contClubs = qualified.filter((c: any) => getContinent(c.country || 'France') === continent);
         const contIdx = contClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
         if (contIdx >= 0) result.continent = { rank: contIdx + 1, total: contClubs.length };
         else if (contClubs.length > 0) result.continent = { rank: contClubs.length + 1, total: contClubs.length + 1 };
       }
       // World ranking
-      const worldIdx = sorted.findIndex((c: any) => c.id === club.id || c.name === club.name);
-      if (worldIdx >= 0) result.world = { rank: worldIdx + 1, total: sorted.length };
-      else result.world = { rank: sorted.length + 1, total: sorted.length + 1 };
+      const worldIdx = qualified.findIndex((c: any) => c.id === club.id || c.name === club.name);
+      if (worldIdx >= 0) result.world = { rank: worldIdx + 1, total: qualified.length };
+      else result.world = { rank: qualified.length + 1, total: qualified.length + 1 };
       setClubGeoRank(Object.keys(result).length > 0 ? result : null);
     }).catch(() => {});
   }, [club?.id, club?.isPublic, club?.city, club?.country]);
