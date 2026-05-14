@@ -66,6 +66,29 @@ if (Platform.OS !== 'web') {
   PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
 }
 
+/** Map markers are rasterized for Google Maps; Android `elevation` draws outside layout bounds and clips (flat edge on circles). */
+const MAP_MARKER_SHADOW = Platform.select({
+  ios: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.14,
+    shadowRadius: 3,
+  },
+  default: {},
+});
+
+/**
+ * Android: MapMarker.java builds a bitmap from Yoga width/height (SizeReportingShadowNode). The default
+ * anchor (0.5, 1) pins the bitmap bottom to the lat/lng; combined with tight layout, the bottom arc is often
+ * clipped (flat / “D” circles). Extra padding inflates the canvas; center anchor pins the coordinate on the
+ * bubble center. Extra bottom padding: partner/sponsor badges are `position: 'absolute'` and do not grow height.
+ */
+const MAP_MARKER_ROOT_STYLE = Platform.select({
+  ios: {},
+  default: { paddingTop: 10, paddingHorizontal: 10, paddingBottom: 18 },
+});
+const MAP_MARKER_BUBBLE_ANCHOR = { x: 0.5, y: 0.5 };
+
 // ============================================
 // CLUSTERING LOGIC
 // ============================================
@@ -241,7 +264,7 @@ const PartnerMarkerView = React.memo(
     return (
       <View
         key={`${partner.id}-${tier.primary}`}
-        style={{ alignItems: 'center' }}
+        style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }}
         collapsable={false}
       >
         <View
@@ -352,7 +375,7 @@ const ClubMarkerView = React.memo(
     return (
       <View
         key={`${partner.id}-${tier.primary}`}
-        style={{ alignItems: 'center' }}
+        style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }}
         collapsable={false}
       >
         <View
@@ -432,12 +455,12 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   const halfW = size / 2;
 
   return (
-    <View style={{ alignItems: 'center' }} collapsable={false}>
+    <View style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }} collapsable={false}>
       <View style={{
         width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
         borderWidth: 2.5, borderColor: sponsorColor,
         flexDirection: 'row',
-        ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }, android: { elevation: 5 }, default: {} }),
+        ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }, default: {} }),
       }}>
         {/* Left half: item photo/icon */}
         <View style={{ width: halfW, height: size, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
@@ -484,7 +507,6 @@ const pMarkerStyles = StyleSheet.create({
     overflow: 'hidden' as const,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.2, shadowRadius: 4 },
-      android: { elevation: 4 },
       default: {},
     }),
   },
@@ -492,7 +514,6 @@ const pMarkerStyles = StyleSheet.create({
     borderWidth: 3,
     ...Platform.select({
       ios: { shadowColor: '#B45309', shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 6 },
-      android: { elevation: 6 },
       default: {},
     }),
   },
@@ -562,7 +583,7 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
   const pulseColor = isLive ? '#EF4444' : '#22C55E';
   const showPulse = isActiveNow || isLive;
   return (
-  <View style={styles.markerWrapper}>
+  <View style={[styles.markerWrapper, MAP_MARKER_ROOT_STYLE]}>
     {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
     <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, showPulse && { borderColor: pulseColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null]}>
       <MaterialIcons name={icon as any} size={showPulse ? 16 : 14} color="#FFF" />
@@ -616,7 +637,7 @@ const ClusterMarkerView = React.memo(
     const showPills = sorted.length > 1 && size >= 52;
 
     return (
-      <View style={{ alignItems: 'center' }} collapsable={false}>
+      <View style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }} collapsable={false}>
         {/* Outer ring with gradient-like effect */}
         <View
           style={{
@@ -630,7 +651,7 @@ const ClusterMarkerView = React.memo(
             borderColor: dominantColor + '40',
           }}
         >
-          {/* Inner circle */}
+          {/* Inner circle — no Android elevation (Map marker bitmap clips outside layout) */}
           <View
             style={{
               width: innerSize,
@@ -641,7 +662,7 @@ const ClusterMarkerView = React.memo(
               justifyContent: 'center',
               borderWidth: 2.5,
               borderColor: '#FFF',
-              ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, android: { elevation: 5 }, default: {} }),
+              ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, default: {} }),
             }}
           >
             <Text style={{ color: '#FFF', fontWeight: '900', fontSize: count > 99 ? 11 : 14 }}>
@@ -913,7 +934,7 @@ export default function MapScreen() {
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const { t, language } = useLanguage();
-  const { lat: paramLat, lng: paramLng, name: paramName, filter: paramFilter, activeNow: paramActiveNow } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string; filter?: string; activeNow?: string }>();
+  const { lat: paramLat, lng: paramLng, name: paramName, filter: paramFilter, activeNow: paramActiveNow, mf: paramMapFocus } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string; filter?: string; activeNow?: string; mf?: string }>();
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
@@ -1909,33 +1930,32 @@ useEffect(() => {
   // Access matches for active-now computation
   const { matches: allMatches } = useAppData();
 
-  // Handle navigation params: zoom to specific location from directory
-  const handledParamRef = useRef<string | null>(null);
+  // Zoom from deep links (home proximity, directory, terrain detail, etc.).
+  // Callers pass mf (map focus nonce) so repeat navigation with the same lat/lng/name still re-runs this effect.
+  // Previously handledParamRef skipped the second visit; unchanged deps also skipped React's useEffect.
   useEffect(() => {
     if (!paramLat || !paramLng) return;
     const lat = parseFloat(paramLat);
     const lng = parseFloat(paramLng);
     if (isNaN(lat) || isNaN(lng)) return;
-    const paramKey = `${paramLat}-${paramLng}-${paramName}`;
-    if (handledParamRef.current === paramKey) return;
-    handledParamRef.current = paramKey;
-    // Small delay to ensure map is mounted
     const timer = setTimeout(() => {
       if (mapRef.current) {
-        mapRef.current.animateToRegion({
-          latitude: lat,
-          longitude: lng,
-          latitudeDelta: 0.001,
-          longitudeDelta: 0.001,
-        }, 600);
+        mapRef.current.animateToRegion(
+          {
+            latitude: lat,
+            longitude: lng,
+            latitudeDelta: 0.001,
+            longitudeDelta: 0.001,
+          },
+          600
+        );
       }
-      // Try to find and select the matching item
       if (paramName) {
         showToast({ message: paramName, icon: 'place', iconColor: theme.success });
       }
     }, 500);
     return () => clearTimeout(timer);
-  }, [paramLat, paramLng, paramName]);
+  }, [paramLat, paramLng, paramName, paramMapFocus, showToast]);
 
   const loadManageData = useCallback(async () => {
     setLoadingManage(true);
@@ -2037,7 +2057,8 @@ useEffect(() => {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleClusterPress(cluster)}
-                tracksViewChanges={true}
+                anchor={MAP_MARKER_BUBBLE_ANCHOR}
+                tracksViewChanges={false}
               >
                 <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
               </MarkerComponent>
@@ -2053,6 +2074,7 @@ useEffect(() => {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
+                anchor={MAP_MARKER_BUBBLE_ANCHOR}
                 tracksViewChanges={!readyMarkers.has(item.id)}
               >
                 {(item.itemType === 'partners' || (item.itemType === 'players' && item._tier))? (
@@ -3200,17 +3222,17 @@ const styles = StyleSheet.create({
   panelLeaderboardTitle: { fontSize: 13, fontWeight: '700' as const, color: theme.textPrimary },
   panelLeaderboardSub: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
 
-  // Single markers
-  marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...theme.shadows.card },
+  // Single markers (avoid theme.shadows.card elevation on Android — same bitmap clipping as clusters)
+  marker: { width: 32, height: 32, borderRadius: 16, alignItems: 'center', justifyContent: 'center', borderWidth: 2, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
   markerPublic: { borderColor: theme.success, borderWidth: 3 },
   markerWrapper: { alignItems: 'center', justifyContent: 'center' },
-  accessBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  accessBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
   accessBadgePublic: { backgroundColor: theme.success },
   accessBadgePrivate: { backgroundColor: '#F59E0B' },
-  verifiedBadge: { position: 'absolute', bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  verifiedBadge: { position: 'absolute', bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, backgroundColor: '#2563EB', alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
   // Fallback badge for players with terrain/club location
-  fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
-  sponsorBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF', ...theme.shadows.card },
+  fallbackBadge: { position: 'absolute', bottom: -3, right: -3, width: 14, height: 14, borderRadius: 7, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
+  sponsorBadge: { position: 'absolute' as const, bottom: -3, right: -3, width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
   sponsorBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF' },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
   activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' } as any,

@@ -907,7 +907,7 @@ export default function TournamentDetailScreen() {
             {(tournament.location?.latitude || tournament.location?.longitude) ? (
               <Pressable
                 style={styles.heroMapBtn}
-                onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(tournament.location.latitude), lng: String(tournament.location.longitude), name: tournament.name } } as any)}
+                onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(tournament.location.latitude), lng: String(tournament.location.longitude), name: tournament.name, mf: String(Date.now()) } } as any)}
               >
                 <MaterialIcons name="map" size={16} color={theme.success} />
                 <Text style={styles.heroMapBtnText}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>

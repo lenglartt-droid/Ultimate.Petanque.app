@@ -2610,7 +2610,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
             return null;
           })()}
           {(item.location?.latitude || item.location?.longitude) ? (
-            <Pressable style={[styles.tag, styles.mapLinkBtn]} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name } } as any); }} hitSlop={4}>
+            <Pressable style={[styles.tag, styles.mapLinkBtn]} onPress={(e) => { e.stopPropagation?.(); Haptics.selectionAsync(); router.push({ pathname: '/(tabs)/map', params: { lat: String(item.location.latitude), lng: String(item.location.longitude), name: item.name, mf: String(Date.now()) } } as any); }} hitSlop={4}>
               <MaterialIcons name="map" size={13} color={theme.success} />
             </Pressable>
           ) : null}
@@ -2632,7 +2632,7 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
 const MapLinkButton = React.memo(({ lat, lng, name }: { lat: number; lng: number; name: string }) => {
   if (!lat && !lng) return null;
   return (
-    <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/(tabs)/map', params: { lat: String(lat), lng: String(lng), name } } as any); }} hitSlop={4}>
+    <Pressable style={styles.mapLinkBtn} onPress={(e) => { e.stopPropagation?.(); router.push({ pathname: '/(tabs)/map', params: { lat: String(lat), lng: String(lng), name, mf: String(Date.now()) } } as any); }} hitSlop={4}>
       <MaterialIcons name="map" size={13} color={theme.success} />
     </Pressable>
   );

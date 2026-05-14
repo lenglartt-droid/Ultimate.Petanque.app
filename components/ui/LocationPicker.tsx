@@ -28,6 +28,14 @@ const MAX_RECENT = 8;
 
 // const GOOGLE_API_KEY = '';
 const GOOGLE_API_KEY = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY || '';
+
+/** Place Details URL is `/v1/places/{PLACE_ID}` — strip a leading `places/` so we never call `/places/places/...` (404, no photos). */
+function normalizePlaceIdForDetails(idOrResource: string): string {
+  let s = (idOrResource || '').trim();
+  while (s.startsWith('places/')) s = s.slice('places/'.length);
+  return s.split('/')[0] || s;
+}
+
 export interface LocationData {
   address: string;
   city: string;
@@ -125,9 +133,10 @@ async function searchGooglePlaces(query: string, types?: string, lang: string = 
       .filter((s: any) => s.placePrediction)
       .map((s: any) => {
         const p = s.placePrediction;
+        const placeId = normalizePlaceIdForDetails(p.place || p.placeId || '');
         return {
-          id: p.placeId,
-          placeId: p.placeId,
+          id: placeId,
+          placeId,
           address: p.structuredFormat?.mainText?.text || '',
           city: '',
           country: '',
@@ -148,6 +157,8 @@ async function searchGooglePlaces(query: string, types?: string, lang: string = 
 // ============================================
 async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Promise<SearchResult | null> {
   if (!GOOGLE_API_KEY) return null;
+  const pid = normalizePlaceIdForDetails(placeId);
+  if (!pid) return null;
   try {
     const fields = [
       'id',
@@ -159,7 +170,7 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     ].join(',');
 
     const response = await fetch(
-      `https://places.googleapis.com/v1/places/${placeId}?languageCode=${lang}`,
+      `https://places.googleapis.com/v1/places/${encodeURIComponent(pid)}?languageCode=${lang}`,
       {
         method: 'GET',
         headers: {
@@ -204,8 +215,8 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     const photoRefs: string[] = (result.photos || []).map((p: any) => p.name).filter(Boolean);
 
     return {
-      id: placeId,
-      placeId,
+      id: pid,
+      placeId: pid,
       address: street || result.displayName?.text || '',
       city,
       country,
@@ -220,6 +231,83 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     };
   } catch (e) {
     console.log('[Google Places New] Details exception:', e);
+    return null;
+  }
+}
+
+/**
+ * OSM / geocode results have lat/lng but no Google photo. Match a Places entry via Text Search (New)
+ * with location bias so we can attach photos for the terrain preview.
+ */
+async function tryFetchGooglePhotoForCoordinates(
+  lat: number,
+  lng: number,
+  textQuery: string,
+  lang: string
+): Promise<{ placeId?: string; googlePhotoRef?: string; placeName?: string } | null> {
+  if (!GOOGLE_API_KEY || !Number.isFinite(lat) || !Number.isFinite(lng)) return null;
+  const q = textQuery.trim();
+  if (!q) return null;
+
+  try {
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_API_KEY,
+        'X-Goog-FieldMask': 'places.id,places.displayName,places.photos',
+      },
+      body: JSON.stringify({
+        textQuery: q,
+        languageCode: lang,
+        locationBias: {
+          circle: {
+            center: { latitude: lat, longitude: lng },
+            radius: 50000,
+          },
+        },
+        maxResultCount: 10,
+      }),
+    });
+
+    if (!response.ok) {
+      console.log('[Places searchText] HTTP', response.status, await response.text());
+      return null;
+    }
+
+    const data = await response.json();
+    const places = data.places || [];
+
+    for (const p of places) {
+      const photoName = p.photos?.[0]?.name as string | undefined;
+      if (photoName) {
+        const rawId = typeof p.id === 'string' ? p.id : '';
+        const placeId = normalizePlaceIdForDetails(rawId);
+        return {
+          placeId: placeId || undefined,
+          googlePhotoRef: photoName,
+          placeName: p.displayName?.text,
+        };
+      }
+    }
+
+    const first = places[0];
+    const rawId = typeof first?.id === 'string' ? first.id : '';
+    if (rawId) {
+      const pid = normalizePlaceIdForDetails(rawId);
+      const details = await getGooglePlaceDetails(pid, lang);
+      if (details?.googlePhotoRef) {
+        return {
+          placeId: details.placeId,
+          googlePhotoRef: details.googlePhotoRef,
+          placeName: details.placeName,
+        };
+      }
+    }
+
+    return null;
+  } catch (e) {
+    console.log('[Places searchText] exception:', e);
     return null;
   }
 }
@@ -463,10 +551,16 @@ export default function LocationPicker({
           types = '(regions)';
         }
 
-        const results = await searchGooglePlaces(query, types, lang);
-        console.log(results);
-        setSearchResults(results);
-        console.log(results);
+        let results = await searchGooglePlaces(query, types, lang);
+        if (results.length === 0) {
+          results = await searchNominatimFallback(query);
+        }
+        if (showCityOnly) {
+          const cityFiltered = results.filter(r => r.city);
+          setSearchResults(cityFiltered.length > 0 ? cityFiltered : results);
+        } else {
+          setSearchResults(results);
+        }
       } else {
         // Fallback to Nominatim
         const results = await searchNominatimFallback(query);
@@ -528,14 +622,30 @@ export default function LocationPicker({
       );
 
       if (geocodeResult) {
-        const newLocation: LocationData = {
+        const lat = location.coords.latitude;
+        const lng = location.coords.longitude;
+        let newLocation: LocationData = {
           address: geocodeResult.address,
           city: geocodeResult.city,
           country: geocodeResult.country || 'France',
-          latitude: location.coords.latitude,
-          longitude: location.coords.longitude,
+          latitude: lat,
+          longitude: lng,
           formattedAddress: geocodeResult.formattedAddress,
         };
+        if (GOOGLE_API_KEY) {
+          const q =
+            geocodeResult.formattedAddress?.trim() ||
+            [geocodeResult.address, geocodeResult.city, geocodeResult.country].filter(Boolean).join(', ');
+          const extra = await tryFetchGooglePhotoForCoordinates(lat, lng, q, lang);
+          if (extra?.googlePhotoRef) {
+            newLocation = {
+              ...newLocation,
+              googlePhotoRef: extra.googlePhotoRef,
+              placeId: extra.placeId,
+              placeName: extra.placeName,
+            };
+          }
+        }
 
         onChange(newLocation);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -556,8 +666,23 @@ export default function LocationPicker({
         const city = r.city || r.subregion || r.region || '';
         const country = r.country || 'France';
         const formattedAddress = [address, city, country].filter(Boolean).join(', ');
+        const lat = location.coords.latitude;
+        const lng = location.coords.longitude;
 
-        onChange({ address, city, country, latitude: location.coords.latitude, longitude: location.coords.longitude, formattedAddress });
+        let loc: LocationData = { address, city, country, latitude: lat, longitude: lng, formattedAddress };
+        if (GOOGLE_API_KEY) {
+          const extra = await tryFetchGooglePhotoForCoordinates(lat, lng, formattedAddress, lang);
+          if (extra?.googlePhotoRef) {
+            loc = {
+              ...loc,
+              googlePhotoRef: extra.googlePhotoRef,
+              placeId: extra.placeId,
+              placeName: extra.placeName,
+            };
+          }
+        }
+
+        onChange(loc);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         setModalVisible(false);
       } else {
@@ -590,7 +715,7 @@ export default function LocationPicker({
     try {
       const geocodeResult = await reverseGoogleGeocode(lat, lng, lang);
 
-      const newLocation: LocationData = {
+      let newLocation: LocationData = {
         address: geocodeResult?.address || '',
         city: geocodeResult?.city || '',
         country: geocodeResult?.country || 'France',
@@ -598,6 +723,22 @@ export default function LocationPicker({
         longitude: lng,
         formattedAddress: geocodeResult?.formattedAddress || `${lat.toFixed(6)}, ${lng.toFixed(6)}`,
       };
+
+      if (GOOGLE_API_KEY) {
+        const q =
+          geocodeResult?.formattedAddress?.trim() ||
+          [geocodeResult?.address, geocodeResult?.city, geocodeResult?.country].filter(Boolean).join(', ') ||
+          `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
+        const extra = await tryFetchGooglePhotoForCoordinates(lat, lng, q, lang);
+        if (extra?.googlePhotoRef) {
+          newLocation = {
+            ...newLocation,
+            googlePhotoRef: extra.googlePhotoRef,
+            placeId: extra.placeId,
+            placeName: extra.placeName,
+          };
+        }
+      }
 
       onChange(newLocation);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -628,6 +769,11 @@ export default function LocationPicker({
   const handleSelectResult = async (result: SearchResult) => {
     Haptics.selectionAsync();
 
+    const buildTextQueryForEnrichment = (r: SearchResult) =>
+      r.formattedAddress?.trim() ||
+      [r.address, r.city, r.country].filter(Boolean).join(', ').trim() ||
+      '';
+
     // If Google place (no lat/lng yet), resolve details first
     if (result.placeId && result.latitude === 0 && result.longitude === 0) {
       setResolvingPlace(true);
@@ -635,7 +781,7 @@ export default function LocationPicker({
       setResolvingPlace(false);
 
       if (details) {
-        const newLocation: LocationData = {
+        let newLocation: LocationData = {
           address: details.address,
           city: details.city,
           country: details.country,
@@ -649,9 +795,27 @@ export default function LocationPicker({
           googlePhotoRef: details.googlePhotoRef,
           googlePhotoRefs: details.googlePhotoRefs,
         };
+        if (GOOGLE_API_KEY && details.latitude && details.longitude && !details.googlePhotoRef) {
+          setResolvingPlace(true);
+          const extra = await tryFetchGooglePhotoForCoordinates(
+            details.latitude,
+            details.longitude,
+            buildTextQueryForEnrichment({ ...result, ...details }),
+            lang
+          );
+          setResolvingPlace(false);
+          if (extra?.googlePhotoRef) {
+            newLocation = {
+              ...newLocation,
+              googlePhotoRef: extra.googlePhotoRef,
+              placeId: extra.placeId || newLocation.placeId,
+              placeName: extra.placeName || newLocation.placeName,
+            };
+          }
+        }
         onChange(newLocation);
 
-        const resolvedResult: SearchResult = { ...result, ...details };
+        const resolvedResult: SearchResult = { ...result, ...details, googlePhotoRef: newLocation.googlePhotoRef };
         setRecentSearches(prev => {
           const filtered = prev.filter(r => r.id !== resolvedResult.id);
           return [resolvedResult, ...filtered].slice(0, MAX_RECENT);
@@ -667,14 +831,39 @@ export default function LocationPicker({
         });
       }
     } else {
-      onChange({
+      const baseLocation: LocationData = {
         address: result.address,
         city: result.city,
         country: result.country,
         latitude: result.latitude,
         longitude: result.longitude,
         formattedAddress: result.formattedAddress,
-      });
+        postalCode: result.postalCode,
+        region: result.region,
+        placeName: result.placeName,
+        placeId: result.placeId,
+        googlePhotoRef: result.googlePhotoRef,
+      };
+      onChange(baseLocation);
+
+      if (GOOGLE_API_KEY && result.latitude && result.longitude && !result.googlePhotoRef) {
+        setResolvingPlace(true);
+        const extra = await tryFetchGooglePhotoForCoordinates(
+          result.latitude,
+          result.longitude,
+          buildTextQueryForEnrichment(result),
+          lang
+        );
+        setResolvingPlace(false);
+        if (extra?.googlePhotoRef) {
+          onChange({
+            ...baseLocation,
+            googlePhotoRef: extra.googlePhotoRef,
+            placeId: extra.placeId || baseLocation.placeId,
+            placeName: extra.placeName || baseLocation.placeName,
+          });
+        }
+      }
 
       setRecentSearches(prev => {
         const filtered = prev.filter(r => r.id !== result.id);

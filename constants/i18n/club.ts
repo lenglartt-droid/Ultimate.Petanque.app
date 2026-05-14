@@ -133,5 +133,15 @@ export const clubTranslations = {
     analyticsAdvMemberAnalytics: { fr: 'Analyse individuelle par membre (score contribution)', en: 'Individual member analytics (contribution score)' },
     analyticsAdvExportCsvPdf: { fr: 'Export CSV et PDF du rapport complet', en: 'Full report CSV and PDF export' },
     analyticsAdvTournamentStats: { fr: 'Statistiques de tournois organises', en: 'Organized tournament statistics' },
+    geoRankPendingTitle: { fr: 'Classement geographique', en: 'Geographic ranking' },
+    geoRankPendingBody: {
+      fr: 'Votre club n\'apparait pas encore dans les classements : il faut que des membres enregistrent des matchs eligibles (parties suivies dans l\'app). Invitez des joueurs pour lancer l\'activite.',
+      en: 'Your club is not in geographic rankings yet: members need to play qualifying matches recorded in the app. Invite players to get activity started.',
+    },
+    geoRankInviteCta: { fr: 'Inviter des membres', en: 'Invite members' },
+    geoRankPendingVisitorHint: {
+      fr: 'Demandez a un administrateur du club d\'inviter des joueurs pour enregistrer des matchs.',
+      en: 'Ask a club admin to invite players so matches can be recorded.',
+    },
   },
 };

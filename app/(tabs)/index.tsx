@@ -729,7 +729,7 @@ export default function HomeScreen() {
                       style={st.proximityMapBtn}
                       onPress={(e) => {
                         e.stopPropagation?.();
-                        router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(t.latitude), lng: String(t.longitude), name: t.name } } as any);
+                        router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(t.latitude), lng: String(t.longitude), name: t.name, mf: String(Date.now()) } } as any);
                       }}
                       hitSlop={6}
                     >
@@ -742,7 +742,7 @@ export default function HomeScreen() {
                 style={st.proximityCta}
                 onPress={() => {
                   const closest = nearbyTerrains[0];
-                  router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(closest.latitude), lng: String(closest.longitude), name: closest.name } } as any);
+                  router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true', lat: String(closest.latitude), lng: String(closest.longitude), name: closest.name, mf: String(Date.now()) } } as any);
                 }}
               >
                 <MaterialIcons name="map" size={16} color="#FFF" />

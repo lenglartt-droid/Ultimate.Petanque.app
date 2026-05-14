@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -54,6 +54,40 @@ function getGooglePlacePhotoDisplayUrl(photoRef: string, maxPx: number = 1200): 
     return `https://places.googleapis.com/v1/${photoRef}/media?maxWidthPx=${maxPx}&maxHeightPx=${maxPx}&key=${encodeURIComponent(key)}`;
   }
   return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxPx}&photo_reference=${encodeURIComponent(photoRef)}&key=${encodeURIComponent(key)}`;
+}
+
+/** Resolve a CDN URL for New Places photos (skipHttpRedirect JSON) so `<Image>` loads reliably on native. */
+async function resolvePlacePhotoUriForDisplay(photoRef: string, apiKey: string, maxPx: number): Promise<string> {
+  if (!apiKey?.trim() || !photoRef?.trim()) return '';
+  const ref = photoRef.trim();
+  if (ref.startsWith('places/')) {
+    const jsonUrl = `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=${maxPx}&maxHeightPx=${maxPx}&key=${encodeURIComponent(apiKey)}&skipHttpRedirect=true`;
+    try {
+      const res = await fetch(jsonUrl);
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        if (ct.includes('application/json')) {
+          const j = await res.json();
+          const uri = j.photoUri || j.photo_uri;
+          if (typeof uri === 'string' && uri.length > 0) {
+            if (uri.startsWith('https://')) return uri;
+            if (uri.startsWith('http://')) return uri;
+            if (uri.startsWith('//')) return `https:${uri}`;
+            return `https://${uri.replace(/^\/+/, '')}`;
+          }
+        }
+      }
+    } catch {
+      /* use direct media URL */
+    }
+    return `https://places.googleapis.com/v1/${ref}/media?maxWidthPx=${maxPx}&maxHeightPx=${maxPx}&key=${encodeURIComponent(apiKey)}`;
+  }
+  return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=${maxPx}&photo_reference=${encodeURIComponent(ref)}&key=${encodeURIComponent(apiKey)}`;
+}
+
+function getGoogleStaticMapPreviewUrl(lat: number, lng: number, apiKey: string): string {
+  if (!apiKey?.trim() || !Number.isFinite(lat) || !Number.isFinite(lng)) return '';
+  return `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=16&size=400x400&scale=2&maptype=roadmap&markers=color:0x2563EB%7C${lat},${lng}&key=${encodeURIComponent(apiKey)}`;
 }
 
 // ============================================
@@ -130,24 +164,62 @@ export default function NewTerrainScreen() {
   const [googlePhotoUrls, setGooglePhotoUrls] = useState<string[]>([]);
   const [showPhotoPreview, setShowPhotoPreview] = useState(false);
   const [selectedGooglePhotos, setSelectedGooglePhotos] = useState<Set<number>>(new Set());
+  const photoResolveGeneration = useRef(0);
+  const lastMapCoordsRef = useRef({ lat: 0, lng: 0 });
 
   const handleLocationChange = useCallback((loc: LocationData) => {
+    const gen = ++photoResolveGeneration.current;
     setLocation(loc);
+    lastMapCoordsRef.current = { lat: loc.latitude, lng: loc.longitude };
     lastPlaceId = loc.placeId;
     lastPhotoRef = loc.googlePhotoRef;
-    // Auto-fetch Google Places photos
+
+    const hasCoords =
+      Number.isFinite(loc.latitude) &&
+      Number.isFinite(loc.longitude) &&
+      (Math.abs(loc.latitude) > 1e-5 || Math.abs(loc.longitude) > 1e-5);
+
+    let urls: string[] = [];
     if (loc.googlePhotoRefs && loc.googlePhotoRefs.length > 0 && GOOGLE_API_KEY) {
-      const urls = loc.googlePhotoRefs
+      urls = loc.googlePhotoRefs
         .slice(0, 10)
         .map(ref => getGooglePlacePhotoDisplayUrl(ref))
-        .filter(Boolean);
-      setGooglePhotoUrls(urls);
+        .filter(Boolean) as string[];
     } else if (loc.googlePhotoRef && GOOGLE_API_KEY) {
-      const url = getGooglePlacePhotoDisplayUrl(loc.googlePhotoRef);
-      setGooglePhotoUrls(url ? [url] : []);
-    } else {
-      setGooglePhotoUrls([]);
+      const u = getGooglePlacePhotoDisplayUrl(loc.googlePhotoRef);
+      urls = u ? [u] : [];
     }
+
+    if (urls.length === 0 && GOOGLE_API_KEY && hasCoords) {
+      urls = [getGoogleStaticMapPreviewUrl(loc.latitude, loc.longitude, GOOGLE_API_KEY)];
+    }
+
+    setGooglePhotoUrls(urls);
+
+    const refs =
+      loc.googlePhotoRefs && loc.googlePhotoRefs.length > 0
+        ? loc.googlePhotoRefs.slice(0, 10)
+        : loc.googlePhotoRef
+          ? [loc.googlePhotoRef]
+          : [];
+
+    if (GOOGLE_API_KEY && urls.length > 0 && refs.length > 0) {
+      void (async () => {
+        const out: string[] = [];
+        for (let i = 0; i < urls.length; i++) {
+          const ref = refs[i];
+          if (ref?.startsWith('places/')) {
+            const resolved = await resolvePlacePhotoUriForDisplay(ref, GOOGLE_API_KEY, 1000);
+            out.push(resolved || urls[i]);
+          } else {
+            out.push(urls[i]);
+          }
+        }
+        if (photoResolveGeneration.current !== gen) return;
+        if (out.some((u, idx) => u !== urls[idx])) setGooglePhotoUrls(out);
+      })();
+    }
+
     // Generate name suggestion from Google Places result
     if (loc.placeName && loc.placeName !== loc.address) {
       // Use place name directly (e.g. "Boulodrome du Parc")
@@ -623,7 +695,25 @@ export default function NewTerrainScreen() {
                       });
                     }}
                   >
-                    <Image source={{ uri: url }} style={styles.photoGalleryImage} contentFit="cover" transition={200} />
+                    <Image
+                      source={{ uri: url }}
+                      style={styles.photoGalleryImage}
+                      contentFit="cover"
+                      transition={200}
+                      onError={() => {
+                        setGooglePhotoUrls((prev) => {
+                          const cur = prev[index];
+                          if (!cur || cur.includes('staticmap')) return prev;
+                          const { lat, lng } = lastMapCoordsRef.current;
+                          if (GOOGLE_API_KEY && Number.isFinite(lat) && Number.isFinite(lng) && (Math.abs(lat) > 1e-5 || Math.abs(lng) > 1e-5)) {
+                            const next = [...prev];
+                            next[index] = getGoogleStaticMapPreviewUrl(lat, lng, GOOGLE_API_KEY);
+                            return next;
+                          }
+                          return prev;
+                        });
+                      }}
+                    />
                     <View style={styles.photoGalleryCheck}>
                       {isSelected ? (
                         <MaterialIcons name="check-circle" size={24} color="#4285F4" />

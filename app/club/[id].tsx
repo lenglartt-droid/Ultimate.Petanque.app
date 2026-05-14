@@ -47,6 +47,7 @@ import { submitClubClaim, hasExistingClaim, getReceivedClaims, acceptClubClaim, 
 import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermission, CoAdmin, CoAdminPermission } from '@/services/clubCoManagementService';
 import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
 import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
+import { fetchClubLeaderboard, sortClubLeaderboard, type LeaderboardClub } from '@/services/clubLeaderboardService';
 
 
 
@@ -137,53 +138,71 @@ export default function ClubDetailScreen() {
   const [showCardFullscreen, setShowCardFullscreen] = React.useState(false);
   // const [screenWidth2, setScreenWidth2] = React.useState(() => Dimensions.get('window').width || 375); // This variable `screenWidth2` is unused.
 
-  // Geo ranking state for club (ranks this club among other clubs)
+  // Geo ranking state for club (ranks this club among other clubs with compositeScore > 0 only)
   const [clubGeoRank, setClubGeoRank] = React.useState<{ city?: { rank: number; total: number }; country?: { rank: number; total: number }; continent?: { rank: number; total: number }; world?: { rank: number; total: number } } | null>(null);
+  /** True after fetch when this club has no qualifying leaderboard score (compositeScore = 0) — show hero placeholder */
+  const [geoRankPendingPlaceholder, setGeoRankPendingPlaceholder] = React.useState(false);
+
   React.useEffect(() => {
     if (!club) return;
-    // Fetch club leaderboard to rank this club among others
-    const { fetchClubLeaderboard, sortClubLeaderboard } = require('@/services/clubLeaderboardService');
-    fetchClubLeaderboard().then(({ clubs: allClubs }: any) => {
-      if (!allClubs || allClubs.length === 0) return;
-      const sorted = sortClubLeaderboard(allClubs, 'compositeScore');
-      // Only rank clubs that have at least one qualified member (compositeScore > 0)
-      const qualified = sorted.filter((c: any) => c.stats?.compositeScore > 0);
-      const result: any = {};
-      // Check if THIS club is qualified
-      const thisClubEntry = sorted.find((c: any) => c.id === club.id || c.name === club.name);
-      const isQualified = thisClubEntry && thisClubEntry.stats?.compositeScore > 0;
-      if (!isQualified) {
+    const matchLb = (c: LeaderboardClub) => c.id === club.id || c.name === club.name;
+    setGeoRankPendingPlaceholder(false);
+    fetchClubLeaderboard().then(({ clubs: allClubs }) => {
+      if (!allClubs?.length) {
         setClubGeoRank(null);
+        setGeoRankPendingPlaceholder(false);
         return;
       }
-      // City ranking: clubs in the same city
+
+      const myEntry = allClubs.find(matchLb);
+      const myScore = myEntry?.stats?.compositeScore ?? 0;
+      if (myScore <= 0) {
+        setClubGeoRank(null);
+        setGeoRankPendingPlaceholder(true);
+        return;
+      }
+
+      const qualified = allClubs.filter((c: LeaderboardClub) => c.stats.compositeScore > 0);
+      const sorted = sortClubLeaderboard(qualified, 'compositeScore');
+      const result: {
+        city?: { rank: number; total: number };
+        country?: { rank: number; total: number };
+        continent?: { rank: number; total: number };
+        world?: { rank: number; total: number };
+      } = {};
+
+      // City ranking: qualified clubs in the same city
       if (club.city) {
-        const cityClubs = qualified.filter((c: any) => c.city?.toLowerCase() === club.city.toLowerCase());
-        const myIdx = cityClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+        const cityClubs = sorted.filter((c) => c.city?.toLowerCase() === club.city!.toLowerCase());
+        const myIdx = cityClubs.findIndex(matchLb);
         if (myIdx >= 0) result.city = { rank: myIdx + 1, total: cityClubs.length };
         else if (cityClubs.length > 0) result.city = { rank: cityClubs.length + 1, total: cityClubs.length + 1 };
       }
-      // Country ranking
       const clubCountry = club.country || 'France';
-      const countryClubs = qualified.filter((c: any) => (c.country || 'France').toLowerCase() === clubCountry.toLowerCase());
-      const countryIdx = countryClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+      const countryClubs = sorted.filter((c) => (c.country || 'France').toLowerCase() === clubCountry.toLowerCase());
+      const countryIdx = countryClubs.findIndex(matchLb);
       if (countryIdx >= 0) result.country = { rank: countryIdx + 1, total: countryClubs.length };
       else if (countryClubs.length > 0) result.country = { rank: countryClubs.length + 1, total: countryClubs.length + 1 };
-      // Continent ranking
+
       const continent = getContinent(clubCountry);
       if (continent) {
-        const contClubs = qualified.filter((c: any) => getContinent(c.country || 'France') === continent);
-        const contIdx = contClubs.findIndex((c: any) => c.id === club.id || c.name === club.name);
+        const contClubs = sorted.filter((c) => getContinent(c.country || 'France') === continent);
+        const contIdx = contClubs.findIndex(matchLb);
         if (contIdx >= 0) result.continent = { rank: contIdx + 1, total: contClubs.length };
         else if (contClubs.length > 0) result.continent = { rank: contClubs.length + 1, total: contClubs.length + 1 };
       }
-      // World ranking
-      const worldIdx = qualified.findIndex((c: any) => c.id === club.id || c.name === club.name);
-      if (worldIdx >= 0) result.world = { rank: worldIdx + 1, total: qualified.length };
-      else result.world = { rank: qualified.length + 1, total: qualified.length + 1 };
+
+      const worldIdx = sorted.findIndex(matchLb);
+      if (worldIdx >= 0) result.world = { rank: worldIdx + 1, total: sorted.length };
+      else result.world = { rank: sorted.length + 1, total: sorted.length + 1 };
+
+      setGeoRankPendingPlaceholder(false);
       setClubGeoRank(Object.keys(result).length > 0 ? result : null);
-    }).catch(() => {});
-  }, [club?.id, club?.isPublic, club?.city, club?.country]);
+    }).catch(() => {
+      setClubGeoRank(null);
+      setGeoRankPendingPlaceholder(false);
+    });
+  }, [club?.id, club?.isPublic, club?.city, club?.country, club?.name]);
 
   // Load club member roles
   React.useEffect(() => {
@@ -702,8 +721,30 @@ export default function ClubDetailScreen() {
             </View>
           </View>
 
-          {/* Geographic Ranking */}
-          {clubGeoRank && (clubGeoRank.city || clubGeoRank.country || clubGeoRank.continent) ? (
+          {/* Geographic Ranking — only clubs with compositeScore > 0; otherwise explanatory placeholder */}
+          {geoRankPendingPlaceholder ? (
+            <View style={[styles.geoRankSection, styles.geoRankPendingCard, { alignSelf: 'stretch' }]}>
+              <View style={styles.geoRankHeader}>
+                <MaterialIcons name="insights" size={14} color="#64748B" />
+                <Text style={[styles.geoRankTitle, styles.geoRankPendingTitleMuted]}>{t('club', 'geoRankPendingTitle')}</Text>
+              </View>
+              <Text style={styles.geoRankPendingBody}>{t('club', 'geoRankPendingBody')}</Text>
+              {(isOwner || isCoadmin) && !isReadOnly ? (
+                <Pressable
+                  style={styles.geoRankPendingCta}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowInviteModal(true);
+                  }}
+                >
+                  <MaterialIcons name="person-add" size={18} color="#FFF" />
+                  <Text style={styles.geoRankPendingCtaText}>{t('club', 'geoRankInviteCta')}</Text>
+                </Pressable>
+              ) : (
+                <Text style={styles.geoRankPendingHint}>{t('club', 'geoRankPendingVisitorHint')}</Text>
+              )}
+            </View>
+          ) : clubGeoRank && (clubGeoRank.city || clubGeoRank.country || clubGeoRank.continent) ? (
             <View style={[styles.geoRankSection, { alignSelf: 'stretch' }]}>
               <View style={styles.geoRankHeader}>
                 <MaterialIcons name="public" size={14} color="#3B82F6" />
@@ -863,7 +904,7 @@ export default function ClubDetailScreen() {
                 const lat = club.location?.latitude;
                 const lng = club.location?.longitude;
                 if (lat || lng) {
-                  router.push({ pathname: '/(tabs)/map', params: { lat: String(lat || 0), lng: String(lng || 0), name: club.name } } as any);
+                  router.push({ pathname: '/(tabs)/map', params: { lat: String(lat || 0), lng: String(lng || 0), name: club.name, mf: String(Date.now()) } } as any);
                 } else {
                   router.push('/(tabs)/map');
                 }
@@ -1591,6 +1632,21 @@ const styles = StyleSheet.create({
   clubMetaText: { fontSize: 14, color: theme.textSecondary },
   clubDescription: { fontSize: 14, color: theme.textSecondary, textAlign: 'center', lineHeight: 20, marginTop: 8 },
   geoRankSection: { marginTop: 12, width: '100%', backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 12 },
+  geoRankPendingCard: { backgroundColor: '#F8FAFC', borderWidth: 1, borderColor: '#E2E8F0' },
+  geoRankPendingTitleMuted: { color: theme.textSecondary },
+  geoRankPendingBody: { fontSize: 13, color: theme.textSecondary, lineHeight: 19, marginBottom: 12 },
+  geoRankPendingHint: { fontSize: 12, color: theme.textMuted, fontStyle: 'italic' as const },
+  geoRankPendingCta: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    gap: 8,
+    backgroundColor: theme.primary,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: theme.borderRadius.md,
+  },
+  geoRankPendingCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
   geoRankHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
   geoRankTitle: { fontSize: 12, fontWeight: '700', color: '#3B82F6', letterSpacing: 0.5 },
   geoRankRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },

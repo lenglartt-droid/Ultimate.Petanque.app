@@ -798,7 +798,7 @@ export default function TerrainDetailScreen() {
           {(terrain.location?.latitude || terrain.location?.longitude) ? (
             <Pressable
               style={styles.mapButton}
-              onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(terrain.location?.latitude || 0), lng: String(terrain.location?.longitude || 0), name: terrain.name } } as any)}
+              onPress={() => router.push({ pathname: '/(tabs)/map', params: { lat: String(terrain.location?.latitude || 0), lng: String(terrain.location?.longitude || 0), name: terrain.name, mf: String(Date.now()) } } as any)}
             >
               <MaterialIcons name="map" size={20} color={theme.primary} />
               <Text style={styles.mapButtonText}>{t('club', 'viewOnMap')}</Text>

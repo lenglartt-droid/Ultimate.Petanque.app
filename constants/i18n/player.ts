@@ -108,5 +108,10 @@ export const playerTranslations = {
     viewFullscreen: { fr: 'Voir en plein écran', en: 'View fullscreen' },
     uploadingCard: { fr: 'Chargement de la carte...', en: 'Uploading card...' },
     replaceFederationCard: { fr: 'Remplacer la carte', en: 'Replace card' },
+    geoRankHiddenMessage: {
+      fr: 'Votre classement est masqué — passez votre profil en public pour apparaître dans les classements.',
+      en: 'Your ranking is hidden — set your profile to public to appear in rankings.',
+    },
+    geoRankPublicCtaLabel: { fr: 'Profil public', en: 'Public profile' },
   },
 };
