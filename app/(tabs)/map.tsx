@@ -14,7 +14,8 @@ import {
   Alert,
   Dimensions,
   KeyboardAvoidingView,
-  Keyboard
+  Keyboard,
+  type ViewStyle,
 } from 'react-native';
 // react-native-maps is loaded dynamically below (Platform !== 'web')
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -78,15 +79,19 @@ const MAP_MARKER_SHADOW = Platform.select({
 });
 
 /**
- * Android: MapMarker.java builds a bitmap from Yoga width/height (SizeReportingShadowNode). The default
- * anchor (0.5, 1) pins the bitmap bottom to the lat/lng; combined with tight layout, the bottom arc is often
- * clipped (flat / “D” circles). Extra padding inflates the canvas; center anchor pins the coordinate on the
- * bubble center. Extra bottom padding: partner/sponsor badges are `position: 'absolute'` and do not grow height.
+ * Custom markers are rasterized to a bitmap (Android: MapMarker.java uses Yoga width/height). Tight or
+ * asymmetric padding + default bottom anchor (0.5,1) used to clip the bottom arc; center anchor (0.5,0.5)
+ * with extra bottom-only padding then skewed layout and clipped the top. GPU offscreen layers on nested
+ * rounded views can also crop strokes. Fix: symmetric padding, no negative margins into the bubble, and
+ * renderToHardwareTextureAndroid={false} on Android bubble layers.
  */
 const MAP_MARKER_ROOT_STYLE = Platform.select({
-  ios: {},
-  default: { paddingTop: 10, paddingHorizontal: 10, paddingBottom: 18 },
+  ios: { paddingVertical: 6, paddingHorizontal: 6 },
+  default: { paddingVertical: 18, paddingHorizontal: 18 },
 });
+/** Android: avoid HW texture compositing that clips rounded marker bitmaps. */
+const MAP_MARKER_NO_HW_TEXTURE: ViewStyle =
+  Platform.OS === 'android' ? { renderToHardwareTextureAndroid: false } : {};
 const MAP_MARKER_BUBBLE_ANCHOR = { x: 0.5, y: 0.5 };
 
 // ============================================
@@ -216,6 +221,8 @@ const TIER_COLORS: Record<string, { primary: string; bg: string; border: string 
 
 interface PartnerMarkerData extends Ambassador {
   _tier: string;
+  /** Club markers pass `logo` from directory payload */
+  logo?: string | null;
 }
 
 const PartnerMarkerView = React.memo(
@@ -264,7 +271,7 @@ const PartnerMarkerView = React.memo(
     return (
       <View
         key={`${partner.id}-${tier.primary}`}
-        style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }}
+        style={{ alignItems: 'center', overflow: 'visible', ...MAP_MARKER_ROOT_STYLE }}
         collapsable={false}
       >
         <View
@@ -278,6 +285,7 @@ const PartnerMarkerView = React.memo(
               borderColor: tier.border,
               backgroundColor: tier.bg,
             },
+            MAP_MARKER_NO_HW_TEXTURE,
           ]}
         >
           {partner.photo && !imageError ? (
@@ -375,7 +383,7 @@ const ClubMarkerView = React.memo(
     return (
       <View
         key={`${partner.id}-${tier.primary}`}
-        style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }}
+        style={{ alignItems: 'center', overflow: 'visible', ...MAP_MARKER_ROOT_STYLE }}
         collapsable={false}
       >
         <View
@@ -389,6 +397,7 @@ const ClubMarkerView = React.memo(
               borderColor: tier.border,
               backgroundColor: tier.bg,
             },
+            MAP_MARKER_NO_HW_TEXTURE,
           ]}
         >
           {partner.logo && !imageError ? (
@@ -455,11 +464,12 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   const halfW = size / 2;
 
   return (
-    <View style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }} collapsable={false}>
+    <View style={{ alignItems: 'center', overflow: 'visible', ...MAP_MARKER_ROOT_STYLE }} collapsable={false}>
       <View style={{
         width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
         borderWidth: 2.5, borderColor: sponsorColor,
         flexDirection: 'row',
+        ...MAP_MARKER_NO_HW_TEXTURE,
         ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }, default: {} }),
       }}>
         {/* Left half: item photo/icon */}
@@ -583,9 +593,9 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
   const pulseColor = isLive ? '#EF4444' : '#22C55E';
   const showPulse = isActiveNow || isLive;
   return (
-  <View style={[styles.markerWrapper, MAP_MARKER_ROOT_STYLE]}>
+  <View style={[styles.markerWrapper, MAP_MARKER_ROOT_STYLE, { overflow: 'visible' }]}>
     {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, showPulse && { borderColor: pulseColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null]}>
+    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, showPulse && { borderColor: pulseColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null, MAP_MARKER_NO_HW_TEXTURE]}>
       <MaterialIcons name={icon as any} size={showPulse ? 16 : 14} color="#FFF" />
     </View>
     {sponsorColor ? (
@@ -637,7 +647,10 @@ const ClusterMarkerView = React.memo(
     const showPills = sorted.length > 1 && size >= 52;
 
     return (
-      <View style={{ alignItems: 'center', ...MAP_MARKER_ROOT_STYLE }} collapsable={false}>
+      <View
+        style={{ alignItems: 'center', justifyContent: 'flex-start', overflow: 'visible', ...MAP_MARKER_ROOT_STYLE }}
+        collapsable={false}
+      >
         {/* Outer ring with gradient-like effect */}
         <View
           style={{
@@ -649,6 +662,7 @@ const ClusterMarkerView = React.memo(
             justifyContent: 'center',
             borderWidth: 2,
             borderColor: dominantColor + '40',
+            ...MAP_MARKER_NO_HW_TEXTURE,
           }}
         >
           {/* Inner circle — no Android elevation (Map marker bitmap clips outside layout) */}
@@ -662,6 +676,7 @@ const ClusterMarkerView = React.memo(
               justifyContent: 'center',
               borderWidth: 2.5,
               borderColor: '#FFF',
+              ...MAP_MARKER_NO_HW_TEXTURE,
               ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, default: {} }),
             }}
           >
@@ -670,9 +685,9 @@ const ClusterMarkerView = React.memo(
             </Text>
           </View>
         </View>
-        {/* Type indicator dots below cluster */}
+        {/* Type indicator dots below cluster (positive margin — negative overlap confused Yoga vs. draw bounds) */}
         {showPills ? (
-          <View style={{ flexDirection: 'row', gap: 3, marginTop: -2 }}>
+          <View style={{ flexDirection: 'row', gap: 3, marginTop: 4 }}>
             {sorted.slice(0, 4).map(([type, cnt]) => (
               <View key={type} style={{
                 width: 8, height: 8, borderRadius: 4,

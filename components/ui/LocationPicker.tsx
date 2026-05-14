@@ -94,7 +94,7 @@ interface SearchResult {
 // POST https://places.googleapis.com/v1/places:autocomplete
 // ============================================
 async function searchGooglePlaces(query: string, types?: string, lang: string = 'fr'): Promise<SearchResult[]> {
-  if (!GOOGLE_API_KEY) return searchNominatimFallback(query);
+  if (!GOOGLE_API_KEY) return [];
   try {
     const body: Record<string, any> = {
       input: query,
@@ -115,6 +115,8 @@ async function searchGooglePlaces(query: string, types?: string, lang: string = 
         headers: {
           'Content-Type': 'application/json',
           'X-Goog-Api-Key': GOOGLE_API_KEY,
+          // Places API (New) requires a field mask; without it, suggestions are often empty.
+          'X-Goog-FieldMask': '*',
         },
         body: JSON.stringify(body),
       }
@@ -144,9 +146,104 @@ async function searchGooglePlaces(query: string, types?: string, lang: string = 
           longitude: 0,
           formattedAddress: p.text?.text || p.structuredFormat?.mainText?.text || '',
         };
-      });
+      })
+      .filter((r: SearchResult) => !!r.placeId);
   } catch (e) {
     console.log('[Google Places New] Autocomplete exception:', e);
+    return [];
+  }
+}
+
+/**
+ * Text Search (New) — fallback when Autocomplete returns no rows (same key, still Google-first).
+ * POST https://places.googleapis.com/v1/places:searchText
+ */
+async function searchGooglePlacesText(
+  query: string,
+  types?: string,
+  lang: string = 'fr'
+): Promise<SearchResult[]> {
+  if (!GOOGLE_API_KEY || !query.trim()) return [];
+  try {
+    const body: Record<string, any> = {
+      textQuery: query.trim(),
+      languageCode: lang,
+      maxResultCount: 10,
+    };
+    if (types === '(cities)') {
+      body.includedType = 'locality';
+      body.strictTypeFiltering = true;
+    }
+
+    const response = await fetch('https://places.googleapis.com/v1/places:searchText', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Goog-Api-Key': GOOGLE_API_KEY,
+        'X-Goog-FieldMask':
+          'places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.photos',
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      console.log('[Google Places New] searchText error:', response.status, await response.text());
+      return [];
+    }
+
+    const data = await response.json();
+    const places = data.places || [];
+
+    return places
+      .map((place: any) => {
+        const rawId = typeof place.id === 'string' ? place.id : '';
+        const placeId = normalizePlaceIdForDetails(rawId);
+        if (!placeId) return null;
+
+        const components: any[] = place.addressComponents || [];
+        const getComponent = (type: string) =>
+          components.find((c: any) => c.types?.includes(type))?.longText || '';
+        const streetNumber = getComponent('street_number');
+        const route = getComponent('route');
+        const street = [streetNumber, route].filter(Boolean).join(' ');
+        const city =
+          getComponent('locality') ||
+          getComponent('administrative_area_level_2') ||
+          getComponent('postal_town') ||
+          getComponent('sublocality_level_1') ||
+          '';
+        const country = getComponent('country') || '';
+        const postalCode = getComponent('postal_code') || '';
+        const region =
+          getComponent('administrative_area_level_1') ||
+          getComponent('administrative_area_level_2') ||
+          '';
+
+        const lat = place.location?.latitude ?? 0;
+        const lng = place.location?.longitude ?? 0;
+        const formatted =
+          place.formattedAddress || place.displayName?.text || [street, city, country].filter(Boolean).join(', ');
+        const photoRefs: string[] = (place.photos || []).map((p: any) => p.name).filter(Boolean);
+
+        return {
+          id: placeId,
+          placeId,
+          address: street || place.displayName?.text || '',
+          city,
+          country,
+          latitude: lat,
+          longitude: lng,
+          formattedAddress: formatted,
+          postalCode: postalCode || undefined,
+          region: region || undefined,
+          placeName: place.displayName?.text || undefined,
+          googlePhotoRef: photoRefs[0],
+          googlePhotoRefs: photoRefs.length > 0 ? photoRefs : undefined,
+        } as SearchResult;
+      })
+      .filter(Boolean) as SearchResult[];
+  } catch (e) {
+    console.log('[Google Places New] searchText exception:', e);
     return [];
   }
 }
@@ -552,6 +649,9 @@ export default function LocationPicker({
         }
 
         let results = await searchGooglePlaces(query, types, lang);
+        if (results.length === 0) {
+          results = await searchGooglePlacesText(query, types, lang);
+        }
         if (results.length === 0) {
           results = await searchNominatimFallback(query);
         }

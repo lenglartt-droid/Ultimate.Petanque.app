@@ -490,10 +490,13 @@ create index idx_ambassadors_user on public.ambassadors using btree (user_id);
 create policy "anon_select_active_ambassadors" on public.ambassadors for select to anon using (is_active = true);
 create policy "authenticated_select_active_ambassadors" on public.ambassadors for select to authenticated using (is_active = true);
 create policy "own_select_ambassadors" on public.ambassadors for select to authenticated using (user_id = auth.uid());
-create policy "own_update_ambassadors" on public.ambassadors for update to authenticated using (user_id = auth.uid());
+-- Admins must see inactive rows (admin UI + PostgREST RETURNING after PATCH).
+create policy "admin_select_all_ambassadors" on public.ambassadors for select to authenticated using (is_admin());
+create policy "own_update_ambassadors" on public.ambassadors for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
 create policy "authenticated_insert_own_ambassadors" on public.ambassadors for insert to authenticated with check (user_id = auth.uid());
 create policy "admin_insert_ambassadors" on public.ambassadors for insert to authenticated with check (is_admin());
-create policy "admin_update_ambassadors" on public.ambassadors for update to authenticated using (is_admin());
+-- Explicit WITH CHECK: new row may have is_active = false; must not inherit a row-only USING as WITH CHECK.
+create policy "admin_update_ambassadors" on public.ambassadors for update to authenticated using (is_admin()) with check (is_admin());
 create policy "admin_delete_ambassadors" on public.ambassadors for delete to authenticated using (is_admin());
 
 -- -----------------------------------------------------------
