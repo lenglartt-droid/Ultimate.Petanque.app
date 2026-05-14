@@ -7,6 +7,7 @@ import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
+import { useAppUI } from '@/contexts/AppContext';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
@@ -28,6 +29,7 @@ function loadGoldSponsor(): Promise<void> {
 }
 
 const AdBanner = React.memo((_props: AdBannerProps) => {
+  const { isPremium } = useAppUI();
   const [sponsor, setSponsor] = useState<Ambassador | null>(null);
   const [loaded, setLoaded] = useState(false);
   const impressionTracked = useRef(false);
@@ -44,6 +46,9 @@ const AdBanner = React.memo((_props: AdBannerProps) => {
     impressionTracked.current = true;
     trackAmbassadorEvent(sponsor.id, 'banner_impression', undefined, { sourcePage: 'ad_replacement_web' });
   }, [sponsor]);
+
+  // Hide all banners for premium users
+  if (isPremium) return null;
 
   if (!loaded || !sponsor) return null;
 
