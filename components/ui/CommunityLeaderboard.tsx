@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, ActivityIndicator, Modal } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -345,37 +346,39 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
               {/* Top 3 podium */}
               {filteredSorted.length >= 3 ? (
                 <View style={s.podium}>
-                  {[1, 0, 2].map(idx => {
-                    const p = filteredSorted[idx];
+                  {[1, 0, 2].map((orderedIdx, displayRank) => { // Use orderedIdx to get original position, displayRank for visual rank
+                    const p = filteredSorted[orderedIdx];
                     if (!p) return null;
-                    const rank = idx + 1;
+                    const rank = orderedIdx + 1;
                     const isMe = user && (p.userId === user.id || (selfPlayer && p.id === selfPlayer.id));
                     const heights = [64, 80, 52];
                     const sizes = [44, 52, 40];
                     const colors = ['#C0C0C0', '#FFD700', '#CD7F32'];
-                    const order = [1, 0, 2];
-                    const h = heights[order.indexOf(idx)];
-                    const sz = sizes[order.indexOf(idx)];
-                    const col = colors[idx];
+                    
+                    // Map displayRank (0, 1, 2) to specific heights/sizes/colors
+                    const currentHeight = heights[displayRank];
+                    const currentSize = sizes[displayRank];
+                    const currentColor = colors[rank - 1]; // Use rank-1 for 0-indexed colors
+
                     return (
-                      <Pressable key={p.id} style={[s.podiumItem, { marginTop: idx === 0 ? 0 : idx === 1 ? 0 : 16 }]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
-                        <View style={[s.podiumAvatarWrap, { width: sz, height: sz, borderColor: col }]}>
+                      <Pressable key={p.id} style={[s.podiumItem, { marginTop: displayRank === 0 ? 0 : displayRank === 1 ? 0 : 16 }]} onPress={() => router.push(isMe ? '/player/me' : `/player/${p.id}` as any)}>
+                        <View style={[s.podiumAvatarWrap, { width: currentSize, height: currentSize, borderColor: currentColor }]}>
                           {p.avatar ? (
-                            <Image source={{ uri: p.avatar }} style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                            <Image source={{ uri: p.avatar }} style={{ width: currentSize - 4, height: currentSize - 4, borderRadius: (currentSize - 4) / 2 }} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                           ) : (
-                            <View style={{ width: sz - 4, height: sz - 4, borderRadius: (sz - 4) / 2, backgroundColor: isMe ? theme.primary : '#334155', alignItems: 'center', justifyContent: 'center' }}>
-                              <Text style={{ fontSize: sz * 0.3, fontWeight: '700', color: '#FFF' }}>{p.name.charAt(0)}</Text>
+                            <View style={{ width: currentSize - 4, height: currentSize - 4, borderRadius: (currentSize - 4) / 2, backgroundColor: isMe ? theme.primary : '#334155', alignItems: 'center', justifyContent: 'center' }}>
+                              <Text style={{ fontSize: currentSize * 0.3, fontWeight: '700', color: '#FFF' }}>{p.name.charAt(0)}</Text>
                             </View>
                           )}
-                          <View style={[s.podiumRankBadge, { backgroundColor: col }]}>
+                          <View style={[s.podiumRankBadge, { backgroundColor: currentColor }]}>
                             <Text style={s.podiumRankText}>{rank}</Text>
                           </View>
                         </View>
                         <Text style={[s.podiumName, isMe && { color: theme.primary }]} numberOfLines={1}>{p.name.split(' ')[0]}</Text>
                         {p.country ? <Text style={s.podiumFlag}>{getCountryFlag(p.country)}</Text> : null}
                         <Text style={s.podiumStat}>{p.stats.winRate}%</Text>
-                        <View style={[s.podiumBar, { height: h, backgroundColor: col + '25' }]}>
-                          <Text style={[s.podiumBarText, { color: col }]}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
+                        <View style={[s.podiumBar, { height: currentHeight, backgroundColor: currentColor + '25' }]}>
+                          <Text style={[s.podiumBarText, { color: currentColor }]}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text>
                         </View>
                       </Pressable>
                     );
@@ -499,28 +502,51 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                 const rank = idx + 1;
                 const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#C0C0C0', 3: '#CD7F32' };
                 const mc = medalColors[rank];
+                const isUnranked = !club.hasQualifiedPlayers;
                 return (
-                  <Pressable key={club.id} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }]} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
+                  <Pressable key={club.id} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }, isUnranked && { opacity: 0.65 }]} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
                     <View style={{ width: 24, alignItems: 'center' }}>
-                      {mc ? <Text style={{ fontSize: 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text> : <Text style={s.rankText}>{rank}</Text>}
+                      {isUnranked ? <MaterialIcons name="remove-circle-outline" size={16} color="#94A3B8" /> : mc ? <Text style={{ fontSize: 14 }}>{rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'}</Text> : <Text style={s.rankText}>{rank}</Text>}
                     </View>
                     <View style={s.avatarWrap}>
                       {club.logo ? (
                         <Image source={{ uri: club.logo }} style={s.avatar} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                       ) : (
-                        <View style={[s.avatar, { backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="home" size={16} color="#F59E0B" /></View>
+                        <View style={[s.avatar, { backgroundColor: isUnranked ? '#94A3B815' : '#F59E0B15', alignItems: 'center', justifyContent: 'center' }]}><MaterialIcons name="home" size={16} color={isUnranked ? '#94A3B8' : '#F59E0B'} /></View>
                       )}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={s.playerName} numberOfLines={1}>{club.name}</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[s.playerName, isUnranked && { color: '#94A3B8' }]} numberOfLines={1}>{club.name}</Text>
+                        {isUnranked ? (
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#94A3B812', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: '#94A3B820' }}>
+                            <MaterialIcons name="hourglass-empty" size={9} color="#94A3B8" />
+                            <Text style={{ fontSize: 8, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.3 }}>{language === 'fr' ? 'NON CLASSE' : 'UNRANKED'}</Text>
+                          </View>
+                        ) : null}
+                      </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
                         {club.city ? <Text style={s.playerClub} numberOfLines={1}>{club.city}</Text> : null}
                         <Text style={{ fontSize: 10, color: theme.textMuted }}>{club.playerCount} {t('leaderboard', 'clubPlayers')}</Text>
                       </View>
+                      {isUnranked ? (
+                        <Text style={{ fontSize: 9, color: '#94A3B8', marginTop: 2, fontStyle: 'italic', lineHeight: 12 }}>
+                          {language === 'fr' ? 'Pas encore de membres qualifies (3+ matchs)' : 'No qualified members yet (3+ matches)'}
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ fontSize: 16, fontWeight: '900', color: '#F59E0B' }}>{club.stats.compositeScore}</Text>
-                      <Text style={{ fontSize: 9, color: theme.textMuted }}>{club.stats.avgWinRate}% V</Text>
+                      {isUnranked ? (
+                        <View style={{ alignItems: 'center' }}>
+                          <MaterialIcons name="hourglass-empty" size={18} color="#CBD5E1" />
+                          <Text style={{ fontSize: 8, fontWeight: '700', color: '#CBD5E1', marginTop: 2 }}>{language === 'fr' ? 'En attente' : 'Pending'}</Text>
+                        </View>
+                      ) : (
+                        <>
+                          <Text style={{ fontSize: 16, fontWeight: '900', color: '#F59E0B' }}>{club.stats.compositeScore}</Text>
+                          <Text style={{ fontSize: 9, color: theme.textMuted }}>{club.stats.avgWinRate}% V</Text>
+                        </>
+                      )}
                     </View>
                   </Pressable>
                 );
