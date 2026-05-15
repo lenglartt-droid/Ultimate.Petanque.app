@@ -1977,7 +1977,7 @@ export default function SponsorPortalScreen() {
 
         {activeSection === 'placement' ? (
           <>
-            <SponsorProposalSection sponsorId={sponsor.id} sponsorName={sponsor.display_name} isSilverPlus={isSilverPlus} tierColor={tierColor} fr={fr} />
+            <SponsorProposalSection sponsorId={sponsor.id} sponsorName={sponsor.display_name} isSilverPlus={isSilverPlus} tierColor={tierColor} fr={fr} badgeType={sponsor?.badge_type || 'partner'} />
             <View style={st.placementCard}>
               <Text style={st.placementTitle}>{fr ? 'Vos emplacements' : 'Your placements'}</Text>
               <Text style={st.placementDesc}>
