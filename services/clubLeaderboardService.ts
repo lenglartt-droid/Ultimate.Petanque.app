@@ -13,6 +13,7 @@ export interface LeaderboardClub {
   logo?: string;
   playerCount: number;
   totalMatches: number;
+  hasQualifiedPlayers: boolean;
   stats: {
     avgWinRate: number;
     avgTirRate: number;
@@ -119,6 +120,7 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
         logo: detail?.logo,
         playerCount: clubPlayers.length > 0 ? clubPlayers.length : (detail?.membersCount || 0),
         totalMatches,
+        hasQualifiedPlayers: clubPlayers.length > 0,
         stats: {
           avgWinRate,
           avgTirRate,
