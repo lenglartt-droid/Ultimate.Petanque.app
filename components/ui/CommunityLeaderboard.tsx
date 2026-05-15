@@ -502,7 +502,7 @@ export default function CommunityLeaderboard({ onFiltersToggled }: { onFiltersTo
                 const rank = idx + 1;
                 const medalColors: Record<number, string> = { 1: '#FFD700', 2: '#C0C0C0', 3: '#CD7F32' };
                 const mc = medalColors[rank];
-                const isUnranked = !club.hasQualifiedPlayers;
+                const isUnranked = !club.hasQualifiedPlayers || (club.totalMatches === 0 && club.stats.totalWins === 0) || club.stats.compositeScore === 0;
                 return (
                   <Pressable key={club.id} style={[s.row, idx < 4 && { borderBottomWidth: 1, borderBottomColor: theme.border + '30' }, isUnranked && { opacity: 0.65 }]} onPress={() => router.push({ pathname: `/club-ranking/${club.id}`, params: { name: club.name } } as any)}>
                     <View style={{ width: 24, alignItems: 'center' }}>
