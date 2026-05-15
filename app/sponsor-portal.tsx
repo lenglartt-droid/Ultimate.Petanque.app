@@ -24,6 +24,7 @@ import { triggerServerPush } from '@/services/pushTokenService';
 import { fetchPushQuota, PushQuotaInfo, getDaysUntilReset } from '@/services/pushQuotaService';
 import SponsorProposalSection from '@/components/feature/SponsorProposalSection';
 import SponsorItemMetrics from '@/components/feature/SponsorItemMetrics';
+import ConsentAnalyticsCard from '@/components/feature/ConsentAnalyticsCard';
 import PartnerExpirationAlert from '@/components/feature/PartnerExpirationAlert';
 import PartnerGalleryManager from '@/components/feature/PartnerGalleryManager';
 
