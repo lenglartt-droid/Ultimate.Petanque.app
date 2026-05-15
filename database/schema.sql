@@ -1,116 +1,106 @@
 -- ============================================================
 -- Ultimate Petanque — Complete Database Schema
--- Generated: 2026-04-10
--- Backend: OnSpace Cloud (Supabase-compatible PostgreSQL)
+-- Generated: 2026-05-14 (fixed table ordering)
+-- Backend: Supabase-compatible PostgreSQL
+--
+-- TABLE ORDER: Dependencies resolved top-down.
+-- Circular FKs (clubs↔terrains, players↔ambassadors) are
+-- added via ALTER TABLE after both sides exist.
 -- ============================================================
 
 -- ============================================================
--- 1. HELPER FUNCTIONS
+-- 1. HELPER FUNCTIONS (plpgsql = deferred table validation)
 -- ============================================================
 
--- Check if current user is admin
 create or replace function public.is_admin()
 returns boolean
-language sql
-security definer
-stable
+language plpgsql security definer stable
 as $$
-  select exists (
-    select 1 from public.user_profiles
-    where id = auth.uid() and is_admin = true
-  );
+begin
+  return exists (select 1 from public.user_profiles where id = auth.uid() and is_admin = true);
+end;
 $$;
 
--- Check if current user is meetup creator
 create or replace function public.is_meetup_creator(meetup_uuid uuid)
 returns boolean
-language sql
-security definer
-stable
+language plpgsql security definer stable
 as $$
-  select exists (
-    select 1 from public.terrain_meetups
-    where id = meetup_uuid and creator_id = auth.uid()
-  );
+begin
+  return exists (select 1 from public.terrain_meetups where id = meetup_uuid and creator_id = auth.uid());
+end;
 $$;
 
--- Handle new user registration (auto-create profile)
 create or replace function public.handle_new_user()
-returns trigger
-language plpgsql
-security definer
+returns trigger language plpgsql security definer
 as $$
 begin
   insert into public.user_profiles (id, email, username)
-  values (
-    new.id,
-    new.email,
-    coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1))
-  );
+  values (new.id, new.email, coalesce(new.raw_user_meta_data->>'username', split_part(new.email, '@', 1)));
   return new;
 end;
 $$;
 
--- Sync user metadata changes
 create or replace function public.sync_user_metadata()
-returns trigger
-language plpgsql
-security definer
+returns trigger language plpgsql security definer
 as $$
 begin
-  update public.user_profiles
-  set email = new.email
-  where id = new.id and email != new.email;
+  update public.user_profiles set email = new.email where id = new.id and email != new.email;
   return new;
 end;
 $$;
 
--- Log soft deletes before actual deletion
 create or replace function public.log_soft_delete()
-returns trigger
-language plpgsql
-security definer
+returns trigger language plpgsql security definer
 as $$
 begin
-  insert into public.soft_deletes (user_id, table_name, item_id)
-  values (old.user_id, tg_table_name, old.id);
+  insert into public.soft_deletes (user_id, table_name, item_id) values (old.user_id, tg_table_name, old.id);
   return old;
 end;
 $$;
 
--- Get community statistics (used by admin dashboard)
 create or replace function public.get_community_stats()
-returns json
-language sql
-security definer
-stable
+returns json language plpgsql security definer stable
 as $$
-  select json_build_object(
+begin
+  return (select json_build_object(
     'total_users', (select count(*) from public.user_profiles),
     'total_matches', (select count(*) from public.matches),
     'total_challenges', (select count(*) from public.challenges),
     'total_clubs', (select count(*) from public.clubs),
     'total_terrains', (select count(*) from public.terrains),
     'total_tournaments', (select count(*) from public.tournaments)
-  );
+  ));
+end;
 $$;
 
--- Get premium user IDs
 create or replace function public.get_premium_user_ids()
-returns uuid[]
-language sql
-security definer
-stable
+returns uuid[] language plpgsql security definer stable
 as $$
-  select array_agg(id) from public.user_profiles where is_premium = true;
+begin
+  return (select array_agg(id) from public.user_profiles where is_premium = true);
+end;
+$$;
+
+create or replace function public.get_terrain_activity_stats()
+returns json language plpgsql security definer stable
+as $$
+begin
+  return (select json_build_object(
+    'total_terrains', (select count(*) from public.terrains),
+    'public_terrains', (select count(*) from public.terrains where is_public = true),
+    'active_meetups', (select count(*) from public.terrain_meetups where status = 'active')
+  ));
+end;
 $$;
 
 -- ============================================================
--- 2. TABLES
+-- 2. TABLES  (dependency order — no forward references)
 -- ============================================================
+
+-- ===================== TIER 0: auth.users (always exists) ====
 
 -- -----------------------------------------------------------
--- user_profiles — Core user data (auto-synced from auth.users)
+-- user_profiles
 -- -----------------------------------------------------------
 create table if not exists public.user_profiles (
   id uuid not null primary key references auth.users(id) on delete cascade,
@@ -130,7 +120,6 @@ create table if not exists public.user_profiles (
   experience text,
   created_at timestamptz default now()
 );
-
 alter table public.user_profiles enable row level security;
 
 create policy "Users can view own profile" on public.user_profiles for select to authenticated using (auth.uid() = id);
@@ -139,8 +128,195 @@ create policy "Users can delete own profile" on public.user_profiles for delete 
 create policy "admin_select_all_user_profiles" on public.user_profiles for select to authenticated using (is_admin());
 create policy "admin_update_all_user_profiles" on public.user_profiles for update to authenticated using (is_admin());
 
+-- ===================== TIER 0.5: referenced by RLS policies on many tables ==
+
 -- -----------------------------------------------------------
--- players — Player profiles with stats and ELO
+-- shared_items  (must exist before clubs/terrains/players/matches/etc. RLS)
+-- -----------------------------------------------------------
+create table if not exists public.shared_items (
+  id uuid not null default gen_random_uuid() primary key,
+  owner_id uuid not null references public.user_profiles(id) on delete cascade,
+  shared_with_id uuid references public.user_profiles(id) on delete cascade,
+  share_code text not null unique,
+  item_type text not null,
+  item_id uuid not null,
+  permission text not null default 'read',
+  is_public_link boolean not null default false,
+  expires_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  associated_items jsonb,
+  view_count integer not null default 0,
+  last_viewed_at timestamptz,
+  first_viewed_at timestamptz
+);
+alter table public.shared_items enable row level security;
+create index idx_shared_items_item on public.shared_items using btree (item_type, item_id);
+create index idx_shared_items_owner on public.shared_items using btree (owner_id);
+create index idx_shared_items_share_code on public.shared_items using btree (share_code);
+create index idx_shared_items_shared_with on public.shared_items using btree (shared_with_id);
+
+create policy "owner_select_shared_items" on public.shared_items for select to authenticated using (owner_id = auth.uid());
+create policy "owner_insert_shared_items" on public.shared_items for insert to authenticated with check (owner_id = auth.uid());
+create policy "owner_update_shared_items" on public.shared_items for update to authenticated using (owner_id = auth.uid());
+create policy "owner_delete_shared_items" on public.shared_items for delete to authenticated using (owner_id = auth.uid());
+create policy "recipient_select_shared_items" on public.shared_items for select to authenticated using (shared_with_id = auth.uid());
+create policy "authenticated_select_by_share_code" on public.shared_items for select to authenticated using (is_public_link = true);
+
+-- -----------------------------------------------------------
+-- match_share_requests  (must exist before matches/challenges RLS)
+-- -----------------------------------------------------------
+create table if not exists public.match_share_requests (
+  id uuid not null default gen_random_uuid() primary key,
+  item_type text not null,
+  item_id uuid not null,
+  sender_user_id uuid not null references public.user_profiles(id) on delete cascade,
+  recipient_user_id uuid not null references public.user_profiles(id) on delete cascade,
+  status text not null default 'pending',
+  permission text not null default 'read',
+  sender_name text,
+  item_summary text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(item_type, item_id, recipient_user_id)
+);
+alter table public.match_share_requests enable row level security;
+create index idx_match_share_requests_item on public.match_share_requests using btree (item_type, item_id);
+create index idx_match_share_requests_recipient on public.match_share_requests using btree (recipient_user_id);
+create index idx_match_share_requests_recipient_status on public.match_share_requests using btree (recipient_user_id, status);
+create index idx_match_share_requests_sender on public.match_share_requests using btree (sender_user_id);
+create index idx_match_share_requests_status on public.match_share_requests using btree (status);
+
+create policy "sender_select_share_requests" on public.match_share_requests for select to authenticated using (sender_user_id = auth.uid());
+create policy "sender_insert_share_requests" on public.match_share_requests for insert to authenticated with check (sender_user_id = auth.uid());
+create policy "sender_delete_share_requests" on public.match_share_requests for delete to authenticated using (sender_user_id = auth.uid());
+create policy "recipient_select_share_requests" on public.match_share_requests for select to authenticated using (recipient_user_id = auth.uid());
+create policy "recipient_update_share_requests" on public.match_share_requests for update to authenticated using (recipient_user_id = auth.uid());
+
+-- ===================== TIER 1: depends only on user_profiles ==
+
+-- -----------------------------------------------------------
+-- boules_sets
+-- -----------------------------------------------------------
+create table if not exists public.boules_sets (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  name text not null,
+  brand text,
+  diameter numeric(4,1),
+  weight integer,
+  serial_number text,
+  hardness text,
+  is_primary boolean default false,
+  notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  photo text,
+  purchase_price numeric(10,2)
+);
+alter table public.boules_sets enable row level security;
+
+create policy "authenticated_select_own_boules_sets" on public.boules_sets for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_boules_sets" on public.boules_sets for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_update_own_boules_sets" on public.boules_sets for update to authenticated using (user_id = auth.uid());
+create policy "authenticated_delete_own_boules_sets" on public.boules_sets for delete to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
+-- clubs  (terrain_id FK added later — circular with terrains)
+-- -----------------------------------------------------------
+create table if not exists public.clubs (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  name text not null,
+  logo text,
+  address text,
+  city text not null,
+  location jsonb,
+  members_count integer default 0,
+  founded_year integer,
+  description text,
+  facilities text[],
+  contact_email text,
+  contact_phone text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  terrain_id uuid,          -- FK added after terrains table
+  terrain_name text,
+  country text default 'France',
+  membership_cost numeric(10,2),
+  is_public boolean not null default false,
+  show_contact_public boolean not null default false,
+  club_card_url text,
+  website text,
+  facebook_url text,
+  instagram_handle text,
+  is_verified boolean not null default false,
+  admin_user_ids uuid[] default '{}'::uuid[],
+  admin_permissions jsonb default '{}'::jsonb,
+  sponsor_id uuid           -- FK added after ambassadors table
+);
+alter table public.clubs enable row level security;
+create index idx_clubs_admin_user_ids on public.clubs using gin (admin_user_ids);
+
+create policy "authenticated_select_own_clubs" on public.clubs for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_clubs" on public.clubs for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_update_own_clubs" on public.clubs for update to authenticated using (user_id = auth.uid());
+create policy "authenticated_delete_own_clubs" on public.clubs for delete to authenticated using (user_id = auth.uid());
+create policy "public_select_clubs" on public.clubs for select using (is_public = true);
+create policy "admin_select_all_clubs" on public.clubs for select to authenticated using (is_admin());
+create policy "admin_update_all_clubs" on public.clubs for update to authenticated using (is_admin());
+create policy "coadmin_select_clubs" on public.clubs for select to authenticated using (auth.uid() = any (admin_user_ids));
+create policy "coadmin_update_clubs" on public.clubs for update to authenticated using (auth.uid() = any (admin_user_ids));
+create policy "shared_select_clubs" on public.clubs for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'club' and si.item_id = clubs.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
+create policy "shared_update_clubs" on public.clubs for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'club' and si.item_id = clubs.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
+
+-- -----------------------------------------------------------
+-- terrains  (references clubs which now exists)
+-- -----------------------------------------------------------
+create table if not exists public.terrains (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  name text not null,
+  address text not null,
+  city text not null,
+  location jsonb not null default '{"latitude": 0, "longitude": 0}'::jsonb,
+  type text not null,
+  description text,
+  facilities text[],
+  photos text[],
+  club_id uuid references public.clubs(id) on delete set null,
+  club_name text,
+  is_public boolean default true,
+  courts_count integer default 1,
+  lighting boolean default false,
+  covered boolean default false,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  public_access boolean not null default true,
+  environment text default 'outdoor',
+  parking boolean default false,
+  toilets boolean not null default false,
+  sponsor_id uuid,           -- FK added after ambassadors table
+  google_place_id text
+);
+alter table public.terrains enable row level security;
+
+create policy "authenticated_select_own_terrains" on public.terrains for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_terrains" on public.terrains for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_update_own_terrains" on public.terrains for update to authenticated using (user_id = auth.uid());
+create policy "authenticated_delete_own_terrains" on public.terrains for delete to authenticated using (user_id = auth.uid());
+create policy "public_select_terrains" on public.terrains for select using (is_public = true);
+create policy "admin_select_all_terrains" on public.terrains for select to authenticated using (is_admin());
+create policy "admin_update_all_terrains" on public.terrains for update to authenticated using (is_admin());
+create policy "admin_delete_all_terrains" on public.terrains for delete to authenticated using (is_admin());
+create policy "shared_select_terrains" on public.terrains for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'terrain' and si.item_id = terrains.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
+create policy "shared_update_terrains" on public.terrains for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'terrain' and si.item_id = terrains.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
+
+-- >> Now add the deferred FK: clubs.terrain_id → terrains
+alter table public.clubs add constraint clubs_terrain_id_fkey foreign key (terrain_id) references public.terrains(id) on delete set null;
+
+-- -----------------------------------------------------------
+-- players  (references terrains; sponsor_id FK added later)
 -- -----------------------------------------------------------
 create table if not exists public.players (
   id uuid not null default gen_random_uuid() primary key,
@@ -171,9 +347,9 @@ create table if not exists public.players (
   elo_milieu integer not null default 1000,
   last_match_date timestamptz,
   experience text,
-  city text
+  city text,
+  sponsor_id uuid            -- FK added after ambassadors table
 );
-
 alter table public.players enable row level security;
 
 create index idx_players_city on public.players using btree (city);
@@ -190,7 +366,118 @@ create policy "shared_select_players" on public.players for select to authentica
 create policy "shared_update_players" on public.players for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'player' and si.item_id = players.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
 
 -- -----------------------------------------------------------
--- matches — Match records with detailed scoring
+-- ambassadors  (references players which now exists)
+-- -----------------------------------------------------------
+create table if not exists public.ambassadors (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  player_id uuid references public.players(id) on delete set null,
+  display_name text not null,
+  bio text,
+  photo text,
+  youtube_url text,
+  tiktok_url text,
+  instagram_handle text,
+  twitter_handle text,
+  website_url text,
+  is_featured boolean not null default false,
+  is_active boolean not null default true,
+  badge_type text not null default 'ambassador',
+  sort_order integer not null default 0,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  ambassador_level text not null default 'decouverte',
+  referral_code text unique,
+  referral_count integer not null default 0,
+  total_referral_xp integer not null default 0,
+  brand_color text,
+  expires_at timestamptz,
+  monthly_cost numeric(10,2),
+  total_invested numeric(10,2) default 0,
+  gallery_photos text[] default '{}'::text[]
+);
+alter table public.ambassadors enable row level security;
+
+create index idx_ambassadors_active on public.ambassadors using btree (is_active);
+create index idx_ambassadors_level on public.ambassadors using btree (ambassador_level);
+create index idx_ambassadors_player on public.ambassadors using btree (player_id);
+create index idx_ambassadors_referral_code on public.ambassadors using btree (referral_code);
+create index idx_ambassadors_user on public.ambassadors using btree (user_id);
+
+create policy "anon_select_active_ambassadors" on public.ambassadors for select to anon using (is_active = true);
+create policy "authenticated_select_active_ambassadors" on public.ambassadors for select to authenticated using (is_active = true);
+create policy "own_select_ambassadors" on public.ambassadors for select to authenticated using (user_id = auth.uid());
+create policy "admin_select_all_ambassadors" on public.ambassadors for select to authenticated using (is_admin());
+create policy "own_update_ambassadors" on public.ambassadors for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
+create policy "authenticated_insert_own_ambassadors" on public.ambassadors for insert to authenticated with check (user_id = auth.uid());
+create policy "admin_insert_ambassadors" on public.ambassadors for insert to authenticated with check (is_admin());
+create policy "admin_update_ambassadors" on public.ambassadors for update to authenticated using (is_admin()) with check (is_admin());
+create policy "admin_delete_ambassadors" on public.ambassadors for delete to authenticated using (is_admin());
+
+-- >> Now add all deferred sponsor_id FKs → ambassadors
+alter table public.players add constraint players_sponsor_id_fkey foreign key (sponsor_id) references public.ambassadors(id) on delete set null;
+create index idx_players_sponsor on public.players using btree (sponsor_id);
+
+alter table public.clubs add constraint clubs_sponsor_id_fkey foreign key (sponsor_id) references public.ambassadors(id) on delete set null;
+create index idx_clubs_sponsor on public.clubs using btree (sponsor_id);
+
+alter table public.terrains add constraint terrains_sponsor_id_fkey foreign key (sponsor_id) references public.ambassadors(id) on delete set null;
+create index idx_terrains_sponsor on public.terrains using btree (sponsor_id);
+create index idx_terrains_google_place_id on public.terrains using btree (google_place_id);
+
+-- ===================== TIER 2: depends on tier-1 tables ======
+
+-- -----------------------------------------------------------
+-- tournaments  (references terrains)
+-- -----------------------------------------------------------
+create table if not exists public.tournaments (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  name text not null,
+  date date not null,
+  end_date date,
+  type text not null default 'Mixte',
+  format text not null default 'Doublette',
+  location jsonb not null,
+  club_id uuid,
+  club_name text,
+  status text not null default 'À venir',
+  participants integer default 0,
+  max_participants integer default 32,
+  prize text,
+  description text,
+  teams jsonb,
+  phases jsonb,
+  current_phase_id text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  terrain_id uuid references public.terrains(id) on delete set null,
+  terrain_name text,
+  terrain_type text,
+  tournament_level text,
+  tournament_category text,
+  registration_type text,
+  tournament_scope text,
+  registration_cost numeric(10,2),
+  prize_won numeric(10,2),
+  final_result text,
+  is_public boolean not null default false,
+  poster_url text,
+  sponsor_id uuid references public.ambassadors(id) on delete set null
+);
+alter table public.tournaments enable row level security;
+create index idx_tournaments_sponsor on public.tournaments using btree (sponsor_id);
+
+create policy "authenticated_select_own_tournaments" on public.tournaments for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_tournaments" on public.tournaments for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_update_own_tournaments" on public.tournaments for update to authenticated using (user_id = auth.uid());
+create policy "authenticated_delete_own_tournaments" on public.tournaments for delete to authenticated using (user_id = auth.uid());
+create policy "public_select_tournaments" on public.tournaments for select using (is_public = true);
+create policy "shared_select_tournaments" on public.tournaments for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'tournament' and si.item_id = tournaments.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
+create policy "shared_update_tournaments" on public.tournaments for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'tournament' and si.item_id = tournaments.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
+
+-- -----------------------------------------------------------
+-- matches  (references tournaments, terrains, boules_sets)
 -- -----------------------------------------------------------
 create table if not exists public.matches (
   id uuid not null default gen_random_uuid() primary key,
@@ -220,9 +507,7 @@ create table if not exists public.matches (
   witness_count integer not null default 0,
   is_attested boolean not null default false
 );
-
 alter table public.matches enable row level security;
-
 create index idx_matches_participant_user_ids on public.matches using gin (participant_user_ids);
 
 create policy "authenticated_select_own_matches" on public.matches for select to authenticated using (user_id = auth.uid());
@@ -234,7 +519,7 @@ create policy "participant_update_shared_matches" on public.matches for update t
 create policy "shared_select_matches" on public.matches for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'match' and si.item_id = matches.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
 
 -- -----------------------------------------------------------
--- challenges — Shooting challenges and drills
+-- challenges  (references boules_sets, terrains, ambassadors)
 -- -----------------------------------------------------------
 create table if not exists public.challenges (
   id uuid not null default gen_random_uuid() primary key,
@@ -272,9 +557,7 @@ create table if not exists public.challenges (
   witness_count integer not null default 0,
   is_attested boolean not null default false
 );
-
 alter table public.challenges enable row level security;
-
 create index idx_challenges_participant_user_ids on public.challenges using gin (participant_user_ids);
 create index idx_challenges_sponsor on public.challenges using btree (sponsor_id);
 
@@ -287,220 +570,7 @@ create policy "participant_update_shared_challenges" on public.challenges for up
 create policy "shared_select_challenges" on public.challenges for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'challenge' and si.item_id = challenges.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
 
 -- -----------------------------------------------------------
--- tournaments — Tournament management
--- -----------------------------------------------------------
-create table if not exists public.tournaments (
-  id uuid not null default gen_random_uuid() primary key,
-  user_id uuid not null references public.user_profiles(id) on delete cascade,
-  name text not null,
-  date date not null,
-  end_date date,
-  type text not null default 'Mixte',
-  format text not null default 'Doublette',
-  location jsonb not null,
-  club_id uuid,
-  club_name text,
-  status text not null default 'À venir',
-  participants integer default 0,
-  max_participants integer default 32,
-  prize text,
-  description text,
-  teams jsonb,
-  phases jsonb,
-  current_phase_id text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  terrain_id uuid references public.terrains(id) on delete set null,
-  terrain_name text,
-  terrain_type text,
-  tournament_level text,
-  tournament_category text,
-  registration_type text,
-  tournament_scope text,
-  registration_cost numeric(10,2),
-  prize_won numeric(10,2),
-  final_result text,
-  is_public boolean not null default false
-);
-
-alter table public.tournaments enable row level security;
-
-create policy "authenticated_select_own_tournaments" on public.tournaments for select to authenticated using (user_id = auth.uid());
-create policy "authenticated_insert_own_tournaments" on public.tournaments for insert to authenticated with check (user_id = auth.uid());
-create policy "authenticated_update_own_tournaments" on public.tournaments for update to authenticated using (user_id = auth.uid());
-create policy "authenticated_delete_own_tournaments" on public.tournaments for delete to authenticated using (user_id = auth.uid());
-create policy "public_select_tournaments" on public.tournaments for select using (is_public = true);
-create policy "shared_select_tournaments" on public.tournaments for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'tournament' and si.item_id = tournaments.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
-create policy "shared_update_tournaments" on public.tournaments for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'tournament' and si.item_id = tournaments.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
-
--- -----------------------------------------------------------
--- terrains — Playing courts/terrains
--- -----------------------------------------------------------
-create table if not exists public.terrains (
-  id uuid not null default gen_random_uuid() primary key,
-  user_id uuid not null references public.user_profiles(id) on delete cascade,
-  name text not null,
-  address text not null,
-  city text not null,
-  location jsonb not null default '{"latitude": 0, "longitude": 0}'::jsonb,
-  type text not null,
-  description text,
-  facilities text[],
-  photos text[],
-  club_id uuid references public.clubs(id) on delete set null,
-  club_name text,
-  is_public boolean default true,
-  courts_count integer default 1,
-  lighting boolean default false,
-  covered boolean default false,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  public_access boolean not null default true,
-  environment text default 'outdoor',
-  parking boolean default false,
-  toilets boolean not null default false
-);
-
-alter table public.terrains enable row level security;
-
-create policy "authenticated_select_own_terrains" on public.terrains for select to authenticated using (user_id = auth.uid());
-create policy "authenticated_insert_own_terrains" on public.terrains for insert to authenticated with check (user_id = auth.uid());
-create policy "authenticated_update_own_terrains" on public.terrains for update to authenticated using (user_id = auth.uid());
-create policy "authenticated_delete_own_terrains" on public.terrains for delete to authenticated using (user_id = auth.uid());
-create policy "public_select_terrains" on public.terrains for select using (is_public = true);
-create policy "admin_select_all_terrains" on public.terrains for select to authenticated using (is_admin());
-create policy "admin_update_all_terrains" on public.terrains for update to authenticated using (is_admin());
-create policy "admin_delete_all_terrains" on public.terrains for delete to authenticated using (is_admin());
-create policy "shared_select_terrains" on public.terrains for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'terrain' and si.item_id = terrains.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
-create policy "shared_update_terrains" on public.terrains for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'terrain' and si.item_id = terrains.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
-
--- -----------------------------------------------------------
--- clubs — Club management
--- -----------------------------------------------------------
-create table if not exists public.clubs (
-  id uuid not null default gen_random_uuid() primary key,
-  user_id uuid not null references public.user_profiles(id) on delete cascade,
-  name text not null,
-  logo text,
-  address text,
-  city text not null,
-  location jsonb,
-  members_count integer default 0,
-  founded_year integer,
-  description text,
-  facilities text[],
-  contact_email text,
-  contact_phone text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  terrain_id uuid references public.terrains(id) on delete set null,
-  terrain_name text,
-  country text default 'France',
-  membership_cost numeric(10,2),
-  is_public boolean not null default false,
-  show_contact_public boolean not null default false,
-  club_card_url text,
-  website text,
-  facebook_url text,
-  instagram_handle text,
-  is_verified boolean not null default false,
-  admin_user_ids uuid[] default '{}'::uuid[],
-  admin_permissions jsonb default '{}'::jsonb
-);
-
-alter table public.clubs enable row level security;
-
-create index idx_clubs_admin_user_ids on public.clubs using gin (admin_user_ids);
-
-create policy "authenticated_select_own_clubs" on public.clubs for select to authenticated using (user_id = auth.uid());
-create policy "authenticated_insert_own_clubs" on public.clubs for insert to authenticated with check (user_id = auth.uid());
-create policy "authenticated_update_own_clubs" on public.clubs for update to authenticated using (user_id = auth.uid());
-create policy "authenticated_delete_own_clubs" on public.clubs for delete to authenticated using (user_id = auth.uid());
-create policy "public_select_clubs" on public.clubs for select using (is_public = true);
-create policy "admin_select_all_clubs" on public.clubs for select to authenticated using (is_admin());
-create policy "admin_update_all_clubs" on public.clubs for update to authenticated using (is_admin());
-create policy "coadmin_select_clubs" on public.clubs for select to authenticated using (auth.uid() = any (admin_user_ids));
-create policy "coadmin_update_clubs" on public.clubs for update to authenticated using (auth.uid() = any (admin_user_ids));
-create policy "shared_select_clubs" on public.clubs for select to authenticated using (exists (select 1 from shared_items si where si.item_type = 'club' and si.item_id = clubs.id and (si.shared_with_id = auth.uid() or si.is_public_link = true)));
-create policy "shared_update_clubs" on public.clubs for update to authenticated using (exists (select 1 from shared_items si where si.item_type = 'club' and si.item_id = clubs.id and si.shared_with_id = auth.uid() and si.permission = 'write'));
-
--- -----------------------------------------------------------
--- boules_sets — Player equipment
--- -----------------------------------------------------------
-create table if not exists public.boules_sets (
-  id uuid not null default gen_random_uuid() primary key,
-  user_id uuid not null references public.user_profiles(id) on delete cascade,
-  name text not null,
-  brand text,
-  diameter numeric(4,1),
-  weight integer,
-  serial_number text,
-  hardness text,
-  is_primary boolean default false,
-  notes text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  photo text,
-  purchase_price numeric(10,2)
-);
-
-alter table public.boules_sets enable row level security;
-
-create policy "authenticated_select_own_boules_sets" on public.boules_sets for select to authenticated using (user_id = auth.uid());
-create policy "authenticated_insert_own_boules_sets" on public.boules_sets for insert to authenticated with check (user_id = auth.uid());
-create policy "authenticated_update_own_boules_sets" on public.boules_sets for update to authenticated using (user_id = auth.uid());
-create policy "authenticated_delete_own_boules_sets" on public.boules_sets for delete to authenticated using (user_id = auth.uid());
-
--- -----------------------------------------------------------
--- ambassadors — Ambassador/sponsor profiles
--- -----------------------------------------------------------
-create table if not exists public.ambassadors (
-  id uuid not null default gen_random_uuid() primary key,
-  user_id uuid not null references public.user_profiles(id) on delete cascade,
-  player_id uuid references public.players(id) on delete set null,
-  display_name text not null,
-  bio text,
-  photo text,
-  youtube_url text,
-  tiktok_url text,
-  instagram_handle text,
-  twitter_handle text,
-  website_url text,
-  is_featured boolean not null default false,
-  is_active boolean not null default true,
-  badge_type text not null default 'ambassador',
-  sort_order integer not null default 0,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  ambassador_level text not null default 'decouverte',
-  referral_code text unique,
-  referral_count integer not null default 0,
-  total_referral_xp integer not null default 0,
-  brand_color text
-);
-
-alter table public.ambassadors enable row level security;
-
-create index idx_ambassadors_active on public.ambassadors using btree (is_active);
-create index idx_ambassadors_level on public.ambassadors using btree (ambassador_level);
-create index idx_ambassadors_player on public.ambassadors using btree (player_id);
-create index idx_ambassadors_referral_code on public.ambassadors using btree (referral_code);
-create index idx_ambassadors_user on public.ambassadors using btree (user_id);
-
-create policy "anon_select_active_ambassadors" on public.ambassadors for select to anon using (is_active = true);
-create policy "authenticated_select_active_ambassadors" on public.ambassadors for select to authenticated using (is_active = true);
-create policy "own_select_ambassadors" on public.ambassadors for select to authenticated using (user_id = auth.uid());
--- Admins must see inactive rows (admin UI + PostgREST RETURNING after PATCH).
-create policy "admin_select_all_ambassadors" on public.ambassadors for select to authenticated using (is_admin());
-create policy "own_update_ambassadors" on public.ambassadors for update to authenticated using (user_id = auth.uid()) with check (user_id = auth.uid());
-create policy "authenticated_insert_own_ambassadors" on public.ambassadors for insert to authenticated with check (user_id = auth.uid());
-create policy "admin_insert_ambassadors" on public.ambassadors for insert to authenticated with check (is_admin());
--- Explicit WITH CHECK: new row may have is_active = false; must not inherit a row-only USING as WITH CHECK.
-create policy "admin_update_ambassadors" on public.ambassadors for update to authenticated using (is_admin()) with check (is_admin());
-create policy "admin_delete_ambassadors" on public.ambassadors for delete to authenticated using (is_admin());
-
--- -----------------------------------------------------------
--- ambassador_analytics — Tracking ambassador impressions/clicks
+-- ambassador_analytics
 -- -----------------------------------------------------------
 create table if not exists public.ambassador_analytics (
   id uuid not null default gen_random_uuid() primary key,
@@ -511,9 +581,7 @@ create table if not exists public.ambassador_analytics (
   source_page text,
   viewer_id uuid
 );
-
 alter table public.ambassador_analytics enable row level security;
-
 create index idx_ambassador_analytics_ambassador on public.ambassador_analytics using btree (ambassador_id);
 create index idx_ambassador_analytics_created on public.ambassador_analytics using btree (created_at);
 create index idx_ambassador_analytics_event on public.ambassador_analytics using btree (event_type);
@@ -524,7 +592,7 @@ create policy "admin_select_ambassador_analytics" on public.ambassador_analytics
 create policy "authenticated_insert_ambassador_analytics" on public.ambassador_analytics for insert to authenticated with check (true);
 
 -- -----------------------------------------------------------
--- elo_history — ELO rating change history
+-- elo_history
 -- -----------------------------------------------------------
 create table if not exists public.elo_history (
   id uuid not null default gen_random_uuid() primary key,
@@ -539,9 +607,7 @@ create table if not exists public.elo_history (
   won boolean not null,
   recorded_at timestamptz not null default now()
 );
-
 alter table public.elo_history enable row level security;
-
 create index idx_elo_history_player on public.elo_history using btree (player_id);
 create index idx_elo_history_user on public.elo_history using btree (user_id);
 
@@ -550,7 +616,7 @@ create policy "authenticated_select_all_elo_history" on public.elo_history for s
 create policy "authenticated_insert_own_elo_history" on public.elo_history for insert to authenticated with check (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- elo_seasons — Seasonal ELO snapshots
+-- elo_seasons
 -- -----------------------------------------------------------
 create table if not exists public.elo_seasons (
   id uuid not null default gen_random_uuid() primary key,
@@ -568,9 +634,7 @@ create table if not exists public.elo_seasons (
   created_at timestamptz default now(),
   unique(player_id, season_year)
 );
-
 alter table public.elo_seasons enable row level security;
-
 create index idx_elo_seasons_player on public.elo_seasons using btree (player_id);
 create index idx_elo_seasons_user on public.elo_seasons using btree (user_id);
 create index idx_elo_seasons_year on public.elo_seasons using btree (season_year);
@@ -580,74 +644,7 @@ create policy "authenticated_select_elo_seasons" on public.elo_seasons for selec
 create policy "authenticated_insert_own_elo_seasons" on public.elo_seasons for insert to authenticated with check (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- shared_items — Sharing system
--- -----------------------------------------------------------
-create table if not exists public.shared_items (
-  id uuid not null default gen_random_uuid() primary key,
-  owner_id uuid not null references public.user_profiles(id) on delete cascade,
-  shared_with_id uuid references public.user_profiles(id) on delete cascade,
-  share_code text not null unique,
-  item_type text not null,
-  item_id uuid not null,
-  permission text not null default 'read',
-  is_public_link boolean not null default false,
-  expires_at timestamptz,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  associated_items jsonb,
-  view_count integer not null default 0,
-  last_viewed_at timestamptz,
-  first_viewed_at timestamptz
-);
-
-alter table public.shared_items enable row level security;
-
-create index idx_shared_items_item on public.shared_items using btree (item_type, item_id);
-create index idx_shared_items_owner on public.shared_items using btree (owner_id);
-create index idx_shared_items_share_code on public.shared_items using btree (share_code);
-create index idx_shared_items_shared_with on public.shared_items using btree (shared_with_id);
-
-create policy "owner_select_shared_items" on public.shared_items for select to authenticated using (owner_id = auth.uid());
-create policy "owner_insert_shared_items" on public.shared_items for insert to authenticated with check (owner_id = auth.uid());
-create policy "owner_update_shared_items" on public.shared_items for update to authenticated using (owner_id = auth.uid());
-create policy "owner_delete_shared_items" on public.shared_items for delete to authenticated using (owner_id = auth.uid());
-create policy "recipient_select_shared_items" on public.shared_items for select to authenticated using (shared_with_id = auth.uid());
-create policy "authenticated_select_by_share_code" on public.shared_items for select to authenticated using (is_public_link = true);
-
--- -----------------------------------------------------------
--- match_share_requests — Match/challenge sharing requests
--- -----------------------------------------------------------
-create table if not exists public.match_share_requests (
-  id uuid not null default gen_random_uuid() primary key,
-  item_type text not null,
-  item_id uuid not null,
-  sender_user_id uuid not null references public.user_profiles(id) on delete cascade,
-  recipient_user_id uuid not null references public.user_profiles(id) on delete cascade,
-  status text not null default 'pending',
-  permission text not null default 'read',
-  sender_name text,
-  item_summary text,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now(),
-  unique(item_type, item_id, recipient_user_id)
-);
-
-alter table public.match_share_requests enable row level security;
-
-create index idx_match_share_requests_item on public.match_share_requests using btree (item_type, item_id);
-create index idx_match_share_requests_recipient on public.match_share_requests using btree (recipient_user_id);
-create index idx_match_share_requests_recipient_status on public.match_share_requests using btree (recipient_user_id, status);
-create index idx_match_share_requests_sender on public.match_share_requests using btree (sender_user_id);
-create index idx_match_share_requests_status on public.match_share_requests using btree (status);
-
-create policy "sender_select_share_requests" on public.match_share_requests for select to authenticated using (sender_user_id = auth.uid());
-create policy "sender_insert_share_requests" on public.match_share_requests for insert to authenticated with check (sender_user_id = auth.uid());
-create policy "sender_delete_share_requests" on public.match_share_requests for delete to authenticated using (sender_user_id = auth.uid());
-create policy "recipient_select_share_requests" on public.match_share_requests for select to authenticated using (recipient_user_id = auth.uid());
-create policy "recipient_update_share_requests" on public.match_share_requests for update to authenticated using (recipient_user_id = auth.uid());
-
--- -----------------------------------------------------------
--- match_witness_requests — Match attestation by witnesses
+-- match_witness_requests
 -- -----------------------------------------------------------
 create table if not exists public.match_witness_requests (
   id uuid not null default gen_random_uuid() primary key,
@@ -664,9 +661,7 @@ create table if not exists public.match_witness_requests (
   item_id uuid,
   unique(match_id, witness_user_id)
 );
-
 alter table public.match_witness_requests enable row level security;
-
 create index idx_match_witness_requests_item on public.match_witness_requests using btree (item_type, item_id);
 create index idx_match_witness_requests_match on public.match_witness_requests using btree (match_id);
 create index idx_match_witness_requests_status on public.match_witness_requests using btree (status);
@@ -678,7 +673,7 @@ create policy "witness_update_own_requests" on public.match_witness_requests for
 create policy "requester_delete_own_requests" on public.match_witness_requests for delete to authenticated using (requester_user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- terrain_meetups — Meetup scheduling
+-- terrain_meetups
 -- -----------------------------------------------------------
 create table if not exists public.terrain_meetups (
   id uuid not null default gen_random_uuid() primary key,
@@ -694,9 +689,7 @@ create table if not exists public.terrain_meetups (
   updated_at timestamptz default now(),
   end_time timestamptz
 );
-
 alter table public.terrain_meetups enable row level security;
-
 create index idx_terrain_meetups_creator on public.terrain_meetups using btree (creator_id);
 create index idx_terrain_meetups_date on public.terrain_meetups using btree (date);
 create index idx_terrain_meetups_share_code on public.terrain_meetups using btree (share_code);
@@ -710,7 +703,7 @@ create policy "creator_delete_meetups" on public.terrain_meetups for delete to a
 create policy "participant_select_meetups" on public.terrain_meetups for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = terrain_meetups.id and r.user_id = auth.uid()));
 
 -- -----------------------------------------------------------
--- terrain_meetup_responses — Meetup RSVPs
+-- terrain_meetup_responses
 -- -----------------------------------------------------------
 create table if not exists public.terrain_meetup_responses (
   id uuid not null default gen_random_uuid() primary key,
@@ -721,9 +714,7 @@ create table if not exists public.terrain_meetup_responses (
   created_at timestamptz default now(),
   unique(meetup_id, user_id)
 );
-
 alter table public.terrain_meetup_responses enable row level security;
-
 create index idx_terrain_meetup_responses_meetup on public.terrain_meetup_responses using btree (meetup_id);
 create index idx_terrain_meetup_responses_user on public.terrain_meetup_responses using btree (user_id);
 
@@ -735,7 +726,7 @@ create policy "creator_select_meetup_responses" on public.terrain_meetup_respons
 create policy "creator_insert_invitations" on public.terrain_meetup_responses for insert to authenticated with check (is_meetup_creator(meetup_id) and status = 'pending');
 
 -- -----------------------------------------------------------
--- meetup_messages — Meetup chat messages
+-- meetup_messages
 -- -----------------------------------------------------------
 create table if not exists public.meetup_messages (
   id uuid not null default gen_random_uuid() primary key,
@@ -746,9 +737,7 @@ create table if not exists public.meetup_messages (
   message text not null,
   created_at timestamptz default now()
 );
-
 alter table public.meetup_messages enable row level security;
-
 create index idx_meetup_messages_created on public.meetup_messages using btree (created_at);
 create index idx_meetup_messages_meetup on public.meetup_messages using btree (meetup_id);
 
@@ -757,7 +746,7 @@ create policy "participant_insert_meetup_messages" on public.meetup_messages for
 create policy "own_delete_meetup_messages" on public.meetup_messages for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- meetup_message_reactions — Chat emoji reactions
+-- meetup_message_reactions
 -- -----------------------------------------------------------
 create table if not exists public.meetup_message_reactions (
   id uuid not null default gen_random_uuid() primary key,
@@ -768,14 +757,16 @@ create table if not exists public.meetup_message_reactions (
   created_at timestamptz default now(),
   unique(message_id, user_id, reaction_type)
 );
-
 alter table public.meetup_message_reactions enable row level security;
-
 create index idx_meetup_message_reactions_meetup on public.meetup_message_reactions using btree (meetup_id);
 create index idx_meetup_message_reactions_message on public.meetup_message_reactions using btree (message_id);
 
+create policy "participant_select_message_reactions" on public.meetup_message_reactions for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_message_reactions.meetup_id and r.user_id = auth.uid()) or exists (select 1 from terrain_meetups m where m.id = meetup_message_reactions.meetup_id and m.creator_id = auth.uid()));
+create policy "participant_insert_message_reactions" on public.meetup_message_reactions for insert to authenticated with check (user_id = auth.uid() and (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_message_reactions.meetup_id and r.user_id = auth.uid() and r.status = 'accepted') or exists (select 1 from terrain_meetups m where m.id = meetup_message_reactions.meetup_id and m.creator_id = auth.uid())));
+create policy "own_delete_message_reactions" on public.meetup_message_reactions for delete to authenticated using (user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- meetup_read_receipts — Chat read indicators
+-- meetup_read_receipts
 -- -----------------------------------------------------------
 create table if not exists public.meetup_read_receipts (
   id uuid not null default gen_random_uuid() primary key,
@@ -785,14 +776,17 @@ create table if not exists public.meetup_read_receipts (
   last_read_at timestamptz not null default now(),
   unique(meetup_id, user_id)
 );
-
 alter table public.meetup_read_receipts enable row level security;
-
 create index idx_meetup_read_receipts_meetup on public.meetup_read_receipts using btree (meetup_id);
 create index idx_meetup_read_receipts_user on public.meetup_read_receipts using btree (user_id);
 
+create policy "participant_select_read_receipts" on public.meetup_read_receipts for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_read_receipts.meetup_id and r.user_id = auth.uid()) or exists (select 1 from terrain_meetups m where m.id = meetup_read_receipts.meetup_id and m.creator_id = auth.uid()));
+create policy "participant_insert_read_receipts" on public.meetup_read_receipts for insert to authenticated with check (user_id = auth.uid() and (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_read_receipts.meetup_id and r.user_id = auth.uid() and r.status = 'accepted') or exists (select 1 from terrain_meetups m where m.id = meetup_read_receipts.meetup_id and m.creator_id = auth.uid())));
+create policy "own_update_read_receipts" on public.meetup_read_receipts for update to authenticated using (user_id = auth.uid());
+create policy "own_delete_read_receipts" on public.meetup_read_receipts for delete to authenticated using (user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- meetup_typing — Typing indicators
+-- meetup_typing
 -- -----------------------------------------------------------
 create table if not exists public.meetup_typing (
   id uuid not null default gen_random_uuid() primary key,
@@ -802,13 +796,16 @@ create table if not exists public.meetup_typing (
   updated_at timestamptz not null default now(),
   unique(meetup_id, user_id)
 );
-
 alter table public.meetup_typing enable row level security;
-
 create index idx_meetup_typing_meetup on public.meetup_typing using btree (meetup_id);
 
+create policy "participant_select_meetup_typing" on public.meetup_typing for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_typing.meetup_id and r.user_id = auth.uid()) or exists (select 1 from terrain_meetups m where m.id = meetup_typing.meetup_id and m.creator_id = auth.uid()));
+create policy "participant_upsert_meetup_typing" on public.meetup_typing for insert to authenticated with check (user_id = auth.uid() and (exists (select 1 from terrain_meetup_responses r where r.meetup_id = meetup_typing.meetup_id and r.user_id = auth.uid() and r.status = 'accepted') or exists (select 1 from terrain_meetups m where m.id = meetup_typing.meetup_id and m.creator_id = auth.uid())));
+create policy "own_update_meetup_typing" on public.meetup_typing for update to authenticated using (user_id = auth.uid());
+create policy "own_delete_meetup_typing" on public.meetup_typing for delete to authenticated using (user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- terrain_reviews — Terrain ratings and reviews
+-- terrain_reviews
 -- -----------------------------------------------------------
 create table if not exists public.terrain_reviews (
   id uuid not null default gen_random_uuid() primary key,
@@ -826,9 +823,7 @@ create table if not exists public.terrain_reviews (
   moderation_status text default 'active',
   unique(terrain_id, user_id)
 );
-
 alter table public.terrain_reviews enable row level security;
-
 create index idx_terrain_reviews_rating on public.terrain_reviews using btree (rating);
 create index idx_terrain_reviews_terrain on public.terrain_reviews using btree (terrain_id);
 create index idx_terrain_reviews_user on public.terrain_reviews using btree (user_id);
@@ -843,7 +838,7 @@ create policy "admin_update_terrain_reviews" on public.terrain_reviews for updat
 create policy "admin_delete_terrain_reviews" on public.terrain_reviews for delete to authenticated using (is_admin());
 
 -- -----------------------------------------------------------
--- review_votes — Upvotes/downvotes on reviews
+-- review_votes
 -- -----------------------------------------------------------
 create table if not exists public.review_votes (
   id uuid not null default gen_random_uuid() primary key,
@@ -853,9 +848,7 @@ create table if not exists public.review_votes (
   created_at timestamptz default now(),
   unique(review_id, user_id)
 );
-
 alter table public.review_votes enable row level security;
-
 create index idx_review_votes_review on public.review_votes using btree (review_id);
 create index idx_review_votes_user on public.review_votes using btree (user_id);
 
@@ -864,7 +857,7 @@ create policy "authenticated_insert_own_review_votes" on public.review_votes for
 create policy "authenticated_delete_own_review_votes" on public.review_votes for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- club_invitations — Club membership invitations
+-- club_invitations
 -- -----------------------------------------------------------
 create table if not exists public.club_invitations (
   id uuid not null default gen_random_uuid() primary key,
@@ -882,16 +875,21 @@ create table if not exists public.club_invitations (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.club_invitations enable row level security;
-
 create index idx_club_invitations_club on public.club_invitations using btree (club_id);
 create index idx_club_invitations_invited_user on public.club_invitations using btree (invited_user_id);
 create index idx_club_invitations_inviter on public.club_invitations using btree (inviter_user_id);
 create index idx_club_invitations_status on public.club_invitations using btree (status);
 
+create policy "inviter_insert_club_invitations" on public.club_invitations for insert to authenticated with check (inviter_user_id = auth.uid());
+create policy "inviter_select_club_invitations" on public.club_invitations for select to authenticated using (inviter_user_id = auth.uid());
+create policy "inviter_delete_club_invitations" on public.club_invitations for delete to authenticated using (inviter_user_id = auth.uid());
+create policy "invited_select_club_invitations" on public.club_invitations for select to authenticated using (invited_user_id = auth.uid());
+create policy "invited_update_club_invitations" on public.club_invitations for update to authenticated using (invited_user_id = auth.uid());
+create policy "club_owner_select_club_invitations" on public.club_invitations for select to authenticated using (exists (select 1 from clubs where clubs.id = club_invitations.club_id and (clubs.user_id = auth.uid() or auth.uid() = any(clubs.admin_user_ids))));
+
 -- -----------------------------------------------------------
--- club_member_roles — Club member role assignments
+-- club_member_roles
 -- -----------------------------------------------------------
 create table if not exists public.club_member_roles (
   id uuid not null default gen_random_uuid() primary key,
@@ -904,17 +902,18 @@ create table if not exists public.club_member_roles (
   updated_at timestamptz default now(),
   unique(club_id, player_id)
 );
-
 alter table public.club_member_roles enable row level security;
-
 create index idx_club_member_roles_club on public.club_member_roles using btree (club_id);
 create index idx_club_member_roles_player on public.club_member_roles using btree (player_id);
 create index idx_club_member_roles_user on public.club_member_roles using btree (user_id);
 
 create policy "authenticated_select_club_member_roles" on public.club_member_roles for select to authenticated using (true);
+create policy "owner_insert_club_member_roles" on public.club_member_roles for insert to authenticated with check (exists (select 1 from clubs where clubs.id = club_member_roles.club_id and (clubs.user_id = auth.uid() or auth.uid() = any(clubs.admin_user_ids))));
+create policy "owner_update_club_member_roles" on public.club_member_roles for update to authenticated using (exists (select 1 from clubs where clubs.id = club_member_roles.club_id and (clubs.user_id = auth.uid() or auth.uid() = any(clubs.admin_user_ids))));
+create policy "owner_delete_club_member_roles" on public.club_member_roles for delete to authenticated using (exists (select 1 from clubs where clubs.id = club_member_roles.club_id and (clubs.user_id = auth.uid() or auth.uid() = any(clubs.admin_user_ids))));
 
 -- -----------------------------------------------------------
--- club_claim_requests — Club ownership claims
+-- club_claim_requests
 -- -----------------------------------------------------------
 create table if not exists public.club_claim_requests (
   id uuid not null default gen_random_uuid() primary key,
@@ -931,16 +930,20 @@ create table if not exists public.club_claim_requests (
   updated_at timestamptz default now(),
   unique(club_id, requester_user_id)
 );
-
 alter table public.club_claim_requests enable row level security;
-
 create index idx_club_claims_club on public.club_claim_requests using btree (club_id);
 create index idx_club_claims_owner on public.club_claim_requests using btree (current_owner_id);
 create index idx_club_claims_requester on public.club_claim_requests using btree (requester_user_id);
 create index idx_club_claims_status on public.club_claim_requests using btree (status);
 
+create policy "requester_insert_claim" on public.club_claim_requests for insert to authenticated with check (requester_user_id = auth.uid());
+create policy "requester_select_own_claims" on public.club_claim_requests for select to authenticated using (requester_user_id = auth.uid());
+create policy "requester_delete_own_pending" on public.club_claim_requests for delete to authenticated using (requester_user_id = auth.uid() and status = 'pending');
+create policy "owner_select_claims" on public.club_claim_requests for select to authenticated using (current_owner_id = auth.uid());
+create policy "owner_update_claims" on public.club_claim_requests for update to authenticated using (current_owner_id = auth.uid());
+
 -- -----------------------------------------------------------
--- player_transfer_requests — Player data transfer system
+-- player_transfer_requests
 -- -----------------------------------------------------------
 create table if not exists public.player_transfer_requests (
   id uuid not null default gen_random_uuid() primary key,
@@ -955,16 +958,20 @@ create table if not exists public.player_transfer_requests (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.player_transfer_requests enable row level security;
-
 create index idx_player_transfer_player on public.player_transfer_requests using btree (player_id);
 create index idx_player_transfer_recipient on public.player_transfer_requests using btree (recipient_user_id);
 create index idx_player_transfer_sender on public.player_transfer_requests using btree (sender_user_id);
 create index idx_player_transfer_status on public.player_transfer_requests using btree (status);
 
+create policy "sender_insert_transfer_requests" on public.player_transfer_requests for insert to authenticated with check (sender_user_id = auth.uid());
+create policy "sender_select_transfer_requests" on public.player_transfer_requests for select to authenticated using (sender_user_id = auth.uid());
+create policy "sender_delete_pending_transfer_requests" on public.player_transfer_requests for delete to authenticated using (sender_user_id = auth.uid() and status = 'pending');
+create policy "recipient_select_transfer_requests" on public.player_transfer_requests for select to authenticated using (recipient_user_id = auth.uid());
+create policy "recipient_update_transfer_requests" on public.player_transfer_requests for update to authenticated using (recipient_user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- player_transfer_archives — Archived resolved transfers
+-- player_transfer_archives
 -- -----------------------------------------------------------
 create table if not exists public.player_transfer_archives (
   id uuid not null default gen_random_uuid() primary key,
@@ -980,9 +987,7 @@ create table if not exists public.player_transfer_archives (
   updated_at timestamptz,
   archived_at timestamptz not null default now()
 );
-
 alter table public.player_transfer_archives enable row level security;
-
 create index idx_transfer_archives_archived on public.player_transfer_archives using btree (archived_at);
 create index idx_transfer_archives_status on public.player_transfer_archives using btree (status);
 
@@ -990,7 +995,7 @@ create policy "admin_select_transfer_archives" on public.player_transfer_archive
 create policy "admin_delete_transfer_archives" on public.player_transfer_archives for delete to authenticated using (is_admin());
 
 -- -----------------------------------------------------------
--- sponsored_events — Ambassador-sponsored challenges
+-- sponsored_events
 -- -----------------------------------------------------------
 create table if not exists public.sponsored_events (
   id uuid not null default gen_random_uuid() primary key,
@@ -1016,9 +1021,7 @@ create table if not exists public.sponsored_events (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.sponsored_events enable row level security;
-
 create index idx_sponsored_events_ambassador on public.sponsored_events using btree (ambassador_id);
 create index idx_sponsored_events_creator on public.sponsored_events using btree (creator_user_id);
 create index idx_sponsored_events_date on public.sponsored_events using btree (event_date);
@@ -1031,7 +1034,7 @@ create policy "creator_update_sponsored_events" on public.sponsored_events for u
 create policy "creator_delete_sponsored_events" on public.sponsored_events for delete to authenticated using (creator_user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- sponsored_event_participants — Event participation
+-- sponsored_event_participants
 -- -----------------------------------------------------------
 create table if not exists public.sponsored_event_participants (
   id uuid not null default gen_random_uuid() primary key,
@@ -1046,14 +1049,19 @@ create table if not exists public.sponsored_event_participants (
   created_at timestamptz default now(),
   unique(event_id, user_id)
 );
-
 alter table public.sponsored_event_participants enable row level security;
-
 create index idx_sponsored_event_participants_event on public.sponsored_event_participants using btree (event_id);
 create index idx_sponsored_event_participants_user on public.sponsored_event_participants using btree (user_id);
 
+create policy "authenticated_select_event_participants" on public.sponsored_event_participants for select to authenticated using (true);
+create policy "user_insert_own_participation" on public.sponsored_event_participants for insert to authenticated with check (user_id = auth.uid());
+create policy "user_update_own_participation" on public.sponsored_event_participants for update to authenticated using (user_id = auth.uid());
+create policy "user_delete_own_participation" on public.sponsored_event_participants for delete to authenticated using (user_id = auth.uid());
+create policy "creator_insert_participants" on public.sponsored_event_participants for insert to authenticated with check (exists (select 1 from sponsored_events se where se.id = sponsored_event_participants.event_id and se.creator_user_id = auth.uid()));
+create policy "creator_update_participants" on public.sponsored_event_participants for update to authenticated using (exists (select 1 from sponsored_events se where se.id = sponsored_event_participants.event_id and se.creator_user_id = auth.uid()));
+
 -- -----------------------------------------------------------
--- sponsored_event_witnesses — Event result attestation
+-- sponsored_event_witnesses
 -- -----------------------------------------------------------
 create table if not exists public.sponsored_event_witnesses (
   id uuid not null default gen_random_uuid() primary key,
@@ -1066,14 +1074,17 @@ create table if not exists public.sponsored_event_witnesses (
   created_at timestamptz default now(),
   unique(event_id, participant_id, witness_user_id)
 );
-
 alter table public.sponsored_event_witnesses enable row level security;
-
 create index idx_sponsored_event_witnesses_event on public.sponsored_event_witnesses using btree (event_id);
 create index idx_sponsored_event_witnesses_participant on public.sponsored_event_witnesses using btree (participant_id);
 
+create policy "authenticated_select_witnesses" on public.sponsored_event_witnesses for select to authenticated using (true);
+create policy "user_insert_witness" on public.sponsored_event_witnesses for insert to authenticated with check (witness_user_id = auth.uid());
+create policy "witness_update_own" on public.sponsored_event_witnesses for update to authenticated using (witness_user_id = auth.uid());
+create policy "creator_delete_witnesses" on public.sponsored_event_witnesses for delete to authenticated using (exists (select 1 from sponsored_events se join sponsored_event_participants sep on sep.event_id = se.id where sep.id = sponsored_event_witnesses.participant_id and se.creator_user_id = auth.uid()));
+
 -- -----------------------------------------------------------
--- event_notifications — Event-related notifications
+-- event_notifications
 -- -----------------------------------------------------------
 create table if not exists public.event_notifications (
   id uuid not null default gen_random_uuid() primary key,
@@ -1088,16 +1099,157 @@ create table if not exists public.event_notifications (
   action_url text,
   created_at timestamptz default now()
 );
-
 alter table public.event_notifications enable row level security;
-
 create index idx_event_notifications_created on public.event_notifications using btree (created_at);
 create index idx_event_notifications_event on public.event_notifications using btree (event_id);
 create index idx_event_notifications_recipient on public.event_notifications using btree (recipient_user_id);
 create index idx_event_notifications_unread on public.event_notifications using btree (recipient_user_id, is_read);
 
+create policy "authenticated_select_own_event_notifications" on public.event_notifications for select to authenticated using (recipient_user_id = auth.uid());
+create policy "authenticated_insert_event_notifications" on public.event_notifications for insert to authenticated with check (true);
+create policy "authenticated_update_own_event_notifications" on public.event_notifications for update to authenticated using (recipient_user_id = auth.uid());
+create policy "authenticated_delete_own_event_notifications" on public.event_notifications for delete to authenticated using (recipient_user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- push_tokens — Device push notification tokens
+-- tournament_teams
+-- -----------------------------------------------------------
+create table if not exists public.tournament_teams (
+  id uuid not null default gen_random_uuid() primary key,
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  creator_user_id uuid not null references public.user_profiles(id) on delete cascade,
+  member_user_ids uuid[] not null default '{}'::uuid[],
+  member_names text[] not null default '{}'::text[],
+  format text not null default 'Doublette',
+  status text not null default 'forming',
+  completed_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(tournament_id, creator_user_id)
+);
+alter table public.tournament_teams enable row level security;
+create index idx_tournament_teams_creator on public.tournament_teams using btree (creator_user_id);
+create index idx_tournament_teams_tournament on public.tournament_teams using btree (tournament_id);
+
+create policy "authenticated_select_completed_teams" on public.tournament_teams for select to authenticated using (status = 'complete');
+create policy "creator_select_tournament_teams" on public.tournament_teams for select to authenticated using (creator_user_id = auth.uid());
+create policy "creator_insert_tournament_teams" on public.tournament_teams for insert to authenticated with check (creator_user_id = auth.uid());
+create policy "creator_update_tournament_teams" on public.tournament_teams for update to authenticated using (creator_user_id = auth.uid());
+create policy "creator_delete_tournament_teams" on public.tournament_teams for delete to authenticated using (creator_user_id = auth.uid());
+create policy "member_select_tournament_teams" on public.tournament_teams for select to authenticated using (auth.uid() = any (member_user_ids));
+
+-- -----------------------------------------------------------
+-- team_invitations
+-- -----------------------------------------------------------
+create table if not exists public.team_invitations (
+  id uuid not null default gen_random_uuid() primary key,
+  tournament_id uuid not null references public.tournaments(id) on delete cascade,
+  inviter_user_id uuid not null references public.user_profiles(id) on delete cascade,
+  invitee_user_id uuid not null references public.user_profiles(id) on delete cascade,
+  inviter_name text not null default '',
+  invitee_name text not null default '',
+  tournament_name text not null default '',
+  format text not null default 'Doublette',
+  status text not null default 'pending',
+  responded_at timestamptz,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now(),
+  unique(tournament_id, inviter_user_id, invitee_user_id)
+);
+alter table public.team_invitations enable row level security;
+create index idx_team_invitations_invitee on public.team_invitations using btree (invitee_user_id);
+create index idx_team_invitations_inviter on public.team_invitations using btree (inviter_user_id);
+create index idx_team_invitations_status on public.team_invitations using btree (status);
+create index idx_team_invitations_tournament on public.team_invitations using btree (tournament_id);
+
+create policy "inviter_insert_team_invitations" on public.team_invitations for insert to authenticated with check (inviter_user_id = auth.uid());
+create policy "inviter_select_team_invitations" on public.team_invitations for select to authenticated using (inviter_user_id = auth.uid());
+create policy "invitee_select_team_invitations" on public.team_invitations for select to authenticated using (invitee_user_id = auth.uid());
+create policy "invitee_update_team_invitations" on public.team_invitations for update to authenticated using (invitee_user_id = auth.uid());
+create policy "inviter_delete_pending_team_invitations" on public.team_invitations for delete to authenticated using (inviter_user_id = auth.uid() and status = 'pending');
+
+-- -----------------------------------------------------------
+-- team_messages
+-- -----------------------------------------------------------
+create table if not exists public.team_messages (
+  id uuid not null default gen_random_uuid() primary key,
+  team_id uuid not null references public.tournament_teams(id) on delete cascade,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  user_name text not null default '',
+  user_avatar text,
+  message text not null,
+  created_at timestamptz default now()
+);
+alter table public.team_messages enable row level security;
+create index idx_team_messages_created on public.team_messages using btree (created_at);
+create index idx_team_messages_team on public.team_messages using btree (team_id);
+
+create policy "team_member_select_messages" on public.team_messages for select to authenticated using (exists (select 1 from tournament_teams tt where tt.id = team_messages.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "team_member_insert_messages" on public.team_messages for insert to authenticated with check (user_id = auth.uid() and exists (select 1 from tournament_teams tt where tt.id = team_messages.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "own_delete_team_messages" on public.team_messages for delete to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
+-- team_message_reactions
+-- -----------------------------------------------------------
+create table if not exists public.team_message_reactions (
+  id uuid not null default gen_random_uuid() primary key,
+  team_id uuid not null references public.tournament_teams(id) on delete cascade,
+  message_id uuid not null references public.team_messages(id) on delete cascade,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  reaction_type text not null,
+  created_at timestamptz default now(),
+  unique(message_id, user_id, reaction_type)
+);
+alter table public.team_message_reactions enable row level security;
+create index idx_team_msg_reactions_message on public.team_message_reactions using btree (message_id);
+create index idx_team_msg_reactions_team on public.team_message_reactions using btree (team_id);
+
+create policy "team_member_select_reactions" on public.team_message_reactions for select to authenticated using (exists (select 1 from tournament_teams tt where tt.id = team_message_reactions.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "own_insert_reactions" on public.team_message_reactions for insert to authenticated with check (user_id = auth.uid() and exists (select 1 from tournament_teams tt where tt.id = team_message_reactions.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "own_delete_reactions" on public.team_message_reactions for delete to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
+-- team_chat_read_receipts
+-- -----------------------------------------------------------
+create table if not exists public.team_chat_read_receipts (
+  id uuid not null default gen_random_uuid() primary key,
+  team_id uuid not null references public.tournament_teams(id) on delete cascade,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  last_read_message_id uuid not null references public.team_messages(id) on delete cascade,
+  last_read_at timestamptz not null default now(),
+  unique(team_id, user_id)
+);
+alter table public.team_chat_read_receipts enable row level security;
+create index idx_team_chat_read_receipts_team on public.team_chat_read_receipts using btree (team_id);
+create index idx_team_chat_read_receipts_user on public.team_chat_read_receipts using btree (user_id);
+
+create policy "team_member_select_read_receipts" on public.team_chat_read_receipts for select to authenticated using (exists (select 1 from tournament_teams tt where tt.id = team_chat_read_receipts.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "own_upsert_read_receipts" on public.team_chat_read_receipts for insert to authenticated with check (user_id = auth.uid());
+create policy "own_update_read_receipts" on public.team_chat_read_receipts for update to authenticated using (user_id = auth.uid());
+create policy "own_delete_read_receipts" on public.team_chat_read_receipts for delete to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
+-- team_chat_typing
+-- -----------------------------------------------------------
+create table if not exists public.team_chat_typing (
+  id uuid not null default gen_random_uuid() primary key,
+  team_id uuid not null references public.tournament_teams(id) on delete cascade,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  user_name text not null default '',
+  updated_at timestamptz not null default now(),
+  unique(team_id, user_id)
+);
+alter table public.team_chat_typing enable row level security;
+create index idx_team_chat_typing_team on public.team_chat_typing using btree (team_id);
+
+create policy "team_member_select_typing" on public.team_chat_typing for select to authenticated using (exists (select 1 from tournament_teams tt where tt.id = team_chat_typing.team_id and (tt.creator_user_id = auth.uid() or auth.uid() = any(tt.member_user_ids))));
+create policy "own_upsert_typing" on public.team_chat_typing for insert to authenticated with check (user_id = auth.uid());
+create policy "own_update_typing" on public.team_chat_typing for update to authenticated using (user_id = auth.uid());
+create policy "own_delete_typing" on public.team_chat_typing for delete to authenticated using (user_id = auth.uid());
+
+-- ===================== TIER 3: standalone tables ==============
+
+-- -----------------------------------------------------------
+-- push_tokens
 -- -----------------------------------------------------------
 create table if not exists public.push_tokens (
   id uuid not null default gen_random_uuid() primary key,
@@ -1108,9 +1260,7 @@ create table if not exists public.push_tokens (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.push_tokens enable row level security;
-
 create index idx_push_tokens_user_active on public.push_tokens using btree (user_id, active);
 
 create policy "authenticated_select_own_push_tokens" on public.push_tokens for select to authenticated using (user_id = auth.uid());
@@ -1119,7 +1269,7 @@ create policy "authenticated_update_own_push_tokens" on public.push_tokens for u
 create policy "authenticated_delete_own_push_tokens" on public.push_tokens for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- user_badges — Unlocked badges
+-- user_badges
 -- -----------------------------------------------------------
 create table if not exists public.user_badges (
   id uuid not null default gen_random_uuid() primary key,
@@ -1128,9 +1278,7 @@ create table if not exists public.user_badges (
   unlocked_at timestamptz not null default now(),
   unique(user_id, badge_id)
 );
-
 alter table public.user_badges enable row level security;
-
 create index idx_user_badges_badge on public.user_badges using btree (badge_id);
 create index idx_user_badges_user on public.user_badges using btree (user_id);
 
@@ -1140,7 +1288,7 @@ create policy "authenticated_delete_own_badges" on public.user_badges for delete
 create policy "public_select_badges" on public.user_badges for select using (true);
 
 -- -----------------------------------------------------------
--- user_preferences — User settings and favorites
+-- user_preferences
 -- -----------------------------------------------------------
 create table if not exists public.user_preferences (
   id uuid not null default gen_random_uuid() primary key,
@@ -1152,7 +1300,6 @@ create table if not exists public.user_preferences (
   notification_preferences jsonb not null default '{"event_created": true, "share_request": true, "event_reminder": true, "ranking_changed": true, "meetup_invitation": true}'::jsonb,
   followed_player_ids jsonb not null default '[]'::jsonb
 );
-
 alter table public.user_preferences enable row level security;
 
 create policy "authenticated_select_own_preferences" on public.user_preferences for select to authenticated using (user_id = auth.uid());
@@ -1161,7 +1308,7 @@ create policy "authenticated_update_own_preferences" on public.user_preferences 
 create policy "authenticated_delete_own_preferences" on public.user_preferences for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- weekly_leaderboard_snapshots — Weekly ranking snapshots
+-- weekly_leaderboard_snapshots
 -- -----------------------------------------------------------
 create table if not exists public.weekly_leaderboard_snapshots (
   id uuid not null default gen_random_uuid() primary key,
@@ -1180,9 +1327,7 @@ create table if not exists public.weekly_leaderboard_snapshots (
   elo_rating integer not null default 1000,
   unique(user_id, week_start)
 );
-
 alter table public.weekly_leaderboard_snapshots enable row level security;
-
 create index idx_weekly_snapshots_rank on public.weekly_leaderboard_snapshots using btree (rank);
 create index idx_weekly_snapshots_user_week on public.weekly_leaderboard_snapshots using btree (user_id, week_start);
 create index idx_weekly_snapshots_week on public.weekly_leaderboard_snapshots using btree (week_start);
@@ -1192,7 +1337,7 @@ create policy "authenticated_select_weekly_snapshots" on public.weekly_leaderboa
 create policy "authenticated_insert_own_weekly_snapshots" on public.weekly_leaderboard_snapshots for insert to authenticated with check (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- tournament_notifications — Tournament reminder subscriptions
+-- tournament_notifications
 -- -----------------------------------------------------------
 create table if not exists public.tournament_notifications (
   id uuid not null default gen_random_uuid() primary key,
@@ -1203,11 +1348,15 @@ create table if not exists public.tournament_notifications (
   created_at timestamptz default now(),
   unique(user_id, tournament_id)
 );
-
 alter table public.tournament_notifications enable row level security;
 
+create policy "authenticated_select_own_notifications" on public.tournament_notifications for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_notifications" on public.tournament_notifications for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_update_own_notifications" on public.tournament_notifications for update to authenticated using (user_id = auth.uid());
+create policy "authenticated_delete_own_notifications" on public.tournament_notifications for delete to authenticated using (user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- feature_votes — Community roadmap voting
+-- feature_votes
 -- -----------------------------------------------------------
 create table if not exists public.feature_votes (
   id uuid not null default gen_random_uuid() primary key,
@@ -1216,9 +1365,7 @@ create table if not exists public.feature_votes (
   created_at timestamptz default now(),
   unique(user_id, feature_id)
 );
-
 alter table public.feature_votes enable row level security;
-
 create index idx_feature_votes_feature on public.feature_votes using btree (feature_id);
 create index idx_feature_votes_user on public.feature_votes using btree (user_id);
 
@@ -1227,7 +1374,7 @@ create policy "authenticated_insert_own_feature_votes" on public.feature_votes f
 create policy "authenticated_delete_own_feature_votes" on public.feature_votes for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- feed_reactions — Activity feed reactions
+-- feed_reactions
 -- -----------------------------------------------------------
 create table if not exists public.feed_reactions (
   id uuid not null default gen_random_uuid() primary key,
@@ -1237,9 +1384,7 @@ create table if not exists public.feed_reactions (
   created_at timestamptz default now(),
   unique(user_id, feed_item_id, reaction_type)
 );
-
 alter table public.feed_reactions enable row level security;
-
 create index idx_feed_reactions_item on public.feed_reactions using btree (feed_item_id);
 create index idx_feed_reactions_user on public.feed_reactions using btree (user_id);
 
@@ -1248,7 +1393,7 @@ create policy "authenticated_insert_own_feed_reactions" on public.feed_reactions
 create policy "authenticated_delete_own_feed_reactions" on public.feed_reactions for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- trust_score_history — Weekly trust score snapshots
+-- trust_score_history
 -- -----------------------------------------------------------
 create table if not exists public.trust_score_history (
   id uuid not null default gen_random_uuid() primary key,
@@ -1261,14 +1406,16 @@ create table if not exists public.trust_score_history (
   recorded_at timestamptz not null default now(),
   unique(player_id, week_start)
 );
-
 alter table public.trust_score_history enable row level security;
-
 create index idx_trust_score_history_player_week on public.trust_score_history using btree (player_id, week_start);
 create index idx_trust_score_history_user on public.trust_score_history using btree (user_id);
 
+create policy "authenticated_select_own_trust_history" on public.trust_score_history for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_trust_history" on public.trust_score_history for insert to authenticated with check (user_id = auth.uid());
+create policy "admin_select_all_trust_history" on public.trust_score_history for select to authenticated using (is_admin());
+
 -- -----------------------------------------------------------
--- suspicious_players — Anti-cheat flagged players
+-- suspicious_players
 -- -----------------------------------------------------------
 create table if not exists public.suspicious_players (
   id uuid not null default gen_random_uuid() primary key,
@@ -1283,9 +1430,7 @@ create table if not exists public.suspicious_players (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.suspicious_players enable row level security;
-
 create index idx_suspicious_players_score on public.suspicious_players using btree (trust_score);
 create index idx_suspicious_players_status on public.suspicious_players using btree (status);
 create index idx_suspicious_players_user on public.suspicious_players using btree (user_id);
@@ -1298,7 +1443,7 @@ create policy "public_select_trust_scores" on public.suspicious_players for sele
 create policy "service_insert_suspicious" on public.suspicious_players for insert to authenticated with check (true);
 
 -- -----------------------------------------------------------
--- device_registrations — Multi-account prevention
+-- device_registrations
 -- -----------------------------------------------------------
 create table if not exists public.device_registrations (
   id uuid not null default gen_random_uuid() primary key,
@@ -1306,11 +1451,10 @@ create table if not exists public.device_registrations (
   user_id uuid references public.user_profiles(id) on delete cascade,
   email text,
   registered_at timestamptz not null default now(),
-  ip_hint text
+  ip_hint text,
+  auth_method text default 'email'
 );
-
 alter table public.device_registrations enable row level security;
-
 create index idx_device_registrations_email on public.device_registrations using btree (email);
 create index idx_device_registrations_fingerprint on public.device_registrations using btree (device_fingerprint);
 create index idx_device_registrations_registered on public.device_registrations using btree (registered_at);
@@ -1322,7 +1466,32 @@ create policy "authenticated_insert_device_registrations" on public.device_regis
 create policy "admin_select_all_device_registrations" on public.device_registrations for select to authenticated using (is_admin());
 
 -- -----------------------------------------------------------
--- player_reports — Abuse reports
+-- device_transfer_requests
+-- -----------------------------------------------------------
+create table if not exists public.device_transfer_requests (
+  id uuid not null default gen_random_uuid() primary key,
+  user_id uuid not null references public.user_profiles(id) on delete cascade,
+  transfer_code text not null unique,
+  old_fingerprint text,
+  new_fingerprint text,
+  status text not null default 'pending',
+  expires_at timestamptz not null,
+  validated_by uuid references public.user_profiles(id) on delete set null,
+  validated_at timestamptz,
+  created_at timestamptz default now()
+);
+alter table public.device_transfer_requests enable row level security;
+create index idx_device_transfer_code on public.device_transfer_requests using btree (transfer_code);
+create index idx_device_transfer_status on public.device_transfer_requests using btree (status);
+create index idx_device_transfer_user on public.device_transfer_requests using btree (user_id);
+
+create policy "admin_select_device_transfer" on public.device_transfer_requests for select to authenticated using (is_admin());
+create policy "admin_update_device_transfer" on public.device_transfer_requests for update to authenticated using (is_admin());
+create policy "own_insert_device_transfer" on public.device_transfer_requests for insert to authenticated with check (user_id = auth.uid());
+create policy "own_select_device_transfer" on public.device_transfer_requests for select to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
+-- player_reports
 -- -----------------------------------------------------------
 create table if not exists public.player_reports (
   id uuid not null default gen_random_uuid() primary key,
@@ -1336,15 +1505,20 @@ create table if not exists public.player_reports (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.player_reports enable row level security;
-
 create index idx_player_reports_reported on public.player_reports using btree (reported_player_id);
 create index idx_player_reports_reporter on public.player_reports using btree (reporter_id);
 create index idx_player_reports_status on public.player_reports using btree (status);
 
+create policy "authenticated_insert_own_reports" on public.player_reports for insert to authenticated with check (reporter_id = auth.uid());
+create policy "authenticated_select_own_reports" on public.player_reports for select to authenticated using (reporter_id = auth.uid());
+create policy "reported_user_select_own_reports" on public.player_reports for select to authenticated using (reported_user_id = auth.uid());
+create policy "admin_select_all_reports" on public.player_reports for select to authenticated using (is_admin());
+create policy "admin_update_reports" on public.player_reports for update to authenticated using (is_admin());
+create policy "admin_delete_reports" on public.player_reports for delete to authenticated using (is_admin());
+
 -- -----------------------------------------------------------
--- ban_appeals — Ban appeal system
+-- ban_appeals
 -- -----------------------------------------------------------
 create table if not exists public.ban_appeals (
   id uuid not null default gen_random_uuid() primary key,
@@ -1356,14 +1530,17 @@ create table if not exists public.ban_appeals (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.ban_appeals enable row level security;
-
 create index idx_ban_appeals_status on public.ban_appeals using btree (status);
 create index idx_ban_appeals_user on public.ban_appeals using btree (user_id);
 
+create policy "banned_user_insert_own_appeal" on public.ban_appeals for insert to authenticated with check (user_id = auth.uid());
+create policy "banned_user_select_own_appeals" on public.ban_appeals for select to authenticated using (user_id = auth.uid());
+create policy "admin_select_all_appeals" on public.ban_appeals for select to authenticated using (is_admin());
+create policy "admin_update_appeals" on public.ban_appeals for update to authenticated using (is_admin());
+
 -- -----------------------------------------------------------
--- soft_deletes — Deleted item audit log
+-- soft_deletes
 -- -----------------------------------------------------------
 create table if not exists public.soft_deletes (
   id uuid not null default gen_random_uuid() primary key,
@@ -1372,9 +1549,7 @@ create table if not exists public.soft_deletes (
   item_id uuid not null,
   deleted_at timestamptz not null default now()
 );
-
 alter table public.soft_deletes enable row level security;
-
 create index idx_soft_deletes_table_item on public.soft_deletes using btree (table_name, item_id);
 create index idx_soft_deletes_user_deleted on public.soft_deletes using btree (user_id, deleted_at);
 
@@ -1383,7 +1558,7 @@ create policy "authenticated_insert_own_soft_deletes" on public.soft_deletes for
 create policy "authenticated_delete_own_soft_deletes" on public.soft_deletes for delete to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- merge_logs — Player merge audit trail
+-- merge_logs
 -- -----------------------------------------------------------
 create table if not exists public.merge_logs (
   id uuid not null default gen_random_uuid() primary key,
@@ -1397,13 +1572,15 @@ create table if not exists public.merge_logs (
   reassigned_relations jsonb not null default '[]'::jsonb,
   created_at timestamptz default now()
 );
-
 alter table public.merge_logs enable row level security;
-
 create index idx_merge_logs_user_created on public.merge_logs using btree (user_id, created_at);
 
+create policy "authenticated_select_own_merge_logs" on public.merge_logs for select to authenticated using (user_id = auth.uid());
+create policy "authenticated_insert_own_merge_logs" on public.merge_logs for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_delete_own_merge_logs" on public.merge_logs for delete to authenticated using (user_id = auth.uid());
+
 -- -----------------------------------------------------------
--- modification_logs — Collaborative edit tracking
+-- modification_logs
 -- -----------------------------------------------------------
 create table if not exists public.modification_logs (
   id uuid not null default gen_random_uuid() primary key,
@@ -1416,15 +1593,18 @@ create table if not exists public.modification_logs (
   changes jsonb not null default '[]'::jsonb,
   created_at timestamptz default now()
 );
-
 alter table public.modification_logs enable row level security;
-
 create index idx_modification_logs_created on public.modification_logs using btree (created_at);
 create index idx_modification_logs_item on public.modification_logs using btree (item_type, item_id);
 create index idx_modification_logs_owner on public.modification_logs using btree (owner_id);
 
+create policy "authenticated_insert_modification_logs" on public.modification_logs for insert to authenticated with check (modifier_id = auth.uid());
+create policy "owner_select_modification_logs" on public.modification_logs for select to authenticated using (owner_id = auth.uid());
+create policy "owner_update_modification_logs" on public.modification_logs for update to authenticated using (owner_id = auth.uid());
+create policy "owner_delete_modification_logs" on public.modification_logs for delete to authenticated using (owner_id = auth.uid());
+
 -- -----------------------------------------------------------
--- share_access_logs — Shared item view tracking
+-- share_access_logs
 -- -----------------------------------------------------------
 create table if not exists public.share_access_logs (
   id uuid not null default gen_random_uuid() primary key,
@@ -1436,16 +1616,18 @@ create table if not exists public.share_access_logs (
   source_page text,
   viewed_at timestamptz not null default now()
 );
-
 alter table public.share_access_logs enable row level security;
-
 create index idx_share_access_logs_owner on public.share_access_logs using btree (owner_id);
 create index idx_share_access_logs_shared_item on public.share_access_logs using btree (shared_item_id);
 create index idx_share_access_logs_viewed_at on public.share_access_logs using btree (viewed_at);
 create index idx_share_access_logs_viewer on public.share_access_logs using btree (viewer_id);
 
+create policy "viewer_insert_access_logs" on public.share_access_logs for insert to authenticated with check (viewer_id = auth.uid());
+create policy "owner_select_access_logs" on public.share_access_logs for select to authenticated using (owner_id = auth.uid());
+create policy "owner_delete_access_logs" on public.share_access_logs for delete to authenticated using (owner_id = auth.uid());
+
 -- -----------------------------------------------------------
--- share_notifications — Share access notifications
+-- share_notifications
 -- -----------------------------------------------------------
 create table if not exists public.share_notifications (
   id uuid not null default gen_random_uuid() primary key,
@@ -1461,14 +1643,17 @@ create table if not exists public.share_notifications (
   is_read boolean not null default false,
   created_at timestamptz default now()
 );
-
 alter table public.share_notifications enable row level security;
-
 create index idx_share_notifications_created on public.share_notifications using btree (created_at);
 create index idx_share_notifications_owner on public.share_notifications using btree (owner_id);
 
+create policy "authenticated_insert_share_notifications" on public.share_notifications for insert to authenticated with check (accessor_id = auth.uid());
+create policy "owner_select_share_notifications" on public.share_notifications for select to authenticated using (owner_id = auth.uid());
+create policy "owner_update_share_notifications" on public.share_notifications for update to authenticated using (owner_id = auth.uid());
+create policy "owner_delete_share_notifications" on public.share_notifications for delete to authenticated using (owner_id = auth.uid());
+
 -- -----------------------------------------------------------
--- promo_codes — Promotional code system
+-- promo_codes
 -- -----------------------------------------------------------
 create table if not exists public.promo_codes (
   id uuid not null default gen_random_uuid() primary key,
@@ -1480,13 +1665,15 @@ create table if not exists public.promo_codes (
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
-
 alter table public.promo_codes enable row level security;
 
 create policy "authenticated_select_active_promo_codes" on public.promo_codes for select to authenticated using (is_active = true);
+create policy "admin_insert_promo_codes" on public.promo_codes for insert to authenticated with check (exists (select 1 from user_profiles where user_profiles.id = auth.uid() and user_profiles.is_admin = true));
+create policy "admin_update_promo_codes" on public.promo_codes for update to authenticated using (exists (select 1 from user_profiles where user_profiles.id = auth.uid() and user_profiles.is_admin = true));
+create policy "admin_delete_promo_codes" on public.promo_codes for delete to authenticated using (exists (select 1 from user_profiles where user_profiles.id = auth.uid() and user_profiles.is_admin = true));
 
 -- -----------------------------------------------------------
--- promo_code_redemptions — Promo code usage tracking
+-- promo_code_redemptions
 -- -----------------------------------------------------------
 create table if not exists public.promo_code_redemptions (
   id uuid not null default gen_random_uuid() primary key,
@@ -1495,11 +1682,14 @@ create table if not exists public.promo_code_redemptions (
   redeemed_at timestamptz default now(),
   unique(user_id, promo_code_id)
 );
-
 alter table public.promo_code_redemptions enable row level security;
 
+create policy "authenticated_insert_own_redemption" on public.promo_code_redemptions for insert to authenticated with check (user_id = auth.uid());
+create policy "authenticated_select_own_redemptions" on public.promo_code_redemptions for select to authenticated using (user_id = auth.uid());
+create policy "admin_select_all_redemptions" on public.promo_code_redemptions for select to authenticated using (exists (select 1 from user_profiles where user_profiles.id = auth.uid() and user_profiles.is_admin = true));
+
 -- -----------------------------------------------------------
--- purchase_receipts — IAP receipt validation
+-- purchase_receipts
 -- -----------------------------------------------------------
 create table if not exists public.purchase_receipts (
   id uuid not null default gen_random_uuid() primary key,
@@ -1511,14 +1701,13 @@ create table if not exists public.purchase_receipts (
   verified boolean not null default false,
   created_at timestamptz default now()
 );
-
 alter table public.purchase_receipts enable row level security;
 
 create policy "authenticated_insert_own_receipt" on public.purchase_receipts for insert to authenticated with check (user_id = auth.uid());
 create policy "authenticated_select_own_receipts" on public.purchase_receipts for select to authenticated using (user_id = auth.uid());
 
 -- -----------------------------------------------------------
--- onboarding_step_logs — Onboarding funnel analytics
+-- onboarding_step_logs
 -- -----------------------------------------------------------
 create table if not exists public.onboarding_step_logs (
   id uuid not null default gen_random_uuid() primary key,
@@ -1529,9 +1718,7 @@ create table if not exists public.onboarding_step_logs (
   action text not null default 'enter',
   created_at timestamptz default now()
 );
-
 alter table public.onboarding_step_logs enable row level security;
-
 create index idx_onboarding_logs_created on public.onboarding_step_logs using btree (created_at);
 create index idx_onboarding_logs_session on public.onboarding_step_logs using btree (session_id);
 create index idx_onboarding_logs_step on public.onboarding_step_logs using btree (step_number);
@@ -1541,10 +1728,78 @@ create policy "anon_insert_onboarding_logs" on public.onboarding_step_logs for i
 create policy "authenticated_insert_onboarding_logs" on public.onboarding_step_logs for insert to authenticated with check (true);
 
 -- -----------------------------------------------------------
--- ADMIN TABLES
+-- partner_goals
 -- -----------------------------------------------------------
+create table if not exists public.partner_goals (
+  id uuid not null default gen_random_uuid() primary key,
+  ambassador_id uuid not null references public.ambassadors(id) on delete cascade,
+  goal_type text not null,
+  target_value numeric(10,2) not null,
+  period text not null default 'monthly',
+  created_by uuid not null references public.user_profiles(id) on delete cascade,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table public.partner_goals enable row level security;
+create index idx_partner_goals_ambassador on public.partner_goals using btree (ambassador_id);
 
+create policy "admin_select_partner_goals" on public.partner_goals for select to authenticated using (is_admin());
+create policy "admin_insert_partner_goals" on public.partner_goals for insert to authenticated with check (is_admin());
+create policy "admin_update_partner_goals" on public.partner_goals for update to authenticated using (is_admin());
+create policy "admin_delete_partner_goals" on public.partner_goals for delete to authenticated using (is_admin());
+
+-- -----------------------------------------------------------
+-- partner_renewal_history
+-- -----------------------------------------------------------
+create table if not exists public.partner_renewal_history (
+  id uuid not null default gen_random_uuid() primary key,
+  ambassador_id uuid not null references public.ambassadors(id) on delete cascade,
+  renewed_by uuid not null references public.user_profiles(id) on delete cascade,
+  previous_expires_at timestamptz,
+  new_expires_at timestamptz not null,
+  previous_tier text,
+  new_tier text,
+  notes text,
+  created_at timestamptz default now()
+);
+alter table public.partner_renewal_history enable row level security;
+create index idx_partner_renewal_ambassador on public.partner_renewal_history using btree (ambassador_id);
+create index idx_partner_renewal_created on public.partner_renewal_history using btree (created_at);
+
+create policy "admin_insert_renewal_history" on public.partner_renewal_history for insert to authenticated with check (is_admin());
+create policy "admin_select_renewal_history" on public.partner_renewal_history for select to authenticated using (is_admin());
+
+-- -----------------------------------------------------------
+-- sponsor_proposals
+-- -----------------------------------------------------------
+create table if not exists public.sponsor_proposals (
+  id uuid not null default gen_random_uuid() primary key,
+  ambassador_id uuid not null references public.ambassadors(id) on delete cascade,
+  ambassador_name text not null default '',
+  item_type text not null,
+  item_id uuid not null,
+  item_name text not null default '',
+  status text not null default 'pending',
+  admin_notes text,
+  created_at timestamptz default now(),
+  updated_at timestamptz default now()
+);
+alter table public.sponsor_proposals enable row level security;
+create index idx_sponsor_proposals_ambassador on public.sponsor_proposals using btree (ambassador_id);
+create index idx_sponsor_proposals_status on public.sponsor_proposals using btree (status);
+
+create policy "admin_select_proposals" on public.sponsor_proposals for select to authenticated using (is_admin());
+create policy "admin_update_proposals" on public.sponsor_proposals for update to authenticated using (is_admin());
+create policy "admin_delete_proposals" on public.sponsor_proposals for delete to authenticated using (is_admin());
+create policy "own_select_proposals" on public.sponsor_proposals for select to authenticated using (ambassador_id in (select id from ambassadors where user_id = auth.uid()));
+create policy "own_insert_proposals" on public.sponsor_proposals for insert to authenticated with check (ambassador_id in (select id from ambassadors where user_id = auth.uid()));
+create policy "own_delete_pending_proposals" on public.sponsor_proposals for delete to authenticated using (ambassador_id in (select id from ambassadors where user_id = auth.uid()) and status = 'pending');
+
+-- ===================== ADMIN TABLES ==========================
+
+-- -----------------------------------------------------------
 -- admin_activity_logs
+-- -----------------------------------------------------------
 create table if not exists public.admin_activity_logs (
   id uuid not null default gen_random_uuid() primary key,
   admin_user_id uuid not null references public.user_profiles(id) on delete cascade,
@@ -1557,16 +1812,16 @@ create table if not exists public.admin_activity_logs (
   metadata jsonb default '{}'::jsonb,
   created_at timestamptz default now()
 );
-
 alter table public.admin_activity_logs enable row level security;
-
 create index idx_admin_activity_logs_created on public.admin_activity_logs using btree (created_at desc);
 create index idx_admin_activity_logs_type on public.admin_activity_logs using btree (action_type);
 
 create policy "admin_insert_activity_logs" on public.admin_activity_logs for insert to authenticated with check (is_admin());
 create policy "admin_select_activity_logs" on public.admin_activity_logs for select to authenticated using (is_admin());
 
+-- -----------------------------------------------------------
 -- admin_permissions
+-- -----------------------------------------------------------
 create table if not exists public.admin_permissions (
   id uuid not null default gen_random_uuid() primary key,
   user_id uuid not null references public.user_profiles(id) on delete cascade,
@@ -1575,13 +1830,19 @@ create table if not exists public.admin_permissions (
   created_at timestamptz default now(),
   unique(user_id, permission)
 );
-
 alter table public.admin_permissions enable row level security;
-
 create index idx_admin_permissions_perm on public.admin_permissions using btree (permission);
 create index idx_admin_permissions_user on public.admin_permissions using btree (user_id);
 
+create policy "admin_select_permissions" on public.admin_permissions for select to authenticated using (is_admin());
+create policy "admin_insert_permissions" on public.admin_permissions for insert to authenticated with check (is_admin());
+create policy "admin_update_permissions" on public.admin_permissions for update to authenticated using (is_admin());
+create policy "admin_delete_permissions" on public.admin_permissions for delete to authenticated using (is_admin());
+create policy "own_select_permissions" on public.admin_permissions for select to authenticated using (user_id = auth.uid());
+
+-- -----------------------------------------------------------
 -- announcements
+-- -----------------------------------------------------------
 create table if not exists public.announcements (
   id uuid not null default gen_random_uuid() primary key,
   admin_user_id uuid not null references public.user_profiles(id) on delete cascade,
@@ -1594,15 +1855,26 @@ create table if not exists public.announcements (
   target_value text,
   push_sent_count integer not null default 0,
   push_error_count integer not null default 0,
-  created_at timestamptz default now()
+  created_at timestamptz default now(),
+  scheduled_at timestamptz,
+  status text not null default 'sent',
+  platform_breakdown jsonb default '{}'::jsonb,
+  ab_data jsonb,
+  estimated_opens integer not null default 0
 );
-
 alter table public.announcements enable row level security;
-
 create index idx_announcements_admin on public.announcements using btree (admin_user_id);
 create index idx_announcements_created on public.announcements using btree (created_at);
+create index idx_announcements_scheduled on public.announcements using btree (scheduled_at);
+create index idx_announcements_status on public.announcements using btree (status);
 
+create policy "admin_select_announcements" on public.announcements for select to authenticated using (is_admin());
+create policy "admin_insert_announcements" on public.announcements for insert to authenticated with check (is_admin());
+create policy "admin_delete_announcements" on public.announcements for delete to authenticated using (is_admin());
+
+-- -----------------------------------------------------------
 -- app_config
+-- -----------------------------------------------------------
 create table if not exists public.app_config (
   id text not null default 'main' primary key,
   maintenance_mode boolean not null default false,
@@ -1618,7 +1890,6 @@ create table if not exists public.app_config (
   scheduled_send_push boolean not null default true,
   disabled_push_types jsonb not null default '[]'::jsonb
 );
-
 alter table public.app_config enable row level security;
 
 create policy "anon_select_app_config" on public.app_config for select to anon using (true);
@@ -1626,7 +1897,9 @@ create policy "authenticated_select_app_config" on public.app_config for select 
 create policy "admin_insert_app_config" on public.app_config for insert to authenticated with check (is_admin());
 create policy "admin_update_app_config" on public.app_config for update to authenticated using (is_admin());
 
+-- -----------------------------------------------------------
 -- maintenance_logs
+-- -----------------------------------------------------------
 create table if not exists public.maintenance_logs (
   id uuid not null default gen_random_uuid() primary key,
   admin_user_id uuid not null references public.user_profiles(id) on delete cascade,
@@ -1640,26 +1913,24 @@ create table if not exists public.maintenance_logs (
   push_sent_count integer not null default 0,
   push_error_count integer not null default 0
 );
-
 alter table public.maintenance_logs enable row level security;
-
 create index idx_maintenance_logs_created on public.maintenance_logs using btree (created_at);
+
+create policy "admin_select_maintenance_logs" on public.maintenance_logs for select to authenticated using (is_admin());
+create policy "admin_insert_maintenance_logs" on public.maintenance_logs for insert to authenticated with check (is_admin());
 
 -- ============================================================
 -- 3. TRIGGERS
 -- ============================================================
 
--- Auto-create user profile on auth signup
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function public.handle_new_user();
 
--- Sync user metadata on auth update
 create trigger on_auth_user_updated
   after update on auth.users
   for each row execute function public.sync_user_metadata();
 
--- Soft delete logging triggers
 create trigger on_boules_sets_delete before delete on public.boules_sets for each row execute function public.log_soft_delete();
 create trigger on_challenges_delete before delete on public.challenges for each row execute function public.log_soft_delete();
 create trigger on_clubs_delete before delete on public.clubs for each row execute function public.log_soft_delete();
@@ -1672,13 +1943,13 @@ create trigger on_tournaments_delete before delete on public.tournaments for eac
 -- 4. STORAGE BUCKETS
 -- ============================================================
 
--- Note: Bucket creation via SQL
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types) values
   ('avatars', 'avatars', true, 5242880, array['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
   ('boules-photos', 'boules-photos', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
   ('club-cards', 'club-cards', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']),
   ('federation-cards', 'federation-cards', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'application/pdf']),
-  ('terrain-photos', 'terrain-photos', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
+  ('terrain-photos', 'terrain-photos', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif']),
+  ('partner-gallery', 'partner-gallery', true, 10485760, array['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 on conflict (id) do nothing;
 
 -- Storage RLS Policies
@@ -1706,6 +1977,11 @@ create policy "terrain_photos_public_read" on storage.objects for select using (
 create policy "terrain_photos_authenticated_upload" on storage.objects for insert to authenticated with check (bucket_id = 'terrain-photos');
 create policy "terrain_photos_authenticated_update" on storage.objects for update to authenticated using (bucket_id = 'terrain-photos');
 create policy "terrain_photos_authenticated_delete" on storage.objects for delete to authenticated using (bucket_id = 'terrain-photos');
+
+create policy "partner_gallery_public_read" on storage.objects for select using (bucket_id = 'partner-gallery');
+create policy "partner_gallery_authenticated_upload" on storage.objects for insert to authenticated with check (bucket_id = 'partner-gallery');
+create policy "partner_gallery_authenticated_update" on storage.objects for update to authenticated using (bucket_id = 'partner-gallery');
+create policy "partner_gallery_authenticated_delete" on storage.objects for delete to authenticated using (bucket_id = 'partner-gallery');
 
 -- ============================================================
 -- END OF SCHEMA
