@@ -353,8 +353,8 @@
         <div class="section-title" lang="fr">Programme partenaire</div>
         <div class="section-title" lang="en">Partner Program</div>
       </div>
-      <div class="section-content" lang="fr">Le programme partenaire comporte 3 niveaux (Bronze, Argent, Or) avec un portail dédié comprenant : suivi ROI, notifications push avec A/B testing et ciblage géographique, CRM avec suivi des parrainages, kit de marque, digest hebdomadaire, calculateur ROI et objectifs mensuels. Les données du portail sont accessibles uniquement par le partenaire et les administrateurs.</div>
-      <div class="section-content" lang="en">The partner program has 3 tiers (Bronze, Silver, Gold) with a dedicated portal including: ROI tracking, push notifications with A/B testing and geographic targeting, CRM with referral tracking, brand kit, weekly digest, ROI calculator and monthly goals. Portal data is accessible only to the partner and administrators.</div>
+      <div class="section-content" lang="fr">Le programme partenaire comporte 3 niveaux (Bronze, Argent, Or) avec un portail dédié comprenant : suivi ROI, notifications push avec A/B testing et ciblage géographique, CRM avec suivi des parrainages, kit de marque, digest hebdomadaire, calculateur ROI et objectifs mensuels. Depuis la version 1.57.0, un flux de consentement est intégré : lorsqu'un admin approuve une proposition de sponsoring, le propriétaire de l'item reçoit une notification push et doit accepter ou refuser. Les données de consentement (décision, raison, date de réponse) sont stockées dans la table sponsor_proposals et accessibles au partenaire, au propriétaire et aux administrateurs.</div>
+      <div class="section-content" lang="en">The partner program has 3 tiers (Bronze, Silver, Gold) with a dedicated portal including: ROI tracking, push notifications with A/B testing and geographic targeting, CRM with referral tracking, brand kit, weekly digest, ROI calculator and monthly goals. Since version 1.57.0, a consent flow is integrated: when an admin approves a sponsorship proposal, the item owner receives a push notification and must accept or decline. Consent data (decision, reason, response date) is stored in the sponsor_proposals table and accessible to the partner, owner and administrators.</div>
     </div>
 
     <!-- Trust Score -->
@@ -454,7 +454,18 @@
       <div class="section-content" lang="en">Public players linked to a partner via sponsor_id are displayed on the map with a distinctive marker: brand color (brand_color) border and "S" badge. The brand color is set by the partner in their portal. No additional location data is collected — only the position already provided by the player is used.</div>
     </div>
 
-    <div class="footer">Ultimate Petanque v1.51.0 — April 20, 2026 — Updated April 20, 2026</div>
+    <!-- Sponsorship Consent Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(212,160,23,0.1)">🤝</div>
+        <div class="section-title" lang="fr">Données de consentement de sponsoring</div>
+        <div class="section-title" lang="en">Sponsorship Consent Data</div>
+      </div>
+      <div class="section-content" lang="fr">Lorsqu'un partenaire propose de sponsoriser un de vos items (joueur, club, terrain ou tournoi), les données suivantes sont collectées et stockées : votre décision (acceptation ou refus), la raison du refus si fournie, la date de réponse, et l'identifiant du partenaire. Ces données sont accessibles uniquement par vous, le partenaire concerné et les administrateurs. Elles sont utilisées pour gérer le cycle de vie du sponsoring et envoyer les notifications appropriées. Aucune donnée de consentement n'est partagée avec des tiers. Le propriétaire peut consulter l'historique de toutes les demandes de sponsoring dans l'onglet Sponsors du hub de notifications.</div>
+      <div class="section-content" lang="en">When a partner proposes to sponsor one of your items (player, club, terrain or tournament), the following data is collected and stored: your decision (acceptance or decline), the decline reason if provided, the response date, and the partner identifier. This data is accessible only to you, the concerned partner and administrators. It is used to manage the sponsorship lifecycle and send appropriate notifications. No consent data is shared with third parties. The owner can view the history of all sponsorship requests in the Sponsors tab of the notification hub.</div>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.57.0 — May 15, 2026 — Updated May 15, 2026</div>
   </div>
 
   <script>
