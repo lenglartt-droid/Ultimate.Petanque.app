@@ -15,42 +15,20 @@ import { useAuth, getSupabaseClient } from '@/template';
 import AdminGuard from '@/components/feature/AdminGuard';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { fetchSponsorsOnly, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
-
-type PartnerTier = 'gold_sponsor' | 'sponsor' | 'partner';
+import { PARTNER_TIERS, getTierConfig, PartnerTier } from '@/constants/partnerTiers';
 
 const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: string; icon: string; advantages: { fr: string; en: string }[] }> = {
   gold_sponsor: {
     label: 'Or', labelEn: 'Gold', color: '#D4A017', icon: 'star',
-    advantages: [
-      { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain/tournoi/joueur', en: 'Sponsor banner on club/terrain/tournament/player pages' },
-      { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
-      { fr: 'Sponsoring de joueurs avec bordure brand_color', en: 'Player sponsoring with brand_color border' },
-      { fr: 'Mise en avant dans le fil d\'activite', en: 'Highlighted in activity feed' },
-      { fr: 'Position prioritaire dans resultats annuaire', en: 'Priority position in directory results' },
-      { fr: 'Badge anime (pulse dore) dans l\'annuaire', en: 'Animated badge (gold pulse) in directory' },
-      { fr: 'Marqueur carte avec bordure marque + badge S', en: 'Map marker with brand border + S badge' },
-      { fr: 'Metriques par item sponsorise (drill-down)', en: 'Per-item sponsored metrics (drill-down)' },
-      { fr: 'Historique assignations sponsor', en: 'Sponsor assignment history' },
-    ],
+    advantages: PARTNER_TIERS.gold_sponsor.benefitsFr.map((fr, i) => ({ fr, en: PARTNER_TIERS.gold_sponsor.benefitsEn[i] || fr })),
   },
   sponsor: {
     label: 'Argent', labelEn: 'Silver', color: '#78909C', icon: 'workspace-premium',
-    advantages: [
-      { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-      { fr: 'Banniere sponsor sur pages club/terrain/tournoi/joueur', en: 'Sponsor banner on club/terrain/tournament/player pages' },
-      { fr: 'Badge sponsor visible sur cartes annuaire', en: 'Sponsor badge on directory cards' },
-      { fr: 'Sponsoring de joueurs avec bordure brand_color', en: 'Player sponsoring with brand_color border' },
-      { fr: 'Propositions de sponsoring self-service', en: 'Self-service sponsorship proposals' },
-      { fr: 'Marqueur carte avec bordure marque + badge S', en: 'Map marker with brand border + S badge' },
-      { fr: 'Metriques par item sponsorise', en: 'Per-item sponsored metrics' },
-    ],
+    advantages: PARTNER_TIERS.sponsor.benefitsFr.map((fr, i) => ({ fr, en: PARTNER_TIERS.sponsor.benefitsEn[i] || fr })),
   },
   partner: {
     label: 'Bronze', labelEn: 'Bronze', color: '#A1887F', icon: 'workspace-premium',
-    advantages: [
-      { fr: 'Badge visible dans annuaire', en: 'Badge visible in directory' },
-    ],
+    advantages: PARTNER_TIERS.partner.benefitsFr.map((fr, i) => ({ fr, en: PARTNER_TIERS.partner.benefitsEn[i] || fr })),
   },
 };
 
@@ -166,11 +144,25 @@ export default function AdminPartnersScreen() {
 
   const handleApproveProposal = useCallback(async (proposal: any) => {
     setProcessingProposal(proposal.id);
-    // Set sponsor_id on the item
-    const { error: linkErr } = await supabase.from(proposal.item_type === 'terrain' ? 'terrains' : proposal.item_type === 'club' ? 'clubs' : 'tournaments').update({ sponsor_id: proposal.ambassador_id }).eq('id', proposal.item_id);
-    if (linkErr) { Alert.alert('Error', linkErr.message); setProcessingProposal(null); return; }
-    // Update proposal status
-    await supabase.from('sponsor_proposals').update({ status: 'approved', updated_at: new Date().toISOString() }).eq('id', proposal.id);
+    // Resolve item owner user_id
+    const tableName = proposal.item_type === 'terrain' ? 'terrains' : proposal.item_type === 'club' ? 'clubs' : proposal.item_type === 'player' ? 'players' : 'tournaments';
+    const { data: itemData } = await supabase.from(tableName).select('user_id').eq('id', proposal.item_id).single();
+    const ownerUserId = itemData?.user_id || null;
+    // Update proposal to awaiting_consent (do NOT set sponsor_id yet)
+    const { error: upErr } = await supabase.from('sponsor_proposals').update({
+      status: 'approved_awaiting_consent',
+      owner_user_id: ownerUserId,
+      admin_notes: `Approved by admin on ${new Date().toISOString().split('T')[0]}`,
+      updated_at: new Date().toISOString(),
+    }).eq('id', proposal.id);
+    if (upErr) { Alert.alert('Error', upErr.message); setProcessingProposal(null); return; }
+    // Notify item owner
+    if (ownerUserId) {
+      try {
+        const { notifyOwnerOfSponsorApproval } = await import('@/services/sponsorConsentService');
+        await notifyOwnerOfSponsorApproval(ownerUserId, proposal.ambassador_name || '', proposal.item_name || '', proposal.item_type);
+      } catch { /* silent */ }
+    }
     setPendingProposals(prev => prev.filter(p => p.id !== proposal.id));
     setProcessingProposal(null);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

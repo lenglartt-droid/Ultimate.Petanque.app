@@ -700,7 +700,7 @@ create policy "creator_select_own_meetups" on public.terrain_meetups for select 
 create policy "creator_insert_meetups" on public.terrain_meetups for insert to authenticated with check (creator_id = auth.uid());
 create policy "creator_update_meetups" on public.terrain_meetups for update to authenticated using (creator_id = auth.uid());
 create policy "creator_delete_meetups" on public.terrain_meetups for delete to authenticated using (creator_id = auth.uid());
-create policy "participant_select_meetups" on public.terrain_meetups for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = terrain_meetups.id and r.user_id = auth.uid()));
+-- NOTE: participant_select_meetups policy deferred until after terrain_meetup_responses exists
 
 -- -----------------------------------------------------------
 -- terrain_meetup_responses
@@ -724,6 +724,9 @@ create policy "user_update_own_response" on public.terrain_meetup_responses for 
 create policy "user_delete_own_response" on public.terrain_meetup_responses for delete to authenticated using (user_id = auth.uid());
 create policy "creator_select_meetup_responses" on public.terrain_meetup_responses for select to authenticated using (is_meetup_creator(meetup_id));
 create policy "creator_insert_invitations" on public.terrain_meetup_responses for insert to authenticated with check (is_meetup_creator(meetup_id) and status = 'pending');
+
+-- >> Deferred policy: terrain_meetups needs terrain_meetup_responses
+create policy "participant_select_meetups" on public.terrain_meetups for select to authenticated using (exists (select 1 from terrain_meetup_responses r where r.meetup_id = terrain_meetups.id and r.user_id = auth.uid()));
 
 -- -----------------------------------------------------------
 -- meetup_messages

@@ -377,8 +377,8 @@
         <div class="section-title" lang="fr">Partenaires</div>
         <div class="section-title" lang="en">Partners</div>
       </div>
-      <div class="section-content" lang="fr">La page partenaires affiche les partenaires officiels de l'application (Or, Argent, Bronze) avec pages landing dédiées. Le programme partenaire offre un portail complet avec suivi ROI incluant drill-down par item sponsorisé et export CSV, carousel rotatif automatique pour les partenaires Or sur la page d'accueil, notifications push A/B testing, CRM, kit de marque, marqueurs carte avec brand_color, assignation sponsor en lot avec historique, désactivation cascade automatique à expiration, et digest hebdomadaire. Les espaces partenaires sont distincts du contenu publicitaire AdMob. Si vous souhaitez devenir partenaire, contactez-nous par email.</div>
-      <div class="section-content" lang="en">The partners page displays official app partners (Gold, Silver, Bronze) with dedicated landing pages. The partner program offers a full portal with ROI tracking including per-item sponsor drill-down and CSV export, automatic rotating carousel for Gold partners on the home page, push notification A/B testing, CRM, brand kit, map markers with brand_color, bulk sponsor assignment with history tracking, automatic cascade deactivation on expiry, and weekly digest. Partner spaces are distinct from AdMob advertising content. If you wish to become a partner, contact us by email.</div>
+      <div class="section-content" lang="fr">La page partenaires affiche les partenaires officiels de l'application (Or, Argent, Bronze) avec pages landing dédiées. Le programme partenaire offre un portail complet avec suivi ROI incluant drill-down par item sponsorisé et export CSV, carousel rotatif automatique pour les partenaires Or sur la page d'accueil, notifications push A/B testing, CRM, kit de marque, marqueurs carte avec brand_color, assignation sponsor en lot avec historique, désactivation cascade automatique à expiration, et digest hebdomadaire. Depuis la version 1.57.0, un flux de consentement est obligatoire : lorsqu'un admin approuve une proposition de sponsoring, le propriétaire de l'item (joueur, club, terrain ou tournoi) reçoit une notification push et doit accepter ou refuser avant que la bannière sponsor ne soit activée. Le propriétaire peut refuser avec une raison optionnelle. Le partenaire est notifié automatiquement du résultat. Les espaces partenaires sont distincts du contenu publicitaire AdMob. Si vous souhaitez devenir partenaire, contactez-nous par email.</div>
+      <div class="section-content" lang="en">The partners page displays official app partners (Gold, Silver, Bronze) with dedicated landing pages. The partner program offers a full portal with ROI tracking including per-item sponsor drill-down and CSV export, automatic rotating carousel for Gold partners on the home page, push notification A/B testing, CRM, brand kit, map markers with brand_color, bulk sponsor assignment with history tracking, automatic cascade deactivation on expiry, and weekly digest. Since version 1.57.0, a consent flow is mandatory: when an admin approves a sponsorship proposal, the item owner (player, club, terrain or tournament) receives a push notification and must accept or decline before the sponsor banner is activated. The owner can decline with an optional reason. The partner is automatically notified of the outcome. Partner spaces are distinct from AdMob advertising content. If you wish to become a partner, contact us by email.</div>
     </div>
 
     <!-- Ambassador Program -->
@@ -478,7 +478,40 @@
       <div class="section-content" lang="en">Administrators can test two variants of a push announcement (A/B test) with 50/50 distribution. The winner is automatically determined after 24 hours and resent to the other half of recipients. Test data is stored in the announcements table and contains no personally identifiable information.</div>
     </div>
 
-    <div class="footer">Ultimate Petanque v1.51.0 — April 20, 2026 — Updated April 20, 2026</div>
+    <!-- Sponsorship Consent -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(212,160,23,0.1)">🤝</div>
+        <div class="section-title" lang="fr">Consentement de sponsoring</div>
+        <div class="section-title" lang="en">Sponsorship Consent</div>
+      </div>
+      <div class="section-content" lang="fr">Lorsqu'un partenaire propose de sponsoriser un item (joueur, club, terrain ou tournoi) et que la demande est approuvée par un administrateur, le propriétaire de l'item reçoit une notification push et doit explicitement accepter ou refuser le sponsoring avant que la bannière sponsor ne soit activée. Le propriétaire peut refuser avec une raison optionnelle. Le partenaire est notifié automatiquement du résultat (acceptation ou refus). Ce flux de consentement garantit le respect du droit à l'image et la transparence du programme partenaire. Les données de consentement (acceptation, refus, raison, date) sont stockées de manière sécurisée dans la table des propositions de sponsoring.</div>
+      <div class="section-content" lang="en">When a partner proposes to sponsor an item (player, club, terrain or tournament) and the request is approved by an administrator, the item owner receives a push notification and must explicitly accept or decline the sponsorship before the sponsor banner is activated. The owner can decline with an optional reason. The partner is automatically notified of the outcome (acceptance or decline). This consent flow ensures compliance with image rights and partner program transparency. Consent data (acceptance, decline, reason, date) is stored securely in the sponsorship proposals table.</div>
+    </div>
+
+    <!-- Sponsor Removal -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">🔗</div>
+        <div class="section-title" lang="fr">Retrait de sponsor par le propriétaire</div>
+        <div class="section-title" lang="en">Sponsor Removal by Owner</div>
+      </div>
+      <div class="section-content" lang="fr">Le propriétaire d'un item sponsorisé (joueur, club, terrain ou tournoi) peut retirer un sponsor actif à tout moment depuis Notifications > Sponsors > Mes sponsors actifs. La bannière sponsor est supprimée immédiatement et le partenaire est notifié automatiquement avec la raison optionnelle du retrait. Le retrait est définitif : le partenaire devra soumettre une nouvelle proposition pour re-sponsoriser l'item.</div>
+      <div class="section-content" lang="en">The owner of a sponsored item (player, club, terrain or tournament) can remove an active sponsor at any time from Notifications > Sponsors > My active sponsors. The sponsor banner is removed immediately and the partner is automatically notified with the optional removal reason. Removal is permanent: the partner must submit a new proposal to re-sponsor the item.</div>
+    </div>
+
+    <!-- Consent Expiry -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">⏰</div>
+        <div class="section-title" lang="fr">Expiration du consentement de sponsoring</div>
+        <div class="section-title" lang="en">Sponsorship Consent Expiry</div>
+      </div>
+      <div class="section-content" lang="fr">Les demandes de consentement de sponsoring expirent automatiquement après 7 jours sans réponse du propriétaire. Un compte à rebours est affiché sur chaque demande en attente. À l'expiration, le statut passe à "consent_expired", le partenaire est notifié automatiquement, et la bannière sponsor n'est pas activée. Le propriétaire peut toujours consulter les demandes expirées dans l'historique de l'onglet Sponsors.</div>
+      <div class="section-content" lang="en">Sponsorship consent requests expire automatically after 7 days without a response from the owner. A countdown is displayed on each pending request. Upon expiration, the status changes to "consent_expired", the partner is automatically notified, and the sponsor banner is not activated. The owner can still view expired requests in the Sponsors tab history.</div>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.58.0 — May 15, 2026 — Updated May 15, 2026</div>
   </div>
 
   <script>

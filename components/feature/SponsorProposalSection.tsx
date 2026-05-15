@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as Haptics from '@/services/haptics';
 import { getSupabaseClient } from '@/template';
 import { useAlert } from '@/template';
+import { getTierLimits, canSponsorItemType, getSponsoringLimitLabel } from '@/constants/partnerTiers';
 
 interface SponsorProposalSectionProps {
   sponsorId: string;
@@ -11,9 +12,10 @@ interface SponsorProposalSectionProps {
   isSilverPlus: boolean;
   tierColor: string;
   fr: boolean;
+  badgeType?: string;
 }
 
-export default function SponsorProposalSection({ sponsorId, sponsorName, isSilverPlus, tierColor, fr }: SponsorProposalSectionProps) {
+export default function SponsorProposalSection({ sponsorId, sponsorName, isSilverPlus, tierColor, fr, badgeType = 'partner' }: SponsorProposalSectionProps) {
   const supabase = getSupabaseClient();
   const { showAlert } = useAlert();
   const [itemType, setItemType] = useState<'terrains' | 'clubs' | 'tournaments' | 'players'>('terrains');
@@ -22,12 +24,25 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
   const [searching, setSearching] = useState(false);
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [proposals, setProposals] = useState<any[]>([]);
+  const [activeCount, setActiveCount] = useState(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const limits = getTierLimits(badgeType);
 
   useEffect(() => {
     supabase.from('sponsor_proposals').select('*').eq('ambassador_id', sponsorId).order('created_at', { ascending: false }).then(({ data }) => {
       setProposals(data || []);
     });
+    // Count active sponsorings (approved proposals + directly assigned items)
+    const countActive = async () => {
+      const [t, c, to, pl] = await Promise.all([
+        supabase.from('terrains').select('id').eq('sponsor_id', sponsorId),
+        supabase.from('clubs').select('id').eq('sponsor_id', sponsorId),
+        supabase.from('tournaments').select('id').eq('sponsor_id', sponsorId),
+        supabase.from('players').select('id').eq('sponsor_id', sponsorId),
+      ]);
+      setActiveCount((t.data?.length || 0) + (c.data?.length || 0) + (to.data?.length || 0) + (pl.data?.length || 0));
+    };
+    countActive();
   }, [sponsorId]);
 
   const handleSearch = useCallback((text: string) => {
@@ -47,6 +62,28 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
   }, [supabase, itemType]);
 
   const handleSubmit = useCallback(async (itemId: string, itemName: string) => {
+    // Check tier limit
+    if (limits.maxSponsoringTotal !== null) {
+      const pendingCount = proposals.filter(p => p.status === 'pending').length;
+      if (activeCount + pendingCount >= limits.maxSponsoringTotal) {
+        showAlert(
+          fr ? 'Limite atteinte' : 'Limit reached',
+          fr ? `Votre niveau ${badgeType === 'sponsor' ? 'Argent' : 'Bronze'} autorise ${limits.maxSponsoringTotal} sponsoring(s) actif(s). Passez au niveau superieur pour plus.` : `Your ${badgeType === 'sponsor' ? 'Silver' : 'Bronze'} tier allows ${limits.maxSponsoringTotal} active sponsorship(s). Upgrade for more.`
+        );
+        setSubmitting(null);
+        return;
+      }
+    }
+    // Check item type allowed
+    if (!canSponsorItemType(badgeType, itemType)) {
+      const typeLabel = itemType === 'clubs' ? (fr ? 'clubs' : 'clubs') : (fr ? 'tournois' : 'tournaments');
+      showAlert(
+        fr ? 'Non disponible' : 'Not available',
+        fr ? `Le sponsoring de ${typeLabel} est reserve au niveau ${itemType === 'tournaments' ? 'Or' : 'Argent'} et superieur.` : `Sponsoring ${typeLabel} is reserved for ${itemType === 'tournaments' ? 'Gold' : 'Silver'} tier and above.`
+      );
+      setSubmitting(null);
+      return;
+    }
     setSubmitting(itemId);
     const { error } = await supabase.from('sponsor_proposals').insert({
       ambassador_id: sponsorId,
@@ -96,6 +133,20 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
         </View>
       </View>
 
+      {/* Limit indicator */}
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12, backgroundColor: '#F8FAFC', borderRadius: 10, padding: 10, borderWidth: 1, borderColor: '#E2E8F0' }}>
+        <MaterialIcons name="data-usage" size={16} color={tierColor} />
+        <Text style={{ flex: 1, fontSize: 12, color: '#334155' }}>
+          {fr ? 'Sponsorings actifs' : 'Active sponsorships'}: <Text style={{ fontWeight: '800', color: tierColor }}>{activeCount}</Text>
+          {limits.maxSponsoringTotal !== null ? ` / ${limits.maxSponsoringTotal}` : ` (${fr ? 'illimite' : 'unlimited'})`}
+        </Text>
+        {limits.maxSponsoringTotal !== null && activeCount >= limits.maxSponsoringTotal ? (
+          <View style={{ backgroundColor: '#EF444415', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+            <Text style={{ fontSize: 9, fontWeight: '800', color: '#EF4444' }}>MAX</Text>
+          </View>
+        ) : null}
+      </View>
+
       {/* Type selector */}
       <View style={{ flexDirection: 'row', gap: 6, marginBottom: 12 }}>
         {([
@@ -105,10 +156,11 @@ export default function SponsorProposalSection({ sponsorId, sponsorName, isSilve
           { id: 'players' as const, label: fr ? 'Joueurs' : 'Players', icon: 'person', color: '#2563EB' },
         ]).map(t => {
           const active = itemType === t.id;
+          const locked = !canSponsorItemType(badgeType, t.id);
           return (
-            <Pressable key={t.id} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 12, backgroundColor: active ? t.color : '#F8FAFC', borderWidth: 1.5, borderColor: active ? t.color : '#E2E8F0' }} onPress={() => { setItemType(t.id); setSearchQuery(''); setSearchResults([]); }}>
-              <MaterialIcons name={t.icon as any} size={14} color={active ? '#FFF' : t.color} />
-              <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#FFF' : '#334155' }}>{t.label}</Text>
+            <Pressable key={t.id} style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 12, backgroundColor: active ? t.color : '#F8FAFC', borderWidth: 1.5, borderColor: active ? t.color : '#E2E8F0', opacity: locked ? 0.4 : 1 }} onPress={() => { if (locked) { showAlert(fr ? 'Non disponible' : 'Not available', fr ? `Reservee au niveau ${t.id === 'tournaments' ? 'Or' : 'Argent'}.` : `Reserved for ${t.id === 'tournaments' ? 'Gold' : 'Silver'} tier.`); return; } setItemType(t.id); setSearchQuery(''); setSearchResults([]); }}>
+              <MaterialIcons name={locked ? 'lock' : t.icon as any} size={14} color={active ? '#FFF' : locked ? '#94A3B8' : t.color} />
+              <Text style={{ fontSize: 12, fontWeight: '700', color: active ? '#FFF' : locked ? '#94A3B8' : '#334155' }}>{t.label}</Text>
             </Pressable>
           );
         })}

@@ -20,6 +20,7 @@ import { useAppData } from '@/contexts/AppContext';
 import { getSupabaseClient } from '@/template';
 import AdBanner from '@/components/ui/AdBanner';
 import { getEloRank } from '@/services/eloService';
+import { fetchClubLeaderboard, sortClubLeaderboard, LeaderboardClub } from '@/services/clubLeaderboardService';
 
 interface ClubLeaderboardEntry {
   id: string;
@@ -34,6 +35,8 @@ interface ClubLeaderboardEntry {
   tournamentsCount: number;
   avgElo: number;
   isVerified: boolean;
+  compositeScore: number;
+  hasQualifiedPlayers: boolean;
 }
 
 type SortKey = 'winRate' | 'totalWins' | 'tournamentsCount' | 'membersCount' | 'avgElo' | 'composite';
@@ -50,6 +53,7 @@ export default function ClubLeaderboardScreen() {
   const [search, setSearch] = useState('');
   const [sortKey, setSortKey] = useState<SortKey>('composite');
   const [regionFilter, setRegionFilter] = useState<RegionFilter>('all');
+  const [leaderboardData, setLeaderboardData] = useState<ClubLeaderboardEntry[]>([]);
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -57,57 +61,67 @@ export default function ClubLeaderboardScreen() {
     return () => sub?.remove();
   }, []);
 
-  // Compute club leaderboard from local data
-  const leaderboardData = useMemo(() => {
-    const entries: ClubLeaderboardEntry[] = [];
-
+  // Build a lookup for local club details (verified, tournaments, ELO) not available from service
+  const clubDetailsMap = useMemo(() => {
+    const map = new Map<string, { isVerified: boolean; tournamentsCount: number; avgElo: number }>();
     for (const club of clubs) {
-      if (!club.isPublic) continue;
-
       const clubPlayers = players.filter(p => p.clubId === club.id);
-      const clubPlayerIds = new Set(clubPlayers.map(p => p.id));
-
-      // Count wins and matches for club members
-      let totalWins = 0;
-      let totalMatches = 0;
       let eloSum = 0;
       let eloCount = 0;
-
       for (const player of clubPlayers) {
-        totalWins += player.stats?.wins || 0;
-        totalMatches += player.stats?.matchesPlayed || 0;
         if (player.eloRating && player.eloRating > 0) {
           eloSum += player.eloRating;
           eloCount++;
         }
       }
-
       const clubTournaments = tournaments.filter(tr => tr.clubId === club.id);
-      const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
-      const avgElo = eloCount > 0 ? Math.round(eloSum / eloCount) : 1000;
-
-      entries.push({
-        id: club.id,
-        name: club.name,
-        city: club.city,
-        country: club.country || 'France',
-        logo: club.logo,
-        membersCount: club.membersCount || clubPlayers.length,
-        totalWins,
-        totalMatches,
-        winRate,
-        tournamentsCount: clubTournaments.length,
-        avgElo,
+      map.set(club.id, {
         isVerified: club.isVerified ?? false,
+        tournamentsCount: clubTournaments.length,
+        avgElo: eloCount > 0 ? Math.round(eloSum / eloCount) : 1000,
+      });
+      // Also map by name for service-returned clubs without matching local ID
+      map.set(club.name, {
+        isVerified: club.isVerified ?? false,
+        tournamentsCount: clubTournaments.length,
+        avgElo: eloCount > 0 ? Math.round(eloSum / eloCount) : 1000,
       });
     }
-
-    return entries;
+    return map;
   }, [clubs, players, tournaments]);
 
+  // Fetch club leaderboard from the service (uses anti-cheat filtered players)
   useEffect(() => {
-    setLoading(false);
-  }, [leaderboardData]);
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const { clubs: serviceClubs } = await fetchClubLeaderboard();
+      if (cancelled) return;
+      const entries: ClubLeaderboardEntry[] = serviceClubs.map(sc => {
+        const details = clubDetailsMap.get(sc.id) || clubDetailsMap.get(sc.name);
+        return {
+          id: sc.id,
+          name: sc.name,
+          city: sc.city || '',
+          country: sc.country || 'France',
+          logo: sc.logo,
+          membersCount: sc.playerCount,
+          totalWins: sc.stats.totalWins,
+          totalMatches: sc.totalMatches,
+          winRate: sc.stats.avgWinRate,
+          tournamentsCount: details?.tournamentsCount || 0,
+          avgElo: details?.avgElo || 1000,
+          isVerified: details?.isVerified ?? false,
+          compositeScore: sc.stats.compositeScore,
+          hasQualifiedPlayers: sc.hasQualifiedPlayers,
+        };
+      });
+      setLeaderboardData(entries);
+      setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [clubDetailsMap]);
 
   // Filter and sort
   const filteredData = useMemo(() => {
@@ -166,14 +180,17 @@ export default function ClubLeaderboardScreen() {
     const rank = index + 1;
     const isTop3 = rank <= 3;
     const medalColors = ['#F59E0B', '#94A3B8', '#CD7F32'];
+    const isUnranked = !item.hasQualifiedPlayers;
 
     return (
       <Pressable
-        style={({ pressed }) => [s.clubCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }, isTop3 && { borderWidth: 1.5, borderColor: (medalColors[rank - 1] || theme.border) + '40' }]}
+        style={({ pressed }) => [s.clubCard, pressed && { opacity: 0.9, transform: [{ scale: 0.98 }] }, isTop3 && !isUnranked && { borderWidth: 1.5, borderColor: (medalColors[rank - 1] || theme.border) + '40' }, isUnranked && { opacity: 0.7, borderWidth: 1, borderColor: '#94A3B830' }]}
         onPress={() => { Haptics.selectionAsync(); router.push(`/club/${item.id}`); }}
       >
         <View style={s.rankCol}>
-          {isTop3 ? (
+          {isUnranked ? (
+            <MaterialIcons name="remove-circle-outline" size={18} color="#94A3B8" />
+          ) : isTop3 ? (
             <View style={[s.medalCircle, { backgroundColor: medalColors[rank - 1] }]}>
               <Text style={s.medalText}>{rank}</Text>
             </View>
@@ -186,40 +203,60 @@ export default function ClubLeaderboardScreen() {
           {item.logo ? (
             <Image source={{ uri: item.logo }} style={s.clubLogo} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} />
           ) : (
-            <View style={s.clubLogoPlaceholder}>
-              <MaterialIcons name="home" size={20} color={theme.primary} />
+            <View style={[s.clubLogoPlaceholder, isUnranked && { backgroundColor: '#94A3B812' }]}>
+              <MaterialIcons name="home" size={20} color={isUnranked ? '#94A3B8' : theme.primary} />
             </View>
           )}
         </View>
 
         <View style={s.clubInfoCol}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <Text style={s.clubName} numberOfLines={1}>{item.name}</Text>
+            <Text style={[s.clubName, isUnranked && { color: '#94A3B8' }]} numberOfLines={1}>{item.name}</Text>
             {item.isVerified ? <MaterialIcons name="verified" size={14} color="#2563EB" /> : null}
+            {isUnranked ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#94A3B810', paddingHorizontal: 7, paddingVertical: 2.5, borderRadius: 8, borderWidth: 1, borderColor: '#94A3B820' }}>
+                <MaterialIcons name="hourglass-empty" size={9} color="#94A3B8" />
+                <Text style={{ fontSize: 9, fontWeight: '800', color: '#94A3B8', letterSpacing: 0.3 }}>{fr ? 'NON CLASSE' : 'UNRANKED'}</Text>
+              </View>
+            ) : null}
           </View>
           <View style={s.clubMetaRow}>
             <MaterialIcons name="place" size={11} color={theme.textMuted} />
             <Text style={s.clubMeta} numberOfLines={1}>{item.city}, {item.country}</Text>
           </View>
+          {isUnranked ? (
+            <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 3, fontStyle: 'italic', lineHeight: 14 }}>
+              {fr ? 'Pas encore de membres qualifies (3+ matchs multi-joueurs)' : 'No qualified members yet (3+ multi-player matches)'}
+            </Text>
+          ) : null}
         </View>
 
         <View style={s.statsCol}>
-          {/* League badge for ELO */}
-          {(() => {
-            const eloR = getEloRank(item.avgElo);
-            return (
-              <View style={[s.leagueBadge, { backgroundColor: eloR.color + '12', borderColor: eloR.color + '30' }]}>
-                <MaterialIcons name={eloR.icon as any} size={10} color={eloR.color} />
-                <Text style={[s.leagueBadgeText, { color: eloR.color }]}>{item.avgElo}</Text>
-              </View>
-            );
-          })()}
-          <Text style={[s.mainStat, sortKey === 'winRate' || sortKey === 'composite' ? { color: theme.success } : sortKey === 'avgElo' ? { color: '#06B6D4' } : { color: theme.primary }]}>
-            {sortKey === 'composite' ? `${item.winRate}%` : sortKey === 'winRate' ? `${item.winRate}%` : sortKey === 'avgElo' ? item.avgElo : sortKey === 'totalWins' ? item.totalWins : sortKey === 'tournamentsCount' ? item.tournamentsCount : item.membersCount}
-          </Text>
-          <Text style={s.subStat}>
-            {sortKey === 'composite' ? `${item.totalWins}W • ${item.tournamentsCount}T` : sortKey === 'winRate' ? `${item.totalWins}/${item.totalMatches}` : sortKey === 'avgElo' ? 'ELO' : sortKey === 'totalWins' ? `${item.winRate}%` : sortKey === 'tournamentsCount' ? (fr ? 'tournois' : 'tournaments') : (fr ? 'membres' : 'members')}
-          </Text>
+          {isUnranked ? (
+            <View style={{ alignItems: 'center' }}>
+              <MaterialIcons name="hourglass-empty" size={22} color="#CBD5E1" />
+              <Text style={{ fontSize: 9, fontWeight: '700', color: '#CBD5E1', marginTop: 3 }}>{fr ? 'En attente' : 'Pending'}</Text>
+            </View>
+          ) : (
+            <>
+              {/* League badge for ELO */}
+              {(() => {
+                const eloR = getEloRank(item.avgElo);
+                return (
+                  <View style={[s.leagueBadge, { backgroundColor: eloR.color + '12', borderColor: eloR.color + '30' }]}>
+                    <MaterialIcons name={eloR.icon as any} size={10} color={eloR.color} />
+                    <Text style={[s.leagueBadgeText, { color: eloR.color }]}>{item.avgElo}</Text>
+                  </View>
+                );
+              })()}
+              <Text style={[s.mainStat, sortKey === 'winRate' || sortKey === 'composite' ? { color: theme.success } : sortKey === 'avgElo' ? { color: '#06B6D4' } : { color: theme.primary }]}>
+                {sortKey === 'composite' ? `${item.winRate}%` : sortKey === 'winRate' ? `${item.winRate}%` : sortKey === 'avgElo' ? item.avgElo : sortKey === 'totalWins' ? item.totalWins : sortKey === 'tournamentsCount' ? item.tournamentsCount : item.membersCount}
+              </Text>
+              <Text style={s.subStat}>
+                {sortKey === 'composite' ? `${item.totalWins}W • ${item.tournamentsCount}T` : sortKey === 'winRate' ? `${item.totalWins}/${item.totalMatches}` : sortKey === 'avgElo' ? 'ELO' : sortKey === 'totalWins' ? `${item.winRate}%` : sortKey === 'tournamentsCount' ? (fr ? 'tournois' : 'tournaments') : (fr ? 'membres' : 'members')}
+              </Text>
+            </>
+          )}
         </View>
       </Pressable>
     );

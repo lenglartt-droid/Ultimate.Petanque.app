@@ -353,8 +353,8 @@
         <div class="section-title" lang="fr">Programme partenaire</div>
         <div class="section-title" lang="en">Partner Program</div>
       </div>
-      <div class="section-content" lang="fr">Le programme partenaire comporte 3 niveaux (Bronze, Argent, Or) avec un portail dédié comprenant : suivi ROI, notifications push avec A/B testing et ciblage géographique, CRM avec suivi des parrainages, kit de marque, digest hebdomadaire, calculateur ROI et objectifs mensuels. Les données du portail sont accessibles uniquement par le partenaire et les administrateurs.</div>
-      <div class="section-content" lang="en">The partner program has 3 tiers (Bronze, Silver, Gold) with a dedicated portal including: ROI tracking, push notifications with A/B testing and geographic targeting, CRM with referral tracking, brand kit, weekly digest, ROI calculator and monthly goals. Portal data is accessible only to the partner and administrators.</div>
+      <div class="section-content" lang="fr">Le programme partenaire comporte 3 niveaux (Bronze, Argent, Or) avec un portail dédié comprenant : suivi ROI, notifications push avec A/B testing et ciblage géographique, CRM avec suivi des parrainages, kit de marque, digest hebdomadaire, calculateur ROI et objectifs mensuels. Depuis la version 1.57.0, un flux de consentement est intégré : lorsqu'un admin approuve une proposition de sponsoring, le propriétaire de l'item reçoit une notification push et doit accepter ou refuser. Les données de consentement (décision, raison, date de réponse) sont stockées dans la table sponsor_proposals et accessibles au partenaire, au propriétaire et aux administrateurs.</div>
+      <div class="section-content" lang="en">The partner program has 3 tiers (Bronze, Silver, Gold) with a dedicated portal including: ROI tracking, push notifications with A/B testing and geographic targeting, CRM with referral tracking, brand kit, weekly digest, ROI calculator and monthly goals. Since version 1.57.0, a consent flow is integrated: when an admin approves a sponsorship proposal, the item owner receives a push notification and must accept or decline. Consent data (decision, reason, response date) is stored in the sponsor_proposals table and accessible to the partner, owner and administrators.</div>
     </div>
 
     <!-- Trust Score -->
@@ -454,7 +454,51 @@
       <div class="section-content" lang="en">Public players linked to a partner via sponsor_id are displayed on the map with a distinctive marker: brand color (brand_color) border and "S" badge. The brand color is set by the partner in their portal. No additional location data is collected — only the position already provided by the player is used.</div>
     </div>
 
-    <div class="footer">Ultimate Petanque v1.51.0 — April 20, 2026 — Updated April 20, 2026</div>
+    <!-- Sponsorship Consent Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(212,160,23,0.1)">🤝</div>
+        <div class="section-title" lang="fr">Données de consentement de sponsoring</div>
+        <div class="section-title" lang="en">Sponsorship Consent Data</div>
+      </div>
+      <div class="section-content" lang="fr">Lorsqu'un partenaire propose de sponsoriser un de vos items (joueur, club, terrain ou tournoi), les données suivantes sont collectées et stockées : votre décision (acceptation ou refus), la raison du refus si fournie, la date de réponse, et l'identifiant du partenaire. Ces données sont accessibles uniquement par vous, le partenaire concerné et les administrateurs. Elles sont utilisées pour gérer le cycle de vie du sponsoring et envoyer les notifications appropriées. Aucune donnée de consentement n'est partagée avec des tiers. Le propriétaire peut consulter l'historique de toutes les demandes de sponsoring dans l'onglet Sponsors du hub de notifications.</div>
+      <div class="section-content" lang="en">When a partner proposes to sponsor one of your items (player, club, terrain or tournament), the following data is collected and stored: your decision (acceptance or decline), the decline reason if provided, the response date, and the partner identifier. This data is accessible only to you, the concerned partner and administrators. It is used to manage the sponsorship lifecycle and send appropriate notifications. No consent data is shared with third parties. The owner can view the history of all sponsorship requests in the Sponsors tab of the notification hub.</div>
+    </div>
+
+    <!-- Sponsor Removal Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(239,68,68,0.1)">🔗</div>
+        <div class="section-title" lang="fr">Données de retrait de sponsor</div>
+        <div class="section-title" lang="en">Sponsor Removal Data</div>
+      </div>
+      <div class="section-content" lang="fr">Lorsqu'un propriétaire retire un sponsor actif de son item, les données suivantes sont enregistrées : la date de retrait, la raison optionnelle fournie par le propriétaire, et le statut mis à jour de la proposition (owner_removed). Ces données sont accessibles au propriétaire, au partenaire concerné et aux administrateurs. Elles sont utilisées pour le suivi du cycle de vie du sponsoring et l'envoi de notifications automatiques au partenaire.</div>
+      <div class="section-content" lang="en">When an owner removes an active sponsor from their item, the following data is recorded: the removal date, the optional reason provided by the owner, and the updated proposal status (owner_removed). This data is accessible to the owner, the concerned partner and administrators. It is used for sponsorship lifecycle management and automatic partner notification.</div>
+    </div>
+
+    <!-- Consent Expiry Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(245,158,11,0.1)">⏰</div>
+        <div class="section-title" lang="fr">Données d'expiration du consentement</div>
+        <div class="section-title" lang="en">Consent Expiry Data</div>
+      </div>
+      <div class="section-content" lang="fr">Les demandes de consentement de sponsoring sans réponse après 7 jours sont automatiquement marquées comme expirées. Les données enregistrées incluent : la date d'expiration, le statut consent_expired, et la raison automatique. Ces données sont utilisées uniquement pour le suivi du cycle de vie du sponsoring. Le partenaire reçoit une notification de l'expiration mais n'a pas accès aux données personnelles du propriétaire.</div>
+      <div class="section-content" lang="en">Sponsorship consent requests without a response after 7 days are automatically marked as expired. Recorded data includes: the expiration date, the consent_expired status, and the automatic reason. This data is used solely for sponsorship lifecycle management. The partner receives an expiration notification but has no access to the owner's personal data.</div>
+    </div>
+
+    <!-- Consent Analytics Data -->
+    <div class="section">
+      <div class="section-header">
+        <div class="section-icon" style="background:rgba(212,160,23,0.1)">📊</div>
+        <div class="section-title" lang="fr">Données analytiques de consentement</div>
+        <div class="section-title" lang="en">Consent Analytics Data</div>
+      </div>
+      <div class="section-content" lang="fr">Les partenaires Argent et Or ont accès à des statistiques agrégées de consentement : taux d'acceptation, temps de réponse moyen, raisons de refus les plus fréquentes, et répartition par type d'item. Ces données sont anonymisées et agrégées — aucune information personnelle des propriétaires n'est identifiable. Elles sont utilisées pour aider les partenaires à optimiser leurs propositions de sponsoring.</div>
+      <div class="section-content" lang="en">Silver and Gold partners have access to aggregated consent statistics: acceptance rate, average response time, most frequent decline reasons, and breakdown by item type. This data is anonymized and aggregated — no owner personal information is identifiable. It is used to help partners optimize their sponsorship proposals.</div>
+    </div>
+
+    <div class="footer">Ultimate Petanque v1.58.0 — May 15, 2026 — Updated May 15, 2026</div>
   </div>
 
   <script>
