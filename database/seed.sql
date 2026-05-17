@@ -7,7 +7,11 @@
 -- This script uses upsert patterns (ON CONFLICT) where possible
 -- so it can be re-run safely.
 --
--- Test accounts (use these with OTP login in dev):
+-- Hosted / external Supabase: run database/seed-auth-test-users.sql FIRST.
+-- Otherwise inserts into user_profiles fail (FK to auth.users). Password
+-- for those test users: TestSeed123!
+--
+-- Test accounts (OTP in dev, or password TestSeed123! after seed-auth-test-users.sql):
 --   1. admin@test.com      — Admin user
 --   2. alice@test.com      — Active player (Tireur)
 --   3. bob@test.com        — Active player (Pointeur)
@@ -31,9 +35,9 @@
 
 -- ============================================================
 -- 1. USER PROFILES
--- These assume auth.users already exist (created via signup).
--- In dev, create these accounts first via the app login flow,
--- then run this seed to enrich their data.
+-- Requires matching rows in auth.users (same UUIDs as below).
+-- Options: (a) run database/seed-auth-test-users.sql, or (b) sign up
+-- each email in the app first, or (c) create users via Supabase Admin API.
 --
 -- If you need deterministic UUIDs for local dev, use these:
 -- ============================================================

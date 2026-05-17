@@ -9,6 +9,25 @@ import * as WebBrowser from 'expo-web-browser';
 // Ensure Web platform correctly handles auth callbacks
 WebBrowser.maybeCompleteAuthSession();
 
+/** Redirect target for email magic links / PKCE (must be listed in Supabase → Auth → URL configuration). */
+export function getAuthEmailRedirectUri(): string {
+  return AuthSession.makeRedirectUri({
+    scheme: 'onspaceapp',
+    path: 'auth',
+  });
+}
+
+/** Sentinel returned when Google is disabled in Supabase Dashboard (not an app bug). */
+export const GOOGLE_PROVIDER_NOT_ENABLED = '__GOOGLE_PROVIDER_NOT_ENABLED__';
+
+function mapGoogleOAuthError(message: string): string {
+  const m = message.toLowerCase();
+  if (m.includes('provider is not enabled') || m.includes('unsupported provider')) {
+    return GOOGLE_PROVIDER_NOT_ENABLED;
+  }
+  return message;
+}
+
 // Visibility change listener related variables
 let lastVisibilityChange = 0;
 let visibilityListener: (() => void) | null = null;
@@ -142,14 +161,18 @@ export class AuthService {
 
   async sendOTP(email: string, options: SendOTPOptions = {}) {
     try {
-      const { shouldCreateUser = true, emailRedirectTo } = options;
-      
+      const { shouldCreateUser = true, emailRedirectTo = getAuthEmailRedirectUri() } = options;
+      if (typeof __DEV__ !== 'undefined' && __DEV__) {
+        console.log('[Template:AuthService] signInWithOtp emailRedirectTo:', emailRedirectTo);
+      }
+
       return await safeSupabaseOperation(async (client) => {
         const { error } = await withTimeout(
           client.auth.signInWithOtp({
             email,
             options: {
               shouldCreateUser,
+              // Without this, Supabase uses Site URL (often http://localhost:3000) in signup emails.
               emailRedirectTo,
             }
           }),
@@ -566,7 +589,7 @@ export class AuthService {
       }
       
       return { 
-        error: `Google login failed: ${errorMessage}`
+        error: mapGoogleOAuthError(errorMessage)
       };
     }
   }

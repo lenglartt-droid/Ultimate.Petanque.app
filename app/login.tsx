@@ -16,6 +16,7 @@ import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
+import { GOOGLE_PROVIDER_NOT_ENABLED } from '@/template/auth';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
@@ -76,7 +77,12 @@ export default function LoginScreen() {
     // device binding is enforced via post-login check in canLoginOnDevice
     const { error } = await signInWithGoogle();
     if (error) {
-      showAlert(t('login', 'googleError'), error);
+      const message =
+        error === GOOGLE_PROVIDER_NOT_ENABLED ||
+        error.toLowerCase().includes('provider is not enabled')
+          ? t('login', 'googleProviderNotEnabled')
+          : error;
+      showAlert(t('login', 'googleError'), message);
     }
   };
 

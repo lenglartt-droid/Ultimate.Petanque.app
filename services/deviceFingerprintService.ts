@@ -12,6 +12,13 @@ const STORAGE_KEY = '@device_registration_history';
 const MAX_ACCOUNTS_PER_DEVICE = 1;
 const COOLDOWN_HOURS = 24; // hours between account creations
 
+/** Dev / QA only — set EXPO_PUBLIC_SKIP_DEVICE_ACCOUNT_LIMIT=true in .env */
+function isDeviceAccountLimitDisabled(): boolean {
+  if (typeof __DEV__ !== 'undefined' && __DEV__) return true;
+  const flag = process.env.EXPO_PUBLIC_SKIP_DEVICE_ACCOUNT_LIMIT;
+  return flag === '1' || flag === 'true';
+}
+
 interface DeviceRegistrationHistory {
   fingerprint: string;
   registrations: { email: string; date: string }[];
@@ -72,6 +79,9 @@ export async function getDeviceFingerprint(): Promise<string> {
  * Returns { allowed, reason } 
  */
 export async function canCreateAccount(email: string): Promise<{ allowed: boolean; reason?: string }> {
+  if (isDeviceAccountLimitDisabled()) {
+    return { allowed: true };
+  }
   try {
     const fingerprint = await getDeviceFingerprint();
 
@@ -169,6 +179,9 @@ export async function recordAccountCreation(email: string, authMethod: string = 
  * Enforces 1-account-per-device: if device is already bound to a different account, block login.
  */
 export async function canLoginOnDevice(email: string): Promise<{ allowed: boolean; reason?: string }> {
+  if (isDeviceAccountLimitDisabled()) {
+    return { allowed: true };
+  }
   try {
     const fingerprint = await getDeviceFingerprint();
 
@@ -303,6 +316,16 @@ export async function markDeviceBindingNotificationShown(): Promise<void> {
 // ============================================
 // HELPERS
 // ============================================
+
+/**
+ * Clears on-device registration history only (dev / support).
+ * Server rows in device_registrations must be removed separately (Admin → Anti-cheat or SQL).
+ */
+export async function clearLocalDeviceRegistrationHistory(): Promise<void> {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEY);
+  } catch { /* silent */ }
+}
 
 async function getLocalHistory(): Promise<DeviceRegistrationHistory | null> {
   try {
