@@ -57,14 +57,25 @@ export const homeTranslations = {
     enterEmail: { fr: 'Veuillez entrer votre email', en: 'Please enter your email' },
     passwordTooShort: { fr: 'Le mot de passe doit contenir au moins 6 caractères', en: 'Password must be at least 6 characters' },
     passwordMismatch: { fr: 'Les mots de passe ne correspondent pas', en: 'Passwords do not match' },
-    enterCode: { fr: 'Veuillez entrer le code de vérification', en: 'Please enter the verification code' },
+    enterCode: {
+      fr: 'Saisissez le code complet reçu par email (6 chiffres).',
+      en: 'Enter the full code from your email (6 digits).',
+    },
     codeSentSuccess: { fr: 'Code envoyé', en: 'Code sent' },
-    codeSentMessage: { fr: 'Saisissez le code reçu par email (8 chiffres). N\'utilisez pas le lien sur mobile.', en: 'Enter the code from your email (8 digits). Do not use the email link on mobile.' },
+    codeSentMessage: { fr: 'Saisissez le code reçu par email (6 chiffres). N\'utilisez pas le lien sur mobile.', en: 'Enter the code from your email (6 digits). Do not use the email link on mobile.' },
     loginError: { fr: 'Erreur de connexion', en: 'Login error' },
     googleError: { fr: 'Erreur Google', en: 'Google error' },
     googleProviderNotEnabled: {
       fr: 'La connexion Google n\'est pas activee sur ce projet Supabase. Un administrateur doit activer le fournisseur Google dans Supabase → Authentication → Providers → Google (Client ID et secret Google Cloud), puis ajouter l\'URL de redirection onspaceapp://auth.',
       en: 'Google sign-in is not enabled for this Supabase project. An admin must enable the Google provider under Supabase → Authentication → Providers → Google (Google Cloud Client ID & secret), and add redirect URL onspaceapp://auth.',
+    },
+    googleDisallowedUserAgent: {
+      fr: 'Google refuse la connexion dans ce navigateur integre (erreur 403). Installez l\'application via un build de developpement ou la version Play Store, ou utilisez la connexion par email. Assurez-vous que Chrome est installe sur l\'appareil.',
+      en: 'Google blocked sign-in in this embedded browser (403). Install the app from a development or store build, or use email sign-in. Make sure Chrome is installed on the device.',
+    },
+    googleExpoGoNotSupported: {
+      fr: 'La connexion Google ne fonctionne pas dans Expo Go. Lancez l\'app avec « npx expo run:android » ou un APK/EAS build, ou connectez-vous par email.',
+      en: 'Google sign-in does not work in Expo Go. Run the app with « npx expo run:android » or an APK/EAS build, or use email sign-in.',
     },
     disposableEmail: { fr: 'Les adresses email temporaires ne sont pas acceptees. Utilisez une adresse email permanente.', en: 'Temporary email addresses are not accepted. Please use a permanent email address.' },
     maxAccountsReached: { fr: 'Un compte est deja enregistre sur cet appareil. Un seul compte par appareil est autorise. Contactez le support si necessaire.', en: 'An account is already registered on this device. Only one account per device is allowed. Contact support if needed.' },

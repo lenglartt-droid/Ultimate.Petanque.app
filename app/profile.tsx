@@ -51,7 +51,11 @@ import { extraTranslations } from '@/constants/i18nExtra';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 import { APP_VERSION_DISPLAY } from '@/constants/appVersion';
-import { AUTH_EMAIL_OTP_LENGTH } from '@/constants/authOtp';
+import {
+  AUTH_EMAIL_OTP_MAX_LENGTH,
+  isCompleteEmailOtp,
+  normalizeEmailOtpInput,
+} from '@/constants/authOtp';
 
 
 export default function ProfileScreen() {
@@ -812,7 +816,7 @@ export default function ProfileScreen() {
     }
     setSendingOtp(true);
     try {
-      const { error } = await sendOTP(user.email);
+      const { error } = await sendOTP(user.email.trim().toLowerCase());
       if (error) {
         showAlert(t('common', 'error'), error);
         return;
@@ -826,16 +830,23 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = async () => {
-    if (otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH) return;
+    if (!isCompleteEmailOtp(otpCode)) return;
 
     setDeletingAccount(true);
     try {
-      // Verify OTP first
-      const { error: otpError } = await supabase.auth.verifyOtp({
-        email: user?.email || '',
-        token: otpCode.trim(),
-        type: 'email',
-      });
+      const email = (user?.email || '').trim().toLowerCase();
+      const token = normalizeEmailOtpInput(otpCode);
+      let otpError: { message: string } | null = null;
+      for (const type of ['email', 'signup'] as const) {
+        const { error } = await supabase.auth.verifyOtp({ email, token, type });
+        if (!error) {
+          otpError = null;
+          break;
+        }
+        otpError = error;
+        if (type === 'email' && /invalid|expired|otp/i.test(error.message)) continue;
+        break;
+      }
       if (otpError) {
         showAlert(t('profile', 'deleteAccountOtpError'), otpError.message);
         setDeletingAccount(false);
@@ -2250,11 +2261,11 @@ export default function ProfileScreen() {
                   <TextInput
                     style={[styles.deleteConfirmField, { borderColor: theme.primary + '30' }]}
                     value={otpCode}
-                    onChangeText={setOtpCode}
+                    onChangeText={(text) => setOtpCode(normalizeEmailOtpInput(text))}
                     placeholder={t('profile', 'deleteAccountOtpPlaceholder')}
                     placeholderTextColor={theme.textMuted}
                     keyboardType="number-pad"
-                    maxLength={AUTH_EMAIL_OTP_LENGTH}
+                    maxLength={AUTH_EMAIL_OTP_MAX_LENGTH}
                     editable={!deletingAccount}
                     autoFocus
                   />
@@ -2274,10 +2285,10 @@ export default function ProfileScreen() {
                 <Pressable
                   style={[
                     styles.deleteConfirmButton,
-                    otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH && styles.deleteConfirmButtonDisabled,
+                    !isCompleteEmailOtp(otpCode) && styles.deleteConfirmButtonDisabled,
                   ]}
                   onPress={handleDeleteAccount}
-                  disabled={otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH || deletingAccount}
+                  disabled={!isCompleteEmailOtp(otpCode) || deletingAccount}
                 >
                   {deletingAccount ? (
                     <View style={styles.deleteConfirmButtonInner}>

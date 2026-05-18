@@ -3,6 +3,7 @@ import { AuthUser, SendOTPOptions, SignUpResult, GoogleSignInResult } from '../t
 import { safeSupabaseOperation, getSharedSupabaseClient } from '../../core/client';
 import { configManager } from '../../core/config';
 import { Platform } from 'react-native';
+import Constants from 'expo-constants';
 import * as AuthSession from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
 
@@ -20,10 +21,41 @@ export function getAuthEmailRedirectUri(): string {
 /** Sentinel returned when Google is disabled in Supabase Dashboard (not an app bug). */
 export const GOOGLE_PROVIDER_NOT_ENABLED = '__GOOGLE_PROVIDER_NOT_ENABLED__';
 
+/** Google blocks OAuth inside embedded WebViews (common in Expo Go). */
+export const GOOGLE_DISALLOWED_USER_AGENT = '__GOOGLE_DISALLOWED_USER_AGENT__';
+
+/** Google Sign-In is not supported inside the Expo Go app shell. */
+export const GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD = '__GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD__';
+
+function isExpoGoClient(): boolean {
+  return Constants.appOwnership === 'expo';
+}
+
+function parseOAuthCallbackError(callbackUrl: string): string | null {
+  try {
+    const params = new URL(callbackUrl).searchParams;
+    const err = params.get('error');
+    const desc = params.get('error_description');
+    const combined = `${err ?? ''} ${desc ?? ''}`.toLowerCase();
+    if (combined.includes('disallowed_useragent')) {
+      return GOOGLE_DISALLOWED_USER_AGENT;
+    }
+    if (err || desc) {
+      return desc || err;
+    }
+  } catch {
+    // ignore malformed callback URLs
+  }
+  return null;
+}
+
 function mapGoogleOAuthError(message: string): string {
   const m = message.toLowerCase();
   if (m.includes('provider is not enabled') || m.includes('unsupported provider')) {
     return GOOGLE_PROVIDER_NOT_ENABLED;
+  }
+  if (m.includes('disallowed_useragent') || m.includes("doesn't comply with google")) {
+    return GOOGLE_DISALLOWED_USER_AGENT;
   }
   return message;
 }
@@ -175,10 +207,12 @@ export class AuthService {
         }
       }
 
+      const emailNormalized = email.trim().toLowerCase();
+
       return await safeSupabaseOperation(async (client) => {
         const { error } = await withTimeout(
           client.auth.signInWithOtp({
-            email,
+            email: emailNormalized,
             options: signInOptions,
           }),
           TIMEOUT_CONFIG.AUTH_OPERATIONS,
@@ -208,19 +242,38 @@ export class AuthService {
 
   async verifyOTPAndLogin(email: string, otp: string, options?: { password?: string }) {
     try {
-      return await safeSupabaseOperation(async (client) => {
-        // Step 1: Verify OTP first
-        const { data, error } = await withTimeout(
-          client.auth.verifyOtp({
-            email,
-            token: otp,
-            type: 'email'
-          }),
-          TIMEOUT_CONFIG.AUTH_OPERATIONS,
-          'VerifyOTP'
-        );
+      const token = otp.replace(/\D/g, '');
+      const emailNormalized = email.trim().toLowerCase();
 
-        if (error) {
+      return await safeSupabaseOperation(async (client) => {
+        // New signups may need type "signup"; returning users use "email".
+        const otpTypes: Array<'email' | 'signup'> = ['email', 'signup'];
+        let data: Awaited<ReturnType<typeof client.auth.verifyOtp>>['data'] | null = null;
+        let lastError: { message: string } | null = null;
+
+        for (const type of otpTypes) {
+          const result = await withTimeout(
+            client.auth.verifyOtp({
+              email: emailNormalized,
+              token,
+              type,
+            }),
+            TIMEOUT_CONFIG.AUTH_OPERATIONS,
+            'VerifyOTP'
+          );
+          if (!result.error) {
+            data = result.data;
+            lastError = null;
+            break;
+          }
+          lastError = result.error;
+          const retryable =
+            /invalid|expired|otp/i.test(result.error.message) && type === 'email';
+          if (!retryable) break;
+        }
+
+        if (lastError) {
+          const error = lastError;
           if (error.message.includes('Database error saving new user')) {
             console.warn('[Template:AuthService] Database trigger missing, auth function available but user profile creation failed');
             console.warn('[Template:AuthService] Please refer to SDK documentation to set up user_profiles table and triggers');
@@ -228,6 +281,18 @@ export class AuthService {
           
           if (error.message.includes('timeout')) {
             return { error: 'Verification timeout, please retry', user: null, errorType: 'timeout' };
+          }
+
+          const msg = error.message.toLowerCase();
+          if (msg.includes('expired')) {
+            return { error: 'Code expired. Tap “Get code” to receive a new one.', user: null, errorType: 'business' };
+          }
+          if (msg.includes('invalid') || msg.includes('otp')) {
+            return {
+              error: 'Invalid code. Use the latest 6-digit code from your email (not the link).',
+              user: null,
+              errorType: 'business',
+            };
           }
           
           return { error: error.message, user: null, errorType: 'business' };
@@ -477,10 +542,15 @@ export class AuthService {
 
   async signInWithGoogle(): Promise<GoogleSignInResult> {
     try {
+      if (Platform.OS !== 'web' && isExpoGoClient()) {
+        return { error: GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD };
+      }
+
       // Generate cross-platform redirect URL
       const redirectUrl = AuthSession.makeRedirectUri({
         scheme: 'onspaceapp',
-        path: 'auth'
+        path: 'auth',
+        preferLocalhost: false,
       });
 
       // Step 1: Get OAuth URL from Supabase
@@ -513,18 +583,41 @@ export class AuthService {
         return { error: null };
       }
 
-      // Mobile platform: Manual OAuth flow
-      // Step 2: Open browser for OAuth
-      const result = await WebBrowser.openAuthSessionAsync(
-        data.url,
-        redirectUrl
-      );
+      // Mobile: system browser / Chrome Custom Tabs (required by Google — not an in-app WebView).
+      if (Platform.OS === 'android') {
+        try {
+          await WebBrowser.warmUpAsync();
+        } catch {
+          // non-fatal
+        }
+      }
+
+      let result: WebBrowser.WebBrowserAuthSessionResult;
+      try {
+        result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
+          preferEphemeralSession: false,
+          showInRecents: true,
+        });
+      } finally {
+        if (Platform.OS === 'android') {
+          try {
+            await WebBrowser.coolDownAsync();
+          } catch {
+            // non-fatal
+          }
+        }
+      }
 
       // Step 3: Handle callback
       if (result.type === 'success') {
         const url = result.url;
         
         try {
+          const callbackError = parseOAuthCallbackError(url);
+          if (callbackError) {
+            return { error: mapGoogleOAuthError(callbackError) };
+          }
+
           const params = new URL(url).searchParams;
           const code = params.get('code');
           
@@ -532,7 +625,7 @@ export class AuthService {
             const error = params.get('error');
             const errorDescription = params.get('error_description');
             return { 
-              error: errorDescription || error || 'No authorization code received'
+              error: mapGoogleOAuthError(errorDescription || error || 'No authorization code received')
             };
           }
 

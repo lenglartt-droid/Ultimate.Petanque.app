@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
-import { Image as RNImage } from 'react-native'; // 👈 use RN Image, not expo-image
+import { Image } from 'expo-image';
 import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme, { blurhash } from '@/constants/theme';
@@ -577,7 +577,7 @@ export default function HomeScreen() {
                 ) : null}
                 <Pressable testID="profile-avatar" style={st.heroAvatarBtn} onPress={() => router.push('/profile')}>
                   {selfPlayer?.avatar ? (
-                    <RNImage source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
+                    <Image source={{ uri: selfPlayer.avatar }} style={st.heroAvatarImg} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.avatar }} cachePolicy="memory-disk" />
                   ) : (
                     <LinearGradient colors={['#3B82F6', '#60A5FA']} style={st.heroAvatarFallback}>
                       <Text style={st.heroAvatarLetter}>{displayName.charAt(0).toUpperCase()}</Text>
@@ -884,7 +884,7 @@ export default function HomeScreen() {
                 <View style={st.goldBannerContent}>
                   {currentGold.photo ? (
                     <View style={[st.goldBannerPhoto, { borderColor: brandColor + '50' }]}>
-                      <RNImage source={{ uri: currentGold.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      <Image source={{ uri: currentGold.photo }} style={{ width: 48, height: 48, borderRadius: 14 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
                     </View>
                   ) : (
                     <View style={[st.goldBannerPhoto, st.goldBannerPhotoFallback, { borderColor: brandColor + '50', backgroundColor: brandColor + '15' }]}>
@@ -1039,7 +1039,7 @@ export default function HomeScreen() {
       case 'frBanner':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <RNImage
+            <Image
               source={require('@/assets/images/banner-home-fr.png')}
               style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
@@ -1052,7 +1052,7 @@ export default function HomeScreen() {
       case 'enBanner':
         return (
           <View style={[st.section, isTablet && st.sectionTablet]}>
-            <RNImage
+            <Image
               source={require('@/assets/images/banner-home-en.png')}
               style={{ width: '100%', height: undefined, aspectRatio: 820 / 312, borderRadius: 16 }}
               contentFit="cover"
@@ -1067,7 +1067,7 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             {(matches.length === 0 && challenges.length === 0) ? (
               <View style={st.emptyCard}>
-                <RnImage source={require('@/assets/images/empty-home.png')} style={st.emptyImage} contentFit="contain" transition={300} />
+                <Image source={require('@/assets/images/empty-home.png')} style={st.emptyImage} contentFit="contain" transition={300} />
                 <Text style={st.emptyTitle}>{t('home', 'welcomeTitle')}</Text>
                 <Text style={st.emptyText}>{t('home', 'welcomeText')}</Text>
                 <View style={st.emptyActionsRow}>

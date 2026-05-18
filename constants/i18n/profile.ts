@@ -65,7 +65,7 @@ export const profileTranslations = {
     deleteConfirmWord: { fr: 'SUPPRIMER', en: 'DELETE' },
     deleteAccountOtpTitle: { fr: 'Vérification par email', en: 'Email verification' },
     deleteAccountOtpDesc: { fr: 'Un code de vérification a été envoyé à', en: 'A verification code has been sent to' },
-    deleteAccountOtpPlaceholder: { fr: 'Code à 8 chiffres', en: '8-digit code' },
+    deleteAccountOtpPlaceholder: { fr: 'Code à 6 chiffres', en: '6-digit code' },
     deleteAccountSendOtp: { fr: 'Envoyer le code de vérification', en: 'Send verification code' },
     deleteAccountSendingOtp: { fr: 'Envoi du code...', en: 'Sending code...' },
     deleteAccountVerifyAndDelete: { fr: 'Vérifier et supprimer', en: 'Verify and delete' },

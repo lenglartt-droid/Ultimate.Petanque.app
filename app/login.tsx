@@ -16,9 +16,18 @@ import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { router } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
-import { GOOGLE_PROVIDER_NOT_ENABLED } from '@/template/auth';
+import {
+  GOOGLE_PROVIDER_NOT_ENABLED,
+  GOOGLE_DISALLOWED_USER_AGENT,
+  GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD,
+} from '@/template/auth';
 import theme from '@/constants/theme';
-import { AUTH_EMAIL_OTP_LENGTH } from '@/constants/authOtp';
+import {
+  AUTH_EMAIL_OTP_LENGTH,
+  AUTH_EMAIL_OTP_MAX_LENGTH,
+  isCompleteEmailOtp,
+  normalizeEmailOtpInput,
+} from '@/constants/authOtp';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
 import { canCreateAccount, canLoginOnDevice, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
@@ -78,11 +87,20 @@ export default function LoginScreen() {
     // device binding is enforced via post-login check in canLoginOnDevice
     const { error } = await signInWithGoogle();
     if (error) {
-      const message =
+      let message = error;
+      if (
         error === GOOGLE_PROVIDER_NOT_ENABLED ||
         error.toLowerCase().includes('provider is not enabled')
-          ? t('login', 'googleProviderNotEnabled')
-          : error;
+      ) {
+        message = t('login', 'googleProviderNotEnabled');
+      } else if (
+        error === GOOGLE_DISALLOWED_USER_AGENT ||
+        error.toLowerCase().includes('disallowed_useragent')
+      ) {
+        message = t('login', 'googleDisallowedUserAgent');
+      } else if (error === GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD) {
+        message = t('login', 'googleExpoGoNotSupported');
+      }
       showAlert(t('login', 'googleError'), message);
     }
   };
@@ -119,7 +137,7 @@ export default function LoginScreen() {
       showAlert(t('common', 'error'), t('login', 'enterEmail'));
       return;
     }
-    const { error } = await sendOTP(resetEmail.trim());
+    const { error } = await sendOTP(resetEmail.trim().toLowerCase());
     if (error) {
       showAlert(t('common', 'error'), error);
       return;
@@ -132,7 +150,7 @@ export default function LoginScreen() {
   };
 
   const handleResetVerifyAndSetPassword = async () => {
-    if (!resetOtp.trim() || resetOtp.length < AUTH_EMAIL_OTP_LENGTH) {
+    if (!isCompleteEmailOtp(resetOtp)) {
       showAlert(t('common', 'error'), t('login', 'enterCode'));
       return;
     }
@@ -144,7 +162,11 @@ export default function LoginScreen() {
       showAlert(t('common', 'error'), t('login', 'passwordMismatch'));
       return;
     }
-    const { error } = await verifyOTPAndLogin(resetEmail.trim(), resetOtp.trim(), { password: resetNewPassword });
+    const { error } = await verifyOTPAndLogin(
+      resetEmail.trim().toLowerCase(),
+      normalizeEmailOtpInput(resetOtp),
+      { password: resetNewPassword }
+    );
     if (error) {
       showAlert(t('common', 'error'), error);
       return;
@@ -190,7 +212,7 @@ export default function LoginScreen() {
     }
 
     try {
-      const { error } = await sendOTP(email.trim());
+      const { error } = await sendOTP(email.trim().toLowerCase());
       if (error) {
         showAlert(t('common', 'error'), error);
         return;
@@ -205,12 +227,16 @@ export default function LoginScreen() {
   };
 
   const handleVerifyOTP = async () => {
-    if (!otp.trim() || otp.length < AUTH_EMAIL_OTP_LENGTH) {
+    if (!isCompleteEmailOtp(otp)) {
       showAlert(t('common', 'error'), t('login', 'enterCode'));
       return;
     }
 
-    const { error, user: newUser } = await verifyOTPAndLogin(email.trim(), otp.trim(), { password });
+    const { error, user: newUser } = await verifyOTPAndLogin(
+      email.trim().toLowerCase(),
+      normalizeEmailOtpInput(otp),
+      { password }
+    );
     if (error) {
       showAlert(t('common', 'error'), error);
     } else {
@@ -481,17 +507,22 @@ export default function LoginScreen() {
                   placeholder={t('login', 'verificationCode')}
                   placeholderTextColor={theme.textMuted}
                   value={otp}
-                  onChangeText={setOtp}
+                  onChangeText={(text) => setOtp(normalizeEmailOtpInput(text))}
                   keyboardType="number-pad"
-                  maxLength={AUTH_EMAIL_OTP_LENGTH}
+                  textContentType="oneTimeCode"
+                  autoComplete="sms-otp"
+                  maxLength={AUTH_EMAIL_OTP_MAX_LENGTH}
                 />
               </View>
 
               <Pressable
                 testID="verify-otp-button"
-                style={[styles.submitButton, operationLoading && styles.submitButtonDisabled]}
+                style={[
+                  styles.submitButton,
+                  (operationLoading || !isCompleteEmailOtp(otp)) && styles.submitButtonDisabled,
+                ]}
                 onPress={handleVerifyOTP}
-                disabled={operationLoading}
+                disabled={operationLoading || !isCompleteEmailOtp(otp)}
               >
                 {operationLoading ? (
                   <ActivityIndicator color="#FFF" />
@@ -569,9 +600,11 @@ export default function LoginScreen() {
                       placeholder={t('login', 'verificationCode')}
                       placeholderTextColor={theme.textMuted}
                       value={resetOtp}
-                      onChangeText={setResetOtp}
+                      onChangeText={(text) => setResetOtp(normalizeEmailOtpInput(text))}
                       keyboardType="number-pad"
-                      maxLength={AUTH_EMAIL_OTP_LENGTH}
+                      textContentType="oneTimeCode"
+                      autoComplete="sms-otp"
+                      maxLength={AUTH_EMAIL_OTP_MAX_LENGTH}
                     />
                   </View>
                   <View style={styles.inputContainer}>
