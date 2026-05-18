@@ -18,6 +18,7 @@ import { router } from 'expo-router';
 import { useAuth, useAlert } from '@/template';
 import { GOOGLE_PROVIDER_NOT_ENABLED } from '@/template/auth';
 import theme from '@/constants/theme';
+import { AUTH_EMAIL_OTP_LENGTH } from '@/constants/authOtp';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
 import { canCreateAccount, canLoginOnDevice, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
@@ -131,7 +132,7 @@ export default function LoginScreen() {
   };
 
   const handleResetVerifyAndSetPassword = async () => {
-    if (!resetOtp.trim() || resetOtp.length < 4) {
+    if (!resetOtp.trim() || resetOtp.length < AUTH_EMAIL_OTP_LENGTH) {
       showAlert(t('common', 'error'), t('login', 'enterCode'));
       return;
     }
@@ -204,7 +205,7 @@ export default function LoginScreen() {
   };
 
   const handleVerifyOTP = async () => {
-    if (!otp.trim() || otp.length < 4) {
+    if (!otp.trim() || otp.length < AUTH_EMAIL_OTP_LENGTH) {
       showAlert(t('common', 'error'), t('login', 'enterCode'));
       return;
     }
@@ -482,7 +483,7 @@ export default function LoginScreen() {
                   value={otp}
                   onChangeText={setOtp}
                   keyboardType="number-pad"
-                  maxLength={4}
+                  maxLength={AUTH_EMAIL_OTP_LENGTH}
                 />
               </View>
 
@@ -570,7 +571,7 @@ export default function LoginScreen() {
                       value={resetOtp}
                       onChangeText={setResetOtp}
                       keyboardType="number-pad"
-                      maxLength={4}
+                      maxLength={AUTH_EMAIL_OTP_LENGTH}
                     />
                   </View>
                   <View style={styles.inputContainer}>

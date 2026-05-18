@@ -51,6 +51,7 @@ import { extraTranslations } from '@/constants/i18nExtra';
 import { Switch } from 'react-native';
 import { NotificationPreferences, DEFAULT_NOTIFICATION_PREFERENCES, loadNotificationPreferences, saveNotificationPreferences } from '@/services/notificationPreferencesService';
 import { APP_VERSION_DISPLAY } from '@/constants/appVersion';
+import { AUTH_EMAIL_OTP_LENGTH } from '@/constants/authOtp';
 
 
 export default function ProfileScreen() {
@@ -825,7 +826,7 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = async () => {
-    if (otpCode.trim().length < 4) return;
+    if (otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH) return;
 
     setDeletingAccount(true);
     try {
@@ -2253,7 +2254,7 @@ export default function ProfileScreen() {
                     placeholder={t('profile', 'deleteAccountOtpPlaceholder')}
                     placeholderTextColor={theme.textMuted}
                     keyboardType="number-pad"
-                    maxLength={4}
+                    maxLength={AUTH_EMAIL_OTP_LENGTH}
                     editable={!deletingAccount}
                     autoFocus
                   />
@@ -2273,10 +2274,10 @@ export default function ProfileScreen() {
                 <Pressable
                   style={[
                     styles.deleteConfirmButton,
-                    otpCode.trim().length < 4 && styles.deleteConfirmButtonDisabled,
+                    otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH && styles.deleteConfirmButtonDisabled,
                   ]}
                   onPress={handleDeleteAccount}
-                  disabled={otpCode.trim().length < 4 || deletingAccount}
+                  disabled={otpCode.trim().length < AUTH_EMAIL_OTP_LENGTH || deletingAccount}
                 >
                   {deletingAccount ? (
                     <View style={styles.deleteConfirmButtonInner}>

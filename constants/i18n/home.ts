@@ -47,7 +47,7 @@ export const homeTranslations = {
     login: { fr: 'Se connecter', en: 'Log in' },
     getCode: { fr: 'Recevoir le code', en: 'Get code' },
     verifyEmail: { fr: 'Vérifiez votre email', en: 'Check your email' },
-    codeSent: { fr: 'Un code à 4 chiffres a été envoyé à', en: 'A 4-digit code was sent to' },
+    codeSent: { fr: 'Un code de vérification a été envoyé à', en: 'A verification code was sent to' },
     verificationCode: { fr: 'Code de vérification', en: 'Verification code' },
     createMyAccount: { fr: 'Créer mon compte', en: 'Create my account' },
     editEmail: { fr: "Modifier l'email", en: 'Edit email' },
@@ -59,7 +59,7 @@ export const homeTranslations = {
     passwordMismatch: { fr: 'Les mots de passe ne correspondent pas', en: 'Passwords do not match' },
     enterCode: { fr: 'Veuillez entrer le code de vérification', en: 'Please enter the verification code' },
     codeSentSuccess: { fr: 'Code envoyé', en: 'Code sent' },
-    codeSentMessage: { fr: 'Un code à 6 chiffres a été envoyé à votre email. Saisissez-le ci-dessous (n\'utilisez pas le lien sur mobile).', en: 'A 6-digit code was sent to your email. Enter it below — do not use the email link on mobile.' },
+    codeSentMessage: { fr: 'Saisissez le code reçu par email (8 chiffres). N\'utilisez pas le lien sur mobile.', en: 'Enter the code from your email (8 digits). Do not use the email link on mobile.' },
     loginError: { fr: 'Erreur de connexion', en: 'Login error' },
     googleError: { fr: 'Erreur Google', en: 'Google error' },
     googleProviderNotEnabled: {

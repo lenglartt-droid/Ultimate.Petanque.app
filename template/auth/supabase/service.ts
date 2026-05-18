@@ -161,20 +161,25 @@ export class AuthService {
 
   async sendOTP(email: string, options: SendOTPOptions = {}) {
     try {
-      const { shouldCreateUser = true, emailRedirectTo = getAuthEmailRedirectUri() } = options;
-      if (typeof __DEV__ !== 'undefined' && __DEV__) {
-        console.log('[Template:AuthService] signInWithOtp emailRedirectTo:', emailRedirectTo);
+      const { shouldCreateUser = true, includeMagicLinkRedirect = false } = options;
+      // Numeric OTP: do not pass emailRedirectTo (see Supabase passwordless OTP docs).
+      // Passing emailRedirectTo + {{ .ConfirmationURL }} in the email template sends a magic link
+      // (often redirect_to=http://localhost:3000 when Site URL is unset).
+      const signInOptions: { shouldCreateUser: boolean; emailRedirectTo?: string } = {
+        shouldCreateUser,
+      };
+      if (includeMagicLinkRedirect) {
+        signInOptions.emailRedirectTo = options.emailRedirectTo ?? getAuthEmailRedirectUri();
+        if (typeof __DEV__ !== 'undefined' && __DEV__) {
+          console.log('[Template:AuthService] signInWithOtp emailRedirectTo:', signInOptions.emailRedirectTo);
+        }
       }
 
       return await safeSupabaseOperation(async (client) => {
         const { error } = await withTimeout(
           client.auth.signInWithOtp({
             email,
-            options: {
-              shouldCreateUser,
-              // Without this, Supabase uses Site URL (often http://localhost:3000) in signup emails.
-              emailRedirectTo,
-            }
+            options: signInOptions,
           }),
           TIMEOUT_CONFIG.AUTH_OPERATIONS,
           'SendOTP'
