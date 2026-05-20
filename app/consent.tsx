@@ -30,6 +30,16 @@ export default function ConsentScreen() {
 
   const canAccept = cguChecked && privacyChecked;
 
+  const openTerms = () => {
+    Haptics.selectionAsync();
+    router.push('/terms');
+  };
+
+  const openPrivacy = () => {
+    Haptics.selectionAsync();
+    router.push('/privacy-policy');
+  };
+
   const handleAccept = async () => {
     if (!canAccept || !user?.id) return;
 
@@ -117,61 +127,57 @@ export default function ConsentScreen() {
           </View>
         </Animated.View>
 
-        {/* Checkboxes */}
+        {/* Checkboxes — links open in-app screens (app/terms.tsx, app/privacy-policy.tsx) */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.checkboxSection}>
-          {/* CGU Checkbox */}
-          <Pressable
-            style={styles.checkboxRow}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setCguChecked(!cguChecked);
-            }}
-          >
-            <View style={[styles.checkbox, cguChecked && styles.checkboxChecked]}>
-              {cguChecked ? (
-                <MaterialIcons name="check" size={18} color="#FFF" />
-              ) : null}
-            </View>
-            <Text style={styles.checkboxLabel}>
-              {t('consent', 'acceptCgu')}{' '}
-              <Text
-                style={styles.checkboxLink}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  router.push('/terms');
-                }}
-              >
-                {t('terms', 'title')}
+          <View style={styles.legalCard}>
+            <Pressable
+              style={styles.checkboxRow}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setCguChecked(!cguChecked);
+              }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: cguChecked }}
+            >
+              <View style={[styles.checkbox, cguChecked && styles.checkboxChecked]}>
+                {cguChecked ? <MaterialIcons name="check" size={18} color="#FFF" /> : null}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                {t('consent', 'acceptCgu')}{' '}
+                <Text style={styles.checkboxLink}>{t('terms', 'title')}</Text>
               </Text>
-            </Text>
-          </Pressable>
+            </Pressable>
+            <Pressable style={styles.readDocButton} onPress={openTerms} accessibilityRole="link">
+              <MaterialIcons name="description" size={18} color={theme.primary} />
+              <Text style={styles.readDocButtonText}>{t('consent', 'readDocument')}</Text>
+              <MaterialIcons name="chevron-right" size={20} color={theme.primary} />
+            </Pressable>
+          </View>
 
-          {/* Privacy Checkbox */}
-          <Pressable
-            style={styles.checkboxRow}
-            onPress={() => {
-              Haptics.selectionAsync();
-              setPrivacyChecked(!privacyChecked);
-            }}
-          >
-            <View style={[styles.checkbox, privacyChecked && styles.checkboxChecked]}>
-              {privacyChecked ? (
-                <MaterialIcons name="check" size={18} color="#FFF" />
-              ) : null}
-            </View>
-            <Text style={styles.checkboxLabel}>
-              {t('consent', 'acceptPrivacy')}{' '}
-              <Text
-                style={styles.checkboxLink}
-                onPress={(e) => {
-                  e.stopPropagation();
-                  router.push('/privacy-policy');
-                }}
-              >
-                {t('privacy', 'title')}
+          <View style={styles.legalCard}>
+            <Pressable
+              style={styles.checkboxRow}
+              onPress={() => {
+                Haptics.selectionAsync();
+                setPrivacyChecked(!privacyChecked);
+              }}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: privacyChecked }}
+            >
+              <View style={[styles.checkbox, privacyChecked && styles.checkboxChecked]}>
+                {privacyChecked ? <MaterialIcons name="check" size={18} color="#FFF" /> : null}
+              </View>
+              <Text style={styles.checkboxLabel}>
+                {t('consent', 'acceptPrivacy')}{' '}
+                <Text style={styles.checkboxLink}>{t('privacy', 'title')}</Text>
               </Text>
-            </Text>
-          </Pressable>
+            </Pressable>
+            <Pressable style={styles.readDocButton} onPress={openPrivacy} accessibilityRole="link">
+              <MaterialIcons name="policy" size={18} color={theme.primary} />
+              <Text style={styles.readDocButtonText}>{t('consent', 'readDocument')}</Text>
+              <MaterialIcons name="chevron-right" size={20} color={theme.primary} />
+            </Pressable>
+          </View>
         </Animated.View>
 
         {/* Accept Button */}
@@ -293,15 +299,34 @@ const styles = StyleSheet.create({
     gap: 16,
     marginBottom: 24,
   },
+  legalCard: {
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    borderWidth: 1,
+    borderColor: theme.border,
+    overflow: 'hidden',
+  },
   checkboxRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
-    backgroundColor: theme.surface,
-    borderRadius: theme.borderRadius.lg,
     padding: 16,
-    borderWidth: 1,
-    borderColor: theme.border,
+  },
+  readDocButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderTopWidth: 1,
+    borderTopColor: theme.border,
+    backgroundColor: theme.primary + '08',
+  },
+  readDocButtonText: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '600',
+    color: theme.primary,
   },
   checkbox: {
     width: 28,

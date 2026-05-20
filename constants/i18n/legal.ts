@@ -15,6 +15,7 @@ export const legalTranslations = {
     keyPoint4: { fr: 'Vous pouvez supprimer votre compte et vos données à tout moment', en: 'You can delete your account and data at any time' },
     acceptCgu: { fr: "J'ai lu et j'accepte les", en: 'I have read and accept the' },
     acceptPrivacy: { fr: "J'ai lu et j'accepte la", en: 'I have read and accept the' },
+    readDocument: { fr: 'Lire le document complet', en: 'Read full document' },
     acceptButton: { fr: 'Accepter et continuer', en: 'Accept and continue' },
     footerNote: { fr: 'Vous pouvez consulter ces documents à tout moment depuis votre profil.', en: 'You can review these documents at any time from your profile.' },
     errorSaving: { fr: 'Erreur lors de la sauvegarde du consentement', en: 'Error saving consent' },

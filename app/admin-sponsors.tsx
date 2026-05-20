@@ -26,6 +26,7 @@ import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminGuard from '@/components/feature/AdminGuard';
+import { patchAmbassadorForAdmin } from '@/services/adminAmbassadorsService';
 import {
   fetchAmbassadors,
   Ambassador,
@@ -178,27 +179,23 @@ export default function AdminSponsorsScreen() {
     if (!editItem) return;
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('ambassadors')
-        .update({
-          display_name: editForm.displayName.trim(),
-          bio: editForm.bio.trim() || null,
-          photo: editForm.photo.trim() || null,
-          badge_type: editForm.badgeType,
-          ambassador_level: editForm.ambassadorLevel,
-          is_active: editForm.isActive,
-          is_featured: editForm.isFeatured,
-          sort_order: parseInt(editForm.sortOrder) || 0,
-          youtube_url: editForm.youtubeUrl.trim() || null,
-          tiktok_url: editForm.tiktokUrl.trim() || null,
-          instagram_handle: editForm.instagramHandle.trim() || null,
-          twitter_handle: editForm.twitterHandle.trim() || null,
-          website_url: editForm.websiteUrl.trim() || null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', editItem.id);
+      const { error } = await patchAmbassadorForAdmin(supabase, editItem.id, {
+        display_name: editForm.displayName.trim(),
+        bio: editForm.bio.trim() || null,
+        photo: editForm.photo.trim() || null,
+        badge_type: editForm.badgeType,
+        ambassador_level: editForm.ambassadorLevel,
+        is_active: editForm.isActive,
+        is_featured: editForm.isFeatured,
+        sort_order: parseInt(editForm.sortOrder) || 0,
+        youtube_url: editForm.youtubeUrl.trim() || null,
+        tiktok_url: editForm.tiktokUrl.trim() || null,
+        instagram_handle: editForm.instagramHandle.trim() || null,
+        twitter_handle: editForm.twitterHandle.trim() || null,
+        website_url: editForm.websiteUrl.trim() || null,
+      });
 
-      if (error) { Alert.alert('Error', error.message); return; }
+      if (error) { Alert.alert('Error', error); return; }
       invalidateAmbassadorCache();
       setShowEditModal(false);
       await loadData();
@@ -258,10 +255,11 @@ export default function AdminSponsorsScreen() {
   const handleToggleActive = async (item: any) => {
     Haptics.selectionAsync();
     const newActive = !item.is_active;
-    await supabase
-      .from('ambassadors')
-      .update({ is_active: newActive, updated_at: new Date().toISOString() })
-      .eq('id', item.id);
+    const { error } = await patchAmbassadorForAdmin(supabase, item.id, { is_active: newActive });
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
     invalidateAmbassadorCache();
     loadData();
   };

@@ -1954,10 +1954,10 @@ const styles = StyleSheet.create({
   shotButtonsContainer: { flex: 1, paddingHorizontal: 16, paddingTop: 20, alignItems: 'center', maxWidth: 600, alignSelf: 'center' as const, width: '100%' },
   shotButtonsTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary, marginBottom: 16 },
   quickBtnsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%' },
-  quickBtnLarge: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 22, borderRadius: 20, ...theme.shadows.cardElevated },
+  quickBtnLarge: { flex: 1, minWidth: '22%' as const, alignItems: 'center', justifyContent: 'center', paddingVertical: 22, paddingHorizontal: 6, borderRadius: 20, ...theme.shadows.cardElevated },
   quickBtnCarreau: { backgroundColor: theme.carreauColor },
   quickBtnNotation: { backgroundColor: theme.surface, borderWidth: 2, borderColor: theme.tirColor + '40' },
-  quickBtnLargeText: { fontSize: 14, fontWeight: '800', color: '#FFF', marginTop: 6, letterSpacing: 0.3 },
+  quickBtnLargeText: { fontSize: 13, fontWeight: '800', color: '#FFF', marginTop: 6, letterSpacing: 0.3, textAlign: 'center', width: '100%' },
   
   // Precision In Progress
   gameContent: { paddingHorizontal: 16, paddingTop: 16, maxWidth: 600, alignSelf: 'center' as const, width: '100%' },

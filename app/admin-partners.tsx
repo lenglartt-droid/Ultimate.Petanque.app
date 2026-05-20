@@ -15,6 +15,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import AdminGuard from '@/components/feature/AdminGuard';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { fetchSponsorsOnly, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
+import { patchAmbassadorForAdmin } from '@/services/adminAmbassadorsService';
 import { PARTNER_TIERS, getTierConfig, PartnerTier } from '@/constants/partnerTiers';
 
 const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: string; icon: string; advantages: { fr: string; en: string }[] }> = {
@@ -350,21 +351,17 @@ export default function AdminPartnersScreen() {
   const handleSaveEdit = async () => {
     if (!editItem) return;
     setSaving(true);
-    const { error } = await supabase
-      .from('ambassadors')
-      .update({
-        badge_type: editTier,
-        is_active: editActive,
-        display_name: editDisplayName.trim(),
-        bio: editBio.trim() || null,
-        photo: editPhoto.trim() || null,
-        brand_color: editBrandColor.trim() || null,
-        expires_at: editExpiresAt.trim() ? new Date(editExpiresAt.trim()).toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('id', editItem.id);
+    const { error } = await patchAmbassadorForAdmin(supabase, editItem.id, {
+      badge_type: editTier,
+      is_active: editActive,
+      display_name: editDisplayName.trim(),
+      bio: editBio.trim() || null,
+      photo: editPhoto.trim() || null,
+      brand_color: editBrandColor.trim() || null,
+      expires_at: editExpiresAt.trim() ? new Date(editExpiresAt.trim()).toISOString() : null,
+    });
     setSaving(false);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { Alert.alert('Error', error); return; }
     invalidateAmbassadorCache();
     setShowEditModal(false);
     await loadData();
@@ -417,19 +414,15 @@ export default function AdminPartnersScreen() {
     const monthlyCost = parseFloat(renewMonthlyCost) || null;
     const totalInvested = (parseFloat(renewItem.total_invested) || 0) + (monthlyCost ? monthlyCost * months : 0);
 
-    const { error } = await supabase
-      .from('ambassadors')
-      .update({
-        badge_type: renewTier,
-        expires_at: newExpiry.toISOString(),
-        is_active: true,
-        monthly_cost: monthlyCost,
-        total_invested: totalInvested,
-        updated_at: now.toISOString(),
-      })
-      .eq('id', renewItem.id);
+    const { error } = await patchAmbassadorForAdmin(supabase, renewItem.id, {
+      badge_type: renewTier,
+      expires_at: newExpiry.toISOString(),
+      is_active: true,
+      monthly_cost: monthlyCost,
+      total_invested: totalInvested,
+    });
 
-    if (error) { Alert.alert('Error', error.message); setSaving(false); return; }
+    if (error) { Alert.alert('Error', error); setSaving(false); return; }
 
     // Log renewal history
     await supabase.from('partner_renewal_history').insert({
@@ -464,20 +457,24 @@ export default function AdminPartnersScreen() {
 
   const handleToggleActive = async (item: any) => {
     Haptics.selectionAsync();
-    await supabase
-      .from('ambassadors')
-      .update({ is_active: !item.is_active, updated_at: new Date().toISOString() })
-      .eq('id', item.id);
+    const { error } = await patchAmbassadorForAdmin(supabase, item.id, {
+      is_active: !item.is_active,
+    });
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
     invalidateAmbassadorCache();
     loadData();
   };
 
   const handleChangeTier = async (item: any, newTier: PartnerTier) => {
     Haptics.selectionAsync();
-    await supabase
-      .from('ambassadors')
-      .update({ badge_type: newTier, updated_at: new Date().toISOString() })
-      .eq('id', item.id);
+    const { error } = await patchAmbassadorForAdmin(supabase, item.id, { badge_type: newTier });
+    if (error) {
+      Alert.alert('Error', error);
+      return;
+    }
     invalidateAmbassadorCache();
     loadData();
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
