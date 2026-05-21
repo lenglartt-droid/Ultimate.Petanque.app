@@ -8,6 +8,42 @@ The text on Google’s account picker (“Accéder à l’application **xzkdtudh
 |---------------------------|---------------|
 | `xzkdtudhtprpuzlamjdt.supabase.co` | **Ultimate Petanque** (or “Ultimate Pétanque Database” in the consent screen **app name**) |
 
+## Fix: `Erreur 400 : redirect_uri_mismatch`
+
+Google blocks sign-in when the **Authorized redirect URI** in your Google OAuth client does not **exactly** match what Supabase sends.
+
+After you activate Supabase **custom domain** `auth.ultimatepetanque.app`, Google usually receives:
+
+```text
+https://auth.ultimatepetanque.app/auth/v1/callback
+```
+
+If Google only has the old URL, you get **redirect_uri_mismatch** (screenshot: “Accès bloqué : la demande de cette appli est incorrecte”).
+
+### Google Cloud → Credentials → OAuth 2.0 Client ID (Web)
+
+**APIs & Services → Credentials** → open the **Web client** whose Client ID is pasted in **Supabase → Auth → Google**.
+
+Under **Authorized redirect URIs**, add **both** (copy/paste, no trailing slash):
+
+```text
+https://auth.ultimatepetanque.app/auth/v1/callback
+https://xzkdtudhtprpuzlamjdt.supabase.co/auth/v1/callback
+```
+
+Save. Wait 1–5 minutes, then retry Google sign-in on the phone.
+
+Optional under **Authorized JavaScript origins** (if Google asks):
+
+```text
+https://auth.ultimatepetanque.app
+https://xzkdtudhtprpuzlamjdt.supabase.co
+```
+
+**Not fixable in app code** — `signInWithGoogle()` is correct; only Google Console + Supabase dashboard must match.
+
+---
+
 ## Step 1 — Google Cloud Console (required)
 
 Use the **same Google Cloud project** whose Web client ID is in Supabase → Authentication → Providers → Google.
@@ -33,8 +69,11 @@ While the OAuth callback goes through `*.supabase.co`, Google often labels the a
 1. Supabase Dashboard → **Project Settings** → **Custom Domains** (or [docs](https://supabase.com/docs/guides/platform/custom-domains)).
 2. Example: `auth.ultimatepetanque.app` → your project `xzkdtudhtprpuzlamjdt`.
 3. DNS: CNAME as instructed by Supabase.
-4. Update **Google Cloud** Web OAuth client **Authorized redirect URI** to use the custom host if Supabase docs require it (often still `https://<project>.supabase.co/auth/v1/callback` unless Supabase switches auth to the custom domain — follow Supabase’s current custom-domain auth guide).
-5. Supabase → **Authentication** → **URL configuration**: keep `onspaceapp://auth` in redirect allow list.
+4. Add **both** redirect URIs in Google (see **redirect_uri_mismatch** section above).
+5. Supabase → **Authentication** → **URL configuration**:
+   - **Site URL:** `onspaceapp://auth`
+   - **Redirect URLs:** `onspaceapp://auth`, `onspaceapp://**`, `exp://**/--/auth`
+6. Optional: set app `.env` `EXPO_PUBLIC_SUPABASE_URL=https://auth.ultimatepetanque.app` after custom domain is **Active** (must match the same project anon key).
 
 After custom domain + Google branding, the picker typically shows **Ultimate Petanque** and/or `auth.ultimatepetanque.app` instead of the raw project id subdomain.
 
@@ -47,8 +86,9 @@ After custom domain + Google branding, the picker typically shows **Ultimate Pet
 
 - [ ] Google **App name** = Ultimate Petanque (+ logo, privacy URL)
 - [ ] Same Web Client ID + secret in Supabase Google provider
-- [ ] Redirect URI: `https://xzkdtudhtprpuzlamjdt.supabase.co/auth/v1/callback`
-- [ ] (Optional, paid) Custom domain `auth.ultimatepetanque.app`
+- [ ] Redirect URIs in Google: `https://auth.ultimatepetanque.app/auth/v1/callback` **and** `https://xzkdtudhtprpuzlamjdt.supabase.co/auth/v1/callback`
+- [ ] Custom domain `auth.ultimatepetanque.app` **Active** in Supabase (CNAME + TXT done)
+- [ ] Supabase redirect allow list includes `onspaceapp://auth`
 - [ ] Google brand verification submitted if required
 
 ## App code (already correct)

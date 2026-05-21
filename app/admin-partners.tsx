@@ -845,7 +845,7 @@ export default function AdminPartnersScreen() {
             <Pressable onPress={() => setShowEditModal(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
             <Text style={s.modalTitle}>{fr ? 'Modifier partenaire' : 'Edit Partner'}</Text>
             <Pressable style={[s.saveBtn, saving && { opacity: 0.5 }]} onPress={handleSaveEdit} disabled={saving}>
-              {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={s.saveBtnText}>{fr ? 'Sauver' : 'Save'}</Text>}
+              {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={s.saveBtnText}>{fr ? 'Mettre a jour' : 'Update'}</Text>}
             </Pressable>
           </View>
           <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, gap: 16 }} showsVerticalScrollIndicator={false}>
@@ -930,6 +930,14 @@ export default function AdminPartnersScreen() {
               <Text style={s.toggleLabel}>{fr ? 'Actif' : 'Active'}</Text>
               <Switch value={editActive} onValueChange={setEditActive} trackColor={{ false: theme.border, true: theme.success + '60' }} thumbColor={editActive ? theme.success : theme.textMuted} />
             </View>
+            <Pressable style={[s.formBottomSaveBtn, saving && { opacity: 0.5 }]} onPress={handleSaveEdit} disabled={saving}>
+              {saving ? <ActivityIndicator size="small" color="#FFF" /> : (
+                <>
+                  <MaterialIcons name="save" size={20} color="#FFF" />
+                  <Text style={s.formBottomSaveBtnText}>{fr ? 'Enregistrer les modifications' : 'Save changes'}</Text>
+                </>
+              )}
+            </Pressable>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1406,6 +1414,14 @@ export default function AdminPartnersScreen() {
               <Text style={s.formLabel}>{fr ? 'URL photo' : 'Photo URL'}</Text>
               <TextInput style={s.formInput} value={createPhoto} onChangeText={setCreatePhoto} placeholder="https://..." placeholderTextColor={theme.textMuted} autoCapitalize="none" />
             </View>
+            <Pressable style={[s.formBottomSaveBtn, saving && { opacity: 0.5 }]} onPress={handleCreate} disabled={saving}>
+              {saving ? <ActivityIndicator size="small" color="#FFF" /> : (
+                <>
+                  <MaterialIcons name="save" size={20} color="#FFF" />
+                  <Text style={s.formBottomSaveBtnText}>{fr ? 'Creer' : 'Create'}</Text>
+                </>
+              )}
+            </Pressable>
           </ScrollView>
         </SafeAreaView>
       </Modal>
@@ -1457,6 +1473,8 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   saveBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.primary, borderRadius: 10 },
   saveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  formBottomSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.md, marginTop: 8 },
+  formBottomSaveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
   formField: { gap: 6 },
   formLabel: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 0.3 },
   formInput: { backgroundColor: theme.surface, borderRadius: 12, paddingHorizontal: 14, paddingVertical: 14, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },

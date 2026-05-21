@@ -264,9 +264,24 @@ export default function AdminSponsorsScreen() {
     loadData();
   };
 
-  const renderFormFields = (form: EditFormData, setForm: (f: EditFormData) => void, showUserId?: boolean) => (
+  const renderFormSaveBar = (onSave: () => void, label: string, isSaving: boolean) => (
+    <Pressable style={[s.formBottomSaveBtn, isSaving && { opacity: 0.5 }]} onPress={onSave} disabled={isSaving}>
+      {isSaving ? <ActivityIndicator size="small" color="#FFF" /> : (
+        <>
+          <MaterialIcons name="save" size={20} color="#FFF" />
+          <Text style={s.formBottomSaveBtnText}>{label}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+
+  const renderFormFields = (
+    form: EditFormData,
+    setForm: (f: EditFormData) => void,
+    opts?: { showUserId?: boolean; onSave?: () => void; saveLabel?: string; saving?: boolean },
+  ) => (
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40, gap: 14 }} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-      {showUserId ? (
+      {opts?.showUserId ? (
         <View style={s.formField}>
           <Text style={s.formLabel}>User ID *</Text>
           <TextInput style={s.formInput} value={createUserId} onChangeText={setCreateUserId} placeholder="UUID du user_profiles" placeholderTextColor={theme.textMuted} autoCapitalize="none" />
@@ -358,6 +373,7 @@ export default function AdminSponsorsScreen() {
           />
         </View>
       ))}
+      {opts?.onSave ? renderFormSaveBar(opts.onSave, opts.saveLabel || (fr ? 'Sauver' : 'Save'), !!opts.saving) : null}
     </ScrollView>
   );
 
@@ -508,10 +524,14 @@ export default function AdminSponsorsScreen() {
             <Pressable style={s.modalCloseBtn} onPress={() => setShowEditModal(false)}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
             <Text style={s.modalTitle}>{fr ? 'Modifier' : 'Edit'}</Text>
             <Pressable style={[s.modalSaveBtn, saving && { opacity: 0.5 }]} onPress={handleSaveEdit} disabled={saving}>
-              {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={s.modalSaveBtnText}>{fr ? 'Sauver' : 'Save'}</Text>}
+              {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={s.modalSaveBtnText}>{fr ? 'Mettre a jour' : 'Update'}</Text>}
             </Pressable>
           </View>
-          {renderFormFields(editForm, setEditForm)}
+          {renderFormFields(editForm, setEditForm, {
+            onSave: handleSaveEdit,
+            saveLabel: fr ? 'Enregistrer les modifications' : 'Save changes',
+            saving,
+          })}
         </SafeAreaView>
       </Modal>
 
@@ -525,7 +545,12 @@ export default function AdminSponsorsScreen() {
               {saving ? <ActivityIndicator size="small" color="#FFF" /> : <Text style={s.modalSaveBtnText}>{fr ? 'Creer' : 'Create'}</Text>}
             </Pressable>
           </View>
-          {renderFormFields(createForm, setCreateForm, true)}
+          {renderFormFields(createForm, setCreateForm, {
+            showUserId: true,
+            onSave: handleCreate,
+            saveLabel: fr ? 'Creer' : 'Create',
+            saving,
+          })}
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -587,6 +612,8 @@ const s = StyleSheet.create({
   modalTitle: { fontSize: 17, fontWeight: '600', color: theme.textPrimary },
   modalSaveBtn: { paddingHorizontal: 16, paddingVertical: 8, backgroundColor: theme.primary, borderRadius: 10 },
   modalSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
+  formBottomSaveBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.primary, paddingVertical: 16, borderRadius: theme.borderRadius.md, marginTop: 8 },
+  formBottomSaveBtnText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
 
   // Form
   formField: { gap: 6 },

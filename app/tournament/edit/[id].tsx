@@ -361,7 +361,13 @@ export default function EditTournamentScreen() {
       <View style={styles.header}>
         <Pressable style={styles.headerBtn} onPress={() => router.back()}><MaterialIcons name="close" size={24} color={theme.textPrimary} /></Pressable>
         <View style={styles.headerCenter}><Text style={styles.headerTitle}>{t('tournament', 'editTournament')}</Text></View>
-        <View style={styles.headerBtn} />
+        <Pressable
+          style={[styles.headerSaveBtn, (!name.trim() || (!terrainId && !location.city.trim())) && styles.headerSaveBtnDisabled]}
+          onPress={handleSave}
+          disabled={!name.trim() || (!terrainId && !location.city.trim())}
+        >
+          <Text style={styles.headerSaveBtnText}>{t('common', 'save')}</Text>
+        </Pressable>
       </View>
 
       <StepIndicator step={progressFilled} total={3} label={progressLabel} />
@@ -935,6 +941,9 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
   headerBtn: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
+  headerSaveBtn: { paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.carreauColor, borderRadius: theme.borderRadius.md, minWidth: 72, alignItems: 'center', justifyContent: 'center' },
+  headerSaveBtnDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
+  headerSaveBtnText: { fontSize: 14, fontWeight: '700', color: '#FFF' },
   headerCenter: { flex: 1, alignItems: 'center' },
   headerTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
   stepIndicator: { paddingHorizontal: 16, paddingVertical: 10, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
