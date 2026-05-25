@@ -15,7 +15,7 @@ import { useAuth, getSupabaseClient } from '@/template';
 import AdminGuard from '@/components/feature/AdminGuard';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import { fetchSponsorsOnly, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
-import { patchAmbassadorForAdmin } from '@/services/adminAmbassadorsService';
+import { insertAmbassadorForAdmin, patchAmbassadorForAdmin } from '@/services/adminAmbassadorsService';
 import { PARTNER_TIERS, getTierConfig, PartnerTier } from '@/constants/partnerTiers';
 
 const TIER_CONFIG: Record<PartnerTier, { label: string; labelEn: string; color: string; icon: string; advantages: { fr: string; en: string }[] }> = {
@@ -351,17 +351,22 @@ export default function AdminPartnersScreen() {
   const handleSaveEdit = async () => {
     if (!editItem) return;
     setSaving(true);
-    const { error } = await patchAmbassadorForAdmin(supabase, editItem.id, {
-      badge_type: editTier,
-      is_active: editActive,
-      display_name: editDisplayName.trim(),
-      bio: editBio.trim() || null,
-      photo: editPhoto.trim() || null,
-      brand_color: editBrandColor.trim() || null,
-      expires_at: editExpiresAt.trim() ? new Date(editExpiresAt.trim()).toISOString() : null,
-    });
+    const { error } = await patchAmbassadorForAdmin(
+      supabase,
+      editItem.id,
+      {
+        badge_type: editTier,
+        is_active: editActive,
+        display_name: editDisplayName.trim(),
+        bio: editBio.trim() || null,
+        photo: editPhoto.trim() || null,
+        brand_color: editBrandColor.trim() || null,
+        expires_at: editExpiresAt.trim() ? new Date(editExpiresAt.trim()).toISOString() : null,
+      },
+      language
+    );
     setSaving(false);
-    if (error) { Alert.alert('Error', error); return; }
+    if (error) { Alert.alert(fr ? 'Erreur' : 'Error', error); return; }
     invalidateAmbassadorCache();
     setShowEditModal(false);
     await loadData();
@@ -374,16 +379,20 @@ export default function AdminPartnersScreen() {
       return;
     }
     setSaving(true);
-    const { error } = await supabase.from('ambassadors').insert({
-      user_id: createUserId.trim(),
-      display_name: createDisplayName.trim(),
-      badge_type: createTier,
-      bio: createBio.trim() || null,
-      photo: createPhoto.trim() || null,
-      is_active: true,
-    });
+    const { error } = await insertAmbassadorForAdmin(
+      supabase,
+      {
+        user_id: createUserId.trim(),
+        display_name: createDisplayName.trim(),
+        badge_type: createTier,
+        bio: createBio.trim() || null,
+        photo: createPhoto.trim() || null,
+        is_active: true,
+      },
+      language
+    );
     setSaving(false);
-    if (error) { Alert.alert('Error', error.message); return; }
+    if (error) { Alert.alert(fr ? 'Erreur' : 'Error', error); return; }
     invalidateAmbassadorCache();
     setShowCreateModal(false);
     setCreateUserId(''); setCreateDisplayName(''); setCreateBio(''); setCreatePhoto('');
@@ -414,15 +423,20 @@ export default function AdminPartnersScreen() {
     const monthlyCost = parseFloat(renewMonthlyCost) || null;
     const totalInvested = (parseFloat(renewItem.total_invested) || 0) + (monthlyCost ? monthlyCost * months : 0);
 
-    const { error } = await patchAmbassadorForAdmin(supabase, renewItem.id, {
-      badge_type: renewTier,
-      expires_at: newExpiry.toISOString(),
-      is_active: true,
-      monthly_cost: monthlyCost,
-      total_invested: totalInvested,
-    });
+    const { error } = await patchAmbassadorForAdmin(
+      supabase,
+      renewItem.id,
+      {
+        badge_type: renewTier,
+        expires_at: newExpiry.toISOString(),
+        is_active: true,
+        monthly_cost: monthlyCost,
+        total_invested: totalInvested,
+      },
+      language
+    );
 
-    if (error) { Alert.alert('Error', error); setSaving(false); return; }
+    if (error) { Alert.alert(fr ? 'Erreur' : 'Error', error); setSaving(false); return; }
 
     // Log renewal history
     await supabase.from('partner_renewal_history').insert({
@@ -457,11 +471,14 @@ export default function AdminPartnersScreen() {
 
   const handleToggleActive = async (item: any) => {
     Haptics.selectionAsync();
-    const { error } = await patchAmbassadorForAdmin(supabase, item.id, {
-      is_active: !item.is_active,
-    });
+    const { error } = await patchAmbassadorForAdmin(
+      supabase,
+      item.id,
+      { is_active: !item.is_active },
+      language
+    );
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert(fr ? 'Erreur' : 'Error', error);
       return;
     }
     invalidateAmbassadorCache();
@@ -470,9 +487,9 @@ export default function AdminPartnersScreen() {
 
   const handleChangeTier = async (item: any, newTier: PartnerTier) => {
     Haptics.selectionAsync();
-    const { error } = await patchAmbassadorForAdmin(supabase, item.id, { badge_type: newTier });
+    const { error } = await patchAmbassadorForAdmin(supabase, item.id, { badge_type: newTier }, language);
     if (error) {
-      Alert.alert('Error', error);
+      Alert.alert(fr ? 'Erreur' : 'Error', error);
       return;
     }
     invalidateAmbassadorCache();
