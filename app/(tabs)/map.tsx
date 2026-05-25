@@ -78,29 +78,80 @@ const MAP_MARKER_SHADOW = Platform.select({
   default: {},
 });
 
+const IS_ANDROID_MAP = Platform.OS === 'android';
 /**
- * Custom markers are rasterized to a fixed-size bitmap on Android. The root view MUST have explicit
- * width/height (MapMarkerSlot) — padding-only roots often snapshot as a quadrant (top-right arc only).
+ * Android rasterizes custom markers to a bitmap. Yoga/Fabric can under-report size → quarter-circle clip.
+ * Fixed canvas + single disc child + patches/react-native-maps (MapMarker.createDrawable).
  */
-const MAP_MARKER_SLOT_SIZE = Platform.OS === 'android' ? 72 : 56;
-const mapMarkerSlotStyle: ViewStyle = {
-  width: MAP_MARKER_SLOT_SIZE,
-  height: MAP_MARKER_SLOT_SIZE,
+const MAP_MARKER_CANVAS = IS_ANDROID_MAP ? 64 : 56;
+const MAP_MARKER_DISC = IS_ANDROID_MAP ? 40 : 36;
+const mapMarkerCanvasStyle: ViewStyle = {
+  width: MAP_MARKER_CANVAS,
+  height: MAP_MARKER_CANVAS,
+  minWidth: MAP_MARKER_CANVAS,
+  minHeight: MAP_MARKER_CANVAS,
   alignItems: 'center',
   justifyContent: 'center',
-  overflow: 'visible',
+  backgroundColor: 'transparent',
 };
-const MapMarkerSlot = React.memo(({ children }: { children: React.ReactNode }) => (
-  <View style={mapMarkerSlotStyle} collapsable={false} pointerEvents="none">
+/** Pass explicit size to Marker so SizeReportingShadowNode gets correct dimensions. */
+const MAP_MARKER_NATIVE_STYLE: ViewStyle | undefined = IS_ANDROID_MAP
+  ? { width: MAP_MARKER_CANVAS, height: MAP_MARKER_CANVAS }
+  : undefined;
+
+/** Android: avoid HW texture compositing that clips rounded marker bitmaps. */
+const MAP_MARKER_NO_HW_TEXTURE: ViewStyle =
+  IS_ANDROID_MAP ? ({ renderToHardwareTextureAndroid: false } as ViewStyle) : {};
+
+const MapMarkerCanvas = React.memo(({ children }: { children: React.ReactNode }) => (
+  <View style={mapMarkerCanvasStyle} collapsable={false} pointerEvents="none">
     {children}
   </View>
 ));
-/** Android: avoid HW texture compositing that clips rounded marker bitmaps. */
-const MAP_MARKER_NO_HW_TEXTURE: ViewStyle =
-  Platform.OS === 'android' ? { renderToHardwareTextureAndroid: false } : {};
+
+/** One circular disc — icon/photo + optional corner badge kept inside the disc bounds. */
+const MapMarkerDisc = React.memo(({
+  size = MAP_MARKER_DISC,
+  color,
+  borderColor = '#FFF',
+  borderWidth = 2,
+  children,
+  badge,
+}: {
+  size?: number;
+  color: string;
+  borderColor?: string;
+  borderWidth?: number;
+  children?: React.ReactNode;
+  badge?: React.ReactNode;
+}) => (
+  <MapMarkerCanvas>
+    <View
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 2,
+        backgroundColor: color,
+        borderWidth,
+        borderColor,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+        ...MAP_MARKER_NO_HW_TEXTURE,
+      }}
+    >
+      {children}
+      {badge}
+    </View>
+  </MapMarkerCanvas>
+));
+
+/** @deprecated alias */
+const MapMarkerSlot = MapMarkerCanvas;
+
 const MAP_MARKER_BUBBLE_ANCHOR = { x: 0.5, y: 0.5 };
-/** Corner badges sit inside the slot — never use negative offsets (they clip on Android). */
-const MAP_MARKER_CORNER_BADGE = { position: 'absolute' as const, bottom: 6, right: 6 };
+/** Corner badge inside the disc (never outside canvas — avoids Android bitmap clip). */
+const MAP_MARKER_CORNER_BADGE = { position: 'absolute' as const, bottom: 0, right: 0 };
 
 function isValidMapCoord(lat: unknown, lng: unknown): boolean {
   if (lat == null || lng == null || typeof lat !== 'number' || typeof lng !== 'number') return false;
@@ -280,68 +331,38 @@ const PartnerMarkerView = React.memo(
     : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
 
     const isGold = partner._tier === 'gold_sponsor';
-    const size = isGold ? 44 : 38;
-    const imageSize = size - 6;
+    const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : (isGold ? 44 : 38);
+    const imageSize = disc - 6;
 
     return (
-      <MapMarkerSlot>
-        <View
-          style={[
-            pMarkerStyles.container,
-            isGold && pMarkerStyles.containerGold,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              borderColor: tier.border,
-              backgroundColor: tier.bg,
-            },
-            MAP_MARKER_NO_HW_TEXTURE,
-          ]}
-        >
-          {partner.photo && !imageError ? (
-            <>
-              {!imageLoaded ? (
-                <MaterialIcons
-                  name={isGold ? 'workspace-premium' : 'handshake'}
-                  size={isGold ? 20 : 16}
-                  color="#fff"
-                  style={{ position: 'absolute' }}
-                />
-              ) : null}
-              <RNImage
-                source={{
-                  uri: partner.photo,
-                  cache: 'force-cache',
-                }}
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  borderRadius: imageSize / 2,
-                  backgroundColor: tier.bg,
-                  opacity: imageLoaded ? 1 : 0,
-                }}
-                resizeMode="cover"
-                onLoad={handleLoad}
-                onError={() => setImageError(true)}
-              />
-            </>
-          ) : (
-            <MaterialIcons
-              name={isGold ? 'workspace-premium' : 'handshake'}
-              size={isGold ? 20 : 16}
-              color="#fff"
+      <MapMarkerDisc
+        size={disc}
+        color={tier.bg}
+        borderColor={tier.border}
+        borderWidth={isGold ? 3 : 2.5}
+        badge={(
+          <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: tier.primary }]}>
+            <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={7} color="#FFF" />
+          </View>
+        )}
+      >
+        {partner.photo && !imageError ? (
+          <>
+            {!imageLoaded ? (
+              <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color="#fff" style={{ position: 'absolute' }} />
+            ) : null}
+            <RNImage
+              source={{ uri: partner.photo, cache: 'force-cache' }}
+              style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, backgroundColor: tier.bg, opacity: imageLoaded ? 1 : 0 }}
+              resizeMode="cover"
+              onLoad={handleLoad}
+              onError={() => setImageError(true)}
             />
-          )}
-        </View>
-        <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: tier.primary }]}>
-          <MaterialIcons
-            name={isGold ? 'star' : 'workspace-premium'}
-            size={7}
-            color="#FFF"
-          />
-        </View>
-      </MapMarkerSlot>
+          </>
+        ) : (
+          <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color="#fff" />
+        )}
+      </MapMarkerDisc>
     );
   }
 );
@@ -386,68 +407,38 @@ const ClubMarkerView = React.memo(
     : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
 
     const isGold = partner._tier === 'gold_sponsor';
-    const size = isGold ? 44 : 38;
-    const imageSize = size - 6;
+    const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : (isGold ? 44 : 38);
+    const imageSize = disc - 6;
 
     return (
-      <MapMarkerSlot>
-        <View
-          style={[
-            pMarkerStyles.container,
-            isGold && pMarkerStyles.containerGold,
-            {
-              width: size,
-              height: size,
-              borderRadius: size / 2,
-              borderColor: tier.border,
-              backgroundColor: tier.bg,
-            },
-            MAP_MARKER_NO_HW_TEXTURE,
-          ]}
-        >
-          {partner.logo && !imageError ? (
-            <>
-              {!imageLoaded ? (
-                <MaterialIcons
-                  name={isGold ? 'workspace-premium' : 'handshake'}
-                  size={isGold ? 20 : 16}
-                  color="#fff"
-                  style={{ position: 'absolute' }}
-                />
-              ) : null}
-              <RNImage
-                source={{
-                  uri: partner.logo,
-                  cache: 'force-cache',
-                }}
-                style={{
-                  width: imageSize,
-                  height: imageSize,
-                  borderRadius: imageSize / 2,
-                  backgroundColor: tier.bg,
-                  opacity: imageLoaded ? 1 : 0,
-                }}
-                resizeMode="cover"
-                onLoad={handleLoad}
-                onError={() => setImageError(true)}
-              />
-            </>
-          ) : (
-            <MaterialIcons
-              name={isGold ? 'workspace-premium' : 'handshake'}
-              size={isGold ? 20 : 16}
-              color="#fff"
+      <MapMarkerDisc
+        size={disc}
+        color={tier.bg}
+        borderColor={tier.border}
+        borderWidth={isGold ? 3 : 2.5}
+        badge={(
+          <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: tier.primary }]}>
+            <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={7} color="#FFF" />
+          </View>
+        )}
+      >
+        {partner.logo && !imageError ? (
+          <>
+            {!imageLoaded ? (
+              <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color="#fff" style={{ position: 'absolute' }} />
+            ) : null}
+            <RNImage
+              source={{ uri: partner.logo, cache: 'force-cache' }}
+              style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, backgroundColor: tier.bg, opacity: imageLoaded ? 1 : 0 }}
+              resizeMode="cover"
+              onLoad={handleLoad}
+              onError={() => setImageError(true)}
             />
-          )}
-        </View>
-        <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: tier.primary }]}>
-          <MaterialIcons
-            name={isGold ? 'star' : 'workspace-premium'}
-            size={7}
-            color="#FFF"
-          />
-        </View>
-      </MapMarkerSlot>
+          </>
+        ) : (
+          <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={isGold ? 20 : 16} color="#fff" />
+        )}
+      </MapMarkerDisc>
     );
   }
 );
@@ -464,78 +455,65 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   const [sponsorImgLoaded, setSponsorImgLoaded] = useState(false);
   const [itemImgError, setItemImgError] = useState(false);
   const [sponsorImgError, setSponsorImgError] = useState(false);
-  const halfW = size / 2;
+  const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : size;
+  const halfW = disc / 2;
 
   return (
-    <MapMarkerSlot>
-      <View style={{
-        width: size, height: size, borderRadius: size / 2, overflow: 'hidden',
-        borderWidth: 2.5, borderColor: sponsorColor,
-        flexDirection: 'row',
-        ...MAP_MARKER_NO_HW_TEXTURE,
-        ...Platform.select({ ios: { shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 4 }, default: {} }),
-      }}>
+    <MapMarkerDisc size={disc} color={itemColor} borderColor={sponsorColor} borderWidth={2.5} badge={(
+      <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
+        <MaterialIcons name="handshake" size={7} color="#FFF" />
+      </View>
+    )}>
+      <View style={{ width: disc, height: disc, flexDirection: 'row', overflow: 'hidden' }}>
         {/* Left half: item photo/icon */}
-        <View style={{ width: halfW, height: size, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <View style={{ width: halfW, height: disc, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {itemPhoto && !itemImgError ? (
             <RNImage
               source={{ uri: itemPhoto, cache: 'force-cache' }}
-              style={{ width: halfW + 4, height: size, marginLeft: -2 }}
+              style={{ width: halfW + 4, height: disc, marginLeft: -2 }}
               resizeMode="cover"
               onLoad={() => setItemImgLoaded(true)}
               onError={() => setItemImgError(true)}
             />
           ) : (
-            <MaterialIcons name={itemIcon as any} size={size * 0.4} color="#FFF" />
+            <MaterialIcons name={itemIcon as any} size={disc * 0.4} color="#FFF" />
           )}
         </View>
         {/* Right half: sponsor logo */}
-        <View style={{ width: halfW, height: size, backgroundColor: sponsorColor + '30', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+        <View style={{ width: halfW, height: disc, backgroundColor: sponsorColor + '30', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {sponsorPhoto && !sponsorImgError ? (
             <RNImage
               source={{ uri: sponsorPhoto, cache: 'force-cache' }}
-              style={{ width: halfW + 4, height: size, marginRight: -2 }}
+              style={{ width: halfW + 4, height: disc, marginRight: -2 }}
               resizeMode="cover"
               onLoad={() => setSponsorImgLoaded(true)}
               onError={() => setSponsorImgError(true)}
             />
           ) : (
-            <MaterialIcons name="handshake" size={size * 0.35} color={sponsorColor} />
+            <MaterialIcons name="handshake" size={disc * 0.35} color={sponsorColor} />
           )}
         </View>
       </View>
-      <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
-        <MaterialIcons name="handshake" size={7} color="#FFF" />
-      </View>
-    </MapMarkerSlot>
+    </MapMarkerDisc>
   );
 });
 
 const PlayerAvatarMarkerView = React.memo(({ avatar, color, isPublic }: { avatar: string; color: string; isPublic: boolean }) => {
-  const size = 34;
-  const inner = size - 6;
+  const disc = MAP_MARKER_DISC;
+  const inner = disc - 6;
   return (
-    <MapMarkerSlot>
-      <View
-        style={[
-          pMarkerStyles.container,
-          {
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            borderColor: isPublic ? theme.success : '#FFF',
-            backgroundColor: color,
-          },
-          MAP_MARKER_NO_HW_TEXTURE,
-        ]}
-      >
-        <RNImage
-          source={{ uri: avatar, cache: 'force-cache' }}
-          style={{ width: inner, height: inner, borderRadius: inner / 2 }}
-          resizeMode="cover"
-        />
-      </View>
-    </MapMarkerSlot>
+    <MapMarkerDisc
+      size={disc}
+      color={color}
+      borderColor={isPublic ? theme.success : '#FFF'}
+      borderWidth={isPublic ? 3 : 2}
+    >
+      <RNImage
+        source={{ uri: avatar, cache: 'force-cache' }}
+        style={{ width: inner, height: inner, borderRadius: inner / 2 }}
+        resizeMode="cover"
+      />
+    </MapMarkerDisc>
   );
 });
 
@@ -618,31 +596,34 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) =>
 
 const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null }) => {
   const pulseColor = isLive ? '#EF4444' : '#22C55E';
-  const showPulse = isActiveNow || isLive;
-  return (
-  <MapMarkerSlot>
-    {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
-    <View style={[styles.marker, { backgroundColor: color }, isPublic && styles.markerPublic, fallbackSource && styles.markerFallback, showPulse && { borderColor: pulseColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 }, sponsorColor ? { borderColor: sponsorColor, borderWidth: 3, width: 36, height: 36, borderRadius: 18 } : null, MAP_MARKER_NO_HW_TEXTURE]}>
-      <MaterialIcons name={icon as any} size={showPulse ? 16 : 14} color="#FFF" />
+  const showPulse = (isActiveNow || isLive) && !IS_ANDROID_MAP;
+  const highlight = isActiveNow || isLive || !!sponsorColor;
+  const discBorder = sponsorColor || (highlight ? pulseColor : '#FFF');
+  const discBorderW = highlight ? 3 : isPublic ? 3 : 2;
+
+  const cornerBadge = sponsorColor ? (
+    <View style={[styles.sponsorBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
+      <Text style={styles.sponsorBadgeText}>S</Text>
     </View>
-    {sponsorColor ? (
-      <View style={[styles.sponsorBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
-        <Text style={styles.sponsorBadgeText}>S</Text>
-      </View>
-    ) : isVerified ? (
-      <View style={[styles.verifiedBadge, MAP_MARKER_CORNER_BADGE]}>
-        <MaterialIcons name="verified" size={9} color="#FFF" />
-      </View>
-    ) : fallbackSource ? (
-      <View style={[styles.fallbackBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: fallbackSource === 'terrain' ? theme.success : theme.accent }]}>
-        <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={7} color="#FFF" />
-      </View>
-    ) : accessIndicator ? (
-      <View style={[styles.accessBadge, MAP_MARKER_CORNER_BADGE, accessIndicator === 'public' ? styles.accessBadgePublic : styles.accessBadgePrivate]}>
-        <MaterialIcons name={accessIndicator === 'public' ? 'lock-open' : 'lock'} size={7} color="#FFF" />
-      </View>
-    ) : null}
-  </MapMarkerSlot>
+  ) : isVerified ? (
+    <View style={[styles.verifiedBadge, MAP_MARKER_CORNER_BADGE]}>
+      <MaterialIcons name="verified" size={9} color="#FFF" />
+    </View>
+  ) : fallbackSource ? (
+    <View style={[styles.fallbackBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: fallbackSource === 'terrain' ? theme.success : theme.accent }]}>
+      <MaterialIcons name={fallbackSource === 'terrain' ? 'sports-soccer' : 'home'} size={7} color="#FFF" />
+    </View>
+  ) : accessIndicator ? (
+    <View style={[styles.accessBadge, MAP_MARKER_CORNER_BADGE, accessIndicator === 'public' ? styles.accessBadgePublic : styles.accessBadgePrivate]}>
+      <MaterialIcons name={accessIndicator === 'public' ? 'lock-open' : 'lock'} size={7} color="#FFF" />
+    </View>
+  ) : null;
+
+  return (
+    <MapMarkerDisc color={color} borderColor={discBorder} borderWidth={discBorderW} badge={cornerBadge}>
+      {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
+      <MaterialIcons name={icon as any} size={highlight ? 16 : 14} color="#FFF" />
+    </MapMarkerDisc>
   );
 });
 
@@ -673,45 +654,32 @@ const ClusterMarkerView = React.memo(
     const innerSize = size - 8;
     const showPills = sorted.length > 1 && size >= 52;
 
+    const clusterDisc = IS_ANDROID_MAP ? MAP_MARKER_DISC : size;
+    const clusterInner = clusterDisc - 8;
+
     return (
-      <MapMarkerSlot>
+      <MapMarkerCanvas>
         <View
           style={{
-            width: size,
-            height: size,
-            borderRadius: size / 2,
-            backgroundColor: dominantColor + '25',
+            width: clusterDisc,
+            height: clusterDisc,
+            borderRadius: clusterDisc / 2,
+            backgroundColor: dominantColor,
             alignItems: 'center',
             justifyContent: 'center',
-            borderWidth: 2,
-            borderColor: dominantColor + '40',
+            borderWidth: 2.5,
+            borderColor: '#FFF',
             ...MAP_MARKER_NO_HW_TEXTURE,
+            ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, default: {} }),
           }}
         >
-          {/* Inner circle — no Android elevation (Map marker bitmap clips outside layout) */}
-          <View
-            style={{
-              width: innerSize,
-              height: innerSize,
-              borderRadius: innerSize / 2,
-              backgroundColor: dominantColor,
-              alignItems: 'center',
-              justifyContent: 'center',
-              borderWidth: 2.5,
-              borderColor: '#FFF',
-              ...MAP_MARKER_NO_HW_TEXTURE,
-              ...Platform.select({ ios: { shadowColor: dominantColor, shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.35, shadowRadius: 4 }, default: {} }),
-            }}
-          >
-            <Text style={{ color: '#FFF', fontWeight: '900', fontSize: count > 99 ? 11 : 14 }}>
-              {count}
-            </Text>
-          </View>
+          <Text style={{ color: '#FFF', fontWeight: '900', fontSize: count > 99 ? 11 : clusterInner > 36 ? 14 : 12 }}>
+            {count}
+          </Text>
         </View>
-        {/* Type indicator dots below cluster (positive margin — negative overlap confused Yoga vs. draw bounds) */}
-        {showPills ? (
+        {!IS_ANDROID_MAP && showPills ? (
           <View style={{ flexDirection: 'row', gap: 3, marginTop: 4 }}>
-            {sorted.slice(0, 4).map(([type, cnt]) => (
+            {sorted.slice(0, 4).map(([type]) => (
               <View key={type} style={{
                 width: 8, height: 8, borderRadius: 4,
                 backgroundColor: CLUSTER_COLOR_MAP[type] || theme.primary,
@@ -720,7 +688,7 @@ const ClusterMarkerView = React.memo(
             ))}
           </View>
         ) : null}
-      </MapMarkerSlot>
+      </MapMarkerCanvas>
     );
   }
 );
@@ -2098,7 +2066,7 @@ useEffect(() => {
   useEffect(() => {
     if (Platform.OS !== 'android') return;
     setClusterTracksViewChanges(true);
-    const timer = setTimeout(() => setClusterTracksViewChanges(false), 500);
+    const timer = setTimeout(() => setClusterTracksViewChanges(false), 900);
     return () => clearTimeout(timer);
   }, [clusters, currentRegion?.latitude, currentRegion?.longitude, currentRegion?.latitudeDelta]);
 
@@ -2135,6 +2103,7 @@ useEffect(() => {
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleClusterPress(cluster)}
                 anchor={MAP_MARKER_BUBBLE_ANCHOR}
+                style={MAP_MARKER_NATIVE_STYLE}
                 tracksViewChanges={clusterTracksViewChanges}
               >
                 <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
@@ -2152,7 +2121,8 @@ useEffect(() => {
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
                 anchor={MAP_MARKER_BUBBLE_ANCHOR}
-                tracksViewChanges={!readyMarkers.has(item.id)}
+                style={MAP_MARKER_NATIVE_STYLE}
+                tracksViewChanges={IS_ANDROID_MAP ? clusterTracksViewChanges : !readyMarkers.has(item.id)}
               >
                 {(item.itemType === 'partners' || (item.itemType === 'players' && item._tier))? (
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
