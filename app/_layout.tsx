@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet as RNStyleSheet, Platform, Pressable } from 'react-native';
+import { initializeAds } from '@/services/adService';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -119,6 +120,15 @@ function LayoutInner() {
   // Initialize Sentry crash reporting
   React.useEffect(() => {
     try { initSentry(); } catch (e) { console.log('[Sentry] Init error:', e); }
+  }, []);
+
+  // Google Mobile Ads — delay until after first frame (requires DELAY_APP_MEASUREMENT_INIT in manifest)
+  React.useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const timer = setTimeout(() => {
+      initializeAds().catch(() => {});
+    }, 1500);
+    return () => clearTimeout(timer);
   }, []);
 
   // Check ban status on mount and periodically

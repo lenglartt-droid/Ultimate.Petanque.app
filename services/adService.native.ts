@@ -1,71 +1,50 @@
 // ============================================
 // Ad Service - Native implementation with Google AdMob
 // ============================================
-// NOTE: Replace test IDs with real AdMob unit IDs before publishing
-// NOTE: Requires a custom dev build (not Expo Go) to function
+// Requires a custom dev/release build (not Expo Go).
 
-import { Platform } from 'react-native';
+import { AD_UNIT_IDS } from '@/constants/admob';
 import { canShowPersonalizedAds } from '@/services/trackingService';
+import {
+  getGoogleMobileAdsModule,
+  isGoogleMobileAdsAvailable,
+} from '@/services/googleMobileAdsModule';
+import { shouldInitializeGoogleMobileAds } from '@/utils/googleMobileAdsEligibility';
+
+export { AD_UNIT_IDS } from '@/constants/admob';
 
 // ============================================
-// AD UNIT IDS
+// SDK INITIALIZATION
 // ============================================
-const TEST_BANNER_ANDROID = 'ca-app-pub-3940256099942544/6300978111';
-const TEST_BANNER_IOS = 'ca-app-pub-3940256099942544/2934735716';
-const TEST_INTERSTITIAL_ANDROID = 'ca-app-pub-3940256099942544/1033173712';
-const TEST_INTERSTITIAL_IOS = 'ca-app-pub-3940256099942544/4411468910';
+let initPromise: Promise<void> | null = null;
 
-export const AD_UNIT_IDS = {
-  banner: Platform.select({
-    android: TEST_BANNER_ANDROID,
-    ios: TEST_BANNER_IOS,
-    default: TEST_BANNER_ANDROID,
-  }),
-  interstitial: Platform.select({
-    android: TEST_INTERSTITIAL_ANDROID,
-    ios: TEST_INTERSTITIAL_IOS,
-    default: TEST_INTERSTITIAL_ANDROID,
-  }),
-} as const;
-
-// ============================================
-// LAZY LOADING - avoid crash if native module missing
-// On Hermes, require() of unlinked native modules throws
-// an uncatchable Invariant Violation. We must check
-// NativeModules first (safe, returns undefined).
-// ============================================
-import { NativeModules } from 'react-native';
-
-let adsModule: any = null;
-let moduleChecked = false;
-let moduleAvailable = false;
-
-function getAdsModule(): any {
-  if (moduleChecked) return adsModule;
-  moduleChecked = true;
-  // NativeModules safely returns undefined for missing modules
-  if (!NativeModules.RNGoogleMobileAdsModule) {
-    adsModule = null;
-    moduleAvailable = false;
-    return adsModule;
-  }
-  // react-native-google-mobile-ads requires native linking
-  // If the native module check above passed, it means the package is installed and linked
-  // We skip require entirely and just mark as available; actual usage goes through NativeModules
-  adsModule = null;
-  moduleAvailable = false;
-  return adsModule;
+export async function initializeAds(): Promise<void> {
+  if (initPromise) return initPromise;
+  initPromise = (async () => {
+    if (!shouldInitializeGoogleMobileAds()) return;
+    const mod = getGoogleMobileAdsModule();
+    if (!mod) return;
+    try {
+      await mod.default().initialize();
+      await preloadInterstitial();
+    } catch (e) {
+      console.warn('[AdMob] initialize failed:', e);
+      initPromise = null;
+    }
+  })();
+  return initPromise;
 }
 
 // ============================================
 // INTERSTITIAL AD MANAGER
 // ============================================
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 let interstitialAd: any = null;
 let isInterstitialLoaded = false;
 
 export async function preloadInterstitial(): Promise<void> {
   try {
-    const mod = getAdsModule();
+    const mod = getGoogleMobileAdsModule();
     if (!mod) return;
 
     const { InterstitialAd, AdEventType } = mod;
@@ -92,19 +71,18 @@ export async function preloadInterstitial(): Promise<void> {
 
     interstitialAd.load();
   } catch {
-    // Silently fail - native module not available
+    // Native module not available (Expo Go, web, etc.)
   }
 }
 
-// Check premium status before showing interstitial
 let _isPremiumFn: (() => boolean) | null = null;
+
 export function setIsPremiumCheck(fn: () => boolean) {
   _isPremiumFn = fn;
 }
 
 export async function showInterstitial(): Promise<boolean> {
-  // Skip interstitial for premium users
-  if (_isPremiumFn && _isPremiumFn()) return false;
+  if (_isPremiumFn?.()) return false;
 
   if (!isInterstitialLoaded || !interstitialAd) {
     preloadInterstitial();
@@ -122,8 +100,7 @@ export async function showInterstitial(): Promise<boolean> {
 }
 
 export async function checkAdMobAvailability(): Promise<boolean> {
-  getAdsModule();
-  return moduleAvailable;
+  return isGoogleMobileAdsAvailable();
 }
 
 export function isInterstitialReady(): boolean {

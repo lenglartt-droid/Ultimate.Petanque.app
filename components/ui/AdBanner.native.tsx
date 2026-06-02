@@ -3,7 +3,7 @@
 // Gold sponsors replace ads with branded content
 // ============================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, NativeModules, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -11,6 +11,7 @@ import { router } from 'expo-router';
 import { AD_UNIT_IDS } from '@/services/adService';
 import { useAppUI } from '@/contexts/AppContext';
 import { canShowPersonalizedAds } from '@/services/trackingService';
+import { getGoogleMobileAdsModule } from '@/services/googleMobileAdsModule';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import theme from '@/constants/theme';
@@ -34,27 +35,27 @@ function loadGoldSponsor(): Promise<void> {
   return goldSponsorLoadPromise;
 }
 
-// Lazy-load the ads module to avoid crash if native module is missing.
-let BannerAdComponent: any = null;
-let BannerAdSizeEnum: any = null;
+let BannerAdComponent: React.ComponentType<{
+  unitId: string;
+  size: string;
+  requestOptions?: { requestNonPersonalizedAdsOnly?: boolean };
+  onAdFailedToLoad?: () => void;
+}> | null = null;
+let BannerAdSizeEnum: { ANCHORED_ADAPTIVE_BANNER: string } | null = null;
 let adsModuleLoaded = false;
 let adsModuleAvailable = false;
 
 function loadAdsModule() {
   if (adsModuleLoaded) return;
   adsModuleLoaded = true;
-  if (!NativeModules.RNGoogleMobileAdsModule) {
+  const mod = getGoogleMobileAdsModule();
+  if (!mod) {
     adsModuleAvailable = false;
     return;
   }
-  // react-native-google-mobile-ads requires native plugin config.
-  // Skip dynamic require to avoid Metro bundler errors.
-  // In production with the package installed & linked, replace with:
-  //   const mod = require('react-native-google-mobile-ads');
-  //   BannerAdComponent = mod.BannerAd;
-  //   BannerAdSizeEnum = mod.BannerAdSize;
-  //   adsModuleAvailable = true;
-  adsModuleAvailable = false;
+  BannerAdComponent = mod.BannerAd;
+  BannerAdSizeEnum = mod.BannerAdSize;
+  adsModuleAvailable = true;
 }
 
 // ============================================

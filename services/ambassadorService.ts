@@ -154,6 +154,13 @@ export async function fetchAmbassadors(): Promise<{ ambassadors: Ambassador[]; e
   }
 }
 
+/** Clear in-memory ambassador list (e.g. after admin tier change — map reloads fresh data). */
+export function invalidateAmbassadorCache(): void {
+  cachedAmbassadors = null;
+  cachedAmbassadorUserIds = null;
+  lastFetchTime = 0;
+}
+
 /** Check if a user is an ambassador (direct DB query, not limited to is_active) */
 export async function isUserAmbassador(userId: string): Promise<boolean> {
   // First check the cache for active ambassadors (fast path)
@@ -189,13 +196,6 @@ export async function getFeaturedAmbassadors(): Promise<Ambassador[]> {
   const { ambassadors } = await fetchAmbassadors();
   const featured = ambassadors.filter(a => a.isFeatured);
   return featured.length > 0 ? featured : ambassadors.slice(0, 3);
-}
-
-/** Invalidate cache (e.g. after admin changes) */
-export function invalidateAmbassadorCache() {
-  cachedAmbassadors = null;
-  cachedAmbassadorUserIds = null;
-  lastFetchTime = 0;
 }
 
 /** Generate a unique referral code for an ambassador */

@@ -7,6 +7,7 @@
  * This file retains: state declarations, data loading, sync logic, computed values, and provider wiring.
  */
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo, ReactNode } from 'react';
+import { Platform } from 'react-native';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { logModification } from '@/services/modificationLogService';
@@ -288,6 +289,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [isPremiumState, setIsPremiumState] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // Interstitial ads: skip when user is Premium (banner uses useAppUI directly).
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    import('@/services/adService').then(({ setIsPremiumCheck }) => {
+      setIsPremiumCheck(() => isPremiumState);
+    });
+  }, [isPremiumState]);
   const [isReplayingQueue, setIsReplayingQueue] = useState(false);
   const [replayProgress, setReplayProgress] = useState({ current: 0, total: 0 });
   const [currentConflict, setCurrentConflict] = useState<ConflictInfo | null>(null);

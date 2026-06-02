@@ -8,6 +8,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
 import { checkPostOAuthDeviceBinding, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
 import { useLanguage } from '@/hooks/useLanguage';
+import { hasRequiredPlayerCity } from '@/utils/playerLocationRequirement';
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
 
@@ -144,11 +145,18 @@ function ProfileChecker() {
       }
 
       try {
-        const { data, error } = await supabase
-          .from('user_profiles')
-          .select('username, consent_accepted')
-          .eq('id', user.id)
-          .single();
+        const [{ data, error }, { data: playerRow }] = await Promise.all([
+          supabase
+            .from('user_profiles')
+            .select('username, consent_accepted')
+            .eq('id', user.id)
+            .single(),
+          supabase
+            .from('players')
+            .select('city, location')
+            .eq('id', user.id)
+            .maybeSingle(),
+        ]);
 
         if (error) throw error;
 
@@ -156,8 +164,9 @@ function ProfileChecker() {
         // If so, user hasn't completed the express profile step
         const emailPrefix = user?.email ? user.email.split('@')[0] : '';
         const hasRealUsername = data?.username && data.username.trim() !== '' && data.username.trim() !== emailPrefix;
-        
-        if (!hasRealUsername) {
+        const hasCity = hasRequiredPlayerCity(playerRow);
+
+        if (!hasRealUsername || !hasCity) {
           setNeedsOnboarding(true);
         } else if (!data?.consent_accepted) {
           setNeedsConsent(true);

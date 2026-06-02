@@ -1855,6 +1855,14 @@ export const translations = {
     continue: { fr: 'Continuer', en: 'Continue' },
     start: { fr: 'Commencer', en: 'Start' },
     nameRequired: { fr: 'Le nom est requis', en: 'Name is required' },
+    cityRequiredMessage: {
+      fr: 'La ville est obligatoire. Sélectionnez votre ville pour continuer.',
+      en: 'City is required. Select your city to continue.',
+    },
+    cityRequiredHint: {
+      fr: 'Obligatoire pour apparaître sur la carte et le classement géographique',
+      en: 'Required to appear on the map and geo leaderboard',
+    },
     unableToCreateProfile: { fr: 'Impossible de créer le profil', en: 'Unable to create profile' },
   },
 

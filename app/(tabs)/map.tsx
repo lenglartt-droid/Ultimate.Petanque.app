@@ -46,7 +46,9 @@ import { useTerrainActivity, TerrainActivityInfo } from '@/hooks/useTerrainActiv
 import { useToast } from '@/components/ui/Toast';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { Image as RNImage } from 'react-native'; // 👈 use RN Image, not expo-image
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
+import { ensureMapCoordinates, isMapPartnerBadge, isValidMapCoord as isValidMapCoordUtil } from '@/utils/mapPlayerLocation';
+import { useFocusEffect } from '@react-navigation/native';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 // import MapView from "react-native-map-clustering";
 
@@ -85,6 +87,14 @@ const IS_ANDROID_MAP = Platform.OS === 'android';
  */
 const MAP_MARKER_CANVAS = IS_ANDROID_MAP ? 64 : 56;
 const MAP_MARKER_DISC = IS_ANDROID_MAP ? 40 : 36;
+/** Android bitmap must fit sonar rings (disc × ~1.8 scale) without clipping */
+const MAP_MARKER_PULSE_CANVAS = IS_ANDROID_MAP ? 88 : 72;
+
+function getMapMarkerNativeStyle(opts?: { pulse?: boolean }): ViewStyle | undefined {
+  if (!IS_ANDROID_MAP) return undefined;
+  const size = opts?.pulse ? MAP_MARKER_PULSE_CANVAS : MAP_MARKER_CANVAS;
+  return { width: size, height: size };
+}
 const mapMarkerCanvasStyle: ViewStyle = {
   width: MAP_MARKER_CANVAS,
   height: MAP_MARKER_CANVAS,
@@ -157,6 +167,71 @@ function isValidMapCoord(lat: unknown, lng: unknown): boolean {
   if (lat == null || lng == null || typeof lat !== 'number' || typeof lng !== 'number') return false;
   if (lat === 0 && lng === 0) return false;
   return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+}
+
+const MAP_ITEM_DEFAULT_ICONS: Record<string, string> = {
+  terrains: 'sports-soccer',
+  clubs: 'home',
+  tournaments: 'emoji-events',
+  players: 'person',
+  events: 'campaign',
+  partners: 'handshake',
+};
+
+function getMapItemIcon(itemType: string, terrainType?: string | null): string {
+  if (itemType === 'terrains' && terrainType) {
+    const tc = config.terrainTypes.find(tt => tt.id === terrainType);
+    if (tc?.icon) return tc.icon;
+  }
+  return MAP_ITEM_DEFAULT_ICONS[itemType] || 'place';
+}
+
+function isPartnerMapItem(item: any): boolean {
+  return item?.itemType === 'partners' || item?._itemType === 'partners';
+}
+
+function isAmbassadorPlayerItem(item: any): boolean {
+  return item?.itemType === 'players' && !!item?._tier;
+}
+
+/** Partner/ambassador bottom sheet — not the standard terrain/club/player card. */
+function shouldUsePartnerPopup(item: any, type?: string): boolean {
+  const itemType = item?.itemType ?? type;
+  return itemType === 'partners' || isPartnerMapItem(item) || isAmbassadorPlayerItem(item);
+}
+
+function getMapItemDisplayName(item: any): string {
+  return item?.name || item?.displayName || '-';
+}
+
+function getAmbassadorTierLabel(item: { _tier?: string }, language: 'fr' | 'en'): string {
+  const isPartner = isPartnerMapItem(item);
+  const isGold = item._tier === 'gold_sponsor';
+  if (isPartner) {
+    if (isGold) return language === 'fr' ? 'Partenaire Or' : 'Gold Partner';
+    return language === 'fr' ? 'Partenaire Argent' : 'Silver Partner';
+  }
+  if (!item._tier) return '';
+  return String(item._tier).replace(/_/g, ' ');
+}
+
+function normalizeBrandColor(brandColor?: string | null): string | undefined {
+  if (!brandColor || typeof brandColor !== 'string') return undefined;
+  const withHash = brandColor.startsWith('#') ? brandColor : `#${brandColor}`;
+  const clean = withHash.replace('#', '');
+  return /^[0-9A-Fa-f]{6}$/.test(clean) ? withHash : undefined;
+}
+
+function hexToRgba(hex: string, alpha = 1): string {
+  const clean = hex.replace('#', '');
+  if (!/^[0-9A-Fa-f]{6}$/.test(clean)) {
+    return `rgba(120, 144, 156, ${alpha})`;
+  }
+  const bigint = parseInt(clean, 16);
+  const r = (bigint >> 16) & 255;
+  const g = (bigint >> 8) & 255;
+  const b = bigint & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 // ============================================
@@ -301,34 +376,14 @@ const PartnerMarkerView = React.memo(
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
 
-    let customColor = partner.brandColor;
-
-    if (customColor) {
-      if (!customColor.startsWith('#')) {
-        customColor = `#${customColor}`;
-      }
-    } else {
-      customColor = undefined;
-    }
-
-    const hexToRgba = (hex: string, alpha = 1) => {
-      const clean = hex.replace('#', '');
-      const bigint = parseInt(clean, 16);
-
-      const r = (bigint >> 16) & 255;
-      const g = (bigint >> 8) & 255;
-      const b = bigint & 255;
-
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };  
-
+    const customColor = normalizeBrandColor(partner.brandColor);
     const tier = customColor
-    ? {
-        primary: customColor,
-        bg: hexToRgba(customColor, 0.5),
-        border: customColor
-      }
-    : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+      ? {
+          primary: customColor,
+          bg: hexToRgba(customColor, 0.5),
+          border: customColor,
+        }
+      : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
 
     const isGold = partner._tier === 'gold_sponsor';
     const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : (isGold ? 44 : 38);
@@ -377,34 +432,14 @@ const ClubMarkerView = React.memo(
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
 
-    let customColor = partner.brandColor;
-
-    if (customColor) {
-      if (!customColor.startsWith('#')) {
-        customColor = `#${customColor}`;
-      }
-    } else {
-      customColor = undefined;
-    }
-
-    const hexToRgba = (hex: string, alpha = 1) => {
-      const clean = hex.replace('#', '');
-      const bigint = parseInt(clean, 16);
-
-      const r = (bigint >> 16) & 255;
-      const g = (bigint >> 8) & 255;
-      const b = bigint & 255;
-
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-    };  
-
+    const customColor = normalizeBrandColor(partner.brandColor);
     const tier = customColor
-    ? {
-        primary: customColor,
-        bg: hexToRgba(customColor, 0.5),
-        border: customColor
-      }
-    : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
+      ? {
+          primary: customColor,
+          bg: hexToRgba(customColor, 0.5),
+          border: customColor,
+        }
+      : TIER_COLORS[partner._tier] || TIER_COLORS.sponsor;
 
     const isGold = partner._tier === 'gold_sponsor';
     const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : (isGold ? 44 : 38);
@@ -549,8 +584,8 @@ const pMarkerStyles = StyleSheet.create({
 // ============================================
 // CLUSTER MARKER COMPONENT
 // ============================================
-// Animated pulse ring for active-now markers
-const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) => {
+// Animated pulse ring for LIVE / habitual terrain markers (rendered outside disc — not clipped)
+const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color?: string; ringSize?: number }) => {
   const pulse1 = useSharedValue(0);
   const pulse2 = useSharedValue(0);
 
@@ -563,7 +598,6 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) =>
       -1,
       false
     );
-    // Staggered second ring
     const timer = setTimeout(() => {
       pulse2.value = withRepeat(
         withSequence(
@@ -575,7 +609,7 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) =>
       );
     }, 750);
     return () => clearTimeout(timer);
-  }, []);
+  }, [pulse1, pulse2]);
 
   const ring1Style = useAnimatedStyle(() => ({
     transform: [{ scale: 1 + pulse1.value * 0.8 }],
@@ -586,20 +620,33 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E' }: { color?: string }) =>
     opacity: 1 - pulse2.value,
   }));
 
+  const ringBase = {
+    position: 'absolute' as const,
+    width: ringSize,
+    height: ringSize,
+    borderRadius: ringSize / 2,
+    backgroundColor: 'transparent',
+    borderWidth: 2.5,
+    borderColor: color,
+  };
+
   return (
-    <>
-      <Animated.View style={[styles.activeNowPulseRing, { borderColor: color }, ring1Style]} />
-      <Animated.View style={[styles.activeNowPulseRing, { borderColor: color }, ring2Style]} />
-    </>
+    <View style={{ width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+      <Animated.View style={[ringBase, ring1Style]} />
+      <Animated.View style={[ringBase, ring2Style]} />
+    </View>
   );
 });
 
 const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null }) => {
   const pulseColor = isLive ? '#EF4444' : '#22C55E';
-  const showPulse = (isActiveNow || isLive) && !IS_ANDROID_MAP;
+  const showPulse = isActiveNow || isLive;
   const highlight = isActiveNow || isLive || !!sponsorColor;
   const discBorder = sponsorColor || (highlight ? pulseColor : '#FFF');
   const discBorderW = highlight ? 3 : isPublic ? 3 : 2;
+  const discSize = MAP_MARKER_DISC;
+  const canvasSize = showPulse ? MAP_MARKER_PULSE_CANVAS : (IS_ANDROID_MAP ? MAP_MARKER_CANVAS : 56);
+  const pulseRingSize = discSize + 4;
 
   const cornerBadge = sponsorColor ? (
     <View style={[styles.sponsorBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
@@ -620,10 +667,44 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
   ) : null;
 
   return (
-    <MapMarkerDisc color={color} borderColor={discBorder} borderWidth={discBorderW} badge={cornerBadge}>
-      {showPulse ? <ActiveNowPulse color={pulseColor} /> : null}
-      <MaterialIcons name={icon as any} size={highlight ? 16 : 14} color="#FFF" />
-    </MapMarkerDisc>
+    <View
+      style={{
+        width: canvasSize,
+        height: canvasSize,
+        minWidth: canvasSize,
+        minHeight: canvasSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: 'transparent',
+      }}
+      collapsable={false}
+      pointerEvents="none"
+    >
+      {showPulse ? (
+        <View style={StyleSheet.absoluteFillObject} pointerEvents="none">
+          <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+            <ActiveNowPulse color={pulseColor} ringSize={pulseRingSize} />
+          </View>
+        </View>
+      ) : null}
+      <View
+        style={{
+          width: discSize,
+          height: discSize,
+          borderRadius: discSize / 2,
+          backgroundColor: color,
+          borderWidth: discBorderW,
+          borderColor: discBorder,
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          ...MAP_MARKER_NO_HW_TEXTURE,
+        }}
+      >
+        <MaterialIcons name={icon as any} size={highlight ? 16 : 14} color="#FFF" />
+        {cornerBadge}
+      </View>
+    </View>
   );
 });
 
@@ -935,8 +1016,15 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, tournaments, terrains, players } = useAppData();
-   const { refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, setItemPublic } = useAppActions();
+  const { refreshData, updatePlayer, updateClub, updateTerrain, updateTournament, setItemPublic, getSharedPermission } = useAppActions();
   const { user } = useAuth();
+
+  /** Only own directory rows or items shared with write — not public/other users' cards */
+  const canUserGeolocateItem = useCallback((item: { id: string; userId?: string }) => {
+    if (!user?.id) return false;
+    if (item.userId === user.id || item.id === user.id) return true;
+    return getSharedPermission(item.id) === 'write';
+  }, [user?.id, getSharedPermission]);
   const { showAlert } = useAlert();
   const { showToast } = useToast();
   const { t, language } = useLanguage();
@@ -1035,6 +1123,7 @@ export default function MapScreen() {
   // Partner markers state (Gold/Silver ambassadors linked to terrains/clubs)
   const [partnerMarkers, setPartnerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
   const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
+  const [partnerMarkersReloadKey, setPartnerMarkersReloadKey] = useState(0);
 
   const [playerMarkers, setPlayerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
 
@@ -1142,87 +1231,84 @@ export default function MapScreen() {
     });
   }, [sponsoredEventsLoaded]);
 
-  // Load partner markers (Gold/Silver ambassadors -> terrains & clubs)
-  useEffect(() => {
-    if (partnerMarkersLoaded) return;
-    const loadPartnerMarkers = async () => {
+  const loadPartnerMarkers = useCallback(async () => {
     try {
+      invalidateAmbassadorCache();
       const { ambassadors } = await fetchAmbassadors();
-
-      const goldSilver = ambassadors.filter(
-        a => a.badgeType === 'gold_sponsor' || a.badgeType === 'silver_sponsor'
-      );
-
-      const realPlayer = ambassadors.filter(
-        a => a.badgeType !== 'gold_sponsor' && a.badgeType !== 'silver_sponsor'
-      );
-
-
-
       const supabase = getSupabaseClient();
 
-        // ✅ GOLD / SILVER
-      let goldMarkers = await Promise.all(
-        goldSilver.map(async (amb) => {
+      const partnerTiers = ambassadors.filter(a => isMapPartnerBadge(a.badgeType));
+      const ambassadorTiers = ambassadors.filter(a => !isMapPartnerBadge(a.badgeType));
+
+      const resolveAmbassadorPlayer = async (amb: Ambassador) => {
+        const ids = [...new Set([amb.playerId, amb.userId].filter(Boolean))] as string[];
+        for (const pid of ids) {
           const { data } = await supabase
             .from('players')
-            .select('id, location, is_public')
-            .eq('id', amb.playerId)
-            .single(); // 👈 important
+            .select('id, location, is_public, city, country')
+            .eq('id', pid)
+            .maybeSingle();
+          if (!data?.is_public) continue;
+          const location = await ensureMapCoordinates(data.location, data.city);
+          if (!location) continue;
+          return { playerId: data.id, location };
+        }
+        return null;
+      };
 
-
-          if (!data?.location) return null;
-          if (!data?.is_public) return null;
-
+      const partnerResults = await Promise.all(
+        partnerTiers.map(async (amb) => {
+          const resolved = await resolveAmbassadorPlayer(amb);
+          if (!resolved) return null;
           return {
             ...amb,
+            playerId: resolved.playerId,
             _tier: amb.badgeType,
-            _itemType: 'partners',
+            _itemType: 'partners' as const,
             _itemId: amb.id,
-            location: data.location,
+            location: resolved.location,
           };
         })
       );
 
-      // ✅ REAL PLAYERS
-      let playerMarkers1 = await Promise.all(
-        realPlayer.map(async (amb) => {
-          const { data } = await supabase
-            .from('players')
-            .select('id, location, is_public')
-            .eq('id', amb.playerId)
-            .single();
-
-
-          if (!data?.location) return null;
-          if (!data?.is_public) return null;
-
-
+      const ambassadorResults = await Promise.all(
+        ambassadorTiers.map(async (amb) => {
+          const resolved = await resolveAmbassadorPlayer(amb);
+          if (!resolved) return null;
           return {
             ...amb,
+            playerId: resolved.playerId,
             _tier: amb.badgeType,
-            _itemType: 'players',
+            _itemType: 'players' as const,
             _itemId: amb.id,
-            location: data.location,
+            location: resolved.location,
           };
         })
       );
 
-          // ✅ remove nulls
-      goldMarkers = goldMarkers.filter(Boolean);
-      playerMarkers1 = playerMarkers1.filter(Boolean);
-          
-      setPartnerMarkers(goldMarkers);
-      setPlayerMarkers(playerMarkers1);
-
-      } catch (e) {
-        console.log('[Map] Error loading partner markers:', e);
-      }
+      setPartnerMarkers(partnerResults.filter(Boolean) as typeof partnerMarkers);
+      setPlayerMarkers(ambassadorResults.filter(Boolean) as typeof playerMarkers);
+    } catch (e) {
+      console.log('[Map] Error loading partner markers:', e);
+    } finally {
       setPartnerMarkersLoaded(true);
-    };
-    const timer = setTimeout(loadPartnerMarkers, 1200);
+    }
+  }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(loadPartnerMarkers, 800);
     return () => clearTimeout(timer);
-  }, [partnerMarkersLoaded]);
+  }, [loadPartnerMarkers, partnerMarkersReloadKey]);
+
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.id) return;
+      setPartnerMarkersLoaded(false);
+      setPartnerMarkersReloadKey(k => k + 1);
+      refreshData();
+      loadPublicItems();
+    }, [user?.id, refreshData, loadPublicItems])
+  );
 
   // Call this after loading partner markers
 const precachePartnerImages = useCallback((markers: typeof partnerMarkers) => {
@@ -1242,7 +1328,7 @@ useEffect(() => {
 
   // Helper: check if a location has valid coordinates (not 0,0)
   const hasValidLocation = useCallback((item: any) => {
-    return isValidMapCoord(item.location?.latitude, item.location?.longitude);
+    return isValidMapCoordUtil(item.location?.latitude, item.location?.longitude);
   }, []);
 
   const isPlayerPublicOnMap = useCallback((player: any) => {
@@ -1271,13 +1357,35 @@ useEffect(() => {
     });
   }, [players, terrains, clubs, hasValidLocation]);
 
+  // City-only profiles (onboarding): geocode city → lat/lng so pins can render
+  const [mapGeocodedPlayers, setMapGeocodedPlayers] = useState(enrichedPlayers);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const next = await Promise.all(
+        enrichedPlayers.map(async (p) => {
+          if (hasValidLocation(p)) return p;
+          const loc = await ensureMapCoordinates(p.location, p.city);
+          if (!loc) return p;
+          return { ...p, city: loc.city ?? p.city, location: { ...(p.location || {}), ...loc } };
+        })
+      );
+      if (!cancelled) setMapGeocodedPlayers(next as typeof enrichedPlayers);
+    })();
+    return () => { cancelled = true; };
+  }, [enrichedPlayers, hasValidLocation]);
+
   // Own data with locations — only public items appear on map
   const ownData = useMemo(() => ({
     terrains: terrains.filter(t => hasValidLocation(t) && t.isPublic),
     clubs: clubs.filter(c => hasValidLocation(c) && c.isPublic),
-    players: enrichedPlayers.filter(p => hasValidLocation(p) && isPlayerPublicOnMap(p)),
+    players: mapGeocodedPlayers.filter(p => {
+      if (!hasValidLocation(p)) return false;
+      const isSelf = p.id === user?.id || p.userId === user?.id;
+      return isPlayerPublicOnMap(p) || isSelf;
+    }),
     tournaments: tournaments.filter(t => hasValidLocation(t) && (t as any).isPublic),
-  }), [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, isPlayerPublicOnMap]);
+  }), [terrains, clubs, mapGeocodedPlayers, tournaments, hasValidLocation, isPlayerPublicOnMap, user?.id]);
 
   // Public data with locations
   const pubData = useMemo(() => ({
@@ -1425,7 +1533,7 @@ useEffect(() => {
     // Partner filter: add partner markers as results for list view
     if (filter === 'all' || filter === 'partners') {
       partnerMarkers.forEach(pm => {
-        if (pm.location && (pm.location.latitude || pm.location.longitude)) {
+        if (isValidMapCoord(pm.location?.latitude, pm.location?.longitude)) {
           items.push({ ...pm, name: pm.displayName, itemType: 'partners', _isPublic: true });
         }
       });
@@ -1489,14 +1597,17 @@ useEffect(() => {
     tournaments: tournaments.length,
   }), [terrains.length, clubs.length, players.length, tournaments.length]);
 
-  // Non-geolocated items count
+  // Non-geolocated items the current user may edit (exclude public / other users' directory cards)
   const noGeoCount = useMemo(() => {
-    const noGeoTerrains = terrains.filter(i => !hasValidLocation(i)).length;
-    const noGeoClubs = clubs.filter(i => !hasValidLocation(i)).length;
-    const noGeoPlayers = enrichedPlayers.filter(i => !hasValidLocation(i)).length;
-    const noGeoTournaments = tournaments.filter(i => !hasValidLocation(i)).length;
-    return noGeoTerrains + noGeoClubs + noGeoPlayers + noGeoTournaments;
-  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation]);
+    const missing = (arr: { id: string; userId?: string; location?: any }[]) =>
+      arr.filter(i => !hasValidLocation(i) && canUserGeolocateItem(i)).length;
+    return (
+      missing(terrains) +
+      missing(clubs) +
+      missing(enrichedPlayers) +
+      missing(tournaments)
+    );
+  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, canUserGeolocateItem]);
 
   const [showNoGeoBanner, setShowNoGeoBanner] = useState(true);
   const [showNoGeoModal, setShowNoGeoModal] = useState(false);
@@ -1506,12 +1617,20 @@ useEffect(() => {
 
   const noGeoItems = useMemo(() => {
     const items: { id: string; name: string; type: string; icon: string; color: string; route: string }[] = [];
-    terrains.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success, route: `/terrain/edit/${i.id}` }));
-    clubs.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'clubSingular'), icon: 'home', color: theme.accent, route: `/club/edit/${i.id}` }));
-    enrichedPlayers.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
-    tournaments.filter(i => !hasValidLocation(i)).forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor, route: `/tournament/edit/${i.id}` }));
+    terrains
+      .filter(i => !hasValidLocation(i) && canUserGeolocateItem(i))
+      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success, route: `/terrain/edit/${i.id}` }));
+    clubs
+      .filter(i => !hasValidLocation(i) && canUserGeolocateItem(i))
+      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'clubSingular'), icon: 'home', color: theme.accent, route: `/club/edit/${i.id}` }));
+    enrichedPlayers
+      .filter(i => !hasValidLocation(i) && canUserGeolocateItem(i))
+      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
+    tournaments
+      .filter(i => !hasValidLocation(i) && canUserGeolocateItem(i))
+      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor, route: `/tournament/edit/${i.id}` }));
     return items;
-  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, t]);
+  }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, canUserGeolocateItem, t]);
 
   const counts = useMemo(() => {
     const countType = (type: string) => results.filter(r => r.itemType === type).length;
@@ -1529,16 +1648,20 @@ useEffect(() => {
   }, [results]);
 
   const handleSelect = useCallback((item: any, type: string) => {
+    if (!item) return;
     Haptics.selectionAsync();
-    if(type === 'partners' || type === 'players'){
-      trackAmbassadorEvent(item.id, 'profile_view', undefined, { sourcePage: 'map' });
+    setShowClusterList(false);
+    if (shouldUsePartnerPopup(item, type)) {
+      const ambassadorId = item._itemId || item.id;
+      if (ambassadorId) {
+        trackAmbassadorEvent(ambassadorId, 'profile_view', undefined, { sourcePage: 'map' });
+      }
       setSelected(null);
       setSelectedPartner(item);
-    }else{
-      setSelected({ ...item, itemType: type });      
+    } else {
+      setSelectedPartner(null);
+      setSelected({ ...item, itemType: item.itemType ?? type });
     }
-
-
   }, []);
 
   const handleClusterPress = useCallback((cluster: Cluster) => {
@@ -2062,13 +2185,14 @@ useEffect(() => {
     setReadyMarkers(prev => new Set([...prev, id]));
   }, []);
 
-  const [clusterTracksViewChanges, setClusterTracksViewChanges] = useState(Platform.OS === 'android');
+  // iOS only: brief tracksViewChanges refresh when clusters change. On Android this blocks marker taps.
+  const [clusterTracksViewChanges, setClusterTracksViewChanges] = useState(false);
   useEffect(() => {
-    if (Platform.OS !== 'android') return;
+    if (IS_ANDROID_MAP) return;
     setClusterTracksViewChanges(true);
-    const timer = setTimeout(() => setClusterTracksViewChanges(false), 900);
+    const timer = setTimeout(() => setClusterTracksViewChanges(false), 600);
     return () => clearTimeout(timer);
-  }, [clusters, currentRegion?.latitude, currentRegion?.longitude, currentRegion?.latitudeDelta]);
+  }, [clusters]);
 
   const renderMap = () => {
     if (!MapViewComponent || !MarkerComponent) return renderList();
@@ -2076,10 +2200,17 @@ useEffect(() => {
       <MapViewComponent
         ref={mapRef}
         provider={PROVIDER_GOOGLE}
-        zoomControlEnabled={true}
         style={StyleSheet.absoluteFillObject}
         initialRegion={config.map.defaultRegion}
-        showsUserLocation showsMyLocationButton={false}
+        showsUserLocation
+        showsMyLocationButton={false}
+        scrollEnabled
+        zoomEnabled
+        zoomTapEnabled
+        rotateEnabled
+        pitchEnabled={false}
+        scrollDuringRotateOrZoomEnabled
+        zoomControlEnabled={IS_ANDROID_MAP}
         onPress={() => { Keyboard.dismiss(); setSelected(null); setSelectedPartner(null); }}
         onRegionChangeComplete={handleRegionChange}
         mapPadding={{
@@ -2104,7 +2235,8 @@ useEffect(() => {
                 onPress={() => handleClusterPress(cluster)}
                 anchor={MAP_MARKER_BUBBLE_ANCHOR}
                 style={MAP_MARKER_NATIVE_STYLE}
-                tracksViewChanges={clusterTracksViewChanges}
+                tappable
+                tracksViewChanges={IS_ANDROID_MAP ? false : clusterTracksViewChanges}
               >
                 <ClusterMarkerView count={cluster.items.length} typeCounts={typeCounts} />
               </MarkerComponent>
@@ -2115,16 +2247,22 @@ useEffect(() => {
             const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
             if (!cfg) return null;
             const tc = item.itemType === 'terrains' ? config.terrainTypes.find(tt => tt.id === item.type) : null;
+            const terrainLive = item.itemType === 'terrains' && liveTerrainIds.has(item.id);
+            const terrainHabitual = activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) && !terrainLive;
+            const markerHasPulse = terrainLive || terrainHabitual;
             return (
               <MarkerComponent
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
                 anchor={MAP_MARKER_BUBBLE_ANCHOR}
-                style={MAP_MARKER_NATIVE_STYLE}
-                tracksViewChanges={IS_ANDROID_MAP ? clusterTracksViewChanges : !readyMarkers.has(item.id)}
+                style={getMapMarkerNativeStyle({ pulse: markerHasPulse }) ?? MAP_MARKER_NATIVE_STYLE}
+                tappable
+                tracksViewChanges={
+                  IS_ANDROID_MAP ? false : (markerHasPulse || !readyMarkers.has(item.id))
+                }
               >
-                {(item.itemType === 'partners' || (item.itemType === 'players' && item._tier))? (
+                {(isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) ? (
                   <PartnerMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
                 ) : item._sponsorPhoto || item._sponsorColor ? (
                   <SponsoredSplitMarkerView
@@ -2140,7 +2278,7 @@ useEffect(() => {
                 ) : item.itemType === 'players' && item.avatar && !item._tier ? (
                   <PlayerAvatarMarkerView avatar={item.avatar} color={cfg.color} isPublic={item._isPublic} />
                 ) :
-                  <SingleMarkerView color={item.itemType === 'terrains' && liveTerrainIds.has(item.id) ? '#EF4444' : (activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) ? '#22C55E' : cfg.color)} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) && !liveTerrainIds.has(item.id)} isLive={item.itemType === 'terrains' && liveTerrainIds.has(item.id)} sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
+                  <SingleMarkerView color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={terrainHabitual} isLive={terrainLive} sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
                 )}
               </MarkerComponent>
             );
@@ -2410,7 +2548,7 @@ useEffect(() => {
       ) : null}
 
       {/* ========== GRADIENT HERO HEADER ========== */}
-      <View style={[styles.heroHeader, { paddingTop: insets.top }]}>
+      <View style={[styles.heroHeader, { paddingTop: insets.top }]} pointerEvents="box-none">
         <View style={[styles.heroGradient, { backgroundColor: '#0F172A' }]}>
           {/* Decorative circles for glassmorphism depth */}
           <View style={styles.heroDecoCircle1} />
@@ -2471,7 +2609,10 @@ useEffect(() => {
 
       {/* Ad Banner - floating at top-center below hero header */}
       {Platform.OS !== 'web' ? (
-        <View style={[styles.floatingAdBanner, { bottom: undefined, top: insets.top + 130 }]}>
+        <View
+          style={[styles.floatingAdBanner, { bottom: undefined, top: insets.top + 130 }]}
+          pointerEvents="box-none"
+        >
           <AdBanner position="inline" />
         </View>
       ) : null}
@@ -2495,10 +2636,12 @@ useEffect(() => {
         </Animated.View>
       ) : null}
 
-      <KeyboardAvoidingView style={{flex:1}}
-        behavior={Platform.OS === 'ios' ? 'position' : 'height'}
+      <KeyboardAvoidingView
+        style={styles.mapOverlayRoot}
+        behavior={Platform.OS === 'ios' ? 'position' : undefined}
+        pointerEvents="box-none"
       >
-        <View style={styles.bottomPanel}>
+        <View style={styles.bottomPanel} pointerEvents="box-none">
           {/* Search bar (expandable) */}
           {showSearch ? (
             <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
@@ -2706,19 +2849,19 @@ useEffect(() => {
         </View>
       </KeyboardAvoidingView>
       {/* Selected Card */}
-      {selected ? (
+      {selected ? (() => {
+        const selectedCfg = MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG];
+        const selectedColor = selectedCfg?.color || theme.primary;
+        const selectedIcon = getMapItemIcon(selected.itemType, selected.type);
+        return (
         <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 155 }]}>
           <Pressable style={styles.selectedInner} onPress={selected._isPublic ? undefined : handleNavigate}>
-            <View style={[styles.selectedIcon, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
-              <MaterialIcons
-                name={(selected.itemType === 'terrains'
-                  ? config.terrainTypes.find(tc => tc.id === selected.type)?.icon
-                  : MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.icon) as any}
-                size={22} color="#FFF" />
+            <View style={[styles.selectedIcon, { backgroundColor: selectedColor }]}>
+              <MaterialIcons name={selectedIcon as any} size={22} color="#FFF" />
             </View>
             <View style={styles.selectedContent}>
               <View style={styles.selectedTitleRow}>
-                <Text style={styles.selectedTitle} numberOfLines={1}>{selected.name}</Text>
+                <Text style={styles.selectedTitle} numberOfLines={1}>{selected.name || selected.displayName || '-'}</Text>
                 {selected._isPublic && selected.itemType === 'players' && selected.isPremium ? (
                   <View style={styles.premiumBadgeMap}>
                     <MaterialIcons name="star" size={8} color="#A8B4C0" />
@@ -2741,9 +2884,9 @@ useEffect(() => {
                 </Text>
               </View>
               <View style={styles.selectedTags}>
-                <View style={[styles.tag, { backgroundColor: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color + '15' }]}>
-                  <Text style={[styles.tagText, { color: MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.color }]}>
-                    {MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG]?.singular}
+                <View style={[styles.tag, { backgroundColor: selectedColor + '15' }]}>
+                  <Text style={[styles.tagText, { color: selectedColor }]}>
+                    {selectedCfg?.singular || selected.itemType}
                   </Text>
                 </View>
                 {selected.itemType === 'terrains' && selected.courtsCount ? (
@@ -2766,7 +2909,7 @@ useEffect(() => {
                   );
                   return null;
                 })()}
-                {selected.itemType === 'players' ? (
+                {selected.itemType === 'players' && selected.role ? (
                   <View style={styles.tag}><Text style={styles.tagText}>{selected.role}</Text></View>
                 ) : null}
                 {selected.itemType === 'players' && (selected.eloRating || selected.elo_rating) ? (() => {
@@ -2800,7 +2943,7 @@ useEffect(() => {
                 </View>
               )}
               {selected._isPublic && selected.itemType === 'players' && selected.userId && selected.userId !== user?.id ? (
-                <Pressable style={styles.selectedInviteBtn} onPress={() => handleInviteToMeetupMap(selected.userId, selected.name)}>
+                <Pressable style={styles.selectedInviteBtn} onPress={() => handleInviteToMeetupMap(selected.userId, getMapItemDisplayName(selected))}>
                   <MaterialIcons name="event" size={14} color={theme.primary} />
                 </Pressable>
               ) : null}
@@ -2822,44 +2965,26 @@ useEffect(() => {
             <MaterialIcons name="close" size={16} color={theme.textMuted} />
           </Pressable>
         </Animated.View>
-      ) : null}
+        );
+      })() : null}
 
       {/* Partner Detail Popup */}
       {selectedPartner ? (() => {
-
-      let customColor = selectedPartner.brandColor;
-
-      if (customColor) {
-        if (!customColor.startsWith('#')) {
-          customColor = `#${customColor}`;
-        }
-      } else {
-        customColor = undefined;
-      }
-
-      const hexToRgba = (hex: string, alpha = 1) => {
-        const clean = hex.replace('#', '');
-        const bigint = parseInt(clean, 16);
-
-        const r = (bigint >> 16) & 255;
-        const g = (bigint >> 8) & 255;
-        const b = bigint & 255;
-
-        return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-      };  
-
+        const customColor = normalizeBrandColor(selectedPartner.brandColor);
         const tierCfg = customColor
-        ? {
-            primary: customColor,
-            bg: hexToRgba(customColor, 0.5),
-            border: customColor
-          }
-        : TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
-          
-        const isPartner = selectedPartner._itemType === 'partners';
+          ? {
+              primary: customColor,
+              bg: hexToRgba(customColor, 0.5),
+              border: customColor,
+            }
+          : TIER_COLORS[selectedPartner._tier] || TIER_COLORS.sponsor;
+
+        const isPartner = isPartnerMapItem(selectedPartner);
         const isGold = selectedPartner._tier === 'gold_sponsor';
-        const tierLabel = isPartner ? (isGold ? (language === 'fr' ? 'Partenaire Or' : 'Gold Partner') : (language === 'fr' ? 'Partenaire Argent' : 'Silver Partner')) : (selectedPartner._tier);
-        
+        const tierLabel = getAmbassadorTierLabel(selectedPartner, language);
+        const partnerDisplayName = getMapItemDisplayName(selectedPartner);
+        const ambassadorId = selectedPartner._itemId || selectedPartner.id;
+
         return (
           <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 155 }]}>
             <Pressable style={styles.partnerPopupClose} onPress={() => setSelectedPartner(null)} hitSlop={8}>
@@ -2868,20 +2993,24 @@ useEffect(() => {
             {/* Header */}
             <View style={styles.partnerPopupHeader}>
               {selectedPartner.photo ? (
-                <RNImage source={{ uri: selectedPartner.photo }} style={[styles.partnerPopupAvatar, { borderColor: tierCfg.border, 
-                  backgroundColor: tierCfg.bg
-                 }]} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                <RNImage
+                  source={{ uri: selectedPartner.photo }}
+                  style={[styles.partnerPopupAvatar, { borderColor: tierCfg.border, backgroundColor: tierCfg.bg }]}
+                  resizeMode="cover"
+                />
               ) : (
                 <View style={[styles.partnerPopupAvatarFallback, { backgroundColor: tierCfg.bg, borderColor: tierCfg.border }]}>
                   <MaterialIcons name={isGold ? 'workspace-premium' : 'handshake'} size={24} color={tierCfg.primary} />
                 </View>
               )}
               <View style={{ flex: 1, minWidth: 0 }}>
-                <Text style={styles.partnerPopupName} numberOfLines={1}>{selectedPartner.displayName}</Text>
-                <View style={[styles.partnerPopupBadge, { backgroundColor: tierCfg.primary }]}>
-                  <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={9} color="#FFF" />
-                  <Text style={styles.partnerPopupBadgeText}>{tierLabel.toUpperCase()}</Text>
-                </View>
+                <Text style={styles.partnerPopupName} numberOfLines={1}>{partnerDisplayName}</Text>
+                {tierLabel ? (
+                  <View style={[styles.partnerPopupBadge, { backgroundColor: tierCfg.primary }]}>
+                    <MaterialIcons name={isGold ? 'star' : 'workspace-premium'} size={9} color="#FFF" />
+                    <Text style={styles.partnerPopupBadgeText}>{tierLabel.toUpperCase()}</Text>
+                  </View>
+                ) : null}
               </View>
             </View>
             {/* Bio */}
@@ -2892,25 +3021,25 @@ useEffect(() => {
             {(selectedPartner.youtubeUrl || selectedPartner.instagramHandle || selectedPartner.twitterHandle || selectedPartner.tiktokUrl) ? (
               <View style={styles.partnerPopupSocials}>
                 {selectedPartner.youtubeUrl ? (
-                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#FF000010', borderColor: '#FF000020' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'youtube', { sourcePage: 'map' }); Linking.openURL(selectedPartner.youtubeUrl!); }}>
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#FF000010', borderColor: '#FF000020' }]} onPress={() => { if (ambassadorId) trackAmbassadorEvent(ambassadorId, 'social_click', 'youtube', { sourcePage: 'map' }); Linking.openURL(selectedPartner.youtubeUrl!); }}>
                     <MaterialIcons name="play-arrow" size={14} color="#FF0000" />
                     <Text style={[styles.partnerPopupSocialText, { color: '#FF0000' }]}>YouTube</Text>
                   </Pressable>
                 ) : null}
                 {selectedPartner.instagramHandle ? (
-                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#E4405F10', borderColor: '#E4405F20' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'instagram', { sourcePage: 'map' }); Linking.openURL(`https://instagram.com/${selectedPartner.instagramHandle}`); }}>
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#E4405F10', borderColor: '#E4405F20' }]} onPress={() => { if (ambassadorId) trackAmbassadorEvent(ambassadorId, 'social_click', 'instagram', { sourcePage: 'map' }); Linking.openURL(`https://instagram.com/${selectedPartner.instagramHandle}`); }}>
                     <MaterialIcons name="camera-alt" size={14} color="#E4405F" />
                     <Text style={[styles.partnerPopupSocialText, { color: '#E4405F' }]}>Instagram</Text>
                   </Pressable>
                 ) : null}
                 {selectedPartner.twitterHandle ? (
-                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#1DA1F210', borderColor: '#1DA1F220' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'twitter', { sourcePage: 'map' }); Linking.openURL(`https://x.com/${selectedPartner.twitterHandle}`); }}>
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#1DA1F210', borderColor: '#1DA1F220' }]} onPress={() => { if (ambassadorId) trackAmbassadorEvent(ambassadorId, 'social_click', 'twitter', { sourcePage: 'map' }); Linking.openURL(`https://x.com/${selectedPartner.twitterHandle}`); }}>
                     <MaterialIcons name="alternate-email" size={14} color="#1DA1F2" />
                     <Text style={[styles.partnerPopupSocialText, { color: '#1DA1F2' }]}>X</Text>
                   </Pressable>
                 ) : null}
                 {selectedPartner.tiktokUrl ? (
-                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#01010108', borderColor: '#01010112' }]} onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'tiktok', { sourcePage: 'map' }); Linking.openURL(selectedPartner.tiktokUrl!); }}>
+                  <Pressable style={[styles.partnerPopupSocialChip, { backgroundColor: '#01010108', borderColor: '#01010112' }]} onPress={() => { if (ambassadorId) trackAmbassadorEvent(ambassadorId, 'social_click', 'tiktok', { sourcePage: 'map' }); Linking.openURL(selectedPartner.tiktokUrl!); }}>
                     <MaterialIcons name="music-note" size={14} color="#010101" />
                     <Text style={[styles.partnerPopupSocialText, { color: '#333' }]}>TikTok</Text>
                   </Pressable>
@@ -2922,7 +3051,7 @@ useEffect(() => {
               {selectedPartner.websiteUrl ? (
                 <Pressable
                   style={({ pressed }) => [styles.partnerPopupVisitBtn, { borderColor: tierCfg.primary }, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-                  onPress={() => { trackAmbassadorEvent(selectedPartner.id, 'social_click', 'website', { sourcePage: 'map' }); Linking.openURL(selectedPartner.websiteUrl!); }}
+                  onPress={() => { if (ambassadorId) trackAmbassadorEvent(ambassadorId, 'social_click', 'website', { sourcePage: 'map' }); Linking.openURL(selectedPartner.websiteUrl!); }}
                 >
                   <MaterialIcons name="open-in-new" size={16} color={tierCfg.primary} />
                   <Text style={[styles.partnerPopupVisitText, { color: tierCfg.primary }]}>{language === 'fr' ? 'Visiter le site' : 'Visit website'}</Text>
@@ -2930,7 +3059,14 @@ useEffect(() => {
               ) : null}
               <Pressable
                 style={({ pressed }) => [styles.partnerPopupProfileBtn, pressed && { opacity: 0.85 }]}
-                onPress={() => { setSelectedPartner(null); if(isPartner) {router.push('/partners' as any);}}}
+                onPress={() => {
+                  setSelectedPartner(null);
+                  if (isPartner) {
+                    router.push('/partners' as any);
+                  } else if (ambassadorId) {
+                    router.push(`/partner/${ambassadorId}` as any);
+                  }
+                }}
               >
                 <MaterialIcons name="arrow-forward" size={16} color={theme.primary} />
               </Pressable>
@@ -3199,6 +3335,11 @@ useEffect(() => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  /** Full-screen overlay host; pointerEvents box-none so the map stays pannable/zoomable in the middle. */
+  mapOverlayRoot: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+  },
   // ========== GRADIENT HERO HEADER ==========
   heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
   heroGradient: { paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, overflow: 'hidden' as const, position: 'relative' as const },

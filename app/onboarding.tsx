@@ -30,6 +30,7 @@ import { fetchAmbassadors, Ambassador, generateReferralCode } from '@/services/a
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { trackOnboardingStep } from '@/services/onboardingAnalyticsService';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { getPlayerCity, hasRequiredPlayerCity } from '@/utils/playerLocationRequirement';
 
 // ============================================
 // TYPES — Step order:
@@ -163,6 +164,35 @@ export default function OnboardingScreen() {
     if (step === 10 && user?.id && !referralCode) loadOrCreateReferralCode();
   }, [step, user?.id]);
 
+  // Pre-fill express profile when returning (e.g. username set but city missing)
+  useEffect(() => {
+    if (step !== 9 || !user?.id) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [{ data: profile }, { data: player }] = await Promise.all([
+          supabase.from('user_profiles').select('username, role').eq('id', user.id).maybeSingle(),
+          supabase.from('players').select('name, city, location, country, role').eq('id', user.id).maybeSingle(),
+        ]);
+        if (cancelled) return;
+        const name = profile?.username?.trim() || player?.name?.trim();
+        if (name && !username.trim()) setUsername(name);
+        if (player?.role && !role) setRole(player.role as PlayerRole);
+        const city = getPlayerCity(player);
+        if (city && !profileLocation.city?.trim()) {
+          setProfileLocation(prev => ({
+            ...prev,
+            city,
+            country: player?.country || prev.country || 'France',
+            latitude: player?.location?.latitude ?? prev.latitude,
+            longitude: player?.location?.longitude ?? prev.longitude,
+          }));
+        }
+      } catch { /* non-blocking */ }
+    })();
+    return () => { cancelled = true; };
+  }, [step, user?.id]);
+
   const loadOrCreateReferralCode = useCallback(async () => {
     if (!user?.id) return;
     setReferralLoading(true);
@@ -225,18 +255,47 @@ export default function OnboardingScreen() {
   // HANDLE COMPLETE (POST-LOGIN PROFILE SAVE)
   // ============================================
   const handleComplete = async () => {
-    if (!username.trim()) { showAlert(t('common', 'error'), fr ? 'Le nom est requis' : 'Name is required'); return; }
+    if (!username.trim()) {
+      showAlert(t('common', 'error'), t('onboarding', 'nameRequired'));
+      return;
+    }
+    if (!hasRequiredPlayerCity({ city: profileLocation.city, location: profileLocation })) {
+      showAlert(t('common', 'error'), t('onboarding', 'cityRequiredMessage'));
+      return;
+    }
     setSaving(true);
     try {
       await supabase.from('user_profiles').update({ username: username.trim(), role: role || 'Milieu', level: 'Intermédiaire' }).eq('id', user?.id);
-      const playerUpdate: any = { name: username.trim(), role: role || 'Milieu', level: 'Intermédiaire', updated_at: new Date().toISOString() };
-      if (profileLocation.city) {
-        playerUpdate.city = profileLocation.city;
-        playerUpdate.country = profileLocation.country || 'France';
-        playerUpdate.location = { city: profileLocation.city, latitude: profileLocation.latitude, longitude: profileLocation.longitude };
-      }
+      const playerUpdate: any = {
+        name: username.trim(),
+        role: role || 'Milieu',
+        level: 'Intermédiaire',
+        updated_at: new Date().toISOString(),
+        city: profileLocation.city.trim(),
+        country: profileLocation.country || 'France',
+        location: {
+          city: profileLocation.city.trim(),
+          latitude: profileLocation.latitude,
+          longitude: profileLocation.longitude,
+        },
+      };
       await supabase.from('players').update(playerUpdate).eq('id', user?.id).then(() => {});
-      try { if (user?.id) { const localUpdate: any = { name: username.trim(), role: role || 'Milieu', level: 'Intermédiaire' }; if (profileLocation.city) { localUpdate.city = profileLocation.city; localUpdate.country = profileLocation.country || 'France'; localUpdate.location = { city: profileLocation.city, latitude: profileLocation.latitude, longitude: profileLocation.longitude }; } await updatePlayer(user.id, localUpdate); } } catch {}
+      try {
+        if (user?.id) {
+          await updatePlayer(user.id, {
+            name: username.trim(),
+            role: role || 'Milieu',
+            level: 'Intermédiaire',
+            city: profileLocation.city.trim(),
+            country: profileLocation.country || 'France',
+            location: {
+              city: profileLocation.city.trim(),
+              latitude: profileLocation.latitude,
+              longitude: profileLocation.longitude,
+            },
+          });
+        }
+      } catch { /* local cache sync best-effort */ }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setStep(10 as Step);
     } catch (error: any) { showAlert(t('common', 'error'), error.message || 'Unable to save profile'); }
@@ -768,7 +827,7 @@ export default function OnboardingScreen() {
             </View>
             <ScrollView contentContainerStyle={s.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={s.pageTitle}>{fr ? 'Derniere touche' : 'Final touch'}</Text>
-              <Text style={s.pageSubtitle}>{fr ? 'Ton nom et ton poste de jeu. Tu pourras completer plus tard.' : 'Your name and play position. You can complete later.'}</Text>
+              <Text style={s.pageSubtitle}>{fr ? 'Ton nom, ta ville et ton poste de jeu.' : 'Your name, city, and play position.'}</Text>
 
               <View style={s.expressSection}>
                 <Text style={s.expressLabel}>{fr ? 'TON NOM' : 'YOUR NAME'}</Text>
@@ -776,14 +835,14 @@ export default function OnboardingScreen() {
               </View>
 
               <View style={s.expressSection}>
-                <Text style={s.expressLabel}>{fr ? 'TA VILLE' : 'YOUR CITY'}</Text>
+                <Text style={s.expressLabel}>{t('onboarding', 'cityRequired')}</Text>
                 <View style={s.locationPickerWrap}>
                   <LocationPicker label="" value={profileLocation} onChange={setProfileLocation} placeholder={fr ? 'Rechercher ta ville...' : 'Search your city...'} showCityOnly />
                 </View>
                 {profileLocation.city ? (
                   <View style={s.locationConfirm}><MaterialIcons name="check-circle" size={14} color="#10B981" /><Text style={s.locationConfirmText}>{profileLocation.city}{profileLocation.country && profileLocation.country !== 'France' ? `, ${profileLocation.country}` : ''}</Text></View>
                 ) : (
-                  <Text style={s.locationHint}>{fr ? 'Recommande pour apparaitre sur la carte et le classement geo' : 'Recommended to appear on the map and geo ranking'}</Text>
+                  <Text style={s.locationHint}>{t('onboarding', 'cityRequiredHint')}</Text>
                 )}
               </View>
 
@@ -800,7 +859,11 @@ export default function OnboardingScreen() {
               </View>
 
               <View style={s.ctaContainer}>
-                <Pressable style={[s.ctaPrimary, (!username.trim() || username.trim().length < 2) && { opacity: 0.4 }]} onPress={handleComplete} disabled={!username.trim() || username.trim().length < 2 || saving}>
+                <Pressable
+                  style={[s.ctaPrimary, (!username.trim() || username.trim().length < 2 || !profileLocation.city?.trim()) && { opacity: 0.4 }]}
+                  onPress={handleComplete}
+                  disabled={!username.trim() || username.trim().length < 2 || !profileLocation.city?.trim() || saving}
+                >
                   {saving ? <ActivityIndicator color="#0F172A" /> : (
                     <><MaterialIcons name="arrow-forward" size={20} color="#0F172A" /><Text style={s.ctaPrimaryText}>{fr ? 'Continuer' : 'Continue'}</Text></>
                   )}

@@ -7,7 +7,7 @@
     "icon": "./assets/images/app-logo.png",
     "scheme": "onspaceapp",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.ultimatepetanque.app",
@@ -123,6 +123,11 @@
       ],
       "expo-secure-store"
     ],
+    "react-native-google-mobile-ads": {
+      "android_app_id": "ca-app-pub-3940256099942544~3347511713",
+      "ios_app_id": "ca-app-pub-3940256099942544~1458002511",
+      "delay_app_measurement_init": true
+    },
     "experiments": {
       "typedRoutes": true
     },

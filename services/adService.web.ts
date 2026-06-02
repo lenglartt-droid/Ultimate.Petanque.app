@@ -9,6 +9,7 @@ export const AD_UNIT_IDS = {
   interstitial: '',
 } as const;
 
+export async function initializeAds(): Promise<void> {}
 export async function preloadInterstitial(): Promise<void> {}
 export function setIsPremiumCheck(_fn: () => boolean) {}
 export async function showInterstitial(): Promise<boolean> { return false; }
