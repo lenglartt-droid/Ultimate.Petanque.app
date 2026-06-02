@@ -285,6 +285,13 @@ describe('computeSelfPlayer', () => {
     const result = computeSelfPlayer(players, undefined);
     expect(result).toBeNull();
   });
+
+  test('returns player linked by userId when id differs from auth user', () => {
+    const linked = makePlayer({ id: 'player-uuid', userId: 'user-1', name: 'Carol' });
+    const result = computeSelfPlayer([linked], 'user-1');
+    expect(result).not.toBeNull();
+    expect(result!.name).toBe('Carol');
+  });
 });
 
 // ============================================================

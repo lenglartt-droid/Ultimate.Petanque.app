@@ -94,7 +94,7 @@ export default function MyPlayerCardScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const { t, language } = useLanguage();
-  const { selfPlayer, userStats, challengeStats, matches, challenges, players, boulesSets } = useAppData();
+  const { selfPlayer, userStats, challengeStats, matches, challenges, players, boulesSets, loading } = useAppData();
   const { setItemPublic, getTerrainById, updatePlayer } = useAppActions();
   const { isPremium } = useAppUI();
   const { showAlert } = useAlert();
@@ -359,11 +359,36 @@ export default function MyPlayerCardScreen() {
   }, [selfPlayer, roleAnalysis, terrainAnalysis, partnerAnalysis, userStats.winRate, tirRate, language]);
 
   if (!selfPlayer) {
+    if (loading) {
+      return (
+        <SafeAreaView style={s.container}>
+          <View style={s.loadingContainer}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={s.loadingText}>{t('player', 'loadingCard')}</Text>
+          </View>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={s.container}>
+        <View style={s.header}>
+          <Pressable style={s.headerBtn} onPress={() => router.back()}>
+            <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
+          </Pressable>
+          <Text style={s.headerTitle}>{t('player', 'myPlayerCard')}</Text>
+          <View style={{ width: 40 }} />
+        </View>
         <View style={s.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
-          <Text style={s.loadingText}>{t('player', 'loadingCard')}</Text>
+          <MaterialIcons name="person-outline" size={48} color={theme.textSecondary} />
+          <Text style={[s.loadingText, { marginTop: 16, textAlign: 'center', paddingHorizontal: 24 }]}>
+            {t('player', 'noPlayerCard')}
+          </Text>
+          <Pressable
+            style={[s.headerIconBtn, { marginTop: 24, paddingHorizontal: 20, paddingVertical: 12, backgroundColor: theme.primary }]}
+            onPress={() => router.push({ pathname: '/profile', params: { edit: 'true' } } as any)}
+          >
+            <Text style={{ color: '#FFF', fontWeight: '600' }}>{t('player', 'editMyProfile')}</Text>
+          </Pressable>
         </View>
       </SafeAreaView>
     );

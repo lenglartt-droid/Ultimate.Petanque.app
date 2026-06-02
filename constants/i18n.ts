@@ -835,6 +835,10 @@ export const translations = {
     myPlayerCard: { fr: 'Ma fiche joueur', en: 'My player card' },
     editMyProfile: { fr: 'MODIFIER MON PROFIL', en: 'EDIT MY PROFILE' },
     loadingCard: { fr: 'Chargement de la fiche...', en: 'Loading card...' },
+    noPlayerCard: {
+      fr: 'Aucune fiche joueur trouvée. Complétez votre profil pour créer votre fiche.',
+      en: 'No player card found. Complete your profile to create your card.',
+    },
     matchesSection: { fr: 'MATCHS', en: 'MATCHES' },
     performancesLabel: { fr: 'PERFORMANCES', en: 'PERFORMANCES' },
     challengesLabel: { fr: 'DÉFIS', en: 'CHALLENGES' },

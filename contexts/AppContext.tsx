@@ -762,11 +762,10 @@ export function AppProvider({ children }: { children: ReactNode }) {
       }
 
       // Check if selfPlayer exists, if not create it
-      const selfPlayerExists = dbPlayers.some(p => p.id === user.id);
+      const selfPlayerExists = dbPlayers.some(p => p.id === user.id || p.userId === user.id);
       if (!selfPlayerExists && profileRes.data) {
         const profile = profileRes.data;
         const { data: newPlayerData, error: createError } = await supabase.from('players').insert({
-          id: user.id,
           user_id: user.id,
           name: profile.username || user.email?.split('@')[0] || 'Joueur',
           role: profile.role || 'Milieu',
