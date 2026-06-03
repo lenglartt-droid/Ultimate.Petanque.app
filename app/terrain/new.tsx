@@ -29,6 +29,7 @@ import { useAlert } from '@/template';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { useAuth } from '@/template';
 import { uploadTerrainPhotos } from '@/services/storageService';
+import { toMapCoord } from '@/utils/mapPlayerLocation';
 import {
   checkDuplicatePublicTerrains,
   importPublicItemToDirectory,
@@ -301,7 +302,11 @@ export default function NewTerrainScreen() {
       const sc = clubs.find(c => c.id === clubId);
       await addTerrain({
         name: name.trim(), address: location.address.trim(), city: location.city.trim(),
-        location: { latitude: location.latitude, longitude: location.longitude, country: location.country || 'France' },
+        location: {
+          latitude: toMapCoord(location.latitude),
+          longitude: toMapCoord(location.longitude),
+          country: location.country || 'France',
+        },
         type, description: description.trim() || undefined, facilities: [], parking, toilets,
         clubId, clubName: sc?.name, isPublic: false, publicAccess,
         courtsCount: parseInt(courtsCount) || 1, lighting, covered, environment, photos: uploadedPhotos,

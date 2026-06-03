@@ -2,10 +2,17 @@ import { geocodeAsync } from '@/services/location.native';
 
 const cityGeocodeCache = new Map<string, { lat: number; lng: number }>();
 
+/** Coerce DB / form values to a finite map latitude or longitude (default 0). */
+export function toMapCoord(value: unknown): number {
+  const n = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 export function isValidMapCoord(lat: unknown, lng: unknown): boolean {
-  if (lat == null || lng == null || typeof lat !== 'number' || typeof lng !== 'number') return false;
-  if (lat === 0 && lng === 0) return false;
-  return Math.abs(lat) <= 90 && Math.abs(lng) <= 180;
+  const la = toMapCoord(lat);
+  const ln = toMapCoord(lng);
+  if (la === 0 && ln === 0) return false;
+  return Math.abs(la) <= 90 && Math.abs(ln) <= 180;
 }
 
 export function isMapPartnerBadge(badgeType?: string | null): boolean {

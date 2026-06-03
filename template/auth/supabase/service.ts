@@ -441,10 +441,12 @@ export class AuthService {
 
   async signInWithPassword(email: string, password: string) {
     try {
+      const emailNormalized = email.trim().toLowerCase();
+
       return await safeSupabaseOperation(async (client) => {
         const { data, error } = await withTimeout(
           client.auth.signInWithPassword({
-            email,
+            email: emailNormalized,
             password
           }),
           TIMEOUT_CONFIG.AUTH_OPERATIONS,
@@ -461,15 +463,14 @@ export class AuthService {
         if (data.user) {
           try {
             const authUser = await this.getCurrentUser();
-            
+
             if (authUser) {
               return { user: authUser };
-            } else {
-              return { error: 'Failed to load user profile', user: null, errorType: 'business' };
             }
+            return { user: this.mapSessionToAuthUser(data.user) };
           } catch (userError) {
             console.warn('[Template:AuthService] Error retrieving user after sign in:', userError);
-            return { error: 'Sign in succeeded but failed to load profile', user: null, errorType: 'network' };
+            return { user: this.mapSessionToAuthUser(data.user) };
           }
         }
         

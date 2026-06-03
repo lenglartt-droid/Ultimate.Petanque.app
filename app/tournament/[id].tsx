@@ -817,6 +817,9 @@ export default function TournamentDetailScreen() {
                 <MaterialIcons name="event" size={13} color={theme.primary} />
                 <Text style={styles.heroMetaPillText}>
                   {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  {tournament.endDate
+                    ? ` → ${new Date(tournament.endDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}`
+                    : ''}
                 </Text>
               </View>
               <View style={styles.heroMetaPill}>
@@ -827,6 +830,32 @@ export default function TournamentDetailScreen() {
                 <MaterialIcons name="groups" size={13} color={theme.accent} />
                 <Text style={styles.heroMetaPillText}>{t('formats', tournament.format)}</Text>
               </View>
+              {tournament.maxParticipants ? (
+                <View style={styles.heroMetaPill}>
+                  <MaterialIcons name="people-outline" size={13} color={theme.carreauColor} />
+                  <Text style={styles.heroMetaPillText}>
+                    {tournament.participants || 0}/{tournament.maxParticipants} {language === 'fr' ? 'joueurs' : 'players'}
+                  </Text>
+                </View>
+              ) : null}
+              {tournament.registrationCost != null && tournament.registrationCost > 0 ? (
+                <View style={styles.heroMetaPill}>
+                  <MaterialIcons name="payments" size={13} color={theme.carreauColor} />
+                  <Text style={styles.heroMetaPillText}>{tournament.registrationCost}€ {t('tournament', 'registrationCost').toLowerCase()}</Text>
+                </View>
+              ) : null}
+              {tournament.prize ? (
+                <View style={styles.heroMetaPill}>
+                  <MaterialIcons name="card-giftcard" size={13} color={theme.warning} />
+                  <Text style={styles.heroMetaPillText} numberOfLines={2}>{tournament.prize}</Text>
+                </View>
+              ) : null}
+              {tournament.clubName ? (
+                <View style={styles.heroMetaPill}>
+                  <MaterialIcons name="home-work" size={13} color={theme.primaryLight} />
+                  <Text style={styles.heroMetaPillText} numberOfLines={1}>{tournament.clubName}</Text>
+                </View>
+              ) : null}
             </View>
 
             {/* Final Result Banner */}
@@ -881,6 +910,13 @@ export default function TournamentDetailScreen() {
                     <Text style={[styles.classificationBadgeText, { color: theme.accent }]}>{t('tournamentScopes', tournament.tournamentScope)}</Text>
                   </View>
                 ) : null}
+              </View>
+            ) : null}
+
+            {tournament.description?.trim() ? (
+              <View style={styles.heroDescriptionBox}>
+                <MaterialIcons name="description" size={16} color={theme.textSecondary} />
+                <Text style={styles.heroDescriptionText}>{tournament.description}</Text>
               </View>
             ) : null}
 
@@ -2157,6 +2193,21 @@ const styles = StyleSheet.create({
   heroMetaPillText: {
     fontSize: 12,
     fontWeight: '600',
+    color: theme.textSecondary,
+  },
+  heroDescriptionBox: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    backgroundColor: theme.backgroundSecondary,
+    padding: 12,
+    borderRadius: theme.borderRadius.lg,
+    marginBottom: 14,
+  },
+  heroDescriptionText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 19,
     color: theme.textSecondary,
   },
   heroResultBanner: {

@@ -35,6 +35,7 @@ import {
 import MergeComparisonModal, { MergeField } from '@/components/ui/MergeComparisonModal';
 import { useAuth } from '@/template';
 import { uploadTerrainPhotos } from '@/services/storageService';
+import { isValidMapCoord, toMapCoord } from '@/utils/mapPlayerLocation';
 
 // ============================================
 // SectionCard
@@ -140,12 +141,12 @@ export default function EditTerrainScreen() {
       setType(terrain.type);
       setDescription(terrain.description || '');
       setClubId(terrain.clubId);
-      setCourtsCount(String(terrain.courtsCount));
+      setCourtsCount(String(terrain.courtsCount ?? 1));
       setPublicAccess(terrain.publicAccess ?? true);
       setLighting(terrain.lighting);
       setCovered(terrain.covered);
-      setLatitude(terrain.location.latitude);
-      setLongitude(terrain.location.longitude);
+      setLatitude(toMapCoord(terrain.location?.latitude));
+      setLongitude(toMapCoord(terrain.location?.longitude));
       setPhotos(terrain.photos || []);
       setEnvironment(terrain.environment || 'outdoor');
       setParking((terrain as any).parking ?? false);
@@ -196,7 +197,7 @@ export default function EditTerrainScreen() {
       { key: 'lighting', label: t('modificationLogs', 'lighting'), myValue: String(lighting), publicValue: String(item.lighting ?? false), icon: 'lightbulb' },
       { key: 'covered', label: t('modificationLogs', 'covered'), myValue: String(covered), publicValue: String(item.covered ?? false), icon: 'roofing' },
       { key: 'clubName', label: t('club', 'clubLabel'), myValue: selClubName, publicValue: item.club_name || '', icon: 'home' },
-      { key: 'location', label: t('modificationLogs', 'location'), myValue: (latitude || longitude) ? `${latitude.toFixed(4)}, ${longitude.toFixed(4)}` : '', publicValue: item.location ? `${(item.location.latitude || 0).toFixed(4)}, ${(item.location.longitude || 0).toFixed(4)}` : '', icon: 'my-location' },
+      { key: 'location', label: t('modificationLogs', 'location'), myValue: isValidMapCoord(latitude, longitude) ? `${toMapCoord(latitude).toFixed(4)}, ${toMapCoord(longitude).toFixed(4)}` : '', publicValue: item.location ? `${toMapCoord(item.location.latitude).toFixed(4)}, ${toMapCoord(item.location.longitude).toFixed(4)}` : '', icon: 'my-location' },
     ];
     setCompareFields(fields);
     setComparePublicData(item);
@@ -236,8 +237,8 @@ export default function EditTerrainScreen() {
       const fullAddress = `${address.trim()}, ${city.trim()}, France`;
       const results = await Location.geocodeAsync(fullAddress);
       if (results && results.length > 0) {
-        setLatitude(results[0].latitude);
-        setLongitude(results[0].longitude);
+        setLatitude(toMapCoord(results[0].latitude));
+        setLongitude(toMapCoord(results[0].longitude));
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       } else {
         Alert.alert(t('terrain', 'addressNotFound'), t('terrain', 'addressNotFoundMsg'));
@@ -251,8 +252,8 @@ export default function EditTerrainScreen() {
     setIsGeocoding(true);
     try {
       const location = await Location.getCurrentPositionAsync({});
-      setLatitude(location.coords.latitude);
-      setLongitude(location.coords.longitude);
+      setLatitude(toMapCoord(location.coords.latitude));
+      setLongitude(toMapCoord(location.coords.longitude));
       const reverseResults = await Location.reverseGeocodeAsync({ latitude: location.coords.latitude, longitude: location.coords.longitude });
       if (reverseResults && reverseResults.length > 0) {
         const result = reverseResults[0];
@@ -291,18 +292,26 @@ export default function EditTerrainScreen() {
     try {
       const uploadedPhotos = user?.id ? await uploadTerrainPhotos(user.id, photos) : photos;
       const sc = clubs.find(c => c.id === clubId);
+      const saveLat = toMapCoord(latitude);
+      const saveLng = toMapCoord(longitude);
       await updateTerrain(terrain.id, {
         name: name.trim(), address: address.trim(), city: city.trim(),
-        location: { latitude, longitude, country: terrain?.location?.country || 'France' }, type,
+        location: { latitude: saveLat, longitude: saveLng, country: terrain?.location?.country || 'France' }, type,
         description: description.trim() || undefined,
         clubId, clubName: sc?.name, publicAccess,
-        courtsCount: parseInt(courtsCount) || 1, lighting, covered, parking, toilets, environment, photos: uploadedPhotos,
+        courtsCount: parseInt(courtsCount, 10) || 1, lighting, covered, parking, toilets, environment, photos: uploadedPhotos,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
-    } catch (error) { Alert.alert(t('common', 'error'), t('terrain', 'errorSave')); }
-    finally { setIsSaving(false); }
+    } catch (error) {
+      console.log('[EditTerrain] Save error:', error);
+      Alert.alert(t('common', 'error'), t('terrain', 'errorSave'));
+    } finally {
+      setIsSaving(false);
+    }
   };
+
+  const showCoordsPreview = isValidMapCoord(latitude, longitude);
 
   const showDuplicates = duplicates.length > 0 && !duplicatesDismissed;
 
@@ -427,12 +436,12 @@ export default function EditTerrainScreen() {
                 <><MaterialIcons name="place" size={18} color="#FFF" /><Text style={styles.geocodeButtonText}>{t('terrain', 'geocodeAddress')}</Text></>
               )}
             </Pressable>
-            {(latitude !== 0 || longitude !== 0) ? (
+            {(showCoordsPreview) ? (
               <Animated.View entering={FadeInDown.duration(300)} style={styles.locationPreview}>
                 <MaterialIcons name="check-circle" size={20} color={theme.success} />
                 <View style={styles.locationPreviewInfo}>
                   <Text style={styles.locationPreviewTitle}>{t('terrain', 'positionSaved')}</Text>
-                  <Text style={styles.locationPreviewCoords}>{latitude.toFixed(6)}, {longitude.toFixed(6)}</Text>
+                  <Text style={styles.locationPreviewCoords}>{toMapCoord(latitude).toFixed(6)}, {toMapCoord(longitude).toFixed(6)}</Text>
                 </View>
                 <Pressable style={styles.resetLocationBtn} onPress={() => { setLatitude(0); setLongitude(0); Haptics.selectionAsync(); }}>
                   <MaterialIcons name="close" size={18} color={theme.error} />

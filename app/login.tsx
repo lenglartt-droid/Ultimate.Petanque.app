@@ -33,6 +33,7 @@ import { isDisposableEmail } from '@/services/emailValidationService';
 import { canCreateAccount, canLoginOnDevice, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
 import { clearTempDataExpiry } from '@/services/retentionNotificationService';
 import { trackReferral } from '@/services/ambassadorService';
+import { mapAuthLoginErrorMessage } from '@/utils/mapAuthLoginError';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
@@ -111,25 +112,31 @@ export default function LoginScreen() {
       return;
     }
 
+    const emailNormalized = email.trim().toLowerCase();
+
     // Anti-cheat: check if device is bound to a different account
-    const { allowed, reason } = await canLoginOnDevice(email.trim());
+    const { allowed, reason } = await canLoginOnDevice(emailNormalized);
     if (!allowed && reason === 'device_bound_to_other_account') {
       showAlert(t('common', 'error'), t('login', 'deviceBoundToOther'));
       return;
     }
 
-    const { error } = await signInWithPassword(email.trim(), password);
+    const { error, user } = await signInWithPassword(emailNormalized, password);
     if (error) {
-      showAlert(t('login', 'loginError'), error);
-    } else {
-      // Show one-time device binding notification
-      const shouldShow = await shouldShowDeviceBindingNotification();
-      if (shouldShow) {
-        markDeviceBindingNotificationShown();
-        showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
-      }
-      router.replace('/');
+      showAlert(t('login', 'loginError'), mapAuthLoginErrorMessage(error, t));
+      return;
     }
+    if (!user) {
+      showAlert(t('login', 'loginError'), t('login', 'loginSessionFailed'));
+      return;
+    }
+
+    const shouldShow = await shouldShowDeviceBindingNotification();
+    if (shouldShow) {
+      markDeviceBindingNotificationShown();
+      showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+    }
+    router.replace('/');
   };
 
   const handleResetSendOTP = async () => {

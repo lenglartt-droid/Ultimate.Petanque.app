@@ -13,7 +13,7 @@ import { router } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getSupabaseClient } from '@/template';
+import { fetchCommunityStats, type CommunityStats } from '@/services/communityStatsService';
 import { fetchSuspiciousPlayers, getTrustScoreColor } from '@/services/trustScoreService';
 
 const CONTACT_EMAIL = 'ultimate.petanque.app@gmail.com';
@@ -66,20 +66,9 @@ export default function CreatorNoteScreen() {
   const [trustStats, setTrustStats] = useState<{ avg: number; verified: number; trusted: number; standard: number; total: number }>({ avg: 0, verified: 0, trusted: 0, standard: 0, total: 0 });
 
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    supabase.rpc('get_community_stats').then(({ data, error }: any) => {
-      if (!error && data) {
-        setStats({
-          players: Number(data.players) || 0,
-          matches: Number(data.matches) || 0,
-          terrains: Number(data.terrains) || 0,
-          tournaments: Number(data.tournaments) || 0,
-          clubs: Number(data.clubs) || 0,
-          challenges: Number(data.challenges) || 0,
-        });
-      }
-      setStatsLoaded(true);
-    }).catch(() => setStatsLoaded(true));
+    fetchCommunityStats()
+      .then(setStats)
+      .finally(() => setStatsLoaded(true));
     fetchSuspiciousPlayers().then(({ players: tp }) => {
       const active = tp.filter(p => p.status !== 'banned');
       if (active.length === 0) return;

@@ -15,6 +15,7 @@ import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/template';
 import { getSupabaseClient } from '@/template';
+import { fetchCommunityStats } from '@/services/communityStatsService';
 
 const GOAL = 1000;
 
@@ -179,9 +180,7 @@ export default function RoadmapScreen() {
     const supabase = getSupabaseClient();
 
     // Player count
-    supabase.rpc('get_community_stats').then(({ data, error }: any) => {
-      if (!error && data) setPlayerCount(Number(data.players) || 0);
-    });
+    fetchCommunityStats().then((s) => setPlayerCount(s.players)).catch(() => {});
 
     // All vote counts
     supabase

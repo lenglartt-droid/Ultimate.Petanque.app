@@ -114,7 +114,7 @@ interface HomeSection { key: SectionKey; data: SectionKey[] }
 // ============================================================
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
-  const { userStats, tournaments, matches, challenges, selfPlayer } = useAppData();
+  const { userStats, tournaments, matches, challenges, selfPlayer, terrains } = useAppData();
   const { refreshData } = useAppActions();
   const { user } = useAuth();
   const { t, language } = useLanguage();
@@ -289,7 +289,7 @@ export default function HomeScreen() {
       invited.filter(m => m.status === 'active' && new Date(m.date) > nowDate).forEach(m => { if (!allMap.has(m.id)) allMap.set(m.id, { ...m, _source: 'invited' }); });
       const sorted = Array.from(allMap.values()).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
       const withCounts = await Promise.all(
-        sorted.slice(0, 5).map(async (m) => {
+        sorted.map(async (m) => {
           const { responses } = await getMeetupResponses(m.id);
           const acceptedCount = responses.filter((r: MeetupResponse) => r.status === 'accepted').length;
           return { ...m, _acceptedCount: acceptedCount, _maxParticipants: m.max_participants };
@@ -303,7 +303,7 @@ export default function HomeScreen() {
     try {
       const { events } = await getSponsoredEvents();
       const nowDate = new Date();
-      const upcoming = events.filter(e => (e.status === 'upcoming' || e.status === 'active') && new Date(e.eventDate) >= new Date(nowDate.toISOString().split('T')[0])).sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime()).slice(0, 5);
+      const upcoming = events.filter(e => (e.status === 'upcoming' || e.status === 'active') && new Date(e.eventDate) >= new Date(nowDate.toISOString().split('T')[0])).sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
       setUpcomingEvents(upcoming);
     } catch { /* silent */ } finally { setEventsLoading(false); }
   }, []);
@@ -1002,6 +1002,7 @@ export default function HomeScreen() {
           <View style={[st.section, isTablet && st.sectionTablet]}>
             <TeamBuilderSection
               tournaments={tournaments}
+              terrains={terrains}
               language={language}
               selfPlayerName={displayName}
             />
@@ -1016,6 +1017,7 @@ export default function HomeScreen() {
               tournaments={tournaments}
               meetups={meetups}
               upcomingEvents={upcomingEvents}
+              terrains={terrains}
               meetupsLoading={false}
               eventsLoading={false}
               pendingInviteCount={pendingInviteCount}

@@ -6,6 +6,20 @@
 import { Terrain } from '@/types/petanque';
 import { logModification } from '@/services/modificationLogService';
 import { enqueueOperation, buildTerrainDbPayload, buildUpdateDbPayload } from '@/services/offlineQueueService';
+import { toMapCoord } from '@/utils/mapPlayerLocation';
+
+function normalizeTerrainLocation(
+  location: Terrain['location'] | undefined,
+  fallbackCountry = 'France',
+): Terrain['location'] {
+  return {
+    latitude: toMapCoord(location?.latitude),
+    longitude: toMapCoord(location?.longitude),
+    country: location?.country || fallbackCountry,
+    address: location?.address,
+    city: location?.city,
+  };
+}
 
 interface TerrainCrudDeps {
   supabase: any;
@@ -39,12 +53,13 @@ export async function addTerrainOp(
   }
 
   try {
+    const normalizedLocation = normalizeTerrainLocation(terrain.location);
     const { data, error } = await supabase.from('terrains').insert({
       user_id: userId,
       name: terrain.name,
       address: terrain.address,
       city: terrain.city,
-      location: terrain.location,
+      location: normalizedLocation,
       type: terrain.type,
       description: terrain.description,
       facilities: terrain.facilities,
@@ -70,7 +85,7 @@ export async function addTerrainOp(
         name: data.name,
         address: data.address,
         city: data.city,
-        location: data.location,
+        location: normalizeTerrainLocation(data.location),
         type: data.type,
         description: data.description,
         facilities: data.facilities,
@@ -105,8 +120,14 @@ export async function updateTerrainOp(
   const { supabase, userId, isConnected, terrains, setTerrains, sharedItemPermissions } = deps;
   const oldTerrain = terrains.find(t => t.id === id);
 
+  const normalizedUpdates = {
+    ...updates,
+    ...(updates.location !== undefined
+      ? { location: normalizeTerrainLocation(updates.location) }
+      : {}),
+  };
   setTerrains(prev => prev.map(terrain =>
-    terrain.id === id ? { ...terrain, ...updates } : terrain
+    terrain.id === id ? { ...terrain, ...normalizedUpdates } : terrain
   ));
 
   if (!userId) return;
@@ -121,7 +142,7 @@ export async function updateTerrainOp(
     if (updates.name !== undefined) dbUpdates.name = updates.name;
     if (updates.address !== undefined) dbUpdates.address = updates.address;
     if (updates.city !== undefined) dbUpdates.city = updates.city;
-    if (updates.location !== undefined) dbUpdates.location = updates.location;
+    if (updates.location !== undefined) dbUpdates.location = normalizeTerrainLocation(updates.location);
     if (updates.type !== undefined) dbUpdates.type = updates.type;
     if (updates.description !== undefined) dbUpdates.description = updates.description;
     if (updates.facilities !== undefined) dbUpdates.facilities = updates.facilities;

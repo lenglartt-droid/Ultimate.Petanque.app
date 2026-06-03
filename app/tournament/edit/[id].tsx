@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
@@ -173,6 +173,7 @@ export default function EditTournamentScreen() {
   const [showParticipantsSection, setShowParticipantsSection] = useState(false);
   const [showFinancesSection, setShowFinancesSection] = useState(false);
   const [showDescriptionSection, setShowDescriptionSection] = useState(false);
+  const [showPosterSection, setShowPosterSection] = useState(false);
 
   useEffect(() => {
     if (tournament) {
@@ -317,23 +318,51 @@ export default function EditTournamentScreen() {
   const progressFilled = [name.trim(), hasLocation ? 'yes' : ''].filter(Boolean).length + 1;
   const progressLabel = !name.trim() ? t('tournament', 'startWithName') : !hasLocation ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate');
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired')); return; }
     if (!terrainId && !location.city.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorCityRequired')); return; }
     const selectedClub = clubs.find(c => c.id === clubId);
     const terrain = terrains.find(t => t.id === terrainId);
-    updateTournament(id!, {
-      name: name.trim(), date: date.toISOString(), endDate: endDate ? endDate.toISOString() : undefined,
-      type, format, status,
-      location: { name: terrain?.name || location.address.trim() || location.city.trim(), city: terrain?.city || location.city.trim(), latitude: terrain?.location.latitude || location.latitude, longitude: terrain?.location.longitude || location.longitude },
-      terrainId: terrain?.id, terrainName: terrain?.name, terrainType: terrain?.type,
-      clubId, clubName: selectedClub?.name, maxParticipants: parseInt(maxParticipants) || 32,
-      prize: prize.trim() || undefined, description: description.trim() || undefined,
-      tournamentLevel, tournamentCategory, registrationType, tournamentScope,
-      registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
-      prizeWon: prizeWon ? parseFloat(prizeWon) : undefined, finalResult,
-    });
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success); router.back();
+    const levelToSave = showCustomLevelInput && customLevel.trim()
+      ? customLevel.trim()
+      : tournamentLevel;
+    try {
+      await updateTournament(id!, {
+        name: name.trim(),
+        date: date.toISOString(),
+        endDate: endDate ? endDate.toISOString() : undefined,
+        type,
+        format,
+        status,
+        location: {
+          name: terrain?.name || location.address.trim() || location.city.trim(),
+          city: terrain?.city || location.city.trim(),
+          latitude: terrain?.location?.latitude ?? location.latitude ?? 0,
+          longitude: terrain?.location?.longitude ?? location.longitude ?? 0,
+        },
+        terrainId: terrain?.id,
+        terrainName: terrain?.name,
+        terrainType: terrain?.type,
+        clubId,
+        clubName: selectedClub?.name,
+        maxParticipants: parseInt(maxParticipants, 10) || 32,
+        prize: prize.trim() || undefined,
+        description: description.trim() || undefined,
+        tournamentLevel: levelToSave,
+        tournamentCategory,
+        registrationType,
+        tournamentScope,
+        registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
+        prizeWon: prizeWon ? parseFloat(prizeWon) : undefined,
+        finalResult,
+        posterUrl: posterUrl ?? undefined,
+      });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.back();
+    } catch (error: any) {
+      console.log('[EditTournament] Save error:', error);
+      Alert.alert(t('common', 'error'), error?.message || t('tournament', 'errorSave'));
+    }
   };
 
   if (!tournament) {
@@ -524,7 +553,7 @@ export default function EditTournamentScreen() {
 
           {/* 8-13: Accordions (Finances, Niveau, Catégorie, Inscription, Envergure, Participants) */}
           {/* 8. Finances */}
-          <Animated.View entering={FadeInDown.duration(350).delay(250)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(250)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="payments" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -544,7 +573,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* 9. Niveau */}
-          <Animated.View entering={FadeInDown.duration(350).delay(275)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(275)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} /></View>
               <View style={{ flex: 1 }}>
@@ -582,7 +611,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* 10. Catégorie */}
-          <Animated.View entering={FadeInDown.duration(350).delay(300)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="verified" size={18} color={theme.warning} /></View>
               <View style={{ flex: 1 }}>
@@ -604,7 +633,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* 11. Inscription */}
-          <Animated.View entering={FadeInDown.duration(350).delay(325)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="how-to-reg" size={18} color={theme.primary} /></View>
               <View style={{ flex: 1 }}>
@@ -626,7 +655,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* 12. Envergure */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="public" size={18} color={theme.accent} /></View>
               <View style={{ flex: 1 }}>
@@ -648,7 +677,7 @@ export default function EditTournamentScreen() {
           </Animated.View>
 
           {/* 13. Participants */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="people-outline" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -734,59 +763,8 @@ export default function EditTournamentScreen() {
             </SectionCard>
           ) : null}
 
-          {/* 15b. Tournament Poster */}
-          <SectionCard title={language === 'fr' ? 'Affiche du tournoi' : 'Tournament Poster'} icon="image" color={theme.carreauColor} delay={460}>
-            {posterUrl ? (
-              <View style={{ backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, overflow: 'hidden' }}>
-                <Pressable style={{ position: 'relative', minHeight: 160 }} onPress={() => posterType === 'pdf' ? require('react-native').Linking.openURL(posterUrl) : setShowPosterFullscreen(true)}>
-                  {posterType === 'image' ? (
-                    <Image source={{ uri: posterUrl }} style={{ width: '100%', height: 200 }} contentFit="cover" transition={200} cachePolicy="memory-disk" />
-                  ) : (
-                    <View style={{ width: '100%', height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 }}>
-                      <MaterialIcons name="picture-as-pdf" size={40} color={theme.error} />
-                      <Text style={{ fontSize: 14, fontWeight: '600', color: theme.textPrimary }}>{language === 'fr' ? 'Document PDF' : 'PDF Document'}</Text>
-                    </View>
-                  )}
-                </Pressable>
-                <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-                  <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md }} onPress={showPosterUploadOptions}>
-                    <MaterialIcons name="refresh" size={16} color={theme.primary} />
-                    <Text style={{ fontSize: 13, fontWeight: '600', color: theme.primary }}>{language === 'fr' ? 'Remplacer' : 'Replace'}</Text>
-                  </Pressable>
-                  <Pressable style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md }} onPress={handleRemovePoster}>
-                    <MaterialIcons name="delete-outline" size={16} color={theme.error} />
-                  </Pressable>
-                </View>
-              </View>
-            ) : (
-              <Pressable style={{ backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 28, alignItems: 'center', borderWidth: 2, borderColor: theme.carreauColor + '25', borderStyle: 'dashed' }} onPress={showPosterUploadOptions}>
-                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}>
-                  <MaterialIcons name="image" size={26} color={theme.carreauColor} />
-                </View>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: theme.carreauColor, marginBottom: 4 }}>{language === 'fr' ? 'Ajouter une affiche' : 'Add a poster'}</Text>
-                <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center' }}>{language === 'fr' ? 'Photo ou PDF' : 'Photo or PDF'}</Text>
-              </Pressable>
-            )}
-            {uploadingPoster ? (
-              <View style={{ alignItems: 'center', paddingVertical: 20, gap: 8 }}>
-                <ActivityIndicator size="large" color={theme.carreauColor} />
-                <Text style={{ fontSize: 13, color: theme.textSecondary }}>{language === 'fr' ? 'Envoi en cours...' : 'Uploading...'}</Text>
-              </View>
-            ) : null}
-          </SectionCard>
-
-          {/* Poster Fullscreen Modal */}
-          <Modal visible={showPosterFullscreen} animationType="fade" transparent onRequestClose={() => setShowPosterFullscreen(false)}>
-            <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' }}>
-              <Pressable style={{ position: 'absolute', top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 10 }} onPress={() => setShowPosterFullscreen(false)}>
-                <MaterialIcons name="close" size={24} color="#FFF" />
-              </Pressable>
-              {posterUrl ? <Image source={{ uri: posterUrl }} style={{ width: '100%', height: '80%' }} contentFit="contain" transition={200} /> : null}
-            </View>
-          </Modal>
-
-          {/* 16. Description */}
-          <Animated.View entering={FadeInDown.duration(350).delay(450)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          {/* 15. Description */}
+          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}><MaterialIcons name="description" size={18} color={theme.textSecondary} /></View>
               <View style={{ flex: 1 }}>
@@ -802,6 +780,69 @@ export default function EditTournamentScreen() {
             ) : null}
           </Animated.View>
 
+          {/* 16. Tournament Poster (collapsible — avoids overlapping accordion content above) */}
+          <Animated.View entering={FadeInDown.duration(350).delay(450)} style={styles.sectionCard}>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowPosterSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="image" size={18} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{language === 'fr' ? 'Affiche du tournoi' : 'Tournament Poster'}</Text>
+                {posterUrl ? (
+                  <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>
+                    {posterType === 'pdf'
+                      ? (language === 'fr' ? 'PDF ajouté' : 'PDF added')
+                      : (language === 'fr' ? 'Image ajoutée' : 'Image added')}
+                  </Text>
+                ) : (
+                  <Text style={styles.sectionCardSubtitle}>{language === 'fr' ? 'Photo ou PDF' : 'Photo or PDF'}</Text>
+                )}
+              </View>
+              <MaterialIcons name={showPosterSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showPosterSection ? (
+              <View style={styles.accordionContent}>
+                {posterUrl ? (
+                  <View style={styles.posterPreviewBox}>
+                    <Pressable onPress={() => posterType === 'pdf' ? require('react-native').Linking.openURL(posterUrl) : setShowPosterFullscreen(true)}>
+                      {posterType === 'image' ? (
+                        <Image source={{ uri: posterUrl }} style={styles.posterPreviewImage} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={styles.posterPdfPreview}>
+                          <MaterialIcons name="picture-as-pdf" size={40} color={theme.error} />
+                          <Text style={styles.posterPdfText}>{language === 'fr' ? 'Document PDF' : 'PDF Document'}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    <View style={styles.posterActionsRow}>
+                      <Pressable style={styles.posterReplaceBtn} onPress={showPosterUploadOptions}>
+                        <MaterialIcons name="refresh" size={16} color={theme.primary} />
+                        <Text style={styles.posterReplaceBtnText}>{language === 'fr' ? 'Remplacer' : 'Replace'}</Text>
+                      </Pressable>
+                      <Pressable style={styles.posterDeleteBtn} onPress={handleRemovePoster}>
+                        <MaterialIcons name="delete-outline" size={16} color={theme.error} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable style={styles.posterUploadBox} onPress={showPosterUploadOptions}>
+                    <View style={styles.posterUploadIcon}>
+                      <MaterialIcons name="image" size={26} color={theme.carreauColor} />
+                    </View>
+                    <Text style={styles.posterUploadTitle}>{language === 'fr' ? 'Ajouter une affiche' : 'Add a poster'}</Text>
+                    <Text style={styles.posterUploadSubtitle}>{language === 'fr' ? 'Photo ou PDF' : 'Photo or PDF'}</Text>
+                  </Pressable>
+                )}
+                {uploadingPoster ? (
+                  <View style={styles.posterUploadingRow}>
+                    <ActivityIndicator size="large" color={theme.carreauColor} />
+                    <Text style={styles.posterUploadingText}>{language === 'fr' ? 'Envoi en cours...' : 'Uploading...'}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </Animated.View>
+
         </ScrollView>
 
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16 }]}>
@@ -811,6 +852,16 @@ export default function EditTournamentScreen() {
           </Pressable>
         </View>
       </KeyboardAvoidingView>
+
+      {/* Poster Fullscreen Modal */}
+      <Modal visible={showPosterFullscreen} animationType="fade" transparent onRequestClose={() => setShowPosterFullscreen(false)}>
+        <View style={styles.posterFullscreenBackdrop}>
+          <Pressable style={styles.posterFullscreenClose} onPress={() => setShowPosterFullscreen(false)}>
+            <MaterialIcons name="close" size={24} color="#FFF" />
+          </Pressable>
+          {posterUrl ? <Image source={{ uri: posterUrl }} style={styles.posterFullscreenImage} contentFit="contain" transition={200} /> : null}
+        </View>
+      </Modal>
 
       {/* Terrain Picker Modal */}
       <Modal visible={showTerrainPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTerrainPicker(false)}>
@@ -956,7 +1007,7 @@ const styles = StyleSheet.create({
   iconSection: { alignItems: 'center', marginBottom: 14 },
   tournamentIcon: { width: 96, height: 96, borderRadius: 20, backgroundColor: theme.carreauColor, alignItems: 'center', justifyContent: 'center' },
 
-  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, ...theme.shadows.card },
+  sectionCard: { backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, padding: 16, marginBottom: 14, overflow: 'hidden', ...theme.shadows.card },
   sectionCardHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
   sectionCardIcon: { width: 32, height: 32, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   sectionCardTitle: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
@@ -1052,6 +1103,25 @@ const styles = StyleSheet.create({
   accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   accordionContent: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
   accordionValueText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 2 },
+
+  // Poster
+  posterPreviewBox: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, overflow: 'hidden' },
+  posterPreviewImage: { width: '100%', height: 200 },
+  posterPdfPreview: { width: '100%', height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 },
+  posterPdfText: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  posterActionsRow: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8, borderTopWidth: 1, borderTopColor: theme.border },
+  posterReplaceBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md },
+  posterReplaceBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  posterDeleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md },
+  posterUploadBox: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 28, alignItems: 'center', borderWidth: 2, borderColor: theme.carreauColor + '25', borderStyle: 'dashed' },
+  posterUploadIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  posterUploadTitle: { fontSize: 14, fontWeight: '600', color: theme.carreauColor, marginBottom: 4 },
+  posterUploadSubtitle: { fontSize: 12, color: theme.textSecondary, textAlign: 'center' },
+  posterUploadingRow: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  posterUploadingText: { fontSize: 13, color: theme.textSecondary },
+  posterFullscreenBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  posterFullscreenClose: { position: 'absolute', top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  posterFullscreenImage: { width: '100%', height: '80%' },
 
   // Modal
   modalContainer: { flex: 1, backgroundColor: theme.backgroundSecondary },

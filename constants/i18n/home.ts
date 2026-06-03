@@ -64,6 +64,26 @@ export const homeTranslations = {
     codeSentSuccess: { fr: 'Code envoyé', en: 'Code sent' },
     codeSentMessage: { fr: 'Saisissez le code reçu par email (6 chiffres). N\'utilisez pas le lien sur mobile.', en: 'Enter the code from your email (6 digits). Do not use the email link on mobile.' },
     loginError: { fr: 'Erreur de connexion', en: 'Login error' },
+    invalidCredentials: {
+      fr: 'Email ou mot de passe incorrect. Si vous vous êtes inscrit par code, utilisez « Mot de passe oublié ? » pour en définir un.',
+      en: 'Incorrect email or password. If you signed up with a code, use “Forgot password?” to set one.',
+    },
+    emailNotConfirmed: {
+      fr: 'Confirmez votre email avant de vous connecter (vérifiez votre boîte de réception).',
+      en: 'Confirm your email before signing in (check your inbox).',
+    },
+    invalidApiKey: {
+      fr: 'Configuration Supabase invalide (clé API). Contactez le support ou réinstallez l\'application officielle.',
+      en: 'Invalid Supabase configuration (API key). Contact support or reinstall the official app.',
+    },
+    loginSessionFailed: {
+      fr: 'Connexion réussie mais la session n\'a pas pu être chargée. Réessayez.',
+      en: 'Sign-in succeeded but the session could not be loaded. Please try again.',
+    },
+    loginTimeout: {
+      fr: 'Délai dépassé. Vérifiez votre connexion et réessayez.',
+      en: 'Request timed out. Check your connection and try again.',
+    },
     googleError: { fr: 'Erreur Google', en: 'Google error' },
     googleProviderNotEnabled: {
       fr: 'La connexion Google n\'est pas activee sur ce projet Supabase. Un administrateur doit activer le fournisseur Google dans Supabase → Authentication → Providers → Google (Client ID et secret Google Cloud), puis ajouter l\'URL de redirection onspaceapp://auth.',

@@ -40,6 +40,11 @@ function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
+/** Haversine distance in kilometers. */
+export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  return haversineDistance(lat1, lon1, lat2, lon2) / 1000;
+}
+
 /**
  * Get user's current location with permission check.
  */

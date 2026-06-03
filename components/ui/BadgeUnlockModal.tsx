@@ -152,17 +152,19 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
                 </Animated.View>
               </View>
 
-              {/* Unlock label */}
-              <Animated.View entering={FadeInUp.duration(500).delay(150)} style={s.unlockLabelWrap}>
-                <LinearGradient
-                  colors={['#F59E0B22', '#F59E0B08']}
-                  style={s.unlockLabelGradient}
-                >
-                  <Text style={s.unlockLabel}>
-                    {isFr ? 'BADGE DEBLOQUE !' : 'BADGE UNLOCKED!'}
-                  </Text>
-                </LinearGradient>
-              </Animated.View>
+              {/* Unlock label — static full-width slot centers pill (Reanimated entering can stretch Animated.View on Android) */}
+              <View style={s.centeredSlot}>
+                <Animated.View entering={FadeIn.duration(500).delay(150)}>
+                  <LinearGradient
+                    colors={['#F59E0B22', '#F59E0B08']}
+                    style={s.unlockLabelGradient}
+                  >
+                    <Text style={s.unlockLabel}>
+                      {isFr ? 'BADGE DEBLOQUE !' : 'BADGE UNLOCKED!'}
+                    </Text>
+                  </LinearGradient>
+                </Animated.View>
+              </View>
 
               {/* Badge name — regular Text inside Animated.View so textAlign centers reliably */}
               <Animated.View entering={FadeInUp.duration(500).delay(250)} style={s.textBlock}>
@@ -170,9 +172,14 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
               </Animated.View>
 
               {/* Category chip */}
-              <Animated.View entering={FadeIn.duration(400).delay(350)} style={[s.catChip, { backgroundColor: badge.color + '15', borderColor: badge.color + '30' }]}>
-                <Text style={[s.catChipText, { color: badge.color }]}>{catLabel}</Text>
-              </Animated.View>
+              <View style={[s.centeredSlot, { marginBottom: 14 }]}>
+                <Animated.View
+                  entering={FadeIn.duration(400).delay(350)}
+                  style={[s.catChip, { backgroundColor: badge.color + '15', borderColor: badge.color + '30' }]}
+                >
+                  <Text style={[s.catChipText, { color: badge.color }]}>{catLabel}</Text>
+                </Animated.View>
+              </View>
 
               {/* Description */}
               <Animated.View entering={FadeIn.duration(400).delay(400)} style={s.textBlock}>
@@ -180,12 +187,14 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
               </Animated.View>
 
               {/* XP reward */}
-              <Animated.View entering={FadeIn.duration(400).delay(500)} style={s.xpRewardOuter}>
-                <Animated.View style={[s.xpReward, { borderColor: badge.color + '30' }, shimmerStyle]}>
-                  <MaterialIcons name="bolt" size={24} color="#FCD34D" />
-                  <Text style={s.xpRewardText}>+{badge.xpReward} XP</Text>
+              <View style={[s.centeredSlot, { marginBottom: 4 }]}>
+                <Animated.View entering={FadeIn.duration(400).delay(500)}>
+                  <Animated.View style={[s.xpReward, { borderColor: badge.color + '30' }, shimmerStyle]}>
+                    <MaterialIcons name="bolt" size={24} color="#FCD34D" />
+                    <Text style={s.xpRewardText}>+{badge.xpReward} XP</Text>
+                  </Animated.View>
                 </Animated.View>
-              </Animated.View>
+              </View>
             </View>
 
             <View style={s.flexBookend} />
@@ -303,11 +312,11 @@ const s = StyleSheet.create({
       android: { elevation: 16 },
     }),
   },
-  // Text content
-  unlockLabelWrap: {
+  /** Full-width row that centers shrink-wrapped children (pills/chips). */
+  centeredSlot: {
+    width: '100%',
+    alignItems: 'center',
     marginBottom: 16,
-    alignSelf: 'center',
-    maxWidth: '100%',
   },
   unlockLabelGradient: {
     paddingHorizontal: 24,
@@ -339,8 +348,6 @@ const s = StyleSheet.create({
     paddingVertical: 5,
     borderRadius: 12,
     borderWidth: 1,
-    marginBottom: 14,
-    alignSelf: 'center',
   },
   catChipText: {
     fontSize: 12,
@@ -355,10 +362,6 @@ const s = StyleSheet.create({
     lineHeight: 23,
     marginBottom: 20,
     width: '100%',
-  },
-  xpRewardOuter: {
-    alignSelf: 'center',
-    marginBottom: 4,
   },
   xpReward: {
     flexDirection: 'row',

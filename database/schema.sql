@@ -60,16 +60,17 @@ $$;
 
 create or replace function public.get_community_stats()
 returns json language plpgsql security definer stable
+set search_path = public
 as $$
 begin
-  return (select json_build_object(
-    'total_users', (select count(*) from public.user_profiles),
-    'total_matches', (select count(*) from public.matches),
-    'total_challenges', (select count(*) from public.challenges),
-    'total_clubs', (select count(*) from public.clubs),
-    'total_terrains', (select count(*) from public.terrains),
-    'total_tournaments', (select count(*) from public.tournaments)
-  ));
+  return json_build_object(
+    'players', (select count(*)::bigint from public.players),
+    'matches', (select count(*)::bigint from public.matches),
+    'challenges', (select count(*)::bigint from public.challenges),
+    'clubs', (select count(*)::bigint from public.clubs),
+    'terrains', (select count(*)::bigint from public.terrains),
+    'tournaments', (select count(*)::bigint from public.tournaments)
+  );
 end;
 $$;
 

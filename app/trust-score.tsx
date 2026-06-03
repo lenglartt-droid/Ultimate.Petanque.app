@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -295,20 +296,19 @@ export default function TrustScoreScreen() {
           <MaterialIcons name="arrow-back" size={24} color={theme.textPrimary} />
         </Pressable>
         <Text style={st.headerTitle}>{(et.pageTitle as any)?.[language] || 'Trust Score'}</Text>
-        <Pressable style={st.backBtn} onPress={() => setShowHowItWorks(!showHowItWorks)}>
+        <Pressable style={st.backBtn} onPress={() => setShowHowItWorks(true)}>
           <MaterialIcons name="help-outline" size={22} color={theme.textSecondary} />
         </Pressable>
       </View>
 
-      <ScrollView
-        style={st.scrollView}
-        contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 32 }]}
-        showsVerticalScrollIndicator={false}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+      <Modal
+        visible={showHowItWorks}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowHowItWorks(false)}
       >
-        {/* How It Works */}
-        {showHowItWorks ? (
-          <Animated.View entering={FadeInDown.duration(300)} style={st.howItWorksCard}>
+        <Pressable style={st.howModalOverlay} onPress={() => setShowHowItWorks(false)}>
+          <Pressable style={st.howItWorksCard} onPress={(e) => e.stopPropagation?.()}>
             <View style={st.howHeader}>
               <MaterialIcons name="info" size={20} color="#3B82F6" />
               <Text style={st.howTitle}>{isFr ? 'Comment ca marche ?' : 'How does it work?'}</Text>
@@ -343,9 +343,16 @@ export default function TrustScoreScreen() {
               <MaterialIcons name="visibility" size={14} color="#7C3AED" />
               <Text style={st.howBonusText}>{isFr ? 'Bonus : attestations temoins (jusqu\'a +8 pts)' : 'Bonus: witness attestations (up to +8 pts)'}</Text>
             </View>
-          </Animated.View>
-        ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
 
+      <ScrollView
+        style={st.scrollView}
+        contentContainerStyle={[st.scrollContent, { paddingBottom: insets.bottom + 32 }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
+      >
         {!trustData ? (
           <Animated.View entering={FadeInDown.duration(400)} style={st.noScoreCard}>
             <View style={st.noScoreIconWrap}>
@@ -667,8 +674,24 @@ const st = StyleSheet.create({
   scrollView: { flex: 1 },
   scrollContent: { paddingHorizontal: 16, paddingTop: 16, flexGrow: 1 },
 
-  // How it works
-  howItWorksCard: { backgroundColor: theme.surface, borderRadius: 20, padding: 18, marginBottom: 16, borderWidth: 1, borderColor: '#3B82F620', ...theme.shadows.card },
+  // How it works modal
+  howModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+  },
+  howItWorksCard: {
+    backgroundColor: theme.surface,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#3B82F620',
+    maxWidth: 420,
+    width: '100%',
+    alignSelf: 'center',
+    ...theme.shadows.cardElevated,
+  },
   howHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
   howTitle: { flex: 1, fontSize: 15, fontWeight: '700', color: theme.textPrimary },
   howText: { fontSize: 13, color: theme.textSecondary, lineHeight: 19, marginBottom: 14 },

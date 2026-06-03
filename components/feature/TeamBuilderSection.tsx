@@ -22,10 +22,35 @@ import {
   TeamInvitation, TournamentTeam,
 } from '@/services/teamInvitationService';
 import { getTeamMessageCount } from '@/services/teamChatService';
-import { Tournament } from '@/types/petanque';
+import { Tournament, Terrain } from '@/types/petanque';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppData } from '@/contexts/AppContext';
 import { useRef } from 'react';
+import { useLanguage } from '@/hooks/useLanguage';
+import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
+import { formatDistance } from '@/services/terrainProximityService';
+import { isValidMapCoord } from '@/utils/mapPlayerLocation';
+
+type DistanceFilter = 'all' | '5' | '10' | '25' | '50' | '100';
+type TeamableTournament = Tournament & { distanceKm?: number };
+
+const DISTANCE_OPTIONS: DistanceFilter[] = ['all', '5', '10', '25', '50', '100'];
+const SCROLL_ITEM_LIMIT = 3;
+const TOURNAMENT_ROW_HEIGHT = 66;
+const SCROLL_MAX_HEIGHT = SCROLL_ITEM_LIMIT * TOURNAMENT_ROW_HEIGHT;
+
+function getTournamentCoords(t: Tournament, terrains: Terrain[]): { lat: number; lng: number } | null {
+  if (isValidMapCoord(t.location?.latitude, t.location?.longitude)) {
+    return { lat: t.location.latitude, lng: t.location.longitude };
+  }
+  if (t.terrainId) {
+    const tr = terrains.find(tr => tr.id === t.terrainId);
+    if (tr && isValidMapCoord(tr.location?.latitude, tr.location?.longitude)) {
+      return { lat: tr.location.latitude, lng: tr.location.longitude };
+    }
+  }
+  return null;
+}
 
 // Haversine distance in km between two lat/lng points
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
@@ -38,13 +63,15 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 interface Props {
   tournaments: Tournament[];
+  terrains: Terrain[];
   language: string;
   selfPlayerName: string;
 }
 
-export default function TeamBuilderSection({ tournaments, language, selfPlayerName }: Props) {
+export default function TeamBuilderSection({ tournaments, terrains, language, selfPlayerName }: Props) {
   const { user } = useAuth();
   const { matches } = useAppData();
+  const { t } = useLanguage();
   const fr = language === 'fr';
   const [showModal, setShowModal] = useState(false);
   const [selectedTournament, setSelectedTournament] = useState<Tournament | null>(null);
@@ -66,10 +93,17 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   // Synergy detail tooltip
   const [synergyDetail, setSynergyDetail] = useState<{ name: string; userId: string; score: number; color: string; bgColor: string; label: string; breakdown: { winRate: number; frequency: number; elo: number; role: number } } | null>(null);
 
-  // Nearby filter state
+  // Nearby filter state (player search in modal)
   const [nearbyMode, setNearbyMode] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [loadingLocation, setLoadingLocation] = useState(false);
+
+  // Tournament list distance filter
+  const [tournamentDistanceFilter, setTournamentDistanceFilter] = useState<DistanceFilter>('all');
+  const [listUserLocation, setListUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [listGpsLoading, setListGpsLoading] = useState(false);
+  const [listGpsDenied, setListGpsDenied] = useState(false);
+  const listGpsRequestedRef = useRef(false);
 
   // Partner match history stats
   type PartnerStats = { wins: number; losses: number; total: number; winRate: number; lastDate: string | null };
@@ -161,14 +195,67 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamTournamentNames, setTeamTournamentNames] = useState<Map<string, { name: string; date: string }>>(new Map());
 
-  // Filter upcoming tournaments that need team-up (Doublette/Triplette)
-  const teamableTournaments = useMemo(() => {
+  const requestListGPS = useCallback(async () => {
+    if (listGpsRequestedRef.current && listUserLocation) return listUserLocation;
+    listGpsRequestedRef.current = true;
+    setListGpsLoading(true);
+    setListGpsDenied(false);
+    try {
+      const { status } = await requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setListGpsDenied(true);
+        return null;
+      }
+      const pos = await getCurrentPositionAsync({ accuracy: Accuracy.Balanced });
+      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+      setListUserLocation(loc);
+      return loc;
+    } catch {
+      setListGpsDenied(true);
+      return null;
+    } finally {
+      setListGpsLoading(false);
+    }
+  }, [listUserLocation]);
+
+  useEffect(() => {
+    if (tournamentDistanceFilter !== 'all' && !listUserLocation && !listGpsLoading) {
+      requestListGPS();
+    }
+  }, [tournamentDistanceFilter, listUserLocation, listGpsLoading, requestListGPS]);
+
+  const allTeamableTournaments = useMemo(() => {
     const now = new Date();
     return tournaments.filter(t => {
       const tDate = new Date(t.date);
       return tDate > now && (t.format === 'Doublette' || t.format === 'Triplette');
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).slice(0, 5);
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tournaments]);
+
+  const teamableTournaments = useMemo((): TeamableTournament[] => {
+    if (tournamentDistanceFilter === 'all' || !listUserLocation) {
+      return allTeamableTournaments;
+    }
+    const maxKm = Number(tournamentDistanceFilter);
+    return allTeamableTournaments
+      .map(t => {
+        const coords = getTournamentCoords(t, terrains);
+        if (!coords) return null;
+        const distanceKm = haversineKm(listUserLocation.lat, listUserLocation.lng, coords.lat, coords.lng);
+        if (distanceKm > maxKm) return null;
+        return { ...t, distanceKm };
+      })
+      .filter((t): t is TeamableTournament => t !== null);
+  }, [allTeamableTournaments, tournamentDistanceFilter, listUserLocation, terrains]);
+
+  const distanceLabels: Record<DistanceFilter, string> = {
+    all: t('directory', 'distanceAll'),
+    '5': '5 km',
+    '10': '10 km',
+    '25': '25 km',
+    '50': '50 km',
+    '100': '100 km',
+  };
 
   // Load favorite partners from AsyncStorage
   useEffect(() => {
@@ -506,7 +593,7 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
     );
   }, [team, fr, selectedTournament, loadTeamData]);
 
-  if (teamableTournaments.length === 0) {
+  if (allTeamableTournaments.length === 0) {
     // Show motivating empty state with create tournament prompt
     return (
       <View style={s.container}>
@@ -578,6 +665,55 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
     return bestScore >= 40 ? bestId : null;
   }, [recentPartners, selectedTournament, alreadyInvitedIds, computeSynergyScore]);
 
+  const renderTournamentRow = (t: TeamableTournament) => (
+    <Pressable
+      key={t.id}
+      style={({ pressed }) => [s.tournamentRow, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
+      onPress={() => handleOpenModal(t)}
+    >
+      <View style={s.tournamentDate}>
+        <Text style={s.tournamentDateDay}>{new Date(t.date).getDate()}</Text>
+        <Text style={s.tournamentDateMonth}>
+          {new Date(t.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}
+        </Text>
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={s.tournamentName} numberOfLines={1}>{t.name}</Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3, flexWrap: 'wrap' }}>
+          <View style={s.formatChip}>
+            <Text style={s.formatChipText}>{t.format}</Text>
+          </View>
+          <Text style={s.tournamentCity} numberOfLines={1}>{(t.location as any)?.city || ''}</Text>
+          {t.distanceKm != null ? (
+            <View style={s.tournamentDistBadge}>
+              <MaterialIcons name="near-me" size={9} color="#10B981" />
+              <Text style={s.tournamentDistText}>{formatDistance(Math.round(t.distanceKm * 1000), language)}</Text>
+            </View>
+          ) : null}
+        </View>
+        {(() => {
+          const dl = isDeadlineActive(t.id, t.date);
+          if (dl.isPast) return (
+            <View style={s.deadlineBadge}>
+              <MaterialIcons name="lock-clock" size={10} color="#EF4444" />
+              <Text style={[s.deadlineText, { color: '#EF4444' }]}>{fr ? 'Inscription fermee' : 'Registration closed'}</Text>
+            </View>
+          );
+          if (dl.isUrgent) return (
+            <View style={[s.deadlineBadge, { backgroundColor: '#FEF3C720' }]}>
+              <MaterialIcons name="schedule" size={10} color="#D97706" />
+              <Text style={[s.deadlineText, { color: '#D97706' }]}>{dl.daysLeft}j {fr ? 'restant(s)' : 'left'}</Text>
+            </View>
+          );
+          return null;
+        })()}
+      </View>
+      <View style={[s.inviteBtn, (() => { const dl = isDeadlineActive(t.id, t.date); return dl.isPast ? { opacity: 0.4 } : {}; })()]}>
+        <MaterialIcons name="person-add" size={16} color="#22C55E" />
+      </View>
+    </Pressable>
+  );
+
   return (
     <>
       {/* Section Card */}
@@ -596,49 +732,65 @@ export default function TeamBuilderSection({ tournaments, language, selfPlayerNa
           </Pressable>
         </View>
 
-        {teamableTournaments.map((t, idx) => (
-          <Pressable
-            key={t.id}
-            style={({ pressed }) => [s.tournamentRow, pressed && { opacity: 0.85, transform: [{ scale: 0.98 }] }]}
-            onPress={() => handleOpenModal(t)}
+        <View style={s.listFilterSection}>
+          <View style={s.listFilterTitleRow}>
+            <MaterialIcons name="near-me" size={14} color="#64748B" />
+            <Text style={s.listFilterTitle}>{t('directory', 'distanceFilter')}</Text>
+            {listGpsLoading ? <ActivityIndicator size="small" color="#22C55E" style={{ marginLeft: 6 }} /> : null}
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.listFilterChips}>
+            {DISTANCE_OPTIONS.map(option => {
+              const active = tournamentDistanceFilter === option;
+              return (
+                <Pressable
+                  key={option}
+                  style={[s.listFilterChip, active && s.listFilterChipActive]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setTournamentDistanceFilter(option);
+                    if (option !== 'all') requestListGPS();
+                  }}
+                >
+                  <Text style={[s.listFilterChipText, active && s.listFilterChipTextActive]}>{distanceLabels[option]}</Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+          {tournamentDistanceFilter !== 'all' && listGpsDenied ? (
+            <Text style={s.listFilterHint}>{t('directory', 'gpsRequired')}</Text>
+          ) : null}
+        </View>
+
+        {teamableTournaments.length === 0 ? (
+          <View style={s.listFilterEmpty}>
+            <MaterialIcons name="filter-alt-off" size={22} color="#94A3B8" />
+            <Text style={s.listFilterEmptyText}>
+              {fr ? `Aucun tournoi dans ${tournamentDistanceFilter} km` : `No tournaments within ${tournamentDistanceFilter} km`}
+            </Text>
+            <Pressable style={s.listFilterResetBtn} onPress={() => setTournamentDistanceFilter('all')}>
+              <Text style={s.listFilterResetText}>{t('directory', 'distanceAll')}</Text>
+            </Pressable>
+          </View>
+        ) : teamableTournaments.length > SCROLL_ITEM_LIMIT ? (
+          <ScrollView
+            style={[s.tournamentScrollList, { maxHeight: SCROLL_MAX_HEIGHT }]}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+            persistentScrollbar={Platform.OS === 'android'}
           >
-            <View style={s.tournamentDate}>
-              <Text style={s.tournamentDateDay}>{new Date(t.date).getDate()}</Text>
-              <Text style={s.tournamentDateMonth}>
-                {new Date(t.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { month: 'short' }).toUpperCase()}
-              </Text>
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={s.tournamentName} numberOfLines={1}>{t.name}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                <View style={s.formatChip}>
-                  <Text style={s.formatChipText}>{t.format}</Text>
-                </View>
-                <Text style={s.tournamentCity} numberOfLines={1}>{(t.location as any)?.city || ''}</Text>
-              </View>
-              {/* Deadline indicator */}
-              {(() => {
-                const dl = isDeadlineActive(t.id, t.date);
-                if (dl.isPast) return (
-                  <View style={s.deadlineBadge}>
-                    <MaterialIcons name="lock-clock" size={10} color="#EF4444" />
-                    <Text style={[s.deadlineText, { color: '#EF4444' }]}>{fr ? 'Inscription fermee' : 'Registration closed'}</Text>
-                  </View>
-                );
-                if (dl.isUrgent) return (
-                  <View style={[s.deadlineBadge, { backgroundColor: '#FEF3C720' }]}>
-                    <MaterialIcons name="schedule" size={10} color="#D97706" />
-                    <Text style={[s.deadlineText, { color: '#D97706' }]}>{dl.daysLeft}j {fr ? 'restant(s)' : 'left'}</Text>
-                  </View>
-                );
-                return null;
-              })()}
-            </View>
-            <View style={[s.inviteBtn, (() => { const dl = isDeadlineActive(t.id, t.date); return dl.isPast ? { opacity: 0.4 } : {}; })()]}>
-              <MaterialIcons name="person-add" size={16} color="#22C55E" />
-            </View>
-          </Pressable>
-        ))}
+            {teamableTournaments.map(renderTournamentRow)}
+          </ScrollView>
+        ) : (
+          teamableTournaments.map(renderTournamentRow)
+        )}
+
+        {teamableTournaments.length > SCROLL_ITEM_LIMIT ? (
+          <Text style={s.tournamentScrollHint}>
+            {fr
+              ? `${teamableTournaments.length} tournois — faites defiler la liste`
+              : `${teamableTournaments.length} tournaments — scroll the list`}
+          </Text>
+        ) : null}
       </View>
 
       {/* Team Builder Modal */}
@@ -1351,6 +1503,23 @@ const s = StyleSheet.create({
   tournamentDateMonth: { fontSize: 8, fontWeight: '700', color: '#2563EB', letterSpacing: 0.5 },
   tournamentName: { fontSize: 14, fontWeight: '600', color: '#0F172A' },
   tournamentCity: { fontSize: 11, color: '#64748B' },
+  tournamentDistBadge: { flexDirection: 'row', alignItems: 'center', gap: 2, backgroundColor: '#10B98112', paddingHorizontal: 5, paddingVertical: 2, borderRadius: 6 },
+  tournamentDistText: { fontSize: 9, fontWeight: '700', color: '#10B981' },
+  listFilterSection: { marginBottom: 10, paddingBottom: 10, borderBottomWidth: 1, borderBottomColor: '#F1F5F9' },
+  listFilterTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  listFilterTitle: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  listFilterChips: { gap: 8, paddingRight: 4 },
+  listFilterChip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: theme.borderRadius.full, backgroundColor: '#F8FAFC', borderWidth: 1.5, borderColor: 'transparent' },
+  listFilterChipActive: { borderColor: '#22C55E', backgroundColor: '#22C55E10' },
+  listFilterChipText: { fontSize: 12, fontWeight: '600', color: '#64748B' },
+  listFilterChipTextActive: { color: '#16A34A' },
+  listFilterHint: { fontSize: 11, color: '#D97706', marginTop: 6 },
+  listFilterEmpty: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  listFilterEmptyText: { fontSize: 13, fontWeight: '600', color: '#64748B', textAlign: 'center' },
+  listFilterResetBtn: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, backgroundColor: '#22C55E12', borderWidth: 1, borderColor: '#22C55E25' },
+  listFilterResetText: { fontSize: 12, fontWeight: '700', color: '#16A34A' },
+  tournamentScrollList: { marginBottom: 4 },
+  tournamentScrollHint: { fontSize: 11, color: '#94A3B8', textAlign: 'center', marginTop: 4 },
   formatChip: { backgroundColor: '#22C55E15', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
   formatChipText: { fontSize: 10, fontWeight: '700', color: '#22C55E' },
   inviteBtn: { width: 36, height: 36, borderRadius: 12, backgroundColor: '#22C55E12', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#22C55E25' },

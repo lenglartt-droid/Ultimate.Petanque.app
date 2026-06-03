@@ -108,6 +108,7 @@ export async function addTournamentOp(
         tournamentScope: data.tournament_scope,
         registrationCost: data.registration_cost ? parseFloat(data.registration_cost) : tournament.registrationCost,
         prizeWon: data.prize_won ? parseFloat(data.prize_won) : tournament.prizeWon,
+        posterUrl: data.poster_url || tournament.posterUrl,
       };
       setTournaments(prev => [...prev, newTournament]);
     }
@@ -126,7 +127,6 @@ export async function updateTournamentOp(
   const { supabase, userId, isConnected, tournaments, setTournaments, sharedItemPermissions } = deps;
   const oldTournament = tournaments.find(t => t.id === id);
 
-  console.log("updating tournament -----------");
   setTournaments(prev => prev.map(tournament =>
     tournament.id === id ? { ...tournament, ...updates } : tournament
   ));
@@ -170,10 +170,10 @@ export async function updateTournamentOp(
 // ✅ Only include poster_url when it was explicitly passed, and map undefined → null
   if ('posterUrl' in updates) dbUpdates.poster_url = updates.posterUrl ?? null;
 
-    console.log(dbUpdates);
     dbUpdates.updated_at = new Date().toISOString();
 
-    await supabase.from('tournaments').update(dbUpdates).eq('id', id);
+    const { error } = await supabase.from('tournaments').update(dbUpdates).eq('id', id);
+    if (error) throw error;
 
     // Log modification for shared items
     if (sharedItemPermissions[id] === 'write' && oldTournament) {
@@ -186,6 +186,12 @@ export async function updateTournamentOp(
     }
   } catch (error) {
     console.log('Error updating tournament:', error);
+    if (oldTournament) {
+      setTournaments(prev => prev.map(tournament =>
+        tournament.id === id ? oldTournament : tournament
+      ));
+    }
+    throw error;
   }
 }
 
