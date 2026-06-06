@@ -1,4 +1,4 @@
-import React, { memo, useState, useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { memo, useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, Pressable, StyleSheet, Platform, TextInput, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
@@ -6,22 +6,24 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import { TimelineSkeleton } from '@/components/ui/SkeletonLoader';
 import { findMeetupByCode } from '@/services/meetupService';
-import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
-import { haversineDistanceKm, formatDistance } from '@/services/terrainProximityService';
-import { isValidMapCoord } from '@/utils/mapPlayerLocation';
+import { formatDistance } from '@/services/terrainProximityService';
+import { useHomeDistanceFilterLocation } from '@/hooks/useHomeDistanceFilterLocation';
+import {
+  HOME_DISTANCE_OPTIONS,
+  type DistanceFilter,
+  type UpcomingItemLike,
+  buildCoordsMap,
+  filterItemsByDistance,
+  resolveUpcomingItemCoords,
+} from '@/utils/homeDistanceCoords';
 import type { Terrain } from '@/types/petanque';
 
-interface UpcomingItem {
-  id: string;
-  type: 'tournament' | 'meetup' | 'challenge';
+interface UpcomingItem extends UpcomingItemLike {
   date: Date;
-  data: any;
   distanceKm?: number;
 }
 
-type DistanceFilter = 'all' | '5' | '10' | '25' | '50' | '100';
-
-const DISTANCE_OPTIONS: DistanceFilter[] = ['all', '5', '10', '25', '50', '100'];
+const DISTANCE_OPTIONS = HOME_DISTANCE_OPTIONS;
 const SCROLL_ITEM_LIMIT = 4;
 const CARD_HEIGHT = 86;
 const CARD_GAP = 8;
@@ -42,33 +44,6 @@ interface Props {
   onJoinSuccess?: (meetupId: string) => void;
 }
 
-function getItemCoords(item: UpcomingItem, terrains: Terrain[]): { lat: number; lng: number } | null {
-  if (item.type === 'tournament') {
-    if (isValidMapCoord(item.data.location?.latitude, item.data.location?.longitude)) {
-      return { lat: item.data.location.latitude, lng: item.data.location.longitude };
-    }
-    if (item.data.terrainId) {
-      const tr = terrains.find(t => t.id === item.data.terrainId);
-      if (tr && isValidMapCoord(tr.location?.latitude, tr.location?.longitude)) {
-        return { lat: tr.location.latitude, lng: tr.location.longitude };
-      }
-    }
-  }
-  if (item.type === 'meetup') {
-    const tr = terrains.find(t => t.id === item.data.terrain_id);
-    if (tr && isValidMapCoord(tr.location?.latitude, tr.location?.longitude)) {
-      return { lat: tr.location.latitude, lng: tr.location.longitude };
-    }
-  }
-  if (item.type === 'challenge' && item.data.terrainId) {
-    const tr = terrains.find(t => t.id === item.data.terrainId);
-    if (tr && isValidMapCoord(tr.location?.latitude, tr.location?.longitude)) {
-      return { lat: tr.location.latitude, lng: tr.location.longitude };
-    }
-  }
-  return null;
-}
-
 function UpcomingTimeline({
   tournaments, meetups, upcomingEvents, terrains, meetupsLoading, eventsLoading,
   pendingInviteCount, language, t, now, onShowMeetupList, onJoinSuccess,
@@ -78,33 +53,8 @@ function UpcomingTimeline({
   const [joinError, setJoinError] = useState('');
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all');
-  const [userLocation, setUserLocation] = useState<{ latitude: number; longitude: number } | null>(null);
-  const [gpsLoading, setGpsLoading] = useState(false);
-  const [gpsDenied, setGpsDenied] = useState(false);
-  const gpsRequestedRef = useRef(false);
-
-  const requestGPS = useCallback(async () => {
-    if (gpsRequestedRef.current && userLocation) return userLocation;
-    gpsRequestedRef.current = true;
-    setGpsLoading(true);
-    setGpsDenied(false);
-    try {
-      const { status } = await requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setGpsDenied(true);
-        return null;
-      }
-      const pos = await getCurrentPositionAsync({ accuracy: Accuracy.Balanced });
-      const loc = { latitude: pos.coords.latitude, longitude: pos.coords.longitude };
-      setUserLocation(loc);
-      return loc;
-    } catch {
-      setGpsDenied(true);
-      return null;
-    } finally {
-      setGpsLoading(false);
-    }
-  }, [userLocation]);
+  const { location: userLocation, loading: gpsLoading, denied: gpsDenied, requestLocation: requestGPS } = useHomeDistanceFilterLocation();
+  const [itemCoordsMap, setItemCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
 
   useEffect(() => {
     if (distanceFilter !== 'all' && !userLocation && !gpsLoading) {
@@ -141,7 +91,7 @@ function UpcomingTimeline({
     challenge: { bg: '#EDE9FE', accent: '#7C3AED', icon: 'campaign' as const, label: language === 'fr' ? 'Defi' : 'Challenge' },
   };
 
-  const items = useMemo(() => {
+  const allItems = useMemo((): UpcomingItem[] => {
     const built: UpcomingItem[] = [];
     tournaments
       .filter((tr: any) => tr.status === 'À venir' || tr.status === 'En cours')
@@ -149,25 +99,28 @@ function UpcomingTimeline({
     meetups.forEach(m => built.push({ id: `m-${m.id}`, type: 'meetup', date: new Date(m.date), data: m }));
     upcomingEvents.forEach(e => built.push({ id: `e-${e.id}`, type: 'challenge', date: new Date(e.eventDate), data: e }));
     built.sort((a, b) => a.date.getTime() - b.date.getTime());
+    return built;
+  }, [tournaments, meetups, upcomingEvents]);
 
-    if (distanceFilter === 'all' || !userLocation) return built;
+  useEffect(() => {
+    if (distanceFilter === 'all' || allItems.length === 0) {
+      setItemCoordsMap(new Map());
+      return;
+    }
+    let cancelled = false;
+    buildCoordsMap(allItems, item => resolveUpcomingItemCoords(item, terrains)).then(map => {
+      if (!cancelled) setItemCoordsMap(map);
+    });
+    return () => { cancelled = true; };
+  }, [distanceFilter, allItems, terrains]);
 
+  const items = useMemo(() => {
+    if (distanceFilter === 'all') return allItems;
+    if (!userLocation) return [];
     const maxKm = Number(distanceFilter);
-    return built
-      .map(item => {
-        const coords = getItemCoords(item, terrains);
-        if (!coords) return null;
-        const distanceKm = haversineDistanceKm(
-          userLocation.latitude,
-          userLocation.longitude,
-          coords.lat,
-          coords.lng,
-        );
-        if (distanceKm > maxKm) return null;
-        return { ...item, distanceKm };
-      })
-      .filter((item): item is UpcomingItem => item !== null);
-  }, [tournaments, meetups, upcomingEvents, terrains, distanceFilter, userLocation]);
+    const userLoc = { lat: userLocation.lat, lng: userLocation.lng };
+    return filterItemsByDistance(allItems, itemCoordsMap, userLoc, maxKm);
+  }, [allItems, distanceFilter, userLocation, itemCoordsMap]);
 
   const distanceLabels: Record<DistanceFilter, string> = {
     all: t('directory', 'distanceAll'),
@@ -264,13 +217,7 @@ function UpcomingTimeline({
     );
   };
 
-  const totalBeforeFilter = useMemo(() => {
-    let count = 0;
-    count += tournaments.filter((tr: any) => tr.status === 'À venir' || tr.status === 'En cours').length;
-    count += meetups.length;
-    count += upcomingEvents.length;
-    return count;
-  }, [tournaments, meetups, upcomingEvents]);
+  const totalBeforeFilter = allItems.length;
 
   return (
     <View>
@@ -391,6 +338,15 @@ function UpcomingTimeline({
 
       {(meetupsLoading || eventsLoading) ? (
         <TimelineSkeleton items={3} />
+      ) : gpsLoading && distanceFilter !== 'all' && !userLocation ? (
+        <View style={s.emptyWrap}>
+          <View style={s.empty}>
+            <ActivityIndicator size="large" color={theme.primary} />
+            <Text style={[s.emptyTitle, { marginTop: 12 }]}>
+              {language === 'fr' ? 'Localisation en cours...' : 'Getting your location...'}
+            </Text>
+          </View>
+        </View>
       ) : items.length === 0 ? (
         <View style={s.emptyWrap}>
           <View style={s.empty}>

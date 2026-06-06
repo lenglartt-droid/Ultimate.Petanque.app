@@ -37,12 +37,11 @@ export interface TournamentTeam {
 
 // Format → required team size (including creator)
 export function getTeamSize(format: string): number {
-  switch (format) {
-    case 'Tête-à-tête': return 1;
-    case 'Doublette': return 2;
-    case 'Triplette': return 3;
-    default: return 2;
-  }
+  const f = (format || '').trim().toLowerCase();
+  if (f === 'tête-à-tête' || f === 'tete-a-tete' || f === 'singles') return 1;
+  if (f === 'doublette' || f === 'doubles') return 2;
+  if (f === 'triplette' || f === 'triples') return 3;
+  return 2;
 }
 
 // ============================================

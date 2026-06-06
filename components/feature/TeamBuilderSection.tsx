@@ -27,32 +27,25 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppData } from '@/contexts/AppContext';
 import { useRef } from 'react';
 import { useLanguage } from '@/hooks/useLanguage';
-import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
 import { formatDistance } from '@/services/terrainProximityService';
-import { isValidMapCoord } from '@/utils/mapPlayerLocation';
+import { isTeamUpEligibleTournament } from '@/utils/tournamentTeamFormat';
+import { useHomeDistanceFilterLocation } from '@/hooks/useHomeDistanceFilterLocation';
+import {
+  HOME_DISTANCE_OPTIONS,
+  type DistanceFilter,
+  buildCoordsMap,
+  filterItemsByDistance,
+  resolveTournamentCoords,
+} from '@/utils/homeDistanceCoords';
 
-type DistanceFilter = 'all' | '5' | '10' | '25' | '50' | '100';
 type TeamableTournament = Tournament & { distanceKm?: number };
 
-const DISTANCE_OPTIONS: DistanceFilter[] = ['all', '5', '10', '25', '50', '100'];
+const DISTANCE_OPTIONS = HOME_DISTANCE_OPTIONS;
 const SCROLL_ITEM_LIMIT = 3;
 const TOURNAMENT_ROW_HEIGHT = 66;
 const SCROLL_MAX_HEIGHT = SCROLL_ITEM_LIMIT * TOURNAMENT_ROW_HEIGHT;
 
-function getTournamentCoords(t: Tournament, terrains: Terrain[]): { lat: number; lng: number } | null {
-  if (isValidMapCoord(t.location?.latitude, t.location?.longitude)) {
-    return { lat: t.location.latitude, lng: t.location.longitude };
-  }
-  if (t.terrainId) {
-    const tr = terrains.find(tr => tr.id === t.terrainId);
-    if (tr && isValidMapCoord(tr.location?.latitude, tr.location?.longitude)) {
-      return { lat: tr.location.latitude, lng: tr.location.longitude };
-    }
-  }
-  return null;
-}
-
-// Haversine distance in km between two lat/lng points
+// Haversine distance in km between two lat/lng points (player search proximity)
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -100,10 +93,8 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
 
   // Tournament list distance filter
   const [tournamentDistanceFilter, setTournamentDistanceFilter] = useState<DistanceFilter>('all');
-  const [listUserLocation, setListUserLocation] = useState<{ lat: number; lng: number } | null>(null);
-  const [listGpsLoading, setListGpsLoading] = useState(false);
-  const [listGpsDenied, setListGpsDenied] = useState(false);
-  const listGpsRequestedRef = useRef(false);
+  const { location: listUserLocation, loading: listGpsLoading, denied: listGpsDenied, requestLocation: requestListGPS } = useHomeDistanceFilterLocation();
+  const [tournamentCoordsMap, setTournamentCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
 
   // Partner match history stats
   type PartnerStats = { wins: number; losses: number; total: number; winRate: number; lastDate: string | null };
@@ -195,29 +186,6 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [teamTournamentNames, setTeamTournamentNames] = useState<Map<string, { name: string; date: string }>>(new Map());
 
-  const requestListGPS = useCallback(async () => {
-    if (listGpsRequestedRef.current && listUserLocation) return listUserLocation;
-    listGpsRequestedRef.current = true;
-    setListGpsLoading(true);
-    setListGpsDenied(false);
-    try {
-      const { status } = await requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        setListGpsDenied(true);
-        return null;
-      }
-      const pos = await getCurrentPositionAsync({ accuracy: Accuracy.Balanced });
-      const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-      setListUserLocation(loc);
-      return loc;
-    } catch {
-      setListGpsDenied(true);
-      return null;
-    } finally {
-      setListGpsLoading(false);
-    }
-  }, [listUserLocation]);
-
   useEffect(() => {
     if (tournamentDistanceFilter !== 'all' && !listUserLocation && !listGpsLoading) {
       requestListGPS();
@@ -225,28 +193,29 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
   }, [tournamentDistanceFilter, listUserLocation, listGpsLoading, requestListGPS]);
 
   const allTeamableTournaments = useMemo(() => {
-    const now = new Date();
-    return tournaments.filter(t => {
-      const tDate = new Date(t.date);
-      return tDate > now && (t.format === 'Doublette' || t.format === 'Triplette');
-    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    return tournaments
+      .filter(t => isTeamUpEligibleTournament(t))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
   }, [tournaments]);
 
-  const teamableTournaments = useMemo((): TeamableTournament[] => {
-    if (tournamentDistanceFilter === 'all' || !listUserLocation) {
-      return allTeamableTournaments;
+  useEffect(() => {
+    if (tournamentDistanceFilter === 'all' || allTeamableTournaments.length === 0) {
+      setTournamentCoordsMap(new Map());
+      return;
     }
+    let cancelled = false;
+    buildCoordsMap(allTeamableTournaments, t => resolveTournamentCoords(t, terrains)).then(map => {
+      if (!cancelled) setTournamentCoordsMap(map);
+    });
+    return () => { cancelled = true; };
+  }, [tournamentDistanceFilter, allTeamableTournaments, terrains]);
+
+  const teamableTournaments = useMemo((): TeamableTournament[] => {
+    if (tournamentDistanceFilter === 'all') return allTeamableTournaments;
+    if (!listUserLocation) return [];
     const maxKm = Number(tournamentDistanceFilter);
-    return allTeamableTournaments
-      .map(t => {
-        const coords = getTournamentCoords(t, terrains);
-        if (!coords) return null;
-        const distanceKm = haversineKm(listUserLocation.lat, listUserLocation.lng, coords.lat, coords.lng);
-        if (distanceKm > maxKm) return null;
-        return { ...t, distanceKm };
-      })
-      .filter((t): t is TeamableTournament => t !== null);
-  }, [allTeamableTournaments, tournamentDistanceFilter, listUserLocation, terrains]);
+    return filterItemsByDistance(allTeamableTournaments, tournamentCoordsMap, listUserLocation, maxKm);
+  }, [allTeamableTournaments, tournamentDistanceFilter, listUserLocation, tournamentCoordsMap]);
 
   const distanceLabels: Record<DistanceFilter, string> = {
     all: t('directory', 'distanceAll'),
@@ -761,15 +730,26 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
           ) : null}
         </View>
 
-        {teamableTournaments.length === 0 ? (
+        {listGpsLoading && tournamentDistanceFilter !== 'all' && !listUserLocation ? (
+          <View style={s.listFilterEmpty}>
+            <ActivityIndicator size="small" color="#22C55E" />
+            <Text style={s.listFilterEmptyText}>
+              {fr ? 'Localisation en cours...' : 'Getting your location...'}
+            </Text>
+          </View>
+        ) : teamableTournaments.length === 0 ? (
           <View style={s.listFilterEmpty}>
             <MaterialIcons name="filter-alt-off" size={22} color="#94A3B8" />
             <Text style={s.listFilterEmptyText}>
-              {fr ? `Aucun tournoi dans ${tournamentDistanceFilter} km` : `No tournaments within ${tournamentDistanceFilter} km`}
+              {tournamentDistanceFilter !== 'all' && allTeamableTournaments.length > 0
+                ? (fr ? `Aucun tournoi dans ${tournamentDistanceFilter} km` : `No tournaments within ${tournamentDistanceFilter} km`)
+                : (fr ? 'Aucun tournoi disponible' : 'No tournaments available')}
             </Text>
-            <Pressable style={s.listFilterResetBtn} onPress={() => setTournamentDistanceFilter('all')}>
-              <Text style={s.listFilterResetText}>{t('directory', 'distanceAll')}</Text>
-            </Pressable>
+            {tournamentDistanceFilter !== 'all' ? (
+              <Pressable style={s.listFilterResetBtn} onPress={() => setTournamentDistanceFilter('all')}>
+                <Text style={s.listFilterResetText}>{t('directory', 'distanceAll')}</Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : teamableTournaments.length > SCROLL_ITEM_LIMIT ? (
           <ScrollView

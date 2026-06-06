@@ -21,7 +21,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, useAnimatedProps, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Linking } from 'react-native';
@@ -67,6 +67,24 @@ if (Platform.OS !== 'web') {
   MarkerComponent = Maps.Marker;
   CircleComponent = Maps.Circle;
   PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+}
+
+/** Pulse rings as native map circles — marker bitmaps on Android freeze when tracksViewChanges=false. */
+const AnimatedMapCircle = CircleComponent
+  ? Animated.createAnimatedComponent(CircleComponent)
+  : null;
+
+const MAP_PULSE_BASE_RADIUS_M = 35;
+const MAP_PULSE_RADIUS_SPAN_M = 70;
+
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const h = hex.replace('#', '');
+  if (h.length < 6) return { r: 34, g: 197, b: 94 };
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  };
 }
 
 /** Map markers are rasterized for Google Maps; Android `elevation` draws outside layout bounds and clips (flat edge on circles). */
@@ -184,6 +202,31 @@ function getMapItemIcon(itemType: string, terrainType?: string | null): string {
     if (tc?.icon) return tc.icon;
   }
   return MAP_ITEM_DEFAULT_ICONS[itemType] || 'place';
+}
+
+/** Primary photo for map pin (excludes PDF tournament posters). */
+function getMapItemPhoto(item: any): string | null {
+  if (!item) return null;
+  switch (item.itemType) {
+    case 'terrains':
+      return item.photos?.[0] || null;
+    case 'clubs':
+      return item.logo || null;
+    case 'tournaments': {
+      const url = item.posterUrl as string | undefined;
+      return url && !url.toLowerCase().endsWith('.pdf') ? url : null;
+    }
+    case 'players':
+      return item.avatar || item.photo || null;
+    case 'partners':
+      return item.photo || item.logo || null;
+    default:
+      return null;
+  }
+}
+
+function isSponsoredMapItem(item: any): boolean {
+  return !!(item?.sponsorId && (item._sponsorPhoto || item._sponsorColor));
 }
 
 function isPartnerMapItem(item: any): boolean {
@@ -483,8 +526,8 @@ const ClubMarkerView = React.memo(
 // SPONSORED SPLIT MARKER COMPONENT
 // Shows half item photo/icon + half sponsor logo
 // ============================================
-const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, sponsorPhoto, sponsorColor, size = 40 }: {
-  itemIcon: string; itemColor: string; itemPhoto?: string | null; sponsorPhoto?: string | null; sponsorColor: string; size?: number;
+const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, sponsorPhoto, sponsorColor, size = 40, onReady }: {
+  itemIcon: string; itemColor: string; itemPhoto?: string | null; sponsorPhoto?: string | null; sponsorColor: string; size?: number; onReady?: () => void;
 }) => {
   const [itemImgLoaded, setItemImgLoaded] = useState(false);
   const [sponsorImgLoaded, setSponsorImgLoaded] = useState(false);
@@ -492,6 +535,12 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   const [sponsorImgError, setSponsorImgError] = useState(false);
   const disc = IS_ANDROID_MAP ? MAP_MARKER_DISC : size;
   const halfW = disc / 2;
+
+  useEffect(() => {
+    const itemDone = !itemPhoto || itemImgLoaded || itemImgError;
+    const sponsorDone = !sponsorPhoto || sponsorImgLoaded || sponsorImgError;
+    if (itemDone && sponsorDone) onReady?.();
+  }, [itemPhoto, sponsorPhoto, itemImgLoaded, itemImgError, sponsorImgLoaded, sponsorImgError, onReady]);
 
   return (
     <MapMarkerDisc size={disc} color={itemColor} borderColor={sponsorColor} borderWidth={2.5} badge={(
@@ -533,7 +582,7 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   );
 });
 
-const PlayerAvatarMarkerView = React.memo(({ avatar, color, isPublic }: { avatar: string; color: string; isPublic: boolean }) => {
+const PlayerAvatarMarkerView = React.memo(({ avatar, color, isPublic, onReady }: { avatar: string; color: string; isPublic: boolean; onReady?: () => void }) => {
   const disc = MAP_MARKER_DISC;
   const inner = disc - 6;
   return (
@@ -547,7 +596,69 @@ const PlayerAvatarMarkerView = React.memo(({ avatar, color, isPublic }: { avatar
         source={{ uri: avatar, cache: 'force-cache' }}
         style={{ width: inner, height: inner, borderRadius: inner / 2 }}
         resizeMode="cover"
+        onLoad={() => onReady?.()}
+        onError={() => onReady?.()}
       />
+    </MapMarkerDisc>
+  );
+});
+
+/** Generic circular photo marker for terrains, clubs, tournaments, etc. */
+const EntityPhotoMarkerView = React.memo(({
+  photo,
+  color,
+  icon,
+  isPublic,
+  borderColor,
+  borderWidth,
+  onReady,
+}: {
+  photo: string;
+  color: string;
+  icon: string;
+  isPublic?: boolean;
+  borderColor?: string;
+  borderWidth?: number;
+  onReady?: () => void;
+}) => {
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+  const disc = MAP_MARKER_DISC;
+  const imageSize = disc - 6;
+
+  const handleLoad = useCallback(() => {
+    setImageLoaded(true);
+    onReady?.();
+  }, [onReady]);
+
+  const handleError = useCallback(() => {
+    setImageError(true);
+    onReady?.();
+  }, [onReady]);
+
+  return (
+    <MapMarkerDisc
+      size={disc}
+      color={color}
+      borderColor={borderColor ?? (isPublic ? theme.success : '#FFF')}
+      borderWidth={borderWidth ?? (isPublic ? 3 : 2)}
+    >
+      {photo && !imageError ? (
+        <>
+          {!imageLoaded ? (
+            <MaterialIcons name={icon as any} size={14} color="#FFF" style={{ position: 'absolute' }} />
+          ) : null}
+          <RNImage
+            source={{ uri: photo, cache: 'force-cache' }}
+            style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, opacity: imageLoaded ? 1 : 0 }}
+            resizeMode="cover"
+            onLoad={handleLoad}
+            onError={handleError}
+          />
+        </>
+      ) : (
+        <MaterialIcons name={icon as any} size={14} color="#FFF" />
+      )}
     </MapMarkerDisc>
   );
 });
@@ -638,9 +749,86 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color
   );
 });
 
-const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null }) => {
+/** Sonar rings as MapView Circle overlays (Android marker bitmaps do not animate). */
+const MapPulseRingCircle = React.memo(({ center, color, delayMs = 0 }: {
+  center: { latitude: number; longitude: number };
+  color: string;
+  delayMs?: number;
+}) => {
+  const progress = useSharedValue(0);
+  const rgb = useMemo(() => hexToRgb(color), [color]);
+
+  React.useEffect(() => {
+    const start = () => {
+      progress.value = withRepeat(
+        withSequence(
+          withTiming(1, { duration: 1500 }),
+          withTiming(0, { duration: 0 })
+        ),
+        -1,
+        false
+      );
+    };
+    if (delayMs > 0) {
+      const timer = setTimeout(start, delayMs);
+      return () => clearTimeout(timer);
+    }
+    start();
+  }, [progress, delayMs]);
+
+  const animatedProps = useAnimatedProps(() => {
+    'worklet';
+    const strokeO = (1 - progress.value) * 0.95;
+    const fillO = (1 - progress.value) * 0.12;
+    return {
+      radius: MAP_PULSE_BASE_RADIUS_M + progress.value * MAP_PULSE_RADIUS_SPAN_M,
+      strokeColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${strokeO})`,
+      fillColor: `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${fillO})`,
+    };
+  });
+
+  if (!AnimatedMapCircle) return null;
+
+  return (
+    <AnimatedMapCircle
+      center={center}
+      strokeWidth={2.5}
+      zIndex={0}
+      animatedProps={animatedProps}
+    />
+  );
+});
+
+const MapTerrainPulseLayer = React.memo(({ items }: {
+  items: { id: string; latitude: number; longitude: number; color: string }[];
+}) => {
+  if (!AnimatedMapCircle || Platform.OS === 'web' || items.length === 0) return null;
+  return (
+    <>
+      {items.map((item) => (
+        <React.Fragment key={item.id}>
+          <MapPulseRingCircle
+            center={{ latitude: item.latitude, longitude: item.longitude }}
+            color={item.color}
+          />
+          <MapPulseRingCircle
+            center={{ latitude: item.latitude, longitude: item.longitude }}
+            color={item.color}
+            delayMs={750}
+          />
+        </React.Fragment>
+      ))}
+    </>
+  );
+});
+
+/** iOS keeps in-marker Reanimated rings; Android uses MapTerrainPulseLayer. */
+const USE_IN_MARKER_PULSE = !IS_ANDROID_MAP;
+
+const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor, onReady }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null; onReady?: () => void }) => {
+  useEffect(() => { onReady?.(); }, [onReady]);
   const pulseColor = isLive ? '#EF4444' : '#22C55E';
-  const showPulse = isActiveNow || isLive;
+  const showPulse = (isActiveNow || isLive) && USE_IN_MARKER_PULSE;
   const highlight = isActiveNow || isLive || !!sponsorColor;
   const discBorder = sponsorColor || (highlight ? pulseColor : '#FFF');
   const discBorderW = highlight ? 3 : isPublic ? 3 : 2;
@@ -1319,7 +1507,15 @@ const precachePartnerImages = useCallback((markers: typeof partnerMarkers) => {
   });
 }, []);
 
-// In your loadPartnerMarkers effect, after setPartnerMarkers:
+// Prefetch marker images so Android bitmap capture includes photos (tracksViewChanges=false after load).
+const precacheMarkerImages = useCallback((items: any[]) => {
+  items.forEach(item => {
+    const photo = getMapItemPhoto(item);
+    if (photo) RNImage.prefetch(photo).catch(() => {});
+    if (item._sponsorPhoto) RNImage.prefetch(item._sponsorPhoto).catch(() => {});
+  });
+}, []);
+
 useEffect(() => {
   if (partnerMarkers.length > 0) {
     precachePartnerImages(partnerMarkers);
@@ -1572,6 +1768,13 @@ useEffect(() => {
       return true;
     });
   }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter, playerMarkers, partnerMarkers]);
+
+  useEffect(() => {
+    if (results.length > 0) {
+      precacheMarkerImages(results);
+    }
+    setReadyMarkers(new Set());
+  }, [results, precacheMarkerImages]);
 
   // Compute clusters with debounced region to avoid expensive re-clustering on every pan
   const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2088,6 +2291,29 @@ useEffect(() => {
     setLiveTerrainIds(liveIds);
   }, [terrainActivityMap]);
 
+  /** LIVE (red) + habitual (green, active-now mode) terrains — pulse drawn as map circles on Android. */
+  const terrainPulseItems = useMemo(() => {
+    const items: { id: string; latitude: number; longitude: number; color: string }[] = [];
+    for (const cluster of clusters) {
+      if (cluster.isCluster) continue;
+      const item = cluster.items[0];
+      if (item.itemType !== 'terrains') continue;
+      const live = liveTerrainIds.has(item.id);
+      const habitual = activeNowMode && activeNowTerrainIds.has(item.id) && !live;
+      if (!live && !habitual) continue;
+      const latitude = cluster.latitude;
+      const longitude = cluster.longitude;
+      if (!isValidMapCoord(latitude, longitude)) continue;
+      items.push({
+        id: item.id,
+        latitude,
+        longitude,
+        color: live ? '#EF4444' : '#22C55E',
+      });
+    }
+    return items;
+  }, [clusters, liveTerrainIds, activeNowTerrainIds, activeNowMode]);
+
   // Access matches for active-now computation
   const { matches: allMatches } = useAppData();
 
@@ -2250,40 +2476,81 @@ useEffect(() => {
             const terrainLive = item.itemType === 'terrains' && liveTerrainIds.has(item.id);
             const terrainHabitual = activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) && !terrainLive;
             const markerHasPulse = terrainLive || terrainHabitual;
+            const markerIcon = tc?.icon || cfg.icon;
+            const itemPhoto = getMapItemPhoto(item);
+            const onMarkerReady = () => handleMarkerReady(item.id);
+            const markerTracksViewChanges = markerHasPulse || !readyMarkers.has(item.id);
+            let markerContent: React.ReactNode;
+            if (isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) {
+              markerContent = (
+                <PartnerMarkerView
+                  partner={{ ...item, _tier: item._tier, photo: item.photo || item.avatar }}
+                  onReady={onMarkerReady}
+                />
+              );
+            } else if (isSponsoredMapItem(item)) {
+              markerContent = (
+                <SponsoredSplitMarkerView
+                  itemIcon={markerIcon}
+                  itemColor={cfg.color}
+                  itemPhoto={itemPhoto}
+                  sponsorPhoto={item._sponsorPhoto}
+                  sponsorColor={item._sponsorColor || '#2563EB'}
+                  size={40}
+                  onReady={onMarkerReady}
+                />
+              );
+            } else if (itemPhoto) {
+              markerContent = (
+                <EntityPhotoMarkerView
+                  photo={itemPhoto}
+                  color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)}
+                  icon={markerIcon}
+                  isPublic={item._isPublic}
+                  onReady={onMarkerReady}
+                />
+              );
+            } else if (item.itemType === 'players' && item.avatar) {
+              markerContent = (
+                <PlayerAvatarMarkerView
+                  avatar={item.avatar}
+                  color={cfg.color}
+                  isPublic={item._isPublic}
+                  onReady={onMarkerReady}
+                />
+              );
+            } else {
+              markerContent = (
+                <SingleMarkerView
+                  color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)}
+                  icon={markerIcon}
+                  isPublic={item._isPublic}
+                  accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null}
+                  fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null}
+                  isVerified={item.itemType === 'clubs' && item.isVerified}
+                  isActiveNow={terrainHabitual}
+                  isLive={terrainLive}
+                  sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null}
+                  onReady={onMarkerReady}
+                />
+              );
+            }
             return (
               <MarkerComponent
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
                 anchor={MAP_MARKER_BUBBLE_ANCHOR}
-                style={getMapMarkerNativeStyle({ pulse: markerHasPulse }) ?? MAP_MARKER_NATIVE_STYLE}
+                style={IS_ANDROID_MAP ? MAP_MARKER_NATIVE_STYLE : (getMapMarkerNativeStyle({ pulse: markerHasPulse && USE_IN_MARKER_PULSE }) ?? MAP_MARKER_NATIVE_STYLE)}
                 tappable
-                tracksViewChanges={
-                  IS_ANDROID_MAP ? false : (markerHasPulse || !readyMarkers.has(item.id))
-                }
+                tracksViewChanges={markerTracksViewChanges}
               >
-                {(isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) ? (
-                  <PartnerMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
-                ) : item._sponsorPhoto || item._sponsorColor ? (
-                  <SponsoredSplitMarkerView
-                    itemIcon={tc?.icon || cfg.icon}
-                    itemColor={cfg.color}
-                    itemPhoto={item.itemType === 'terrains' ? item.photos?.[0] : item.itemType === 'clubs' ? item.logo : item.itemType === 'players' ? item.avatar : null}
-                    sponsorPhoto={item._sponsorPhoto}
-                    sponsorColor={item._sponsorColor || '#2563EB'}
-                    size={40}
-                  />
-                ) : ((item.itemType === 'clubs' && item.logo)? (
-                  <ClubMarkerView partner={{ ...item, _tier: item._tier }}  onReady={() => handleMarkerReady(item.id)} />
-                ) : item.itemType === 'players' && item.avatar && !item._tier ? (
-                  <PlayerAvatarMarkerView avatar={item.avatar} color={cfg.color} isPublic={item._isPublic} />
-                ) :
-                  <SingleMarkerView color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)} icon={tc?.icon || cfg.icon} isPublic={item._isPublic} accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null} fallbackSource={item.itemType === 'players' ? (item._locationFallback || null) : null} isVerified={item.itemType === 'clubs' && item.isVerified} isActiveNow={terrainHabitual} isLive={terrainLive} sponsorColor={item.itemType === 'players' && item.sponsorBrandColor ? item.sponsorBrandColor : null} />
-                )}
+                {markerContent}
               </MarkerComponent>
             );
           }
         }) : null}
+        <MapTerrainPulseLayer items={terrainPulseItems} />
         {/* Player density heatmap circles */}
         {showHeatmap && CircleComponent ? heatmapData.map((cell, idx) => (
           <CircleComponent

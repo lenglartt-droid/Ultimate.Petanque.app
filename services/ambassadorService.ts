@@ -159,6 +159,9 @@ export function invalidateAmbassadorCache(): void {
   cachedAmbassadors = null;
   cachedAmbassadorUserIds = null;
   lastFetchTime = 0;
+  import('@/services/goldSponsorAdReplacement')
+    .then(({ onAmbassadorCacheInvalidated }) => onAmbassadorCacheInvalidated())
+    .catch(() => {});
 }
 
 /** Check if a user is an ambassador (direct DB query, not limited to is_active) */

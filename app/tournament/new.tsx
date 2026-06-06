@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,13 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import Animated, { FadeInDown, FadeIn, Layout } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import theme from '@/constants/theme';
@@ -23,6 +25,11 @@ import config, { GameFormat, TournamentType, TournamentLevel, TournamentCategory
 import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useLanguage } from '@/hooks/useLanguage';
 import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
+import { Image } from 'expo-image';
+import * as ImagePicker from '@/services/imagePicker';
+import { decode } from '@/services/base64';
+import { getSupabaseClient } from '@/template';
+import { useAuth } from '@/template';
 
 const CADRAGE_ICONS: Record<TournamentType, string> = {
   'Poules': 'grid-view', 'Élimination directe': 'call-split', 'Mixte': 'merge-type',
@@ -63,6 +70,10 @@ function SectionCard({ children, title, subtitle, icon, color, delay = 0, requir
   );
 }
 
+function AccordionCard({ children }: { children: React.ReactNode }) {
+  return <View style={styles.sectionCard}>{children}</View>;
+}
+
 function StepIndicator({ step, total, label }: { step: number; total: number; label: string }) {
   const pct = Math.round((step / total) * 100);
   return (
@@ -80,6 +91,8 @@ export default function NewTournamentScreen() {
   const { clubs, terrains } = useAppData();
   const { addTournament } = useAppActions();
   const { t, language } = useLanguage();
+  const { user } = useAuth();
+  const supabase = getSupabaseClient();
 
   const [name, setName] = useState('');
   const [date, setDate] = useState(new Date());
@@ -130,6 +143,13 @@ export default function NewTournamentScreen() {
   const [showParticipantsSection, setShowParticipantsSection] = useState(false);
   const [showFinancesSection, setShowFinancesSection] = useState(false);
   const [showDescriptionSection, setShowDescriptionSection] = useState(false);
+  const [showPosterSection, setShowPosterSection] = useState(false);
+
+  // Poster state (uploaded to storage before tournament exists — linked on create)
+  const [posterUrl, setPosterUrl] = useState<string | null>(null);
+  const [posterType, setPosterType] = useState<'image' | 'pdf'>('image');
+  const [uploadingPoster, setUploadingPoster] = useState(false);
+  const [showPosterFullscreen, setShowPosterFullscreen] = useState(false);
 
   const progress = useMemo(() => {
     let filled = 0; const total = 4;
@@ -157,6 +177,93 @@ export default function NewTournamentScreen() {
   } as Record<TournamentType, { icon: string; description: string; matches: string; points: string; specifics: string[] }>), [t]);
 
   const canSave = name.trim() && (terrainId || manualLocation.city.trim());
+
+  const uploadPosterFile = useCallback(async (fileUri: string, fileName: string, mimeType: string) => {
+    if (!user) {
+      Alert.alert(t('common', 'error'), language === 'fr' ? 'Connectez-vous pour ajouter une affiche' : 'Sign in to add a poster');
+      return;
+    }
+    setUploadingPoster(true);
+    try {
+      const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+      const storagePath = `${user.id}/new_poster_${Date.now()}.${fileExt}`;
+      let base64Data: string;
+      if (Platform.OS === 'web') {
+        const response = await fetch(fileUri);
+        const blob = await response.blob();
+        base64Data = await new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => { const result = reader.result as string; resolve(result.split(',')[1]); };
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        const FileSystem = require('expo-file-system');
+        base64Data = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+      }
+      const { error: uploadError } = await supabase.storage.from('terrain-photos').upload(storagePath, decode(base64Data), { contentType: mimeType, upsert: true });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from('terrain-photos').getPublicUrl(storagePath);
+      setPosterUrl(urlData.publicUrl);
+      setPosterType(fileExt === 'pdf' ? 'pdf' : 'image');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    } catch (error: any) {
+      console.log('Error uploading poster:', error);
+      Alert.alert(t('common', 'error'), error.message || 'Upload failed');
+    } finally {
+      setUploadingPoster(false);
+    }
+  }, [user, supabase, t, language]);
+
+  const showPosterUploadOptions = useCallback(() => {
+    Alert.alert(
+      language === 'fr' ? 'Affiche du tournoi' : 'Tournament Poster',
+      language === 'fr' ? 'Ajoutez une affiche ou un document' : 'Add a poster or document',
+      [
+        { text: t('player', 'fromCamera'), onPress: async () => {
+          const { status } = await ImagePicker.requestCameraPermissionsAsync();
+          if (status !== 'granted') return;
+          const result = await ImagePicker.launchCameraAsync({ quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadPosterFile(result.assets[0].uri, `poster.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromGallery'), onPress: async () => {
+          const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+          if (status !== 'granted') return;
+          const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, quality: 0.9 });
+          if (!result.canceled && result.assets[0]) {
+            const ext = result.assets[0].uri.split('.').pop()?.toLowerCase() || 'jpg';
+            await uploadPosterFile(result.assets[0].uri, `poster.${ext}`, `image/${ext === 'jpg' ? 'jpeg' : ext}`);
+          }
+        }},
+        { text: t('player', 'fromFiles'), onPress: async () => {
+          try {
+            const DocumentPicker = require('expo-document-picker');
+            const result = await DocumentPicker.getDocumentAsync({ type: ['application/pdf', 'image/*'], copyToCacheDirectory: true });
+            if (!result.canceled && result.assets && result.assets[0]) {
+              await uploadPosterFile(result.assets[0].uri, result.assets[0].name || 'poster.pdf', result.assets[0].mimeType || 'application/pdf');
+            }
+          } catch (e) { console.log('Error picking document:', e); }
+        }},
+        { text: t('common', 'cancel'), style: 'cancel' },
+      ]
+    );
+  }, [t, language, uploadPosterFile]);
+
+  const handleRemovePoster = useCallback(() => {
+    Alert.alert(
+      language === 'fr' ? 'Supprimer l affiche' : 'Remove poster',
+      '',
+      [
+        { text: t('common', 'cancel'), style: 'cancel' },
+        { text: t('common', 'delete'), style: 'destructive', onPress: () => {
+          setPosterUrl(null);
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        }},
+      ]
+    );
+  }, [t, language]);
 
   const getStatusFromDate = (startDate: Date, end?: Date | null): 'À venir' | 'En cours' | 'Terminé' => {
     const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -197,6 +304,7 @@ export default function NewTournamentScreen() {
         prize: prize.trim() || undefined, description: description.trim() || undefined,
         tournamentLevel, tournamentCategory, registrationType, tournamentScope,
         registrationCost: registrationCost ? parseFloat(registrationCost) : undefined,
+        posterUrl: posterUrl ?? undefined,
       });
       if (error) {
         Alert.alert(t('common', 'error'), error);
@@ -368,7 +476,7 @@ export default function NewTournamentScreen() {
           </SectionCard>
 
           {/* 7. Finances - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(250)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="payments" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -385,10 +493,10 @@ export default function NewTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 8. Niveau - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(275)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} /></View>
               <View style={{ flex: 1 }}>
@@ -423,10 +531,10 @@ export default function NewTournamentScreen() {
                 ) : null}
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 9. Catégorie - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(300)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="verified" size={18} color={theme.warning} /></View>
               <View style={{ flex: 1 }}>
@@ -445,10 +553,10 @@ export default function NewTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 10. Inscription - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(325)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="how-to-reg" size={18} color={theme.primary} /></View>
               <View style={{ flex: 1 }}>
@@ -467,10 +575,10 @@ export default function NewTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 11. Envergure - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="public" size={18} color={theme.accent} /></View>
               <View style={{ flex: 1 }}>
@@ -489,10 +597,10 @@ export default function NewTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 12. Participants - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="people-outline" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -544,10 +652,10 @@ export default function NewTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 13. Description - Accordion */}
-          <Animated.View entering={FadeInDown.duration(350).delay(400)} layout={Layout.duration(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}><MaterialIcons name="description" size={18} color={theme.textSecondary} /></View>
               <View style={{ flex: 1 }}>
@@ -561,7 +669,70 @@ export default function NewTournamentScreen() {
                 <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('tournament', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
+
+          {/* 14. Tournament Poster */}
+          <AccordionCard>
+            <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowPosterSection(p => !p); }}>
+              <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
+                <MaterialIcons name="image" size={18} color={theme.carreauColor} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.sectionCardTitle}>{language === 'fr' ? 'Affiche du tournoi' : 'Tournament Poster'}</Text>
+                {posterUrl ? (
+                  <Text style={[styles.accordionValueText, { color: theme.carreauColor }]}>
+                    {posterType === 'pdf'
+                      ? (language === 'fr' ? 'PDF ajouté' : 'PDF added')
+                      : (language === 'fr' ? 'Image ajoutée' : 'Image added')}
+                  </Text>
+                ) : (
+                  <Text style={styles.sectionCardSubtitle}>{language === 'fr' ? 'Photo ou PDF' : 'Photo or PDF'}</Text>
+                )}
+              </View>
+              <MaterialIcons name={showPosterSection ? 'expand-less' : 'expand-more'} size={24} color={theme.textMuted} />
+            </Pressable>
+            {showPosterSection ? (
+              <View style={styles.accordionContent}>
+                {posterUrl ? (
+                  <View style={styles.posterPreviewBox}>
+                    <Pressable onPress={() => posterType === 'pdf' ? Linking.openURL(posterUrl) : setShowPosterFullscreen(true)}>
+                      {posterType === 'image' ? (
+                        <Image source={{ uri: posterUrl }} style={styles.posterPreviewImage} contentFit="cover" transition={200} cachePolicy="memory-disk" />
+                      ) : (
+                        <View style={styles.posterPdfPreview}>
+                          <MaterialIcons name="picture-as-pdf" size={40} color={theme.error} />
+                          <Text style={styles.posterPdfText}>{language === 'fr' ? 'Document PDF' : 'PDF Document'}</Text>
+                        </View>
+                      )}
+                    </Pressable>
+                    <View style={styles.posterActionsRow}>
+                      <Pressable style={styles.posterReplaceBtn} onPress={showPosterUploadOptions}>
+                        <MaterialIcons name="refresh" size={16} color={theme.primary} />
+                        <Text style={styles.posterReplaceBtnText}>{language === 'fr' ? 'Remplacer' : 'Replace'}</Text>
+                      </Pressable>
+                      <Pressable style={styles.posterDeleteBtn} onPress={handleRemovePoster}>
+                        <MaterialIcons name="delete-outline" size={16} color={theme.error} />
+                      </Pressable>
+                    </View>
+                  </View>
+                ) : (
+                  <Pressable style={styles.posterUploadBox} onPress={showPosterUploadOptions}>
+                    <View style={styles.posterUploadIcon}>
+                      <MaterialIcons name="add-photo-alternate" size={28} color={theme.carreauColor} />
+                    </View>
+                    <Text style={styles.posterUploadTitle}>{language === 'fr' ? 'Ajouter une affiche' : 'Add a poster'}</Text>
+                    <Text style={styles.posterUploadSubtitle}>{language === 'fr' ? 'Photo ou PDF' : 'Photo or PDF'}</Text>
+                  </Pressable>
+                )}
+                {uploadingPoster ? (
+                  <View style={styles.posterUploadingRow}>
+                    <ActivityIndicator size="small" color={theme.carreauColor} />
+                    <Text style={styles.posterUploadingText}>{language === 'fr' ? 'Envoi en cours...' : 'Uploading...'}</Text>
+                  </View>
+                ) : null}
+              </View>
+            ) : null}
+          </AccordionCard>
 
         </ScrollView>
 
@@ -670,6 +841,16 @@ export default function NewTournamentScreen() {
             </Pressable>
           )} ListEmptyComponent={<View style={styles.modalEmpty}><MaterialIcons name="home-work" size={40} color={theme.textMuted} /><Text style={styles.modalEmptyText}>{t('profile', 'noClubRegistered')}</Text></View>} />
         </SafeAreaView>
+      </Modal>
+
+      {/* Poster Fullscreen Modal */}
+      <Modal visible={showPosterFullscreen} animationType="fade" transparent onRequestClose={() => setShowPosterFullscreen(false)}>
+        <View style={styles.posterFullscreenBackdrop}>
+          <Pressable style={styles.posterFullscreenClose} onPress={() => setShowPosterFullscreen(false)}>
+            <MaterialIcons name="close" size={24} color="#FFF" />
+          </Pressable>
+          {posterUrl ? <Image source={{ uri: posterUrl }} style={styles.posterFullscreenImage} contentFit="contain" transition={200} /> : null}
+        </View>
       </Modal>
     </SafeAreaView>
   );
@@ -788,7 +969,7 @@ const styles = StyleSheet.create({
   financeInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
 
   // Accordion
-  accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   accordionContent: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
   accordionValueText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 2 },
 
@@ -826,4 +1007,23 @@ const styles = StyleSheet.create({
   saveButtonDisabled: { backgroundColor: theme.textMuted, opacity: 0.6 },
   saveButtonPressed: { opacity: 0.85, transform: [{ scale: 0.98 }] },
   saveButtonText: { fontSize: 16, fontWeight: '700', color: '#FFF' },
+
+  // Poster
+  posterPreviewBox: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, overflow: 'hidden' },
+  posterPreviewImage: { width: '100%', height: 200 },
+  posterPdfPreview: { width: '100%', height: 120, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.backgroundSecondary, gap: 8 },
+  posterPdfText: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  posterActionsRow: { flexDirection: 'row', alignItems: 'center', padding: 10, gap: 8, borderTopWidth: 1, borderTopColor: theme.border },
+  posterReplaceBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, backgroundColor: theme.primary + '10', borderRadius: theme.borderRadius.md },
+  posterReplaceBtnText: { fontSize: 13, fontWeight: '600', color: theme.primary },
+  posterDeleteBtn: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.error + '10', borderRadius: theme.borderRadius.md },
+  posterUploadBox: { backgroundColor: theme.backgroundSecondary, borderRadius: theme.borderRadius.md, padding: 28, alignItems: 'center', borderWidth: 2, borderColor: theme.carreauColor + '25', borderStyle: 'dashed' },
+  posterUploadIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: theme.carreauColor + '12', alignItems: 'center', justifyContent: 'center', marginBottom: 12 },
+  posterUploadTitle: { fontSize: 14, fontWeight: '600', color: theme.carreauColor, marginBottom: 4 },
+  posterUploadSubtitle: { fontSize: 12, color: theme.textSecondary, textAlign: 'center' },
+  posterUploadingRow: { alignItems: 'center', paddingVertical: 20, gap: 8 },
+  posterUploadingText: { fontSize: 13, color: theme.textSecondary },
+  posterFullscreenBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', alignItems: 'center' },
+  posterFullscreenClose: { position: 'absolute', top: 60, right: 20, width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', alignItems: 'center', justifyContent: 'center', zIndex: 10 },
+  posterFullscreenImage: { width: '100%', height: '80%' },
 });

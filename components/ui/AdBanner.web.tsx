@@ -2,30 +2,23 @@
 // AdBanner - Web: Gold sponsor replacement or null
 // ============================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { useAppUI } from '@/contexts/AppContext';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import {
+  getActiveGoldSponsorForAdReplacement,
+  subscribeGoldSponsorAdRefresh,
+} from '@/services/goldSponsorAdReplacement';
+import type { Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 
 interface AdBannerProps {
   position?: 'inline' | 'sticky';
   bottomOffset?: number;
-}
-
-let cachedGoldSponsor: Ambassador | null | undefined = undefined;
-let goldLoadPromise: Promise<void> | null = null;
-
-function loadGoldSponsor(): Promise<void> {
-  if (cachedGoldSponsor !== undefined) return Promise.resolve();
-  if (goldLoadPromise) return goldLoadPromise;
-  goldLoadPromise = fetchAmbassadors().then(({ ambassadors }) => {
-    cachedGoldSponsor = ambassadors.find(a => a.badgeType === 'gold_sponsor') || null;
-  }).catch(() => { cachedGoldSponsor = null; });
-  return goldLoadPromise;
 }
 
 const AdBanner = React.memo((_props: AdBannerProps) => {
@@ -34,12 +27,34 @@ const AdBanner = React.memo((_props: AdBannerProps) => {
   const [loaded, setLoaded] = useState(false);
   const impressionTracked = useRef(false);
 
-  useEffect(() => {
-    loadGoldSponsor().then(() => {
-      setSponsor(cachedGoldSponsor || null);
+  const refreshGoldSponsor = useCallback(async () => {
+    try {
+      const gold = await getActiveGoldSponsorForAdReplacement();
+      setSponsor(gold);
+    } catch {
+      setSponsor(null);
+    } finally {
       setLoaded(true);
-    });
+    }
   }, []);
+
+  useEffect(() => {
+    refreshGoldSponsor();
+    const unsubscribe = subscribeGoldSponsorAdRefresh(() => {
+      refreshGoldSponsor();
+    });
+    const appStateSub = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshGoldSponsor();
+    });
+    return () => {
+      unsubscribe();
+      appStateSub.remove();
+    };
+  }, [refreshGoldSponsor]);
+
+  useFocusEffect(useCallback(() => {
+    refreshGoldSponsor();
+  }, [refreshGoldSponsor]));
 
   useEffect(() => {
     if (!sponsor || impressionTracked.current) return;

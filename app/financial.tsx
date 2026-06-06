@@ -15,12 +15,13 @@ import * as Haptics from '@/services/haptics';
 import Svg, { Rect, G, Text as SvgText, Line } from 'react-native-svg';
 import theme from '@/constants/theme';
 import { useAppData } from '@/contexts/AppContext';
-import { Club } from '@/types/petanque';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useFinancialSummary } from '@/hooks/useFinancialSummary';
 
 export default function FinancialScreen() {
   const insets = useSafeAreaInsets();
-  const { tournaments, clubs, selfPlayer, boulesSets } = useAppData();
+  const { tournaments } = useAppData();
+  const financialData = useFinancialSummary();
   const { t, language } = useLanguage();
 
   const [screenWidth, setScreenWidth] = useState(() => Dimensions.get('window').width || 375);
@@ -29,20 +30,6 @@ export default function FinancialScreen() {
     return () => sub?.remove();
   }, []);
   const isTablet = screenWidth >= 600;
-
-  const financialData = useMemo(() => {
-    const myClub = selfPlayer?.clubId ? clubs.find((c: Club) => c.id === selfPlayer.clubId) : null;
-    const membershipCost = myClub?.membershipCost || 0;
-    const totalRegistrationCosts = tournaments.reduce((sum, t) => sum + (t.registrationCost || 0), 0);
-    const totalPrizesWon = tournaments.reduce((sum, t) => sum + (t.prizeWon || 0), 0);
-    const totalEquipmentCost = boulesSets.reduce((sum, bs) => sum + (bs.purchasePrice || 0), 0);
-    const setsWithPrice = boulesSets.filter(bs => bs.purchasePrice && bs.purchasePrice > 0);
-    const totalCosts = membershipCost + totalRegistrationCosts + totalEquipmentCost;
-    const balance = totalPrizesWon - totalCosts;
-    const tournamentsWithCost = tournaments.filter(t => t.registrationCost && t.registrationCost > 0);
-    const tournamentsWithPrize = tournaments.filter(t => t.prizeWon && t.prizeWon > 0);
-    return { membershipCost, totalRegistrationCosts, totalPrizesWon, totalCosts, balance, clubName: myClub?.name, tournamentsWithCost, tournamentsWithPrize, totalEquipmentCost, setsWithPrice };
-  }, [tournaments, clubs, selfPlayer, boulesSets]);
 
   // Monthly breakdown for chart
   const monthlyData = useMemo(() => {
@@ -61,7 +48,7 @@ export default function FinancialScreen() {
     return Object.entries(months)
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([, data]) => data);
-  }, [tournaments]);
+  }, [tournaments, language]);
 
   const balanceIsPositive = financialData.balance >= 0;
   const balanceColor = balanceIsPositive ? theme.success : theme.error;

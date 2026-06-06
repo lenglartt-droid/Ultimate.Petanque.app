@@ -43,8 +43,6 @@ import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, getPendingInvitationsCount, Meetup, MeetupResponse } from '@/services/meetupService';
 import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { getEloRank, ELO_INACTIVITY_THRESHOLD_DAYS, ELO_INACTIVITY_DECAY_PER_MONTH, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
-import { fetchWeeklyLeaderboard } from '@/services/weeklyLeaderboardService';
-import { extraTranslations } from '@/constants/i18nExtra';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -106,7 +104,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'weekly' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -211,7 +209,6 @@ export default function HomeScreen() {
   const isTablet = screenWidth >= 600;
 
   // Weekly leaderboard
-  const [weeklyRank, setWeeklyRank] = useState<{ rank: number; direction: string; diff: number; matchesThisWeek: number } | null>(null);
 
   // Feed notification badge
   const [feedUnreadCount, setFeedUnreadCount] = useState(0);
@@ -313,23 +310,11 @@ export default function HomeScreen() {
     setFeaturedAmbassadors(ambassadors);
   }, []);
 
-  const loadWeeklyRank = useCallback(async () => {
-    if (!user?.id) return;
-    try {
-      const { players } = await fetchWeeklyLeaderboard();
-      const me = players.find((p: any) => p.userId === user.id);
-      if (me) {
-        setWeeklyRank({ rank: me.rankChange.currentRank, direction: me.rankChange.direction, diff: me.rankChange.diff, matchesThisWeek: me.weeklyMatches });
-      } else { setWeeklyRank(null); }
-    } catch { /* silent */ }
-  }, [user?.id]);
-
   // === INITIAL LOAD — Phased: critical first, deferred second ===
   useEffect(() => {
     const loadCritical = async () => {
       // Phase 1: Load only what's needed for above-the-fold content
       await Promise.all([
-        loadWeeklyRank(),
         loadWitnessRequests(),
       ]);
       setInitialLoading(false);
@@ -347,7 +332,7 @@ export default function HomeScreen() {
       }, 1500);
     };
     loadCritical();
-  }, [loadWeeklyRank, loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
+  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
 
   // Auto-city detection
   const checkAutoCityDetection = useCallback(async () => {
@@ -453,12 +438,11 @@ export default function HomeScreen() {
       loadMeetups(),
       loadWitnessRequests(),
       loadUpcomingEvents(),
-      loadWeeklyRank(),
       loadAmbassadors(),
       loadFeedUnread(),
     ]);
     setRefreshing(false);
-  }, [refreshData, loadMeetups, loadWitnessRequests, loadUpcomingEvents, loadWeeklyRank, loadAmbassadors]);
+  }, [refreshData, loadMeetups, loadWitnessRequests, loadUpcomingEvents, loadAmbassadors]);
 
   // === COMPUTED DATA ===
   const recentResults = useMemo(() => {
@@ -514,7 +498,6 @@ export default function HomeScreen() {
     s.push({ key: 'leaderboardHub', data: ['leaderboardHub'] });
     if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
     if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
-    if (weeklyRank) s.push({ key: 'weekly', data: ['weekly'] });
     s.push({ key: 'sponsor', data: ['sponsor'] });
     // Season summary moved to History page
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
@@ -535,7 +518,7 @@ export default function HomeScreen() {
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
-  }, [witnessRequests.length, weeklyRank, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed]);
+  }, [witnessRequests.length, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -836,37 +819,6 @@ export default function HomeScreen() {
           </View>
         );
 
-      // ===== WEEKLY BANNER =====
-      case 'weekly':
-        return weeklyRank ? (
-          <View style={[st.section, isTablet && st.sectionTablet]}>
-            <Pressable style={st.weeklyBanner} onPress={() => router.push('/leaderboard' as any)}>
-              <LinearGradient colors={['#1E3A8A', '#2563EB']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={st.weeklyBannerGradient}>
-                <View style={st.weeklyBannerLeft}>
-                  <View style={st.weeklyBannerIconBg}><MaterialIcons name="leaderboard" size={20} color="#FFF" /></View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={st.weeklyBannerTitle}>{(extraTranslations.weeklyLeaderboard?.title as any)?.[language] || 'Weekly Leaderboard'}</Text>
-                    <Text style={st.weeklyBannerSub}>{weeklyRank.matchesThisWeek} {t('leaderboard', 'matches')} {language === 'fr' ? 'cette semaine' : 'this week'}</Text>
-                  </View>
-                </View>
-                <View style={st.weeklyBannerRight}>
-                  <Text style={st.weeklyBannerRank}>#{weeklyRank.rank}</Text>
-                  {weeklyRank.direction === 'up' ? (
-                    <View style={st.weeklyBannerChange}><MaterialIcons name="arrow-upward" size={14} color="#34D399" /><Text style={[st.weeklyBannerChangeText, { color: '#34D399' }]}>+{weeklyRank.diff}</Text></View>
-                  ) : weeklyRank.direction === 'down' ? (
-                    <View style={st.weeklyBannerChange}><MaterialIcons name="arrow-downward" size={14} color="#F87171" /><Text style={[st.weeklyBannerChangeText, { color: '#F87171' }]}>-{weeklyRank.diff}</Text></View>
-                  ) : weeklyRank.direction === 'new' ? (
-                    <View style={[st.weeklyBannerChange, { backgroundColor: 'rgba(96,165,250,0.2)' }]}><Text style={[st.weeklyBannerChangeText, { color: '#60A5FA', fontSize: 10 }]}>NEW</Text></View>
-                  ) : (
-                    <View style={st.weeklyBannerChange}><Text style={[st.weeklyBannerChangeText, { color: 'rgba(255,255,255,0.5)' }]}>=</Text></View>
-                  )}
-                  <MaterialIcons name="chevron-right" size={20} color="rgba(255,255,255,0.5)" />
-                </View>
-              </LinearGradient>
-            </Pressable>
-          </View>
-        ) : null;
-
       // ===== GOLD PARTNER BANNER / CAROUSEL =====
       case 'sponsor':
         if (goldPartners.length === 0) return null;
@@ -1094,7 +1046,7 @@ export default function HomeScreen() {
     }
   }, [
     isTablet, greeting, displayName, selfPlayer, pendingInviteCount, eventNotifCount, pendingWitnessMatchCount,
-    totalMatches, totalWins, winRate, challenges.length, weeklyRank, language, t, eloDecayWarning, placementInfo,
+    totalMatches, totalWins, winRate, challenges.length, language, t, eloDecayWarning, placementInfo,
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors, goldPartners, goldCarouselIndex,
     now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
     cityChange, cityChangeDismissed, cityUpdating,
@@ -1231,16 +1183,6 @@ const st = StyleSheet.create({
   actionSub: { fontSize: 11, color: theme.textSecondary },
 
   // WEEKLY BANNER
-  weeklyBanner: { borderRadius: 16, overflow: 'hidden' as const, ...Platform.select({ ios: { shadowColor: '#1E3A8A', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.15, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },
-  weeklyBannerGradient: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, paddingHorizontal: 16, paddingVertical: 14, borderRadius: 16 },
-  weeklyBannerLeft: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, flex: 1 },
-  weeklyBannerIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center' as const, justifyContent: 'center' as const },
-  weeklyBannerTitle: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
-  weeklyBannerSub: { fontSize: 11, color: 'rgba(255,255,255,0.6)', marginTop: 2 },
-  weeklyBannerRight: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
-  weeklyBannerRank: { fontSize: 24, fontWeight: '900' as const, color: '#FFF' },
-  weeklyBannerChange: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 2, backgroundColor: 'rgba(255,255,255,0.12)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  weeklyBannerChangeText: { fontSize: 12, fontWeight: '800' as const },
 
   // PROGRESS
   progressCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, borderWidth: 1, borderColor: '#D97706' + '20', ...theme.shadows.card },

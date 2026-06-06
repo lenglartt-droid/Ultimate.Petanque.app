@@ -341,59 +341,6 @@ export default function NewTerrainScreen() {
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
         <ScrollView style={styles.scrollView} contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 100 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
 
-          {/* Photos */}
-          <SectionCard title={`${t('terrain', 'photosLabel')} (${photos.length}/5)`} icon="photo-camera" color={theme.primary} delay={50}>
-            <View style={styles.photosGrid}>
-              {photos.map((photo, index) => (
-                <View key={index} style={styles.photoItem}>
-                  <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
-                  <Pressable style={styles.removePhotoBtn} onPress={() => { setPhotos(prev => prev.filter((_, i) => i !== index)); Haptics.selectionAsync(); }}>
-                    <MaterialIcons name="close" size={14} color="#FFF" />
-                  </Pressable>
-                </View>
-              ))}
-              {/* Google Places photos suggestion */}
-              {photos.length < 5 && googlePhotoUrls.length > 0 ? (
-                <Pressable
-                  style={styles.googlePhotoSuggestion}
-                  onPress={() => {
-                    Haptics.selectionAsync();
-                    setSelectedGooglePhotos(new Set());
-                    setShowPhotoPreview(true);
-                  }}
-                >
-                  <Image source={{ uri: googlePhotoUrls[0] }} style={styles.photoImage} contentFit="cover" transition={200} />
-                  <View style={styles.googlePhotoBadge}>
-                    <MaterialIcons name="photo-library" size={12} color="#FFF" />
-                    <Text style={styles.googlePhotoBadgeText}>{googlePhotoUrls.length} photo{googlePhotoUrls.length > 1 ? 's' : ''}</Text>
-                  </View>
-                </Pressable>
-              ) : null}
-              {photos.length < 5 ? (
-                <>
-                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
-                    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'galleryPermissionMsg')); return; }
-                    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5 - photos.length });
-                    if (!result.canceled && result.assets) { setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5)); Haptics.selectionAsync(); }
-                  }}>
-                    <MaterialIcons name="photo-library" size={22} color={theme.primary} />
-                    <Text style={styles.addPhotoText}>{t('terrain', 'gallery')}</Text>
-                  </Pressable>
-                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
-                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'cameraPermissionMsg')); return; }
-                    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
-                    if (!result.canceled && result.assets?.[0]) { setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5)); Haptics.selectionAsync(); }
-                  }}>
-                    <MaterialIcons name="camera-alt" size={22} color={theme.primary} />
-                    <Text style={styles.addPhotoText}>{t('terrain', 'photo')}</Text>
-                  </Pressable>
-                </>
-              ) : null}
-            </View>
-          </SectionCard>
-
           {/* 1. Nom du terrain */}
           <SectionCard title={t('terrain', 'terrainNameRequired').replace(' *', '')} icon="landscape" color={theme.accent} delay={100} required>
             <TextInput style={styles.textInput} value={name} onChangeText={(text) => { setName(text); if (text.trim()) setNameSuggestion(''); }} placeholder={t('terrain', 'namePlaceholder')} placeholderTextColor={theme.textMuted} autoCapitalize="words" autoFocus />
@@ -458,6 +405,59 @@ export default function NewTerrainScreen() {
                 ) : null}
               </View>
             ) : null}
+          </SectionCard>
+
+          {/* Photos — after address so place search can suggest Google photos first */}
+          <SectionCard title={`${t('terrain', 'photosLabel')} (${photos.length}/5)`} icon="photo-camera" color={theme.primary} delay={225}>
+            <View style={styles.photosGrid}>
+              {photos.map((photo, index) => (
+                <View key={index} style={styles.photoItem}>
+                  <Image source={{ uri: photo }} style={styles.photoImage} contentFit="cover" />
+                  <Pressable style={styles.removePhotoBtn} onPress={() => { setPhotos(prev => prev.filter((_, i) => i !== index)); Haptics.selectionAsync(); }}>
+                    <MaterialIcons name="close" size={14} color="#FFF" />
+                  </Pressable>
+                </View>
+              ))}
+              {/* Google Places photos suggestion */}
+              {photos.length < 5 && googlePhotoUrls.length > 0 ? (
+                <Pressable
+                  style={styles.googlePhotoSuggestion}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setSelectedGooglePhotos(new Set());
+                    setShowPhotoPreview(true);
+                  }}
+                >
+                  <Image source={{ uri: googlePhotoUrls[0] }} style={styles.photoImage} contentFit="cover" transition={200} />
+                  <View style={styles.googlePhotoBadge}>
+                    <MaterialIcons name="photo-library" size={12} color="#FFF" />
+                    <Text style={styles.googlePhotoBadgeText}>{googlePhotoUrls.length} photo{googlePhotoUrls.length > 1 ? 's' : ''}</Text>
+                  </View>
+                </Pressable>
+              ) : null}
+              {photos.length < 5 ? (
+                <>
+                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
+                    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'galleryPermissionMsg')); return; }
+                    const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsMultipleSelection: true, quality: 0.8, selectionLimit: 5 - photos.length });
+                    if (!result.canceled && result.assets) { setPhotos(prev => [...prev, ...result.assets.map(a => a.uri)].slice(0, 5)); Haptics.selectionAsync(); }
+                  }}>
+                    <MaterialIcons name="photo-library" size={22} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>{t('terrain', 'gallery')}</Text>
+                  </Pressable>
+                  <Pressable style={styles.addPhotoBtn} onPress={async () => {
+                    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+                    if (status !== 'granted') { Alert.alert(t('common', 'error'), t('terrain', 'cameraPermissionMsg')); return; }
+                    const result = await ImagePicker.launchCameraAsync({ quality: 0.8 });
+                    if (!result.canceled && result.assets?.[0]) { setPhotos(prev => [...prev, result.assets[0].uri].slice(0, 5)); Haptics.selectionAsync(); }
+                  }}>
+                    <MaterialIcons name="camera-alt" size={22} color={theme.primary} />
+                    <Text style={styles.addPhotoText}>{t('terrain', 'photo')}</Text>
+                  </Pressable>
+                </>
+              ) : null}
+            </View>
           </SectionCard>
 
           {/* Duplicate Detection */}

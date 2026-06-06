@@ -11,7 +11,7 @@ On Android, `react-native-maps` draws custom marker views as a **bitmap**. With 
 ## Fix (in this repo)
 
 1. **`patches/react-native-maps+1.20.1.patch`** — expands marker bitmap size from the child view and refreshes on layout change.
-2. **`app/(tabs)/map.tsx`** — fixed 64×64 marker canvas (88×88 when LIVE/habitual pulse rings show), single circular disc per pin, badges kept inside the disc. On Android, `tracksViewChanges={false}` so marker taps and map pan/zoom work (LIVE pulse rings may not animate on the map bitmap).
+2. **`app/(tabs)/map.tsx`** — fixed 64×64 marker canvas, single circular disc per pin, badges kept inside the disc. On Android, `tracksViewChanges={false}` so marker taps and map pan/zoom work; **LIVE/habitual pulse rings use native `Circle` overlays** (`MapTerrainPulseLayer`) because Reanimated rings inside a frozen marker bitmap do not animate.
 3. **Map touch pass-through** — hero header + bottom filter sheet use `pointerEvents="box-none"` so they do not block map gestures in the center of the screen.
 3. **`package.json`** — `postinstall`: `patch-package` (run `npm install` so the patch applies).
 

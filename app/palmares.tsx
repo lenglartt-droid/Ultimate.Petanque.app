@@ -22,6 +22,7 @@ import { Tournament, Match } from '@/types/petanque';
 import AdBanner from '@/components/ui/AdBanner';
 import { fetchEloSeasons, getEloRank, getEloColor, EloSeasonEntry, ELO_RANKS, checkAndApplySeasonalReset } from '@/services/eloService';
 import { exportPalmaresPDF } from '@/services/palmaresExportService';
+import { useFinancialSummary } from '@/hooks/useFinancialSummary';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -214,6 +215,7 @@ type ResultFilter = 'all' | 'podium';
 export default function PalmaresScreen() {
   const insets = useSafeAreaInsets();
   const { tournaments, matches } = useAppData();
+  const financial = useFinancialSummary();
   const { t, language } = useLanguage();
   const locale = language === 'en' ? 'en-US' : 'fr-FR';
 
@@ -604,9 +606,9 @@ export default function PalmaresScreen() {
                   </View>
                   <View style={styles.advStatDivider} />
                   <View style={styles.advStatItem}>
-                    <MaterialIcons name="savings" size={18} color={summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error} />
-                    <Text style={[styles.advStatValue, { color: summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error }]}>
-                      {summary.totalPrize - summary.totalCost >= 0 ? '+' : ''}{summary.totalPrize - summary.totalCost}€
+                    <MaterialIcons name="savings" size={18} color={financial.balance >= 0 ? theme.success : theme.error} />
+                    <Text style={[styles.advStatValue, { color: financial.balance >= 0 ? theme.success : theme.error }]}>
+                      {financial.balance >= 0 ? '+' : ''}{Math.round(financial.balance)}€
                     </Text>
                     <Text style={styles.advStatLabel}>Net</Text>
                   </View>
@@ -622,23 +624,23 @@ export default function PalmaresScreen() {
             ) : null}
 
             {/* ============ FINANCIAL SUMMARY ============ */}
-            {summary.totalTournaments > 0 ? (
+            {(financial.totalPrizesWon > 0 || financial.totalCosts > 0 || summary.totalTournaments > 0) ? (
               <View>
                 <Pressable
                   style={styles.financialCard}
                   onPress={() => router.push('/financial')}
                 >
                   <View style={styles.financialCardHeader}>
-                    <View style={[styles.financialCardIcon, { backgroundColor: (summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error) + '15' }]}>
-                      <MaterialIcons name="account-balance-wallet" size={22} color={summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error} />
+                    <View style={[styles.financialCardIcon, { backgroundColor: (financial.balance >= 0 ? theme.success : theme.error) + '15' }]}>
+                      <MaterialIcons name="account-balance-wallet" size={22} color={financial.balance >= 0 ? theme.success : theme.error} />
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={styles.financialCardTitle}>{t('financial', 'title')}</Text>
                       <Text style={styles.financialCardSub}>{summary.totalTournaments} {t('palmares', 'tournois').toLowerCase()}</Text>
                     </View>
                     <View style={{ alignItems: 'flex-end' as const }}>
-                      <Text style={[styles.financialCardBalance, { color: summary.totalPrize - summary.totalCost >= 0 ? theme.success : theme.error }]}>
-                        {summary.totalPrize - summary.totalCost >= 0 ? '+' : ''}{summary.totalPrize - summary.totalCost}€
+                      <Text style={[styles.financialCardBalance, { color: financial.balance >= 0 ? theme.success : theme.error }]}>
+                        {financial.balance >= 0 ? '+' : ''}{Math.round(financial.balance)}€
                       </Text>
                       <Text style={styles.financialCardLabel}>Net</Text>
                     </View>
@@ -647,13 +649,13 @@ export default function PalmaresScreen() {
                   <View style={styles.financialCardRow}>
                     <View style={styles.financialCardItem}>
                       <MaterialIcons name="arrow-upward" size={14} color={theme.success} />
-                      <Text style={[styles.financialCardAmount, { color: theme.success }]}>+{summary.totalPrize}€</Text>
+                      <Text style={[styles.financialCardAmount, { color: theme.success }]}>+{Math.round(financial.totalPrizesWon)}€</Text>
                       <Text style={styles.financialCardAmountLabel}>{t('financial', 'gains')}</Text>
                     </View>
                     <View style={styles.financialCardDivider} />
                     <View style={styles.financialCardItem}>
                       <MaterialIcons name="arrow-downward" size={14} color={theme.error} />
-                      <Text style={[styles.financialCardAmount, { color: theme.error }]}>-{summary.totalCost}€</Text>
+                      <Text style={[styles.financialCardAmount, { color: theme.error }]}>-{Math.round(financial.totalCosts)}€</Text>
                       <Text style={styles.financialCardAmountLabel}>{t('financial', 'expenses')}</Text>
                     </View>
                   </View>

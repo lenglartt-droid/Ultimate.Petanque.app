@@ -3,7 +3,8 @@
 // Gold sponsors replace ads with branded content
 // ============================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Platform } from 'react-native';
+import { View, Text, Pressable, StyleSheet, Platform, AppState } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -12,27 +13,17 @@ import { AD_UNIT_IDS } from '@/services/adService';
 import { useAppUI } from '@/contexts/AppContext';
 import { canShowPersonalizedAds } from '@/services/trackingService';
 import { getGoogleMobileAdsModule } from '@/services/googleMobileAdsModule';
-import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
+import {
+  getActiveGoldSponsorForAdReplacement,
+  subscribeGoldSponsorAdRefresh,
+} from '@/services/goldSponsorAdReplacement';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
+import type { Ambassador } from '@/services/ambassadorService';
 import theme from '@/constants/theme';
 
 interface AdBannerProps {
   position?: 'inline' | 'sticky';
   bottomOffset?: number;
-}
-
-// Gold sponsor cache (shared across all AdBanner instances)
-let cachedGoldSponsor: Ambassador | null | undefined = undefined; // undefined = not loaded
-let goldSponsorLoadPromise: Promise<void> | null = null;
-
-function loadGoldSponsor(): Promise<void> {
-  if (cachedGoldSponsor !== undefined) return Promise.resolve();
-  if (goldSponsorLoadPromise) return goldSponsorLoadPromise;
-  goldSponsorLoadPromise = fetchAmbassadors().then(({ ambassadors }) => {
-    const gold = ambassadors.find(a => a.badgeType === 'gold_sponsor');
-    cachedGoldSponsor = gold || null;
-  }).catch(() => { cachedGoldSponsor = null; });
-  return goldSponsorLoadPromise;
 }
 
 let BannerAdComponent: React.ComponentType<{
@@ -150,18 +141,39 @@ const AdBanner = React.memo(({ position = 'inline', bottomOffset = 0 }: AdBanner
   const appUI = useAppUI();
   const isPremium = appUI.isPremium;
 
-  useEffect(() => {
-    // Load gold sponsor first, then ads module as fallback
-    loadGoldSponsor().then(() => {
-      setGoldSponsor(cachedGoldSponsor || null);
+  const refreshGoldSponsor = useCallback(async () => {
+    try {
+      const gold = await getActiveGoldSponsorForAdReplacement();
+      setGoldSponsor(gold);
+    } catch {
+      setGoldSponsor(null);
+    } finally {
       setGoldLoaded(true);
-    });
+    }
+  }, []);
+
+  useEffect(() => {
     loadAdsModule();
     if (!adsModuleAvailable) {
       setIsAvailable(false);
     }
     canShowPersonalizedAds().then(can => setNonPersonalized(!can));
-  }, []);
+    refreshGoldSponsor();
+    const unsubscribe = subscribeGoldSponsorAdRefresh(() => {
+      refreshGoldSponsor();
+    });
+    const appStateSub = AppState.addEventListener('change', state => {
+      if (state === 'active') refreshGoldSponsor();
+    });
+    return () => {
+      unsubscribe();
+      appStateSub.remove();
+    };
+  }, [refreshGoldSponsor]);
+
+  useFocusEffect(useCallback(() => {
+    refreshGoldSponsor();
+  }, [refreshGoldSponsor]));
 
   // Hide ads for premium users
   if (isPremium) return null;

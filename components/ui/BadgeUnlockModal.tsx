@@ -138,23 +138,9 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
           <View style={[s.centeredContent, { paddingBottom: insets.bottom + 12 }]}>
             <View style={s.flexBookend} />
             <View style={s.heroColumn}>
-              {/* Glow ring */}
-              <View style={s.iconArea}>
-                <Animated.View style={[s.glowRing, { borderColor: badge.color, shadowColor: badge.color }, glowStyle]} />
-
-                {/* Badge icon with pulse */}
-                <Animated.View style={[s.iconContainer, { backgroundColor: badge.color + '15' }, pulseStyle]}>
-                  <View style={[s.iconRing, { borderColor: badge.color + '35' }]}>
-                    <View style={[s.iconInner, { backgroundColor: badge.color }]}>
-                      <MaterialIcons name={badge.icon as any} size={48} color="#FFF" />
-                    </View>
-                  </View>
-                </Animated.View>
-              </View>
-
-              {/* Unlock label — static full-width slot centers pill (Reanimated entering can stretch Animated.View on Android) */}
-              <View style={s.centeredSlot}>
-                <Animated.View entering={FadeIn.duration(500).delay(150)}>
+              {/* Unlock banner first — keeps icon from overlapping the label on Android (FadeIn layout) */}
+              <View style={s.unlockBannerSlot}>
+                <Animated.View entering={FadeIn.duration(500).delay(100)} style={s.unlockBannerAnim}>
                   <LinearGradient
                     colors={['#F59E0B22', '#F59E0B08']}
                     style={s.unlockLabelGradient}
@@ -166,13 +152,27 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
                 </Animated.View>
               </View>
 
-              {/* Badge name — regular Text inside Animated.View so textAlign centers reliably */}
-              <Animated.View entering={FadeInUp.duration(500).delay(250)} style={s.textBlock}>
-                <Text style={[s.badgeName, { color: badge.color }]}>{getBadgeName(badgeId, language)}</Text>
-              </Animated.View>
+              {/* Badge icon — fixed-height slot below banner */}
+              <View style={s.iconArea}>
+                <Animated.View style={[s.glowRing, { borderColor: badge.color, shadowColor: badge.color }, glowStyle]} />
+                <Animated.View style={[s.iconContainer, { backgroundColor: badge.color + '15' }, pulseStyle]}>
+                  <View style={[s.iconRing, { borderColor: badge.color + '35' }]}>
+                    <View style={[s.iconInner, { backgroundColor: badge.color }]}>
+                      <MaterialIcons name={badge.icon as any} size={48} color="#FFF" />
+                    </View>
+                  </View>
+                </Animated.View>
+              </View>
+
+              {/* Badge name */}
+              <View style={s.titleSlot}>
+                <Animated.View entering={FadeInUp.duration(500).delay(250)}>
+                  <Text style={[s.badgeName, { color: badge.color }]}>{getBadgeName(badgeId, language)}</Text>
+                </Animated.View>
+              </View>
 
               {/* Category chip */}
-              <View style={[s.centeredSlot, { marginBottom: 14 }]}>
+              <View style={s.centeredSlot}>
                 <Animated.View
                   entering={FadeIn.duration(400).delay(350)}
                   style={[s.catChip, { backgroundColor: badge.color + '15', borderColor: badge.color + '30' }]}
@@ -182,12 +182,14 @@ export default function BadgeUnlockModal({ visible, badgeId, language, onClose }
               </View>
 
               {/* Description */}
-              <Animated.View entering={FadeIn.duration(400).delay(400)} style={s.textBlock}>
-                <Text style={s.badgeDesc}>{getBadgeDescription(badgeId, language)}</Text>
-              </Animated.View>
+              <View style={s.titleSlot}>
+                <Animated.View entering={FadeIn.duration(400).delay(400)}>
+                  <Text style={s.badgeDesc}>{getBadgeDescription(badgeId, language)}</Text>
+                </Animated.View>
+              </View>
 
               {/* XP reward */}
-              <View style={[s.centeredSlot, { marginBottom: 4 }]}>
+              <View style={s.centeredSlot}>
                 <Animated.View entering={FadeIn.duration(400).delay(500)}>
                   <Animated.View style={[s.xpReward, { borderColor: badge.color + '30' }, shimmerStyle]}>
                     <MaterialIcons name="bolt" size={24} color="#FCD34D" />
@@ -262,18 +264,34 @@ const s = StyleSheet.create({
     alignSelf: 'center',
     alignItems: 'center',
   },
-  textBlock: {
+  /** Reserves vertical space so entering animations never collapse into the icon. */
+  unlockBannerSlot: {
+    width: '100%',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  unlockBannerAnim: {
+    alignSelf: 'center',
+    flexGrow: 0,
+    flexShrink: 0,
+    maxWidth: '100%',
+  },
+  titleSlot: {
     width: '100%',
     maxWidth: 320,
     alignItems: 'center',
+    marginBottom: 14,
   },
-  // Icon area
+  // Icon area — fixed box; pulse scale stays inside
   iconArea: {
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 28,
-    width: 160,
-    height: 160,
+    marginBottom: 20,
+    width: 172,
+    height: 172,
+    flexShrink: 0,
   },
   glowRing: {
     position: 'absolute',
@@ -316,29 +334,30 @@ const s = StyleSheet.create({
   centeredSlot: {
     width: '100%',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   unlockLabelGradient: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: '#F59E0B30',
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   unlockLabel: {
     fontSize: 13,
     fontWeight: '800',
     color: '#FCD34D',
-    letterSpacing: 2.5,
+    letterSpacing: 1.5,
     textAlign: 'center',
+    includeFontPadding: false,
   },
   badgeName: {
     fontSize: 26,
     fontWeight: '900',
     textAlign: 'center',
-    marginBottom: 10,
     lineHeight: 32,
     letterSpacing: -0.3,
     width: '100%',
@@ -360,7 +379,6 @@ const s = StyleSheet.create({
     color: 'rgba(255,255,255,0.55)',
     textAlign: 'center',
     lineHeight: 23,
-    marginBottom: 20,
     width: '100%',
   },
   xpReward: {

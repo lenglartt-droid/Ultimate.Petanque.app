@@ -10,6 +10,11 @@ import {
   isGoogleMobileAdsAvailable,
 } from '@/services/googleMobileAdsModule';
 import { shouldInitializeGoogleMobileAds } from '@/utils/googleMobileAdsEligibility';
+import {
+  hasActiveGoldSponsorAdReplacement,
+  subscribeGoldSponsorAdRefresh,
+  syncGoldSponsorAdReplacement,
+} from '@/services/goldSponsorAdReplacement';
 
 export { AD_UNIT_IDS } from '@/constants/admob';
 
@@ -17,8 +22,23 @@ export { AD_UNIT_IDS } from '@/constants/admob';
 // SDK INITIALIZATION
 // ============================================
 let initPromise: Promise<void> | null = null;
+let goldSponsorRefreshBound = false;
+
+function bindGoldSponsorAdRefresh(): void {
+  if (goldSponsorRefreshBound) return;
+  goldSponsorRefreshBound = true;
+  subscribeGoldSponsorAdRefresh(() => {
+    if (hasActiveGoldSponsorAdReplacement()) {
+      interstitialAd = null;
+      isInterstitialLoaded = false;
+      return;
+    }
+    preloadInterstitial().catch(() => {});
+  });
+}
 
 export async function initializeAds(): Promise<void> {
+  bindGoldSponsorAdRefresh();
   if (initPromise) return initPromise;
   initPromise = (async () => {
     if (!shouldInitializeGoogleMobileAds()) return;
@@ -26,6 +46,7 @@ export async function initializeAds(): Promise<void> {
     if (!mod) return;
     try {
       await mod.default().initialize();
+      await syncGoldSponsorAdReplacement();
       await preloadInterstitial();
     } catch (e) {
       console.warn('[AdMob] initialize failed:', e);
@@ -44,6 +65,8 @@ let isInterstitialLoaded = false;
 
 export async function preloadInterstitial(): Promise<void> {
   try {
+    if (hasActiveGoldSponsorAdReplacement()) return;
+
     const mod = getGoogleMobileAdsModule();
     if (!mod) return;
 
@@ -83,6 +106,7 @@ export function setIsPremiumCheck(fn: () => boolean) {
 
 export async function showInterstitial(): Promise<boolean> {
   if (_isPremiumFn?.()) return false;
+  if (hasActiveGoldSponsorAdReplacement()) return false;
 
   if (!isInterstitialLoaded || !interstitialAd) {
     preloadInterstitial();

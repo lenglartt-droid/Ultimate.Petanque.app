@@ -1417,7 +1417,7 @@ export default function LocationPicker({
 }
 
 const styles = StyleSheet.create({
-  container: { marginBottom: 16, flex: 1 },
+  container: { marginBottom: 16 },
   label: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, letterSpacing: 1, marginBottom: 10 },
   inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: theme.surface, paddingHorizontal: 14, paddingVertical: 14, borderRadius: theme.borderRadius.md, gap: 12, ...theme.shadows.card },
   inputContent: { flex: 1 },

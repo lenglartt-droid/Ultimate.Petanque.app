@@ -29,7 +29,6 @@ import * as ImagePicker from '@/services/imagePicker';
 import { decode } from '@/services/base64';
 import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
-import { useAlert } from '@/template';
 
 type TournamentStatus = 'À venir' | 'En cours' | 'Terminé';
 
@@ -80,6 +79,10 @@ function SectionCard({ children, title, subtitle, icon, color, delay = 0, requir
   );
 }
 
+function AccordionCard({ children }: { children: React.ReactNode }) {
+  return <View style={styles.sectionCard}>{children}</View>;
+}
+
 function StepIndicator({ step, total, label }: { step: number; total: number; label: string }) {
   const pct = Math.round((step / total) * 100);
   return (
@@ -99,7 +102,6 @@ export default function EditTournamentScreen() {
   const { getTournamentById, updateTournament } = useAppActions();
   const { t, language } = useLanguage();
   const { user } = useAuth();
-  const { showAlert } = useAlert();
   const supabase = getSupabaseClient();
 
   const tournament = getTournamentById(id!);
@@ -316,7 +318,7 @@ export default function EditTournamentScreen() {
 
   const hasLocation = terrainId || location.city.trim();
   const progressFilled = [name.trim(), hasLocation ? 'yes' : ''].filter(Boolean).length + 1;
-  const progressLabel = !name.trim() ? t('tournament', 'startWithName') : !hasLocation ? t('tournament', 'chooseLocation') : t('tournament', 'readyToCreate');
+  const progressLabel = !name.trim() ? t('tournament', 'startWithName') : !hasLocation ? t('tournament', 'chooseLocation') : t('tournament', 'saveChanges');
 
   const handleSave = async () => {
     if (!name.trim()) { Alert.alert(t('common', 'error'), t('tournament', 'errorNameRequired')); return; }
@@ -553,7 +555,7 @@ export default function EditTournamentScreen() {
 
           {/* 8-13: Accordions (Finances, Niveau, Catégorie, Inscription, Envergure, Participants) */}
           {/* 8. Finances */}
-          <Animated.View entering={FadeInDown.duration(350).delay(250)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowFinancesSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="payments" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -570,10 +572,10 @@ export default function EditTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 9. Niveau */}
-          <Animated.View entering={FadeInDown.duration(350).delay(275)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowLevelSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.success + '15' }]}><MaterialIcons name="signal-cellular-alt" size={18} color={theme.success} /></View>
               <View style={{ flex: 1 }}>
@@ -608,10 +610,10 @@ export default function EditTournamentScreen() {
                 ) : null}
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 10. Catégorie */}
-          <Animated.View entering={FadeInDown.duration(350).delay(300)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowCategorySection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.warning + '15' }]}><MaterialIcons name="verified" size={18} color={theme.warning} /></View>
               <View style={{ flex: 1 }}>
@@ -630,10 +632,10 @@ export default function EditTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 11. Inscription */}
-          <Animated.View entering={FadeInDown.duration(350).delay(325)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowRegistrationSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.primary + '15' }]}><MaterialIcons name="how-to-reg" size={18} color={theme.primary} /></View>
               <View style={{ flex: 1 }}>
@@ -652,10 +654,10 @@ export default function EditTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 12. Envergure */}
-          <Animated.View entering={FadeInDown.duration(350).delay(350)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowScopeSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="public" size={18} color={theme.accent} /></View>
               <View style={{ flex: 1 }}>
@@ -674,10 +676,10 @@ export default function EditTournamentScreen() {
                 </ScrollView>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 13. Participants */}
-          <Animated.View entering={FadeInDown.duration(350).delay(375)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowParticipantsSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}><MaterialIcons name="people-outline" size={18} color={theme.carreauColor} /></View>
               <View style={{ flex: 1 }}>
@@ -729,7 +731,7 @@ export default function EditTournamentScreen() {
                 </View>
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 14. Résultat final (Modal Picker - only for finished tournaments) */}
           {status === 'Terminé' ? (
@@ -764,7 +766,7 @@ export default function EditTournamentScreen() {
           ) : null}
 
           {/* 15. Description */}
-          <Animated.View entering={FadeInDown.duration(350).delay(425)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowDescriptionSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.textSecondary + '15' }]}><MaterialIcons name="description" size={18} color={theme.textSecondary} /></View>
               <View style={{ flex: 1 }}>
@@ -778,10 +780,10 @@ export default function EditTournamentScreen() {
                 <TextInput style={[styles.textInput, styles.textArea]} value={description} onChangeText={setDescription} placeholder={t('tournament', 'descriptionPlaceholder')} placeholderTextColor={theme.textMuted} multiline numberOfLines={4} textAlignVertical="top" />
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
           {/* 16. Tournament Poster (collapsible — avoids overlapping accordion content above) */}
-          <Animated.View entering={FadeInDown.duration(350).delay(450)} style={styles.sectionCard}>
+          <AccordionCard>
             <Pressable style={styles.accordionHeader} onPress={() => { Haptics.selectionAsync(); setShowPosterSection(p => !p); }}>
               <View style={[styles.sectionCardIcon, { backgroundColor: theme.carreauColor + '15' }]}>
                 <MaterialIcons name="image" size={18} color={theme.carreauColor} />
@@ -841,7 +843,7 @@ export default function EditTournamentScreen() {
                 ) : null}
               </View>
             ) : null}
-          </Animated.View>
+          </AccordionCard>
 
         </ScrollView>
 
@@ -1100,7 +1102,7 @@ const styles = StyleSheet.create({
   financeInput: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 14, paddingVertical: 12, borderRadius: theme.borderRadius.md, fontSize: 15, color: theme.textPrimary, borderWidth: 1, borderColor: theme.border },
 
   // Accordion
-  accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  accordionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 },
   accordionContent: { marginTop: 14, paddingTop: 14, borderTopWidth: 1, borderTopColor: theme.border },
   accordionValueText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary, marginTop: 2 },
 

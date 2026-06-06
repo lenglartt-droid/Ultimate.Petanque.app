@@ -969,6 +969,10 @@ export default function DirectoryScreen() {
     if (!item) return undefined;
     if (activeTab === 'players') return item.avatar;
     if (activeTab === 'terrains') return item.photos?.[0];
+    if (activeTab === 'tournaments') {
+      const url = item.posterUrl as string | undefined;
+      return url && !url.toLowerCase().endsWith('.pdf') ? url : undefined;
+    }
     return undefined;
   }, [activeTab]);
   const scrollPrefetch = useScrollPrefetch(getItemImageUrl, 10);
@@ -2812,10 +2816,19 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const hasSponsor = !!(item as any).sponsorId;
+  const posterUrl = item.posterUrl;
+  const isPosterPdf = !!posterUrl && posterUrl.toLowerCase().endsWith('.pdf');
+  const hasPosterImage = !!posterUrl && !isPosterPdf;
   return (
     <Pressable style={styles.itemCard} onPress={() => router.push(`/tournament/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
-        <MaterialIcons name="emoji-events" size={24} color="#FFF" />
+        {hasPosterImage ? (
+          <Image source={{ uri: posterUrl }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.banner }} cachePolicy="memory-disk" recyclingKey={`${item.id}-poster`} />
+        ) : isPosterPdf ? (
+          <MaterialIcons name="picture-as-pdf" size={24} color="#FFF" />
+        ) : (
+          <MaterialIcons name="emoji-events" size={24} color="#FFF" />
+        )}
         {isPublicItem ? <View style={styles.publicOverlay}><MaterialIcons name="public" size={10} color={theme.success} /></View>
         : sharedPerm ? <SharedOverlayBadge permission={sharedPerm} /> : null}
       </View>
