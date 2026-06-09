@@ -1,15 +1,39 @@
-# Clean release APK with 16 KB–friendly NDK settings.
+# Release APK build (Windows-safe: no gradlew clean, Gradle cache off C: drive).
 $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-Write-Host "Updating Expo/RN deps (16 KB page size fixes in SDK 53.0.14+)..." -ForegroundColor Cyan
+# Gradle defaults to %USERPROFILE%\.gradle on C:. A full C: drive causes corrupt
+# cache entries and cryptic mergeReleaseResources / AAPT2 failures
+# (com/android/aapt/Resources$ResourceTableOrBuilder).
+$gradleHome = "E:\Gradle"
+if (-not (Test-Path $gradleHome)) {
+  New-Item -ItemType Directory -Path $gradleHome -Force | Out-Null
+}
+$env:GRADLE_USER_HOME = $gradleHome
+
+$driveLetter = (Get-Item $gradleHome).PSDrive.Name
+$freeGb = [math]::Round((Get-PSDrive $driveLetter).Free / 1GB, 2)
+Write-Host "GRADLE_USER_HOME=$gradleHome (${driveLetter}: ${freeGb} GB free)" -ForegroundColor Cyan
+if ($freeGb -lt 8) {
+  Write-Warning "${driveLetter}: has only ${freeGb} GB free. Release builds need ~8-10 GB."
+}
+
+Write-Host "Updating Expo/RN deps..." -ForegroundColor Cyan
 npx expo install --fix
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-Write-Host "Clean release build (NDK r28 from android/gradle.properties)..." -ForegroundColor Yellow
+Write-Host "Stopping Gradle daemons and stray build tools..." -ForegroundColor Yellow
 Set-Location android
-.\gradlew.bat clean assembleRelease --no-daemon --max-workers=1
+.\gradlew.bat --stop 2>$null
+Get-Process java,ninja,cmake -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+
+# Only wipe local app outputs — not the whole Gradle cache unless you know C: was corrupted.
+Remove-Item -Recurse -Force "app\build", "build" -ErrorAction SilentlyContinue
+
+Write-Host "assembleRelease (no clean — avoids ninja Permission denied on .cxx)..." -ForegroundColor Yellow
+.\gradlew.bat assembleRelease --no-daemon --max-workers=1 --stacktrace
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 Write-Host ""

@@ -419,6 +419,15 @@ const PartnerMarkerView = React.memo(
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
 
+    const handleError = useCallback(() => {
+      setImageError(true);
+      onReady?.();
+    }, [onReady]);
+
+    useEffect(() => {
+      if (!partner.photo) onReady?.();
+    }, [partner.photo, onReady]);
+
     const customColor = normalizeBrandColor(partner.brandColor);
     const tier = customColor
       ? {
@@ -454,7 +463,7 @@ const PartnerMarkerView = React.memo(
               style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, backgroundColor: tier.bg, opacity: imageLoaded ? 1 : 0 }}
               resizeMode="cover"
               onLoad={handleLoad}
-              onError={() => setImageError(true)}
+              onError={handleError}
             />
           </>
         ) : (
@@ -474,6 +483,15 @@ const ClubMarkerView = React.memo(
       setImageLoaded(true);
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
+
+    const handleError = useCallback(() => {
+      setImageError(true);
+      onReady?.();
+    }, [onReady]);
+
+    useEffect(() => {
+      if (!partner.logo) onReady?.();
+    }, [partner.logo, onReady]);
 
     const customColor = normalizeBrandColor(partner.brandColor);
     const tier = customColor
@@ -510,7 +528,7 @@ const ClubMarkerView = React.memo(
               style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, backgroundColor: tier.bg, opacity: imageLoaded ? 1 : 0 }}
               resizeMode="cover"
               onLoad={handleLoad}
-              onError={() => setImageError(true)}
+              onError={handleError}
             />
           </>
         ) : (
@@ -2411,6 +2429,20 @@ useEffect(() => {
     setReadyMarkers(prev => new Set([...prev, id]));
   }, []);
 
+  // iOS: stop tracksViewChanges if a marker never calls onReady (broken image URL, etc.)
+  useEffect(() => {
+    if (IS_ANDROID_MAP) return;
+    const pendingIds = clusters
+      .filter(c => !c.isCluster)
+      .map(c => c.items[0]?.id)
+      .filter((id): id is string => !!id && !readyMarkers.has(id));
+    if (pendingIds.length === 0) return;
+    const timer = setTimeout(() => {
+      setReadyMarkers(prev => new Set([...prev, ...pendingIds]));
+    }, 2500);
+    return () => clearTimeout(timer);
+  }, [clusters, readyMarkers]);
+
   // iOS only: brief tracksViewChanges refresh when clusters change. On Android this blocks marker taps.
   const [clusterTracksViewChanges, setClusterTracksViewChanges] = useState(false);
   useEffect(() => {
@@ -2479,7 +2511,11 @@ useEffect(() => {
             const markerIcon = tc?.icon || cfg.icon;
             const itemPhoto = getMapItemPhoto(item);
             const onMarkerReady = () => handleMarkerReady(item.id);
-            const markerTracksViewChanges = markerHasPulse || !readyMarkers.has(item.id);
+            // Android: always false — true freezes map/tabs (see docs/map-marker-android-fix.md).
+            // iOS: keep true until bitmap ready or pulse animating.
+            const markerTracksViewChanges = IS_ANDROID_MAP
+              ? false
+              : (markerHasPulse || !readyMarkers.has(item.id));
             let markerContent: React.ReactNode;
             if (isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) {
               markerContent = (
@@ -2906,6 +2942,7 @@ useEffect(() => {
       <KeyboardAvoidingView
         style={styles.mapOverlayRoot}
         behavior={Platform.OS === 'ios' ? 'position' : undefined}
+        enabled={Platform.OS === 'ios'}
         pointerEvents="box-none"
       >
         <View style={styles.bottomPanel} pointerEvents="box-none">
