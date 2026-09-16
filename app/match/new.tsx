@@ -276,6 +276,38 @@ export default function NewMatchScreen() {
     return terrains.find(t => t.id === selectedTerrainId) || null;
   }, [selectedTerrainId, terrains]);
 
+  // Warning: terrain > 300 km from the player's declared home city
+  const terrainDistanceWarning = useMemo(() => {
+    if (!selfPlayer) return null;
+    const effectiveTerrain = selectedTerrain
+      || (linkedTournament?.terrainId ? terrains.find(x => x.id === linkedTournament.terrainId) : null);
+    if (!effectiveTerrain) return null;
+    const pLat = (selfPlayer as any).location?.latitude;
+    const pLng = (selfPlayer as any).location?.longitude;
+    const tLat = (effectiveTerrain as any).location?.latitude;
+    const tLng = (effectiveTerrain as any).location?.longitude;
+    if (!Number.isFinite(pLat) || !Number.isFinite(pLng) || !Number.isFinite(tLat) || !Number.isFinite(tLng)) return null;
+    if (Math.abs(pLat) < 0.0001 && Math.abs(pLng) < 0.0001) return null;
+    if (Math.abs(tLat) < 0.0001 && Math.abs(tLng) < 0.0001) return null;
+    // Haversine
+    const R = 6371;
+    const dLat = ((tLat - pLat) * Math.PI) / 180;
+    const dLon = ((tLng - pLng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((pLat * Math.PI) / 180) *
+      Math.cos((tLat * Math.PI) / 180) *
+      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const distKm = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    if (distKm < 300) return null;
+    return {
+      distanceKm: Math.round(distKm),
+      playerCity: (selfPlayer as any).location?.city || (selfPlayer as any).city || null,
+      terrainName: (effectiveTerrain as any).name,
+      terrainCity: (effectiveTerrain as any).city || null,
+    };
+  }, [selectedTerrain, selfPlayer, linkedTournament, terrains]);
+
   const selectedBoulesSet = useMemo(() => {
     if (!selectedBoulesSetId) return null;
     return boulesSets.find(bs => bs.id === selectedBoulesSetId) || null;
@@ -2114,6 +2146,33 @@ export default function NewMatchScreen() {
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
 
+              {terrainDistanceWarning ? (
+                <View style={styles.terrainWarning}>
+                  <MaterialIcons name="wrong-location" size={18} color="#D97706" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terrainWarningTitle}>
+                      {fr
+                        ? `Terrain a ${terrainDistanceWarning.distanceKm} km de votre ville`
+                        : `Terrain ${terrainDistanceWarning.distanceKm} km from your city`}
+                    </Text>
+                    <Text style={styles.terrainWarningText}>
+                      {fr
+                        ? `${terrainDistanceWarning.terrainName}${terrainDistanceWarning.terrainCity ? ` (${terrainDistanceWarning.terrainCity})` : ''} est eloigne de ${terrainDistanceWarning.playerCity || 'votre ville declaree'}. Verifiez que le bon terrain est selectionne.`
+                        : `${terrainDistanceWarning.terrainName}${terrainDistanceWarning.terrainCity ? ` (${terrainDistanceWarning.terrainCity})` : ''} is far from ${terrainDistanceWarning.playerCity || 'your declared city'}. Make sure the correct terrain is selected.`}
+                    </Text>
+                    <View style={styles.terrainWarningActions}>
+                      <Pressable style={styles.terrainWarningBtn} onPress={() => setShowTerrainPicker(true)}>
+                        <MaterialIcons name="swap-horiz" size={14} color="#B45309" />
+                        <Text style={styles.terrainWarningBtnText}>{fr ? 'Changer de terrain' : 'Change terrain'}</Text>
+                      </Pressable>
+                      <Pressable style={styles.terrainWarningSkipBtn} onPress={() => { Haptics.selectionAsync(); }}>
+                        <Text style={styles.terrainWarningSkipText}>{fr ? 'Continuer' : 'Continue'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              ) : null}
+
               <Pressable style={styles.terrainSelector} onPress={() => setShowBoulesSetPicker(true)}>
                 <View style={styles.terrainSelectorIcon}>
                   <MaterialIcons name="sports-baseball" size={20} color={selectedBoulesSet ? theme.accent : theme.textMuted} />
@@ -2151,6 +2210,24 @@ export default function NewMatchScreen() {
                 </View>
                 <MaterialIcons name="chevron-right" size={20} color={theme.textMuted} />
               </Pressable>
+
+              {terrainDistanceWarning ? (
+                <View style={styles.terrainWarning}>
+                  <MaterialIcons name="wrong-location" size={18} color="#D97706" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.terrainWarningTitle}>
+                      {fr
+                        ? `Terrain a ${terrainDistanceWarning.distanceKm} km de votre ville`
+                        : `Terrain ${terrainDistanceWarning.distanceKm} km from your city`}
+                    </Text>
+                    <Text style={styles.terrainWarningText}>
+                      {fr
+                        ? `${terrainDistanceWarning.terrainName}${terrainDistanceWarning.terrainCity ? ` (${terrainDistanceWarning.terrainCity})` : ''} est eloigne de ${terrainDistanceWarning.playerCity || 'votre ville declaree'}. Ce terrain est defini par le tournoi.`
+                        : `${terrainDistanceWarning.terrainName}${terrainDistanceWarning.terrainCity ? ` (${terrainDistanceWarning.terrainCity})` : ''} is far from ${terrainDistanceWarning.playerCity || 'your declared city'}. This terrain is set by the tournament.`}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
             </Animated.View>
           )}
 
@@ -3039,6 +3116,14 @@ const styles = StyleSheet.create({
   terrainSelectorLabel: { fontSize: 11, fontWeight: '600', color: theme.textMuted, marginBottom: 2 },
   terrainSelectorValue: { fontSize: 14, fontWeight: '500', color: theme.textPrimary },
   terrainSelectorPlaceholder: { color: theme.textMuted, fontStyle: 'italic' },
+  terrainWarning: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 10, backgroundColor: '#FFFBEB', borderRadius: theme.borderRadius.md, padding: 12, marginTop: 10, borderWidth: 1, borderColor: '#FDE68A' },
+  terrainWarningTitle: { fontSize: 13, fontWeight: '700' as const, color: '#78350F', marginBottom: 3 },
+  terrainWarningText: { fontSize: 11, color: '#92400E', lineHeight: 16 },
+  terrainWarningActions: { flexDirection: 'row' as const, gap: 8, marginTop: 8 },
+  terrainWarningBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#FEF3C7', paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.borderRadius.sm, borderWidth: 1, borderColor: '#FDE68A' },
+  terrainWarningBtnText: { fontSize: 11, fontWeight: '700' as const, color: '#B45309' },
+  terrainWarningSkipBtn: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: theme.borderRadius.sm },
+  terrainWarningSkipText: { fontSize: 11, fontWeight: '600' as const, color: '#92400E' },
   phaseSection: { marginBottom: 16 },
   sectionLabel: { fontSize: 11, fontWeight: '700', color: theme.textMuted, letterSpacing: 0.5, marginBottom: 10 },
   phaseScroll: { gap: 8 },
