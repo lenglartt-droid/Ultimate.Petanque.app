@@ -73,13 +73,13 @@ Deno.serve(async (req: Request) => {
     if (mode === 'self' && targetUserId) {
       const { data, error } = await supabaseClient
         .from('players')
-        .select('id, user_id, name, stats, created_at, is_public')
+        .select('id, user_id, name, stats, created_at, is_public, city, location')
         .eq('user_id', targetUserId);
       if (!error && data) players = data;
     } else {
       const { data, error } = await supabaseClient
         .from('players')
-        .select('id, user_id, name, stats, created_at, is_public')
+        .select('id, user_id, name, stats, created_at, is_public, city, location')
         .eq('is_public', true);
       if (!error && data) players = data;
     }
@@ -655,6 +655,65 @@ Deno.serve(async (req: Request) => {
       }
 
       // ================================================
+      // FACTOR 15: Home City Consistency (10 pts)
+      // Flag matches whose terrain sits far (> 300 km) from
+      // the player's declared home coordinates. Repeated
+      // inconsistencies (3+ or 6+ matches) escalate the flag.
+      // Requires valid home coordinates on the player profile;
+      // players without home geolocation are not penalized.
+      // ================================================
+      const HOME_CITY_DISTANCE_KM = 300;
+      const playerHomeLat = player.location?.latitude;
+      const playerHomeLng = player.location?.longitude;
+      const hasHomeCoords =
+        Number.isFinite(playerHomeLat) &&
+        Number.isFinite(playerHomeLng) &&
+        (Math.abs(playerHomeLat) > 0.0001 || Math.abs(playerHomeLng) > 0.0001);
+
+      let distantMatchesCount = 0;
+      const distantMatchExamples: any[] = [];
+
+      if (hasHomeCoords && geoPoints.length > 0) {
+        for (const gp of geoPoints) {
+          const distKm = haversineKm(playerHomeLat, playerHomeLng, gp.lat, gp.lng);
+          if (distKm > HOME_CITY_DISTANCE_KM) {
+            distantMatchesCount++;
+            if (distantMatchExamples.length < 5) {
+              distantMatchExamples.push({
+                matchId: gp.matchId,
+                terrainName: gp.terrainName,
+                distanceKm: Math.round(distKm),
+                date: new Date(gp.ts).toISOString(),
+              });
+            }
+          }
+        }
+      }
+
+      const totalGeoMatches = geoPoints.length;
+      const distantRatio = totalGeoMatches > 0 ? distantMatchesCount / totalGeoMatches : 0;
+
+      details.homeCityConsistency = {
+        homeCity: player.city || null,
+        hasHomeCoords,
+        totalMatchesWithGeo: totalGeoMatches,
+        distantMatchesCount,
+        distantRatio: Math.round(distantRatio * 100),
+        thresholdKm: HOME_CITY_DISTANCE_KM,
+        examples: distantMatchExamples,
+      };
+
+      if (hasHomeCoords) {
+        if (distantMatchesCount >= 6 && distantRatio >= 0.5) {
+          score -= 10;
+          flags.push('frequent_distant_from_home_city');
+        } else if (distantMatchesCount >= 3) {
+          score -= 5;
+          flags.push('distant_from_home_city');
+        }
+      }
+
+      // ================================================
       // BONUS: Arranged match detection
       // ================================================
       // Same opponent pair > 5 times this week with same/similar scores
@@ -729,16 +788,20 @@ Deno.serve(async (req: Request) => {
     // ============================================
     // UPSERT RESULTS + DETECT THRESHOLD CROSSINGS
     // ============================================
-    // Fetch previous scores for threshold crossing detection
+    // Fetch previous scores AND previous flags to detect newly triggered alerts
     const prevScoreMap = new Map<string, number>();
+    const prevFlagsMap = new Map<string, string[]>();
     if (results.length > 0) {
       const pids = results.map(r => r.player_id);
       try {
         const { data: prevData } = await supabaseClient
           .from('suspicious_players')
-          .select('player_id, trust_score')
+          .select('player_id, trust_score, flags')
           .in('player_id', pids);
-        (prevData || []).forEach((pd: any) => prevScoreMap.set(pd.player_id, pd.trust_score));
+        (prevData || []).forEach((pd: any) => {
+          prevScoreMap.set(pd.player_id, pd.trust_score);
+          prevFlagsMap.set(pd.player_id, Array.isArray(pd.flags) ? pd.flags : []);
+        });
       } catch { /* no previous data is ok */ }
     }
 
@@ -787,6 +850,122 @@ Deno.serve(async (req: Request) => {
 
       if (upsertError) {
         console.error(`[detect-suspicious] Upsert error for ${r.player_id}:`, upsertError.message);
+      }
+    }
+
+    // ============================================
+    // GEO-BASED ALERT NOTIFICATIONS FOR USERS
+    // Notify users when newly flagged for impossible travel,
+    // teleportation, or matches distant from their declared city.
+    // Only fires on transitions (absent -> present) to avoid spam.
+    // ============================================
+    interface GeoAlert {
+      userId: string;
+      flagType: 'impossible_travel' | 'micro_teleportation' | 'distant_from_home_city';
+      count: number;
+      details: Record<string, any>;
+    }
+    const geoAlerts: GeoAlert[] = [];
+
+    for (const r of results) {
+      const prevFlags = prevFlagsMap.get(r.player_id) || [];
+      const newFlags = r.flags;
+
+      const wasImpossible = prevFlags.includes('impossible_travel') || prevFlags.includes('impossible_travel_repeated');
+      const nowImpossible = newFlags.includes('impossible_travel') || newFlags.includes('impossible_travel_repeated');
+      if (!wasImpossible && nowImpossible) {
+        geoAlerts.push({
+          userId: r.user_id,
+          flagType: 'impossible_travel',
+          count: r.details.impossibleTravel?.count || 0,
+          details: r.details.impossibleTravel || {},
+        });
+      }
+
+      const wasTeleport = prevFlags.includes('micro_teleportation');
+      const nowTeleport = newFlags.includes('micro_teleportation');
+      if (!wasTeleport && nowTeleport) {
+        geoAlerts.push({
+          userId: r.user_id,
+          flagType: 'micro_teleportation',
+          count: r.details.microTeleportation?.count || 0,
+          details: r.details.microTeleportation || {},
+        });
+      }
+
+      const wasDistantHome = prevFlags.includes('distant_from_home_city') || prevFlags.includes('frequent_distant_from_home_city');
+      const nowDistantHome = newFlags.includes('distant_from_home_city') || newFlags.includes('frequent_distant_from_home_city');
+      if (!wasDistantHome && nowDistantHome) {
+        geoAlerts.push({
+          userId: r.user_id,
+          flagType: 'distant_from_home_city',
+          count: r.details.homeCityConsistency?.distantMatchesCount || 0,
+          details: r.details.homeCityConsistency || {},
+        });
+      }
+    }
+
+    if (geoAlerts.length > 0) {
+      console.log(`[detect-suspicious] ${geoAlerts.length} geo alert(s) to send`);
+      try {
+        const alertUserIds = [...new Set(geoAlerts.map(a => a.userId))];
+        const { data: alertTokens } = await supabaseClient
+          .from('push_tokens')
+          .select('user_id, token')
+          .in('user_id', alertUserIds)
+          .eq('active', true);
+
+        const tokensByUser = new Map<string, string[]>();
+        (alertTokens || []).forEach((t: any) => {
+          if (!tokensByUser.has(t.user_id)) tokensByUser.set(t.user_id, []);
+          tokensByUser.get(t.user_id)!.push(t.token);
+        });
+
+        const geoPushMessages: any[] = [];
+        for (const alert of geoAlerts) {
+          const userTokens = tokensByUser.get(alert.userId) || [];
+          if (userTokens.length === 0) continue;
+
+          let title = '';
+          let body = '';
+          if (alert.flagType === 'impossible_travel') {
+            title = '\u26A0\uFE0F Trajet geographique impossible detecte';
+            body = `${alert.count} trajet(s) impossibles (> 500 km en < 6 h) detectes entre vos matchs. Verifiez les terrains associes ou signalez une erreur.`;
+          } else if (alert.flagType === 'micro_teleportation') {
+            title = '\u26A0\uFE0F Deplacement rapide suspect';
+            body = `${alert.count} teleportation(s) (> 200 km en < 2 h) detectees entre matchs consecutifs. Verifiez les terrains associes.`;
+          } else if (alert.flagType === 'distant_from_home_city') {
+            const ratio = alert.details.distantRatio || 0;
+            title = '\u{1F4CD} Matchs eloignes de votre ville declaree';
+            body = `${alert.count} match(s) enregistres a plus de 300 km de votre ville (${ratio}%). Mettez a jour votre profil ou verifiez les terrains.`;
+          }
+
+          for (const tk of userTokens) {
+            geoPushMessages.push({
+              to: tk,
+              title,
+              body,
+              data: { type: 'geo_alert', flagType: alert.flagType, count: alert.count },
+              channelId: 'tournament-reminders',
+              priority: 'high',
+            });
+          }
+        }
+
+        if (geoPushMessages.length > 0) {
+          // Send in batches of 100 to respect Expo Push API limits
+          for (let i = 0; i < geoPushMessages.length; i += 100) {
+            const batch = geoPushMessages.slice(i, i + 100);
+            await fetch('https://exp.host/--/api/v2/push/send', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify(batch),
+            });
+          }
+          console.log(`[detect-suspicious] Sent ${geoPushMessages.length} geo alert push message(s)`);
+        }
+      } catch (e) {
+        console.error('[detect-suspicious] Error sending geo alerts:', e);
       }
     }
 
