@@ -14,6 +14,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from './nativeNotifications';
 import { getSupabaseClient } from '@/template';
 import { getEloRank } from './eloService';
+import { getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 
 const STORAGE_KEY = '@feed_notif_last_check';
 const COOLDOWN_MS = 5 * 60 * 1000; // 5 min minimum between checks
@@ -196,7 +197,7 @@ export async function checkFeedNotifications(params: {
     if (sent < 5) {
       const { data: eventData } = await supabase
         .from('sponsored_events')
-        .select('id, title, challenge_type, event_date, city, created_at')
+        .select('id, title, challenge_type, event_date, start_time, city, created_at')
         .gt('created_at', since)
         .in('status', ['upcoming', 'active'])
         .order('created_at', { ascending: false })
@@ -207,8 +208,10 @@ export async function checkFeedNotifications(params: {
           if (state.seenEvents.includes(event.id)) continue;
           state.seenEvents.push(event.id);
 
-          const evDate = new Date(event.event_date);
-          const dateStr = evDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+          const evDate = getSponsoredEventDisplayDate(event);
+          const dateStr = evDate
+            ? evDate.toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })
+            : '';
           const typeLabel = event.challenge_type === '10_tirs' ? '10 Tirs'
             : event.challenge_type === '10_tirs_sautee' ? (fr ? '10 Tirs sautee' : '10 Lob Shots')
             : 'Precision';

@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, ScrollView, StyleSheet as RNStyleSheet, Platform, Pressable } from 'react-native';
-import { initializeAds } from '@/services/adService';
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AlertProvider, AuthProvider } from '@/template';
@@ -14,21 +13,11 @@ import ConflictResolutionModal from '@/components/ui/ConflictResolutionModal';
 import { useAppActions } from '@/contexts/AppContext';
 import TrackingConsentModal from '@/components/ui/TrackingConsentModal';
 import MaintenanceBanner from '@/components/ui/MaintenanceBanner';
-import { isATTPromptNeeded } from '@/services/trackingService';
 import DevPerformanceOverlay from '@/components/ui/DevPerformanceOverlay';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
-import { checkUserBanStatus, BanInfo } from '@/services/banCheckService';
+import type { BanInfo } from '@/services/banCheckService';
 import BanScreen from '@/components/ui/BanScreen';
 import { initSentry } from '@/services/sentryService';
-import { addNotificationResponseListener } from '@/services/notificationService';
-import { registerPushToken } from '@/services/pushTokenService';
-import { router } from 'expo-router';
-import { checkTempDataExpiry } from '@/services/retentionNotificationService';
-import { checkFavoriteTerrainActivity } from '@/services/terrainActivityNotificationService';
-import { checkTeamDeadlineReminders } from '@/services/teamInvitationService';
-import { registerBackgroundProximityTask } from '@/services/backgroundProximityService';
-import * as Linking from 'expo-linking';
-import { findEventByCode } from '@/services/sponsoredEventService';
 
 // ============================================
 // Error Boundary — catches JS crashes on web
@@ -122,112 +111,109 @@ function LayoutInner() {
     try { initSentry(); } catch (e) { console.log('[Sentry] Init error:', e); }
   }, []);
 
+  // Re-sync gold sponsor ↔ AdMob state when app returns to foreground
+  React.useEffect(() => {
+    import('@/services/goldSponsorAdReplacement')
+      .then(({ bindGoldSponsorSyncOnAppResume }) => bindGoldSponsorSyncOnAppResume())
+      .catch(() => {});
+  }, []);
+
   // Google Mobile Ads — delay until after first frame (requires DELAY_APP_MEASUREMENT_INIT in manifest)
   React.useEffect(() => {
     if (Platform.OS === 'web') return;
     const timer = setTimeout(() => {
-      initializeAds().catch(() => {});
+      import('@/services/adService').then(({ initializeAds }) => initializeAds().catch(() => {})).catch(() => {});
     }, 1500);
     return () => clearTimeout(timer);
   }, []);
 
   // Check ban status on mount and periodically
   React.useEffect(() => {
+    let cancelled = false;
     const checkBan = async () => {
-      const result = await checkUserBanStatus();
-      if (result.isBanned) setBanInfo(result);
-      else setBanInfo(null);
+      try {
+        const { checkUserBanStatus } = await import('@/services/banCheckService');
+        const result = await checkUserBanStatus();
+        if (cancelled) return;
+        if (result.isBanned) setBanInfo(result);
+        else setBanInfo(null);
+      } catch { /* silent */ }
     };
     checkBan();
-    const interval = setInterval(checkBan, 60000); // Check every 60s
-    return () => clearInterval(interval);
+    const interval = setInterval(checkBan, 60000);
+    return () => { cancelled = true; clearInterval(interval); };
   }, []);
 
   React.useEffect(() => {
-    isATTPromptNeeded().then(needed => {
-      if (needed) setShowATT(true);
-    }).catch(() => {});
+    import('@/services/trackingService')
+      .then(({ isATTPromptNeeded }) => isATTPromptNeeded())
+      .then(needed => { if (needed) setShowATT(true); })
+      .catch(() => {});
   }, []);
 
   // Register push token for server-side notifications
   React.useEffect(() => {
-    registerPushToken().catch(() => {});
+    import('@/services/pushTokenService')
+      .then(({ registerPushToken }) => registerPushToken())
+      .catch(() => {});
   }, []);
 
   // Check temp data expiry for non-registered users & update retention on login
   React.useEffect(() => {
-    checkTempDataExpiry().then(({ expired }) => {
-      if (expired) {
-        console.log('[Retention] Temporary onboarding data expired and cleaned up');
-      }
-    }).catch(() => {});
+    import('@/services/retentionNotificationService')
+      .then(({ checkTempDataExpiry }) => checkTempDataExpiry())
+      .then(({ expired }) => {
+        if (expired) {
+          console.log('[Retention] Temporary onboarding data expired and cleaned up');
+        }
+      })
+      .catch(() => {});
   }, []);
 
   // Check if favorite terrains are active and send push notification
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      checkFavoriteTerrainActivity().then(({ activeTerrains, notificationSent }) => {
-        if (activeTerrains.length > 0) {
-          console.log(`[TerrainActivity] ${activeTerrains.length} favorite terrain(s) active, push sent: ${notificationSent}`);
-        }
-      }).catch(() => {});
-    }, 5000); // Delay 5s after app mount
+      import('@/services/terrainActivityNotificationService')
+        .then(({ checkFavoriteTerrainActivity }) => checkFavoriteTerrainActivity())
+        .then(({ activeTerrains, notificationSent }) => {
+          if (activeTerrains.length > 0) {
+            console.log(`[TerrainActivity] ${activeTerrains.length} favorite terrain(s) active, push sent: ${notificationSent}`);
+          }
+        })
+        .catch(() => {});
+    }, 5000);
     return () => clearTimeout(timer);
   }, []);
 
   // Check team formation deadline reminders
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      checkTeamDeadlineReminders().catch(() => {});
-    }, 8000); // Delay 8s after mount
+      import('@/services/teamInvitationService')
+        .then(({ checkTeamDeadlineReminders }) => checkTeamDeadlineReminders())
+        .catch(() => {});
+    }, 8000);
     return () => clearTimeout(timer);
   }, []);
 
   // Register background proximity check task
   React.useEffect(() => {
     const timer = setTimeout(() => {
-      try {
-        registerBackgroundProximityTask().catch(() => {});
-      } catch (e) {
-        console.log('[Layout] Background proximity registration skipped:', e);
-      }
-    }, 10000); // Delay 10s after mount
+      import('@/services/backgroundProximityService')
+        .then(({ registerBackgroundProximityTask }) => registerBackgroundProximityTask())
+        .catch((e) => {
+          console.log('[Layout] Background proximity registration skipped:', e);
+        });
+    }, 10000);
     return () => clearTimeout(timer);
-  }, []);
-
-  // Handle deep links for event QR codes (?event=CODE)
-  React.useEffect(() => {
-    const handleDeepLinkUrl = async (url: string) => {
-      if (!url) return;
-      const eventMatch = url.match(/[?&]event=([A-Z0-9-]+)/i);
-      if (eventMatch) {
-        const code = eventMatch[1].toUpperCase();
-        setTimeout(async () => {
-          try {
-            const { event } = await findEventByCode(code);
-            if (event) {
-              router.push(`/sponsored-event/${event.id}` as any);
-            } else {
-              router.push({ pathname: '/sponsored-event/list', params: { joinCode: code } } as any);
-            }
-          } catch {
-            router.push({ pathname: '/sponsored-event/list', params: { joinCode: code } } as any);
-          }
-        }, 500);
-      }
-    };
-
-    Linking.getInitialURL().then(url => {
-      if (url) handleDeepLinkUrl(url);
-    }).catch(() => {});
-
-    const sub = Linking.addEventListener('url', ({ url }) => handleDeepLinkUrl(url));
-    return () => sub.remove();
   }, []);
 
   // Navigate to match-invitations when user taps a share request notification
   React.useEffect(() => {
-    const sub = addNotificationResponseListener((response: any) => {
+    let remove: (() => void) | undefined;
+    let cancelled = false;
+    import('@/services/notificationService').then(({ addNotificationResponseListener }) => {
+      if (cancelled) return;
+      const sub = addNotificationResponseListener((response: any) => {
       const data = response?.notification?.request?.content?.data;
       if (!data?.type) return;
       // Small delay to ensure navigation stack is ready
@@ -318,7 +304,12 @@ function LayoutInner() {
         }
       }, 300);
     });
-    return () => sub.remove();
+      remove = () => sub.remove();
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+      remove?.();
+    };
   }, []);
   // Show ban screen if user is banned
   if (banInfo?.isBanned) {
@@ -597,6 +588,20 @@ function LayoutInner() {
                   presentation: 'card',
                   animation: 'slide_from_right',
                 }} 
+              />
+              <Stack.Screen 
+                name="terms-of-service" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen
+                name="download"
+                options={{
+                  headerShown: false,
+                  animation: 'fade',
+                }}
               />
               <Stack.Screen 
                 name="terms" 

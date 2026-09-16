@@ -16,11 +16,14 @@ import { useAuth, useAlert } from '@/template';
 import { getSupabaseClient } from '@/template';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useAppActions } from '@/contexts/AppContext';
 import { clearTempDataExpiry, updateRetentionForRegisteredUser } from '@/services/retentionNotificationService';
+import { enableSelfPlayerPublicProfile } from '@/services/publicItemsService';
 
 export default function ConsentScreen() {
   const { user } = useAuth();
   const { showAlert } = useAlert();
+  const { setItemPublic } = useAppActions();
   const { t } = useLanguage();
   const supabase = getSupabaseClient();
 
@@ -32,7 +35,7 @@ export default function ConsentScreen() {
 
   const openTerms = () => {
     Haptics.selectionAsync();
-    router.push('/terms');
+    router.push('/terms-of-service');
   };
 
   const openPrivacy = () => {
@@ -54,6 +57,13 @@ export default function ConsentScreen() {
         .eq('id', user.id);
 
       if (error) throw error;
+
+      const { playerId, error: publicError } = await enableSelfPlayerPublicProfile(user.id);
+      if (publicError) {
+        console.log('Consent: could not enable public profile:', publicError);
+      } else if (playerId) {
+        setItemPublic('players', playerId, true);
+      }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
 
@@ -127,7 +137,7 @@ export default function ConsentScreen() {
           </View>
         </Animated.View>
 
-        {/* Checkboxes — links open in-app screens (app/terms.tsx, app/privacy-policy.tsx) */}
+        {/* Checkboxes — links open in-app screens (app/terms-of-service.tsx, app/privacy-policy.tsx) */}
         <Animated.View entering={FadeInDown.duration(400).delay(200)} style={styles.checkboxSection}>
           <View style={styles.legalCard}>
             <Pressable

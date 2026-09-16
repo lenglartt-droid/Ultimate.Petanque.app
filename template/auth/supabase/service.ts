@@ -1,11 +1,13 @@
 // @ts-nocheck
 import { AuthUser, SendOTPOptions, SignUpResult, GoogleSignInResult } from '../types';
-import { safeSupabaseOperation, getSharedSupabaseClient } from '../../core/client';
+import { safeSupabaseOperation, getSharedSupabaseClient, setGoogleOnlySupabaseBypass } from '../../core/client';
 import { configManager } from '../../core/config';
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
 import * as AuthSession from 'expo-auth-session';
+import * as QueryParams from 'expo-auth-session/build/QueryParams';
 import * as WebBrowser from 'expo-web-browser';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // Ensure Web platform correctly handles auth callbacks
 WebBrowser.maybeCompleteAuthSession();
@@ -13,7 +15,7 @@ WebBrowser.maybeCompleteAuthSession();
 /** Redirect target for email magic links / PKCE (must be listed in Supabase → Auth → URL configuration). */
 export function getAuthEmailRedirectUri(): string {
   return AuthSession.makeRedirectUri({
-    scheme: 'onspaceapp',
+    scheme: 'ultimatepetanque',
     path: 'auth',
   });
 }
@@ -26,6 +28,134 @@ export const GOOGLE_DISALLOWED_USER_AGENT = '__GOOGLE_DISALLOWED_USER_AGENT__';
 
 /** Google Sign-In is not supported inside the Expo Go app shell. */
 export const GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD = '__GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD__';
+
+/** Native Google Sign-In package is missing from the installed build. */
+export const GOOGLE_NATIVE_SIGNIN_PACKAGE_MISSING = '__GOOGLE_NATIVE_SIGNIN_PACKAGE_MISSING__';
+
+/** Set while the system-browser Google OAuth flow is waiting for a deep-link callback. */
+export const GOOGLE_OAUTH_IN_PROGRESS_KEY = '@ultimatepetanque_google_oauth_in_progress';
+
+/** Deep-link URL captured by app/auth.tsx when Custom Tabs reports dismiss on Android. */
+export const GOOGLE_OAUTH_CALLBACK_URL_KEY = '@ultimatepetanque_google_oauth_callback_url';
+
+const GOOGLE_PREFER_OAUTH_KEY = '@ultimatepetanque_google_prefer_oauth';
+const GOOGLE_ONLY_USER_KEY = '@ultimatepetanque_google_only_user';
+const GOOGLE_ONLY_TOKEN_KEY = '@ultimatepetanque_google_only_tokens';
+const GOOGLE_ONLY_CREATED_AT_KEY = '@ultimatepetanque_google_only_created_at';
+const googleAuthSubscribers = new Set<(user: AuthUser | null) => void>();
+let googleNativeConfigured = false;
+
+function getGoogleNativeSignInModule(): any | null {
+  try {
+    return require('@react-native-google-signin/google-signin');
+  } catch {
+    return null;
+  }
+}
+
+function cleanEnvValue(value: unknown): string {
+  return typeof value === 'string' && value.trim() ? value.trim() : '';
+}
+
+function getExpoExtraValue(...keys: string[]): string {
+  const extra = Constants.expoConfig?.extra || {};
+
+  for (const key of keys) {
+    const directExtra = cleanEnvValue(extra[key]);
+    if (directExtra) return directExtra;
+
+    const publiclessExtra = cleanEnvValue(extra[key.replace('EXPO_PUBLIC_', '')]);
+    if (publiclessExtra) return publiclessExtra;
+  }
+
+  return '';
+}
+
+function getGoogleWebClientId(): string {
+  // Expo only inlines EXPO_PUBLIC_* values when they are referenced with
+  // static dot notation. Do not read this with process.env[key].
+  return (
+    cleanEnvValue(process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) ||
+    getExpoExtraValue('EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID', 'GOOGLE_WEB_CLIENT_ID', 'googleWebClientId')
+  );
+}
+
+function getGoogleIosClientId(): string {
+  return (
+    cleanEnvValue(process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID) ||
+    getExpoExtraValue('EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID', 'GOOGLE_IOS_CLIENT_ID', 'googleIosClientId')
+  );
+}
+
+function getGoogleAndroidClientId(): string {
+  return (
+    cleanEnvValue(process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID) ||
+    getExpoExtraValue('EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID', 'GOOGLE_ANDROID_CLIENT_ID', 'googleAndroidClientId')
+  );
+}
+
+function configureNativeGoogleSignIn(GoogleSignin: any) {
+  if (googleNativeConfigured) return;
+
+  const webClientId = getGoogleWebClientId();
+  const iosClientId = getGoogleIosClientId();
+
+  GoogleSignin.configure({
+    webClientId,
+    iosClientId: iosClientId || undefined,
+    offlineAccess: false,
+    forceCodeForRefreshToken: false,
+    profileImageSize: 120,
+    scopes: ['profile', 'email'],
+  });
+
+  googleNativeConfigured = true;
+}
+
+function extractGoogleIdToken(result: any, tokens?: any): string | null {
+  return (
+    result?.idToken ||
+    result?.data?.idToken ||
+    tokens?.idToken ||
+    null
+  );
+}
+
+function isGoogleCancelError(error: any): boolean {
+  const code = String(error?.code || error?.message || '').toLowerCase();
+  return (
+    code.includes('sign_in_cancelled') ||
+    code.includes('cancelled') ||
+    code.includes('canceled') ||
+    code.includes('user cancelled')
+  );
+}
+
+async function readStoredGoogleOnlyUser(): Promise<AuthUser | null> {
+  try {
+    const raw = await AsyncStorage.getItem(GOOGLE_ONLY_USER_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed?.id) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function clearStoredGoogleOnlyUser() {
+  await AsyncStorage.multiRemove([GOOGLE_ONLY_USER_KEY, GOOGLE_ONLY_TOKEN_KEY, GOOGLE_ONLY_CREATED_AT_KEY]);
+}
+
+function notifyGoogleAuthSubscribers(user: AuthUser | null) {
+  googleAuthSubscribers.forEach((callback) => {
+    try {
+      callback(user);
+    } catch (error) {
+      console.warn('[Template:AuthService] Auth subscriber failed:', error);
+    }
+  });
+}
 
 function isExpoGoClient(): boolean {
   return Constants.appOwnership === 'expo';
@@ -58,6 +188,55 @@ function mapGoogleOAuthError(message: string): string {
     return GOOGLE_DISALLOWED_USER_AGENT;
   }
   return message;
+}
+
+function isGoogleIdTokenAudienceError(message: string): boolean {
+  const m = (message || '').toLowerCase();
+  return m.includes('unacceptable audience') || m.includes('audience in id_token');
+}
+
+function extractOAuthCode(url: string): string | null {
+  try {
+    const { params } = QueryParams.getQueryParams(url);
+    if (typeof params.code === 'string' && params.code.trim()) return params.code.trim();
+  } catch {
+    // fall through
+  }
+  try {
+    return new URL(url).searchParams.get('code');
+  } catch {
+    return null;
+  }
+}
+
+function extractOAuthTokens(url: string): { accessToken: string; refreshToken: string } | null {
+  try {
+    const { params } = QueryParams.getQueryParams(url);
+    const accessToken = typeof params.access_token === 'string' ? params.access_token : null;
+    const refreshToken = typeof params.refresh_token === 'string' ? params.refresh_token : null;
+    if (accessToken && refreshToken) return { accessToken, refreshToken };
+  } catch {
+    // fall through
+  }
+  return null;
+}
+
+async function discardLeftoverGoogleOnlySession() {
+  const leftover = await readStoredGoogleOnlyUser();
+  if (!leftover) {
+    setGoogleOnlySupabaseBypass(false);
+    return;
+  }
+
+  try {
+    const nativeGoogle = getGoogleNativeSignInModule();
+    await nativeGoogle?.GoogleSignin?.signOut?.();
+  } catch {
+    // Best-effort native Google sign-out.
+  }
+
+  await clearStoredGoogleOnlyUser();
+  setGoogleOnlySupabaseBypass(false);
 }
 
 // Visibility change listener related variables
@@ -149,6 +328,10 @@ export class AuthService {
 
   async getCurrentUser(): Promise<AuthUser | null> {
     try {
+      // Older builds stored a local-only Google user that never linked to Supabase.
+      // Discard that so the real Google/email account can sign in.
+      await discardLeftoverGoogleOnlySession();
+
       const session = await safeSupabaseOperation(async (client) => {
         const { data: { session }, error } = await withTimeout(
           client.auth.getSession(),
@@ -162,12 +345,9 @@ export class AuthService {
       
       if (!session?.user) return null;
 
-      // Map session.user to AuthUser (unified for all auth methods)
       return this.mapSessionToAuthUser(session.user);
 
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown getCurrentUser error';
-      
       if (isAuthError(error)) {
         return null;
       }
@@ -192,6 +372,7 @@ export class AuthService {
   }
 
   async sendOTP(email: string, options: SendOTPOptions = {}) {
+    await discardLeftoverGoogleOnlySession();
     try {
       const { shouldCreateUser = true, includeMagicLinkRedirect = false } = options;
       // Numeric OTP: do not pass emailRedirectTo (see Supabase passwordless OTP docs).
@@ -241,6 +422,7 @@ export class AuthService {
   }
 
   async verifyOTPAndLogin(email: string, otp: string, options?: { password?: string }) {
+    await discardLeftoverGoogleOnlySession();
     try {
       const token = otp.replace(/\D/g, '');
       const emailNormalized = email.trim().toLowerCase();
@@ -387,6 +569,7 @@ export class AuthService {
   }
 
   async signUpWithPassword(email: string, password: string, metadata: Record<string, any> = {}): Promise<SignUpResult> {
+    await discardLeftoverGoogleOnlySession();
     try {
       return await safeSupabaseOperation(async (client) => {
         const { data, error } = await withTimeout(
@@ -440,6 +623,7 @@ export class AuthService {
   }
 
   async signInWithPassword(email: string, password: string) {
+    await discardLeftoverGoogleOnlySession();
     try {
       const emailNormalized = email.trim().toLowerCase();
 
@@ -490,6 +674,17 @@ export class AuthService {
 
   async logout() {
     try {
+      try {
+        const nativeGoogle = getGoogleNativeSignInModule();
+        await nativeGoogle?.GoogleSignin?.signOut?.();
+      } catch {
+        // Best-effort native Google sign-out.
+      }
+
+      await clearStoredGoogleOnlyUser();
+      setGoogleOnlySupabaseBypass(false);
+      notifyGoogleAuthSubscribers(null);
+
       return await safeSupabaseOperation(async (client) => {
         const { error } = await withTimeout(
           client.auth.signOut(),
@@ -543,165 +738,233 @@ export class AuthService {
 
   async signInWithGoogle(): Promise<GoogleSignInResult> {
     try {
-      if (Platform.OS !== 'web' && isExpoGoClient()) {
+      await discardLeftoverGoogleOnlySession();
+
+      if (Platform.OS === 'web') {
+        return await this.completeGoogleOAuthInBrowser();
+      }
+
+      if (isExpoGoClient()) {
         return { error: GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD };
       }
 
-      // Generate cross-platform redirect URL
-      const redirectUrl = AuthSession.makeRedirectUri({
-        scheme: 'onspaceapp',
-        path: 'auth',
-        preferLocalhost: false,
-      });
+      const preferOAuth = await AsyncStorage.getItem(GOOGLE_PREFER_OAUTH_KEY);
+      if (preferOAuth === '1') {
+        return await this.completeGoogleOAuthInBrowser();
+      }
 
-      // Step 1: Get OAuth URL from Supabase
+      const nativeGoogle = getGoogleNativeSignInModule();
+      const GoogleSignin = nativeGoogle?.GoogleSignin;
+      const statusCodes = nativeGoogle?.statusCodes;
+
+      if (!GoogleSignin) {
+        return await this.completeGoogleOAuthInBrowser();
+      }
+
+      const webClientId = getGoogleWebClientId();
+      if (!webClientId) {
+        return {
+          error: 'Missing EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID. Create a Google OAuth Web client and add its client ID to .env.'
+        };
+      }
+
+      if (Platform.OS === 'android' && !getGoogleAndroidClientId()) {
+        console.warn('[Template:AuthService] EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID is missing. Android sign-in may fail if the Google Cloud Android OAuth client is not configured for this package/SHA-1.');
+      }
+
+      configureNativeGoogleSignIn(GoogleSignin);
+
+      if (Platform.OS === 'android' && typeof GoogleSignin.hasPlayServices === 'function') {
+        await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      }
+
+      // Do not timeout the account picker — users often take longer than 10s.
+      const googleResult = await GoogleSignin.signIn();
+
+      if (googleResult?.type === 'cancelled' || googleResult?.type === 'cancel') {
+        return { error: 'User cancelled login' };
+      }
+
+      let tokens: any = null;
+      try {
+        tokens = await GoogleSignin.getTokens?.();
+      } catch {
+        tokens = null;
+      }
+
+      const idToken = extractGoogleIdToken(googleResult, tokens);
+      if (!idToken) {
+        return { error: 'Google login succeeded but no ID token was returned. Check that EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID is the Web client ID.' };
+      }
+
+      const accessToken = tokens?.accessToken || googleResult?.data?.accessToken || googleResult?.accessToken || null;
       const { data, error } = await withTimeout(
-        this.supabase.auth.signInWithOAuth({
+        this.supabase.auth.signInWithIdToken({
           provider: 'google',
-          options: {
-            redirectTo: redirectUrl,
-            queryParams: { 
-              access_type: 'offline', 
-              prompt: 'consent' 
-            },
-            skipBrowserRedirect: Platform.OS !== 'web'
-          }
+          token: idToken,
+          access_token: accessToken || undefined,
         }),
-        TIMEOUT_CONFIG.AUTH_OPERATIONS,
-        'GoogleOAuth'
+        TIMEOUT_CONFIG.USER_UPDATE,
+        'GoogleIdToken'
       );
 
       if (error) {
-        return { error: `OAuth init failed: ${error.message}` };
-      }
-
-      if (!data?.url) {
-        return { error: 'Failed to generate OAuth URL' };
-      }
-
-      // Web platform: Supabase handles redirect automatically
-      if (Platform.OS === 'web') {
-        return { error: null };
-      }
-
-      // Mobile: system browser / Chrome Custom Tabs (required by Google — not an in-app WebView).
-      if (Platform.OS === 'android') {
-        try {
-          await WebBrowser.warmUpAsync();
-        } catch {
-          // non-fatal
-        }
-      }
-
-      let result: WebBrowser.WebBrowserAuthSessionResult;
-      try {
-        result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl, {
-          preferEphemeralSession: false,
-          showInRecents: true,
-        });
-      } finally {
-        if (Platform.OS === 'android') {
+        // Native ID tokens are minted for EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID.
+        // If that is not the Web client ID stored in Supabase → Auth → Google,
+        // GoTrue rejects the token. Complete login through Supabase OAuth instead.
+        if (isGoogleIdTokenAudienceError(error.message)) {
+          await AsyncStorage.setItem(GOOGLE_PREFER_OAUTH_KEY, '1');
           try {
-            await WebBrowser.coolDownAsync();
+            await GoogleSignin.signOut?.();
           } catch {
-            // non-fatal
+            // Continue to the browser fallback.
           }
+          return await this.completeGoogleOAuthInBrowser();
         }
+        return { error: mapGoogleOAuthError(error.message) };
+      }
+      if (!data?.user) {
+        return { error: 'Google login succeeded but no session was created.' };
       }
 
-      // Step 3: Handle callback
-      if (result.type === 'success') {
-        const url = result.url;
-        
-        try {
-          const callbackError = parseOAuthCallbackError(url);
-          if (callbackError) {
-            return { error: mapGoogleOAuthError(callbackError) };
-          }
+      notifyGoogleAuthSubscribers(this.mapSessionToAuthUser(data.user));
+      await AsyncStorage.removeItem(GOOGLE_PREFER_OAUTH_KEY);
+      return { error: null };
+    } catch (error: any) {
+      const nativeGoogle = getGoogleNativeSignInModule();
+      const statusCodes = nativeGoogle?.statusCodes;
 
-          const params = new URL(url).searchParams;
-          const code = params.get('code');
-          
-          if (!code) {
-            const error = params.get('error');
-            const errorDescription = params.get('error_description');
-            return { 
-              error: mapGoogleOAuthError(errorDescription || error || 'No authorization code received')
-            };
-          }
-
-          // Exchange code for session - this triggers SIGNED_IN event
-          const { error: exchangeError } = await withTimeout(
-            this.supabase.auth.exchangeCodeForSession(code),
-            TIMEOUT_CONFIG.AUTH_OPERATIONS,
-            'ExchangeCode'
-          );
-
-          if (exchangeError) {
-            return { 
-              error: `Session exchange failed: ${exchangeError.message}`
-            };
-          }
-
-          // CRITICAL: Don't poll and wait here!
-          // exchangeCodeForSession will trigger onAuthStateChange(SIGNED_IN)
-          // Just verify session exists and return immediately
-          const { data: sessionData } = await this.supabase.auth.getSession();
-          if (sessionData.session) {
-            // Session created successfully, AuthContext will update via onAuthStateChange
-            return { error: null };
-          }
-
-          // If no session yet, wait briefly for it to settle
-          await new Promise(resolve => setTimeout(resolve, 500));
-          const { data: retrySessionData } = await this.supabase.auth.getSession();
-          if (retrySessionData.session) {
-            return { error: null };
-          }
-
-          // Last resort: refresh to trigger state change
-          await this.supabase.auth.refreshSession();
-          return { error: null };
-        } catch (urlError) {
-          const errorMsg = urlError instanceof Error ? urlError.message : 'Unknown error';
-          return { 
-            error: `Failed to parse callback: ${errorMsg}`
-          };
-        }
-      } else if (result.type === 'cancel') {
+      if (isGoogleCancelError(error) || error?.code === statusCodes?.SIGN_IN_CANCELLED) {
         return { error: 'User cancelled login' };
-      } else if (result.type === 'dismiss') {
-        return { error: 'Browser dismissed' };
-      } else if (result.type === 'locked') {
-        return { error: 'Browser is locked' };
       }
 
-      return { 
-        error: `Unknown result: ${result.type}`
-      };
+      if (error?.code === statusCodes?.IN_PROGRESS) {
+        return { error: 'Google sign-in is already in progress' };
+      }
 
-    } catch (error) {
+      if (error?.code === statusCodes?.PLAY_SERVICES_NOT_AVAILABLE) {
+        return { error: 'Google Play Services is not available or needs an update' };
+      }
+
       const errorMessage = error instanceof Error ? error.message : 'Unknown Google login error';
-      
+      if (isGoogleIdTokenAudienceError(errorMessage)) {
+        await AsyncStorage.setItem(GOOGLE_PREFER_OAUTH_KEY, '1');
+        return await this.completeGoogleOAuthInBrowser();
+      }
       if (errorMessage.includes('timeout')) {
         return { error: 'Google login timeout, please retry' };
       }
-      
-      return { 
-        error: mapGoogleOAuthError(errorMessage)
-      };
+
+      return { error: mapGoogleOAuthError(errorMessage) };
+    }
+  }
+
+  private async completeGoogleOAuthInBrowser(): Promise<GoogleSignInResult> {
+    const redirectTo = getAuthEmailRedirectUri();
+    await AsyncStorage.setItem(GOOGLE_OAUTH_IN_PROGRESS_KEY, '1');
+    await AsyncStorage.removeItem(GOOGLE_OAUTH_CALLBACK_URL_KEY);
+
+    try {
+      const { data, error } = await this.supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo,
+          skipBrowserRedirect: true,
+          queryParams: {
+            access_type: 'offline',
+            prompt: 'select_account',
+          },
+        },
+      });
+
+      if (error) {
+        return { error: mapGoogleOAuthError(error.message) };
+      }
+      if (!data?.url) {
+        return { error: 'Failed to start Google login' };
+      }
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo, {
+        showInRecents: true,
+      });
+
+      let callbackUrl: string | null = null;
+      if (result.type === 'success' && result.url) {
+        callbackUrl = result.url;
+      } else {
+        callbackUrl = await AsyncStorage.getItem(GOOGLE_OAUTH_CALLBACK_URL_KEY);
+      }
+
+      if (!callbackUrl) {
+        if (result.type === 'cancel' || result.type === 'dismiss') {
+          return { error: 'User cancelled login' };
+        }
+        return { error: 'Google login did not complete' };
+      }
+
+      const parsedError = parseOAuthCallbackError(callbackUrl);
+      if (parsedError) {
+        return { error: parsedError };
+      }
+
+      const code = extractOAuthCode(callbackUrl);
+      if (code) {
+        const { error: exchangeError } = await withTimeout(
+          this.supabase.auth.exchangeCodeForSession(code),
+          TIMEOUT_CONFIG.USER_UPDATE,
+          'GoogleExchangeCode'
+        );
+        if (exchangeError) {
+          return { error: mapGoogleOAuthError(exchangeError.message) };
+        }
+        await this.publishCurrentSupabaseUser();
+        return { error: null };
+      }
+
+      const tokens = extractOAuthTokens(callbackUrl);
+      if (tokens) {
+        const { error: sessionError } = await withTimeout(
+          this.supabase.auth.setSession({
+            access_token: tokens.accessToken,
+            refresh_token: tokens.refreshToken,
+          }),
+          TIMEOUT_CONFIG.USER_UPDATE,
+          'GoogleSetSession'
+        );
+        if (sessionError) {
+          return { error: mapGoogleOAuthError(sessionError.message) };
+        }
+        await this.publishCurrentSupabaseUser();
+        return { error: null };
+      }
+
+      return { error: 'Google login missing authorization code' };
+    } finally {
+      await AsyncStorage.multiRemove([GOOGLE_OAUTH_IN_PROGRESS_KEY, GOOGLE_OAUTH_CALLBACK_URL_KEY]);
+    }
+  }
+
+  private async publishCurrentSupabaseUser() {
+    try {
+      const { data: { session } } = await this.supabase.auth.getSession();
+      notifyGoogleAuthSubscribers(session?.user ? this.mapSessionToAuthUser(session.user) : null);
+    } catch (error) {
+      console.warn('[Template:AuthService] Could not publish Google session:', error);
     }
   }
 
   onAuthStateChange(callback: (user: AuthUser | null) => void) {
+    googleAuthSubscribers.add(callback);
+
+    let supabaseSubscription: any = null;
+
     try {
       const { data: { subscription } } = this.supabase.auth.onAuthStateChange(
         async (event, session) => {
-          // Use enhanced event filtering to prevent deadlock
           if (shouldIgnoreAuthEvent(event)) {
             return;
           }
-          
+
           if (session?.user) {
             try {
               const authUser = this.mapSessionToAuthUser(session.user);
@@ -716,11 +979,17 @@ export class AuthService {
         }
       );
 
-      return subscription;
+      supabaseSubscription = subscription;
     } catch (error) {
-      console.error('[Template:AuthService] Failed to set up auth state listener:', error);
-      throw error;
+      console.warn('[Template:AuthService] Supabase auth listener unavailable:', error);
     }
+
+    return {
+      unsubscribe: () => {
+        googleAuthSubscribers.delete(callback);
+        supabaseSubscription?.unsubscribe?.();
+      },
+    };
   }
 }
 

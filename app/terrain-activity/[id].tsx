@@ -1,7 +1,7 @@
 /**
  * Terrain Activity History
  * 
- * Monthly calendar view showing activity intensity per day (matches, meetups, tournaments).
+ * Monthly calendar view showing activity intensity per day (matches, meetups, tournaments, challenges).
  * Tapping a day shows detail for that day.
  */
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
@@ -28,6 +28,7 @@ interface DayActivity {
   matches: { id: string; date: string; teamANames: string[]; teamBNames: string[]; scoreA: number; scoreB: number; winner: string }[];
   meetups: { id: string; title: string; date: string; status: string }[];
   tournaments: { id: string; name: string; date: string; status: string }[];
+  challenges: { id: string; type: string; date: string; mode?: string; title?: string; totalShots?: number; totalPoints?: number; maxPoints?: number; isSponsoredEvent?: boolean; startTime?: string | null; endTime?: string | null }[];
   total: number;
 }
 
@@ -54,18 +55,119 @@ function getIntensityBg(count: number, maxCount: number): string {
   return '#EFF6FF';
 }
 
+function toDateKey(value: any): string | null {
+  if (!value) return null;
+  if (typeof value === 'string') {
+    const direct = value.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (direct) return direct[1];
+  }
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+function pickActivityDateKey(...values: any[]): string | null {
+  for (const value of values) {
+    const key = toDateKey(value);
+    if (key) return key;
+  }
+  return null;
+}
+
+
+function dateKeyToLocalNoon(key: string): Date | null {
+  const m = key.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return null;
+  return new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), 12, 0, 0, 0);
+}
+
+function isNextDayKey(dateKey: string | null, baseKey: string | null): boolean {
+  if (!dateKey || !baseKey) return false;
+  const d = dateKeyToLocalNoon(dateKey);
+  const b = dateKeyToLocalNoon(baseKey);
+  if (!d || !b) return false;
+  b.setDate(b.getDate() + 1);
+  return d.getFullYear() === b.getFullYear() && d.getMonth() === b.getMonth() && d.getDate() === b.getDate();
+}
+
+function getRegularChallengeActivityDateKey(c: any): string | null {
+  const explicitKey = pickActivityDateKey(c.activityDate, c.activity_date);
+  const createdKey = pickActivityDateKey(c.createdAt, c.created_at);
+  const updatedKey = pickActivityDateKey(c.updatedAt, c.updated_at);
+  const scheduledKey = pickActivityDateKey(c.date, c.eventDate, c.event_date);
+
+  if (explicitKey) return explicitKey;
+  if (isNextDayKey(scheduledKey, createdKey)) return createdKey;
+  if (isNextDayKey(scheduledKey, updatedKey)) return updatedKey;
+  return scheduledKey || createdKey || updatedKey;
+}
+
+function getSponsoredChallengeActivityDateKey(c: any): string | null {
+  // Prefer the precise scheduled start. event_date can be one day off if it was
+  // produced with toISOString().split('T')[0] from a native date picker.
+  return pickActivityDateKey(c.startTime, c.start_time, c.eventDate, c.event_date, c.createdAt, c.created_at);
+}
+
+function combineDateAndTime(baseDate?: string | null, timeValue?: string | null): Date | null {
+  if (!baseDate && !timeValue) return null;
+  if (timeValue) {
+    const direct = new Date(timeValue);
+    if (!Number.isNaN(direct.getTime()) && String(timeValue).includes('T')) return direct;
+
+    const match = String(timeValue).match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?/);
+    if (match && baseDate) {
+      const dateKey = toDateKey(baseDate);
+      if (!dateKey) return null;
+      const d = new Date(`${dateKey}T12:00:00`);
+      d.setHours(Number(match[1]), Number(match[2]), Number(match[3] || 0), 0);
+      return d;
+    }
+  }
+
+  const dateKey = toDateKey(baseDate || timeValue);
+  if (!dateKey) return null;
+  return new Date(`${dateKey}T12:00:00`);
+}
+
+function formatActivityTime(date?: string | null, startTime?: string | null, fr = false): string {
+  const d = combineDateAndTime(date, startTime || date);
+  if (!d) return '';
+  return d.toLocaleTimeString(fr ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+}
+
+function isSameViewedMonth(dateKey: string | null, year: number, month: number): boolean {
+  if (!dateKey) return false;
+  const [y, m] = dateKey.split('-').map(Number);
+  return y === year && m === month + 1;
+}
+
+function getChallengeLabel(type?: string, fr = false): string {
+  switch (type) {
+    case '10_tirs':
+      return fr ? '10 tirs' : '10 shots';
+    case '10_tirs_sautee':
+      return fr ? '10 tirs sautés' : '10 jump shots';
+    case 'precision':
+      return fr ? 'Précision' : 'Precision';
+    default:
+      return fr ? 'Défi' : 'Challenge';
+  }
+}
+
 export default function TerrainActivityScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { language } = useLanguage();
   const fr = language === 'fr';
-  const { matches: allMatches, tournaments: allTournaments, terrains } = useAppData();
+  const { matches: allMatches, tournaments: allTournaments, challenges: allChallenges, terrains } = useAppData();
 
   const terrain = terrains.find(t => t.id === id);
   const [loading, setLoading] = useState(true);
   const [monthOffset, setMonthOffset] = useState(0); // 0 = current month, -1 = prev, etc.
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [meetupsData, setMeetupsData] = useState<{ terrain_id: string; date: string; title: string; status: string; id: string }[]>([]);
+  const [terrainChallengesData, setTerrainChallengesData] = useState<any[]>([]);
+  const [sponsoredChallengesData, setSponsoredChallengesData] = useState<any[]>([]);
 
   const now = new Date();
   const viewYear = new Date(now.getFullYear(), now.getMonth() + monthOffset, 1).getFullYear();
@@ -74,21 +176,38 @@ export default function TerrainActivityScreen() {
   const monthNames = fr ? MONTH_NAMES_FR : MONTH_NAMES_EN;
   const dayNames = fr ? DAY_NAMES_FR : DAY_NAMES_EN;
 
-  // Load meetups from Supabase
+  // Load meetups, regular terrain challenges, and ambassador/sponsored challenges from Supabase.
+  // We query regular challenges directly here because AppContext can be stale after
+  // creating a challenge, and the DB column is terrain_id while in-app objects may
+  // be terrainId. This makes the Activity History board reflect the selected court
+  // immediately and reliably.
   useEffect(() => {
     if (!id) return;
-    const loadMeetups = async () => {
+    const loadRemoteActivity = async () => {
       try {
         const supabase = getSupabaseClient();
-        const { data } = await supabase
-          .from('terrain_meetups')
-          .select('id, terrain_id, date, title, status')
-          .eq('terrain_id', id);
-        setMeetupsData(data || []);
+        const [{ data: meetups }, { data: terrainChallenges }, { data: sponsoredChallenges }] = await Promise.all([
+          supabase
+            .from('terrain_meetups')
+            .select('id, terrain_id, date, title, status')
+            .eq('terrain_id', id),
+          supabase
+            .from('challenges')
+            .select('*')
+            .eq('terrain_id', id),
+          supabase
+            .from('sponsored_events')
+            .select('id, title, challenge_type, challenge_mode, event_date, start_time, end_time, terrain_id, status, created_at')
+            .eq('terrain_id', id)
+            .neq('status', 'cancelled'),
+        ]);
+        setMeetupsData(meetups || []);
+        setTerrainChallengesData(terrainChallenges || []);
+        setSponsoredChallengesData(sponsoredChallenges || []);
       } catch { /* silent */ }
       setLoading(false);
     };
-    loadMeetups();
+    loadRemoteActivity();
   }, [id]);
 
   // Build day activity map for the viewed month
@@ -100,15 +219,14 @@ export default function TerrainActivityScreen() {
     // Initialize all days
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const dateStr = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
-      map.set(dateStr, { date: dateStr, matches: [], meetups: [], tournaments: [], total: 0 });
+      map.set(dateStr, { date: dateStr, matches: [], meetups: [], tournaments: [], challenges: [], total: 0 });
     }
 
     // Matches
     allMatches.filter(m => m.terrainId === id).forEach(m => {
-      const mDate = new Date(m.date);
-      if (mDate.getFullYear() === viewYear && mDate.getMonth() === viewMonth) {
-        const dateStr = mDate.toISOString().slice(0, 10);
-        const entry = map.get(dateStr);
+      const dateStr = toDateKey(m.date);
+      if (isSameViewedMonth(dateStr, viewYear, viewMonth)) {
+        const entry = map.get(dateStr!);
         if (entry) {
           entry.matches.push({
             id: m.id,
@@ -126,10 +244,9 @@ export default function TerrainActivityScreen() {
 
     // Meetups
     meetupsData.forEach(mt => {
-      const mtDate = new Date(mt.date);
-      if (mtDate.getFullYear() === viewYear && mtDate.getMonth() === viewMonth) {
-        const dateStr = mtDate.toISOString().slice(0, 10);
-        const entry = map.get(dateStr);
+      const dateStr = toDateKey(mt.date);
+      if (isSameViewedMonth(dateStr, viewYear, viewMonth)) {
+        const entry = map.get(dateStr!);
         if (entry) {
           entry.meetups.push({ id: mt.id, title: mt.title, date: mt.date, status: mt.status });
           entry.total++;
@@ -139,10 +256,9 @@ export default function TerrainActivityScreen() {
 
     // Tournaments
     allTournaments.filter(t => t.terrainId === id).forEach(t => {
-      const tDate = new Date(t.date);
-      if (tDate.getFullYear() === viewYear && tDate.getMonth() === viewMonth) {
-        const dateStr = t.date.slice(0, 10);
-        const entry = map.get(dateStr);
+      const dateStr = pickActivityDateKey((t as any).date, (t as any).eventDate, (t as any).event_date);
+      if (isSameViewedMonth(dateStr, viewYear, viewMonth)) {
+        const entry = map.get(dateStr!);
         if (entry) {
           entry.tournaments.push({ id: t.id, name: t.name, date: t.date, status: t.status });
           entry.total++;
@@ -150,8 +266,68 @@ export default function TerrainActivityScreen() {
       }
     });
 
+    // Challenges — count as terrain activity too.
+    // Prefer direct DB rows from this terrain, then merge AppContext rows. This
+    // avoids missing a freshly-created challenge before global app data refreshes.
+    const seenChallengeIds = new Set<string>();
+    const terrainChallengeRows = [
+      ...terrainChallengesData,
+      ...allChallenges.filter((c: any) => {
+        const linkedTerrainId = c.terrainId || c.terrain_id || c.courtId || c.court_id || c.terrain?.id;
+        return String(linkedTerrainId || '') === String(id);
+      }),
+    ];
+
+    terrainChallengeRows.forEach((c: any) => {
+      if (!c?.id) return;
+      const challengeId = String(c.id);
+      if (seenChallengeIds.has(challengeId)) return;
+      seenChallengeIds.add(challengeId);
+
+      const dateStr = getRegularChallengeActivityDateKey(c);
+
+      if (isSameViewedMonth(dateStr, viewYear, viewMonth)) {
+        const entry = map.get(dateStr!);
+        if (entry) {
+          entry.challenges.push({
+            id: c.id,
+            type: c.type || c.challenge_type || 'challenge',
+            date: dateStr!,
+            mode: c.mode || c.challenge_mode,
+            title: c.title || c.name || getChallengeLabel(c.type || c.challenge_type, fr),
+            totalShots: c.totalShots ?? c.total_shots,
+            totalPoints: c.totalPoints ?? c.total_points,
+            maxPoints: c.maxPoints ?? c.max_points,
+          });
+          entry.total++;
+        }
+      }
+    });
+
+    // Ambassador/sponsored challenges are stored in sponsored_events, not the
+    // regular challenges array, so they must be added separately.
+    sponsoredChallengesData.forEach((c: any) => {
+      const dateStr = getSponsoredChallengeActivityDateKey(c);
+      if (isSameViewedMonth(dateStr, viewYear, viewMonth)) {
+        const entry = map.get(dateStr!);
+        if (entry) {
+          entry.challenges.push({
+            id: c.id,
+            type: c.challenge_type || c.challengeType || 'challenge',
+            date: dateStr!,
+            startTime: c.start_time || c.startTime || null,
+            endTime: c.end_time || c.endTime || null,
+            mode: c.challenge_mode || c.challengeMode,
+            title: c.title,
+            isSponsoredEvent: true,
+          });
+          entry.total++;
+        }
+      }
+    });
+
     return map;
-  }, [id, allMatches, allTournaments, meetupsData, viewYear, viewMonth]);
+  }, [id, allMatches, allTournaments, allChallenges, meetupsData, terrainChallengesData, sponsoredChallengesData, viewYear, viewMonth, fr]);
 
   const maxDayCount = useMemo(() => {
     let max = 1;
@@ -164,14 +340,16 @@ export default function TerrainActivityScreen() {
     let totalMatches = 0;
     let totalMeetups = 0;
     let totalTournaments = 0;
+    let totalChallenges = 0;
     let activeDays = 0;
     dayActivityMap.forEach(v => {
       totalMatches += v.matches.length;
       totalMeetups += v.meetups.length;
       totalTournaments += v.tournaments.length;
+      totalChallenges += v.challenges.length;
       if (v.total > 0) activeDays++;
     });
-    return { totalMatches, totalMeetups, totalTournaments, activeDays };
+    return { totalMatches, totalMeetups, totalTournaments, totalChallenges, activeDays };
   }, [dayActivityMap]);
 
   // Calendar grid
@@ -244,6 +422,11 @@ export default function TerrainActivityScreen() {
               <Text style={[s.statValue, { color: '#F59E0B' }]}>{monthStats.totalTournaments}</Text>
               <Text style={s.statLabel}>{fr ? 'Tournois' : 'Tournaments'}</Text>
             </View>
+            <View style={[s.statCard, { borderColor: '#8B5CF620' }]}>
+              <MaterialIcons name="track-changes" size={18} color="#8B5CF6" />
+              <Text style={[s.statValue, { color: '#8B5CF6' }]}>{monthStats.totalChallenges}</Text>
+              <Text style={s.statLabel}>{fr ? 'Défis' : 'Challenges'}</Text>
+            </View>
             <View style={[s.statCard, { borderColor: '#7C3AED20' }]}>
               <MaterialIcons name="calendar-today" size={18} color="#7C3AED" />
               <Text style={[s.statValue, { color: '#7C3AED' }]}>{monthStats.activeDays}</Text>
@@ -315,6 +498,7 @@ export default function TerrainActivityScreen() {
                           {(dayData?.matches?.length || 0) > 0 ? <View style={[s.calendarDot, { backgroundColor: '#3B82F6' }]} /> : null}
                           {(dayData?.meetups?.length || 0) > 0 ? <View style={[s.calendarDot, { backgroundColor: '#10B981' }]} /> : null}
                           {(dayData?.tournaments?.length || 0) > 0 ? <View style={[s.calendarDot, { backgroundColor: '#F59E0B' }]} /> : null}
+                          {(dayData?.challenges?.length || 0) > 0 ? <View style={[s.calendarDot, { backgroundColor: '#8B5CF6' }]} /> : null}
                         </View>
                       ) : null}
                     </Pressable>
@@ -329,6 +513,7 @@ export default function TerrainActivityScreen() {
             <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: '#3B82F6' }]} /><Text style={s.legendText}>{fr ? 'Match' : 'Match'}</Text></View>
             <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: '#10B981' }]} /><Text style={s.legendText}>{fr ? 'RDV' : 'Meetup'}</Text></View>
             <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: '#F59E0B' }]} /><Text style={s.legendText}>{fr ? 'Tournoi' : 'Tournament'}</Text></View>
+            <View style={s.legendItem}><View style={[s.legendDot, { backgroundColor: '#8B5CF6' }]} /><Text style={s.legendText}>{fr ? 'Défi' : 'Challenge'}</Text></View>
           </View>
 
           {/* Selected Day Detail */}
@@ -401,6 +586,27 @@ export default function TerrainActivityScreen() {
                       </View>
                     </Pressable>
                   ))}
+
+                  {/* Challenges */}
+                  {selectedDayData.challenges.map((c) => (
+                    <Pressable key={c.id} style={s.dayItem} onPress={() => router.push(c.isSponsoredEvent ? `/sponsored-event/${c.id}` as any : `/challenge/${c.id}` as any)}>
+                      <View style={[s.dayItemIcon, { backgroundColor: '#8B5CF615' }]}>
+                        <MaterialIcons name="track-changes" size={16} color="#8B5CF6" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={s.dayItemTitle} numberOfLines={1}>{c.title || getChallengeLabel(c.type, fr)}</Text>
+                        <Text style={s.dayItemSub}>
+                          {formatActivityTime(c.date, c.startTime || c.date, fr)}
+                          {c.endTime ? ` - ${formatActivityTime(c.date, c.endTime, fr)}` : ''}
+                          {c.totalShots ? ` • ${c.totalShots} tirs` : ''}
+                          {c.totalPoints != null && c.maxPoints ? ` • ${c.totalPoints}/${c.maxPoints} pts` : ''}
+                        </Text>
+                      </View>
+                      <View style={[s.dayItemBadge, { backgroundColor: '#8B5CF615' }]}>
+                        <Text style={[s.dayItemBadgeText, { color: '#8B5CF6' }]}>{fr ? 'Défi' : 'Challenge'}</Text>
+                      </View>
+                    </Pressable>
+                  ))}
                 </>
               )}
             </View>
@@ -436,9 +642,11 @@ const s = StyleSheet.create({
   scrollContent: { paddingHorizontal: 16, paddingTop: 16 },
 
   // Stats
-  statsRow: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+  statsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 16 },
   statCard: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: '18%',
+    minWidth: 62,
     alignItems: 'center',
     backgroundColor: theme.surface,
     borderRadius: 14,
@@ -507,7 +715,7 @@ const s = StyleSheet.create({
   calendarDot: { width: 4, height: 4, borderRadius: 2 },
 
   // Legend
-  legendRow: { flexDirection: 'row', justifyContent: 'center', gap: 20, marginBottom: 16 },
+  legendRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 14, marginBottom: 16 },
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendDot: { width: 8, height: 8, borderRadius: 4 },
   legendText: { fontSize: 12, fontWeight: '600', color: theme.textSecondary },

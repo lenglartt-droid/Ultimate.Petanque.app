@@ -21,6 +21,7 @@ import { Ambassador, invalidateAmbassadorCache, generateReferralCode, AMBASSADOR
 import LevelUpModal from '@/components/ui/LevelUpModal';
 import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchSponsoredChallengeAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent, getEventParticipants } from '@/services/sponsoredEventService';
+import { getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 import { getMyEventNotifications, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import Svg, { Polyline, Circle as SvgCircle, Line, Text as SvgText } from 'react-native-svg';
 // expo-sharing loaded dynamically to avoid web bundler issues
@@ -833,7 +834,7 @@ export default function AmbassadorDashboardScreen() {
                           {ev.status === 'upcoming' ? (fr ? 'A venir' : 'Upcoming') : ev.status === 'active' ? (fr ? 'En cours' : 'Active') : ev.status === 'completed' ? (fr ? 'Termine' : 'Done') : (fr ? 'Annule' : 'Cancelled')}
                         </Text>
                         <View style={{ flex: 1 }} />
-                        <Text style={s.eventDate}>{new Date(ev.eventDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                        <Text style={s.eventDate}>{(getSponsoredEventDisplayDate(ev) || new Date(ev.eventDate)).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
                       </View>
                       <Text style={s.eventTitle} numberOfLines={1}>{ev.title}</Text>
                       <View style={s.eventMeta}>

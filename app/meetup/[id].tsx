@@ -25,7 +25,7 @@ import { useAlert } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import QRCode from 'react-native-qrcode-svg';
 import MeetupChat from '@/components/feature/MeetupChat';
-import { config } from '@/constants/config';
+import { buildAppDownloadLink } from '@/utils/appDownload';
 import {
   Meetup,
   MeetupResponse,
@@ -442,7 +442,7 @@ export default function MeetupDetailScreen() {
             <View style={styles.qrCardBody}>
               <View style={styles.qrWrap}>
                 <QRCode
-                  value={`${config.appDownloadUrl}?meetup=${meetup.share_code}`}
+                  value={buildAppDownloadLink({ meetup: meetup.share_code })}
                   size={130}
                   color={theme.primary}
                   backgroundColor="#FFFFFF"

@@ -84,7 +84,7 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
               <MaterialIcons name="celebration" size={8} color={ct.accent} />
               <Text style={{ fontSize: 7, fontWeight: '800', letterSpacing: 1, color: ct.accent }}>{fr ? 'BADGE DEBLOQUE' : 'BADGE UNLOCKED'}</Text>
             </View>
-            <Text style={{ fontSize: 13, fontWeight: '900', color: badge.color, marginBottom: 1 }} numberOfLines={1}>{getBadgeName(badgeId, language)}</Text>
+            <Text style={{ fontSize: 13, fontWeight: '900', color: badge.color, marginBottom: 1, flexShrink: 1 }} numberOfLines={2}>{getBadgeName(badgeId, language)}</Text>
             <Text style={{ fontSize: 8, fontWeight: '500', color: ct.textSecondary, marginBottom: 3, lineHeight: 11 }} numberOfLines={2}>{getBadgeDescription(badgeId, language)}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, flexWrap: 'wrap' }}>
               {(xpReward || badge.xpReward) ? (
@@ -142,7 +142,7 @@ export default function ShareCardBadge({ badgeId, playerName, unlockedAt, xpRewa
         </View>
 
         {/* Badge Name */}
-        <Text style={{ fontSize: nameSize, fontWeight: '900', color: badge.color, textAlign: 'center', marginBottom: isStory ? 6 : 4 }}>{getBadgeName(badgeId, language)}</Text>
+        <Text style={{ fontSize: nameSize, fontWeight: '900', color: badge.color, textAlign: 'center', marginBottom: isStory ? 6 : 4, paddingHorizontal: 8, lineHeight: nameSize + 4 }} numberOfLines={2}>{getBadgeName(badgeId, language)}</Text>
 
         {/* Description */}
         <Text style={{ fontSize: descSize, fontWeight: '500', color: ct.textSecondary, textAlign: 'center', lineHeight: descSize * 1.4, paddingHorizontal: 6, marginBottom: isStory ? 8 : 10 }} numberOfLines={3}>{getBadgeDescription(badgeId, language)}</Text>

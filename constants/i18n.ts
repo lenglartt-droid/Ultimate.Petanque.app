@@ -3,9 +3,40 @@
 // INTERNATIONALIZATION - FR / EN
 // ============================================
 
+// Topic-specific translation files are merged below.
+// Keep this root file as the public entrypoint because imports like
+// '@/constants/i18n' resolve to constants/i18n.ts before constants/i18n/index.ts.
+import { commonTranslations } from './i18n/common';
+import { homeTranslations } from './i18n/home';
+import { profileTranslations } from './i18n/profile';
+import { statsTranslations } from './i18n/stats';
+import { directoryTranslations } from './i18n/directory';
+import { matchTranslations } from './i18n/match';
+import { challengeTranslations } from './i18n/challenge';
+import { historyTranslations } from './i18n/history';
+import { tournamentTranslations } from './i18n/tournament';
+import { playerTranslations } from './i18n/player';
+import { clubTranslations } from './i18n/club';
+import { terrainTranslations } from './i18n/terrain';
+import { equipmentTranslations } from './i18n/equipment';
+import { palmaresTranslations } from './i18n/palmares';
+import { financialTranslations } from './i18n/financial';
+import { mapTranslations } from './i18n/map';
+import { shareTranslations } from './i18n/share';
+import { meetupTranslations } from './i18n/meetup';
+import { leaderboardTranslations } from './i18n/leaderboard';
+import { notificationsTranslations } from './i18n/notifications';
+import { passwordTranslations } from './i18n/password';
+import { syncTranslations } from './i18n/sync';
+import { legalTranslations } from './i18n/legal';
+import { tournamentEnumsTranslations } from './i18n/tournamentEnums';
+import { trustAndReportsTranslations } from './i18n/trustAndReports';
+import { gameAndUITranslations } from './i18n/gameAndUI';
+
+
 export type Language = 'fr' | 'en';
 
-export const translations = {
+const baseTranslations = {
   // ============================================
   // COMMON
   // ============================================
@@ -84,7 +115,7 @@ export const translations = {
     upcoming: { fr: 'À Venir', en: 'Upcoming' },
     shareApp: { fr: 'Partager l\'appli', en: 'Share app' },
     shareAppTitle: { fr: 'Invitez vos amis !', en: 'Invite your friends!' },
-    shareAppDesc: { fr: 'Scannez ce QR code pour telecharger Ultimate Petanque', en: 'Scan this QR code to download Ultimate Petanque' },
+    shareAppDesc: { fr: 'Scannez ce QR code pour telecharger Ultimate Petanque sur l\'App Store ou Google Play', en: 'Scan this QR code to download Ultimate Petanque on the App Store or Google Play' },
     shareAppNote: { fr: 'Montrez ce QR code aux joueurs autour de vous pour qu\'ils installent l\'application et rejoignent la communaute.', en: 'Show this QR code to players around you so they install the app and join the community.' },
     copyLink: { fr: 'Copier le lien', en: 'Copy link' },
     linkCopied: { fr: 'Lien copie dans le presse-papier', en: 'Link copied to clipboard' },
@@ -708,10 +739,47 @@ export const translations = {
     outdoorShort: { fr: 'Extérieur', en: 'Outdoor' },
     litLabel: { fr: 'Éclairé', en: 'Lit' },
     notLitLabel: { fr: 'Non éclairé', en: 'Not lit' },
+    activeNowLabel: { fr: 'Actifs maintenant', en: 'Active now' },
+    activeNowDesc: { fr: 'Terrains avec activité habituelle à cette heure', en: 'Courts with usual activity at this time' },
+    activityScore: { fr: 'Affluence', en: 'Activity' },
     locationLabel: { fr: 'Lieu', en: 'Location' },
     tournamentType: { fr: 'Type de tournoi', en: 'Tournament type' },
     registrationType: { fr: "Type d'inscription", en: 'Registration type' },
     scopeLabel: { fr: 'Cadre', en: 'Scope' },
+    distanceFilter: { fr: 'Distance', en: 'Distance' },
+    distanceAll: { fr: 'Toutes distances', en: 'Any distance' },
+    distance5: { fr: 'Moins de 5 km', en: 'Within 5 km' },
+    distance10: { fr: 'Moins de 10 km', en: 'Within 10 km' },
+    distance25: { fr: 'Moins de 25 km', en: 'Within 25 km' },
+    distance50: { fr: 'Moins de 50 km', en: 'Within 50 km' },
+    distance100: { fr: 'Moins de 100 km', en: 'Within 100 km' },
+    locatingGPS: { fr: 'Localisation en cours...', en: 'Getting location...' },
+    gpsError: { fr: 'Impossible de vous localiser', en: 'Unable to get your location' },
+    gpsRequired: { fr: 'Activez la localisation pour filtrer par distance', en: 'Enable location to filter by distance' },
+    searchInFilter: { fr: 'Rechercher...', en: 'Search...' },
+    nearYou: { fr: 'Proche de vous', en: 'Near you' },
+    sortLabel: { fr: 'Trier', en: 'Sort' },
+    sortDefault: { fr: 'Par defaut', en: 'Default' },
+    sortEloDesc: { fr: 'ELO (plus fort)', en: 'ELO (highest)' },
+    sortEloAsc: { fr: 'ELO (plus faible)', en: 'ELO (lowest)' },
+    sortWinRate: { fr: '% victoires', en: 'Win rate' },
+    sortName: { fr: 'Nom (A-Z)', en: 'Name (A-Z)' },
+    sortMembersDesc: { fr: 'Membres (plus grand)', en: 'Members (most)' },
+    sortActivityDesc: { fr: 'Activite (plus fort)', en: 'Activity (highest)' },
+    sortCourtsDesc: { fr: 'Terrains (plus)', en: 'Courts (most)' },
+    sortParticipantsDesc: { fr: 'Participants (plus)', en: 'Participants (most)' },
+    sortDateDesc: { fr: 'Date (recent)', en: 'Date (newest)' },
+    sortDateAsc: { fr: 'Date (ancien)', en: 'Date (oldest)' },
+    sortTitle: { fr: 'Trier par', en: 'Sort by' },
+    sortMultiHint: { fr: 'Combinez plusieurs criteres, reordonnez par priorite', en: 'Combine multiple criteria, reorder by priority' },
+    sortActiveCriteria: { fr: 'Criteres actifs', en: 'Active criteria' },
+    sortAddCriteria: { fr: 'Ajouter un critere', en: 'Add criteria' },
+    sortCity: { fr: 'Ville', en: 'City' },
+    sortClub: { fr: 'Club', en: 'Club' },
+    sortCountry: { fr: 'Pays', en: 'Country' },
+    sortAsc: { fr: 'Croissant', en: 'Ascending' },
+    sortDesc: { fr: 'Decroissant', en: 'Descending' },
+    sortCriteriaCount: { fr: 'critere(s)', en: 'criteria' },
   },
 
   // ============================================
@@ -806,6 +874,11 @@ export const translations = {
     nameIsRequired: { fr: 'Le nom est requis', en: 'Name is required' },
     roleLabel: { fr: 'Rôle', en: 'Role' },
     levelLabel: { fr: 'Niveau', en: 'Level' },
+    experienceLabel: { fr: 'Experience petanque', en: 'Petanque experience' },
+    experienceLessThan1: { fr: 'Moins d\'1 an', en: 'Less than 1 year' },
+    experience1to3: { fr: '1 a 3 ans', en: '1 to 3 years' },
+    experience3to10: { fr: '3 a 10 ans', en: '3 to 10 years' },
+    experienceMoreThan10: { fr: '10 ans et +', en: '10+ years' },
     clubLabel: { fr: 'Club', en: 'Club' },
     contactLabel: { fr: 'Contact', en: 'Contact' },
     locationLabel: { fr: 'Localisation', en: 'Location' },
@@ -3399,6 +3472,62 @@ export const translations = {
     leaderboardContent: { fr: 'Classement des joueurs publics avec 3+ matchs multi-joueurs. Comparaison de clubs et classement par ville utilisent les donnees publiques. Score de completude calcule localement.', en: 'Leaderboard of public players with 3+ multi-player matches. Club comparison and city rankings use public data only. Completeness score calculated locally.' },
   },
 };
+
+
+function isPlainObject(value: unknown): value is Record<string, any> {
+  return !!value && typeof value === 'object' && !Array.isArray(value);
+}
+
+function deepMergeTranslations<T extends Record<string, any>>(...sources: T[]): T {
+  const output: Record<string, any> = {};
+
+  sources.forEach((source) => {
+    Object.entries(source || {}).forEach(([key, value]) => {
+      if (isPlainObject(value) && isPlainObject(output[key])) {
+        output[key] = deepMergeTranslations(output[key], value);
+      } else if (isPlainObject(value)) {
+        output[key] = deepMergeTranslations(value);
+      } else {
+        output[key] = value;
+      }
+    });
+  });
+
+  return output as T;
+}
+
+// Topic files must be merged deeply because many files share the same namespace
+// such as login, consent, terms, privacy, map, etc. A shallow spread would replace
+// whole namespaces and make valid keys return raw key names.
+export const translations = deepMergeTranslations(
+  baseTranslations,
+  commonTranslations,
+  homeTranslations,
+  profileTranslations,
+  statsTranslations,
+  directoryTranslations,
+  matchTranslations,
+  challengeTranslations,
+  historyTranslations,
+  tournamentTranslations,
+  playerTranslations,
+  clubTranslations,
+  terrainTranslations,
+  equipmentTranslations,
+  palmaresTranslations,
+  financialTranslations,
+  mapTranslations,
+  shareTranslations,
+  meetupTranslations,
+  leaderboardTranslations,
+  notificationsTranslations,
+  passwordTranslations,
+  syncTranslations,
+  legalTranslations,
+  tournamentEnumsTranslations,
+  trustAndReportsTranslations,
+  gameAndUITranslations,
+) as typeof baseTranslations;
 
 // ============================================
 // TRANSLATION HELPER FUNCTION

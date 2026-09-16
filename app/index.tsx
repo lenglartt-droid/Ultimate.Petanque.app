@@ -6,22 +6,29 @@ import { Redirect, router } from 'expo-router';
 import * as Linking from 'expo-linking';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import theme from '@/constants/theme';
-import { checkPostOAuthDeviceBinding, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
+import { ensureDeviceBoundToAccount } from '@/services/deviceFingerprintService';
 import { useLanguage } from '@/hooks/useLanguage';
 import { hasRequiredPlayerCity } from '@/utils/playerLocationRequirement';
+import {
+  isGoogleOnlyUserId,
+} from '@/services/googleOnlyProfileService';
 
 const ONBOARDING_KEY = 'hasSeenOnboarding';
+const PENDING_DEVICE_BINDING_ALERT_KEY = '@pending_device_binding_alert';
 
 // ============================================
 // Deep Link Parser
 // ============================================
-function parseDeepLink(url: string): { type: 'share' | 'meetup'; code: string } | null {
+function parseDeepLink(url: string): { type: 'share' | 'meetup' | 'event'; code: string } | null {
   try {
-    // Handle custom scheme: ultimatepetanque://share/CODE or ultimatepetanque://meetup/CODE
-    // Handle https: https://ultimatepetanque.app/share/CODE or /meetup/CODE
     const parsed = Linking.parse(url);
     const path = parsed.path || '';
     const segments = path.split('/').filter(Boolean);
+    const qp = parsed.queryParams || {};
+
+    if (qp.event) return { type: 'event', code: String(qp.event) };
+    if (qp.meetup) return { type: 'meetup', code: String(qp.meetup) };
+    if (qp.share) return { type: 'share', code: String(qp.share) };
 
     if (segments.length >= 2 && segments[0] === 'share' && segments[1]) {
       return { type: 'share', code: segments[1] };
@@ -30,12 +37,11 @@ function parseDeepLink(url: string): { type: 'share' | 'meetup'; code: string } 
       return { type: 'meetup', code: segments[1] };
     }
 
-    // Also check queryParams as fallback (e.g. ?code=XXX)
-    if (segments.length >= 1 && segments[0] === 'share' && parsed.queryParams?.code) {
-      return { type: 'share', code: String(parsed.queryParams.code) };
+    if (segments.length >= 1 && segments[0] === 'share' && qp.code) {
+      return { type: 'share', code: String(qp.code) };
     }
-    if (segments.length >= 1 && segments[0] === 'meetup' && parsed.queryParams?.code) {
-      return { type: 'meetup', code: String(parsed.queryParams.code) };
+    if (segments.length >= 1 && segments[0] === 'meetup' && qp.code) {
+      return { type: 'meetup', code: String(qp.code) };
     }
 
     return null;
@@ -50,37 +56,41 @@ function parseDeepLink(url: string): { type: 'share' | 'meetup'; code: string } 
 function ProfileChecker() {
   const { user, logout } = useAuth();
   const { showAlert } = useAlert();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [checking, setChecking] = useState(true);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const supabase = getSupabaseClient();
   const [needsConsent, setNeedsConsent] = useState(false);
-  const pendingDeepLinkRef = useRef<{ type: 'share' | 'meetup'; code: string } | null>(null);
+  const [deviceBindingAcknowledged, setDeviceBindingAcknowledged] = useState(false);
+  const [waitingForDeviceBindingAck, setWaitingForDeviceBindingAck] = useState(false);
+  const pendingDeepLinkRef = useRef<{ type: 'share' | 'meetup' | 'event'; code: string } | null>(null);
   const profileReadyRef = useRef(false);
   const oauthCheckedRef = useRef(false);
+  const deviceBindingAlertShownRef = useRef(false);
 
-  // Handle deep link navigation after profile is ready
-  const handleDeepLinkNavigation = (link: { type: 'share' | 'meetup'; code: string }) => {
-    // Small delay to let the tabs mount before navigating
+  const showDeviceBoundConfirmation = (onOk: () => void) => {
+    showAlert(
+      t('login', 'deviceBindingTitle'),
+      t('login', 'deviceBindingMessage'),
+      [{ text: 'OK', onPress: onOk }]
+    );
+  };
+
+  const handleDeepLinkNavigation = (link: { type: 'share' | 'meetup' | 'event'; code: string }) => {
     setTimeout(() => {
-      if (link.type === 'meetup') {
-        // Navigate to meetup lookup: first try finding by code, then redirect
-        router.replace('/(tabs)');
-        setTimeout(() => {
-          // Pass the code as a search param to share page which handles meetup codes too
+      router.replace('/(tabs)');
+      setTimeout(() => {
+        if (link.type === 'event') {
+          router.push({ pathname: '/sponsored-event/list', params: { joinCode: link.code } });
+        } else if (link.type === 'meetup') {
           router.push({ pathname: '/share', params: { deepLinkCode: link.code, deepLinkType: 'meetup' } });
-        }, 300);
-      } else {
-        // Share code: navigate to share page with pre-filled code
-        router.replace('/(tabs)');
-        setTimeout(() => {
+        } else {
           router.push({ pathname: '/share', params: { deepLinkCode: link.code, deepLinkType: 'share' } });
-        }, 300);
-      }
+        }
+      }, 300);
     }, 200);
   };
 
-  // Listen for deep links (app already open)
   useEffect(() => {
     const subscription = Linking.addEventListener('url', ({ url }) => {
       const link = parseDeepLink(url);
@@ -93,7 +103,6 @@ function ProfileChecker() {
     return () => subscription.remove();
   }, []);
 
-  // Check initial URL (app opened via deep link)
   useEffect(() => {
     Linking.getInitialURL().then((url) => {
       if (url) {
@@ -112,13 +121,12 @@ function ProfileChecker() {
         return;
       }
 
-      // Post-OAuth device binding check (runs once per session)
+      // Post-OAuth/session device binding check (runs once per session).
       if (!oauthCheckedRef.current && user?.email) {
         oauthCheckedRef.current = true;
         try {
-          const { allowed, reason } = await checkPostOAuthDeviceBinding(user.email);
-          if (!allowed && reason === 'device_bound_to_other_account') {
-            // Device is bound to another account — kick user out
+          const binding = await ensureDeviceBoundToAccount(user.email, 'google', user.id);
+          if (!binding.allowed && binding.reason === 'device_bound_to_other_account') {
             showAlert(
               t('common', 'error'),
               t('login', 'deviceBindingOAuthKicked'),
@@ -133,15 +141,45 @@ function ProfileChecker() {
             setChecking(false);
             return;
           }
-          // Record device binding for OAuth users (first-time)
-          recordAccountCreation(user.email, 'google').catch(() => {});
-          // Show one-time device binding notification
-          const shouldShow = await shouldShowDeviceBindingNotification();
-          if (shouldShow) {
-            markDeviceBindingNotificationShown();
-            showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+
+          const pendingBindingAlertFor = await AsyncStorage.getItem(PENDING_DEVICE_BINDING_ALERT_KEY);
+          const shouldShowPendingLoginAlert = !!pendingBindingAlertFor;
+          const shouldShowNewOAuthBindingAlert = binding.bound && !binding.alreadyBound;
+
+          // Keep this screen in a blocking/loading state while the alert is visible.
+          // This prevents the final <Redirect href="/(tabs)" /> from sending the user
+          // to the homepage before they press OK.
+          if (!deviceBindingAcknowledged && (shouldShowPendingLoginAlert || shouldShowNewOAuthBindingAlert)) {
+            setWaitingForDeviceBindingAck(true);
+            setChecking(false);
+
+            if (!deviceBindingAlertShownRef.current) {
+              deviceBindingAlertShownRef.current = true;
+              showDeviceBoundConfirmation(async () => {
+                await AsyncStorage.removeItem(PENDING_DEVICE_BINDING_ALERT_KEY);
+                setChecking(true);
+                setWaitingForDeviceBindingAck(false);
+                setDeviceBindingAcknowledged(true);
+              });
+            }
+            return;
           }
-        } catch { /* silent — don't block login on error */ }
+        } catch {
+          // Do not block legitimate users on unexpected errors.
+        }
+      }
+
+      // Leftover local-only Google sessions from older builds are not real accounts.
+      // Sign them out so they can log in with Google/email and see CGU + their data.
+      if (isGoogleOnlyUserId(user.id)) {
+        try {
+          await logout();
+        } catch {
+          // Continue to login even if logout is noisy.
+        }
+        router.replace('/login');
+        setChecking(false);
+        return;
       }
 
       try {
@@ -154,14 +192,14 @@ function ProfileChecker() {
           supabase
             .from('players')
             .select('city, location')
-            .eq('id', user.id)
+            .eq('user_id', user.id)
+            .order('created_at', { ascending: true })
+            .limit(1)
             .maybeSingle(),
         ]);
 
         if (error) throw error;
 
-        // Check if username is just the email prefix (auto-generated by trigger)
-        // If so, user hasn't completed the express profile step
         const emailPrefix = user?.email ? user.email.split('@')[0] : '';
         const hasRealUsername = data?.username && data.username.trim() !== '' && data.username.trim() !== emailPrefix;
         const hasCity = hasRequiredPlayerCity(playerRow);
@@ -171,7 +209,6 @@ function ProfileChecker() {
         } else if (!data?.consent_accepted) {
           setNeedsConsent(true);
         } else {
-          // Profile is ready - handle pending deep link
           profileReadyRef.current = true;
           if (pendingDeepLinkRef.current) {
             const link = pendingDeepLinkRef.current;
@@ -190,9 +227,9 @@ function ProfileChecker() {
     };
 
     checkProfile();
-  }, [user?.id]);
+  }, [user?.id, deviceBindingAcknowledged]);
 
-  if (checking) {
+  if (checking || waitingForDeviceBindingAck) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={theme.primary} />

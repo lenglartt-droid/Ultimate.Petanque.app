@@ -562,6 +562,27 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
     );
   }, [team, fr, selectedTournament, loadTeamData]);
 
+  // Keep invitation-derived memo hooks above all conditional returns so the
+  // component executes the same hooks in the same order on every render.
+  const alreadyInvitedIds = useMemo(
+    () => new Set(invitations.map(i => i.inviteeUserId)),
+    [invitations]
+  );
+
+  // Recommended partner: highest synergy score among eligible recent partners
+  const recommendedPartnerId = useMemo(() => {
+    if (recentPartners.length === 0 || !selectedTournament) return null;
+    const eligible = recentPartners.filter(rp => !alreadyInvitedIds.has(rp.userId));
+    if (eligible.length === 0) return null;
+    let bestId: string | null = null;
+    let bestScore = -1;
+    eligible.forEach(p => {
+      const syn = computeSynergyScore(p.userId);
+      if (syn.score > bestScore) { bestScore = syn.score; bestId = p.userId; }
+    });
+    return bestScore >= 40 ? bestId : null;
+  }, [recentPartners, selectedTournament, alreadyInvitedIds, computeSynergyScore]);
+
   if (allTeamableTournaments.length === 0) {
     // Show motivating empty state with create tournament prompt
     return (
@@ -616,23 +637,8 @@ export default function TeamBuilderSection({ tournaments, terrains, language, se
   const teamSize = selectedTournament ? getTeamSize(selectedTournament.format) : 2;
   const acceptedInvites = invitations.filter(i => i.status === 'accepted');
   const pendingInvites = invitations.filter(i => i.status === 'pending');
-  const alreadyInvitedIds = new Set(invitations.map(i => i.inviteeUserId));
   const isTeamComplete = team?.status === 'complete' || (acceptedInvites.length + 1 >= teamSize);
   const slotsRemaining = teamSize - 1 - acceptedInvites.length;
-
-  // Recommended partner: highest synergy score among eligible recent partners
-  const recommendedPartnerId = useMemo(() => {
-    if (recentPartners.length === 0 || !selectedTournament) return null;
-    const eligible = recentPartners.filter(rp => !alreadyInvitedIds.has(rp.userId));
-    if (eligible.length === 0) return null;
-    let bestId: string | null = null;
-    let bestScore = -1;
-    eligible.forEach(p => {
-      const syn = computeSynergyScore(p.userId);
-      if (syn.score > bestScore) { bestScore = syn.score; bestId = p.userId; }
-    });
-    return bestScore >= 40 ? bestId : null;
-  }, [recentPartners, selectedTournament, alreadyInvitedIds, computeSynergyScore]);
 
   const renderTournamentRow = (t: TeamableTournament) => (
     <Pressable

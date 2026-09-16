@@ -1,25 +1,25 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
   TextInput,
   Pressable,
   StyleSheet,
-  KeyboardAvoidingView,
-  Platform,
   ScrollView,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
 import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { router } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth, useAlert } from '@/template';
 import {
   GOOGLE_PROVIDER_NOT_ENABLED,
   GOOGLE_DISALLOWED_USER_AGENT,
   GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD,
+  GOOGLE_NATIVE_SIGNIN_PACKAGE_MISSING,
 } from '@/template/auth';
 import theme from '@/constants/theme';
 import {
@@ -30,19 +30,24 @@ import {
 } from '@/constants/authOtp';
 import { useLanguage } from '@/hooks/useLanguage';
 import { isDisposableEmail } from '@/services/emailValidationService';
-import { canCreateAccount, canLoginOnDevice, recordAccountCreation, shouldShowDeviceBindingNotification, markDeviceBindingNotificationShown } from '@/services/deviceFingerprintService';
+import { canCreateAccount, canLoginOnDevice, ensureDeviceBoundToAccount } from '@/services/deviceFingerprintService';
 import { clearTempDataExpiry } from '@/services/retentionNotificationService';
 import { trackReferral } from '@/services/ambassadorService';
 import { mapAuthLoginErrorMessage } from '@/utils/mapAuthLoginError';
+import { isGoogleOnlyUserId } from '@/services/googleOnlyProfileService';
+
+const PENDING_DEVICE_BINDING_ALERT_KEY = '@pending_device_binding_alert';
 
 type AuthMode = 'login' | 'register';
 type RegisterStep = 'email' | 'otp';
 type ResetStep = 'email' | 'otp' | 'done';
 
+
 export default function LoginScreen() {
-  const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading } = useAuth();
+  const { sendOTP, verifyOTPAndLogin, signInWithPassword, signInWithGoogle, operationLoading, user } = useAuth();
   const { showAlert } = useAlert();
   const { t, language } = useLanguage();
+  const insets = useSafeAreaInsets();
 
   const [mode, setMode] = useState<AuthMode>('login');
   const [registerStep, setRegisterStep] = useState<RegisterStep>('email');
@@ -60,6 +65,13 @@ export default function LoginScreen() {
   const [resetOtp, setResetOtp] = useState('');
   const [resetNewPassword, setResetNewPassword] = useState('');
   const [resetConfirmPassword, setResetConfirmPassword] = useState('');
+
+  useEffect(() => {
+    if (user?.id && !isGoogleOnlyUserId(user.id)) {
+      router.replace('/');
+    }
+  }, [user?.id]);
+
 
   const resetForm = () => {
     setEmail('');
@@ -83,11 +95,16 @@ export default function LoginScreen() {
     resetForm();
   };
 
+  const openPolicy = (type: 'terms' | 'privacy') => {
+    router.push(type === 'terms' ? '/terms-of-service' : '/privacy-policy');
+  };
+
   const handleGoogleLogin = async () => {
     // Note: Google OAuth cannot pre-check email before auth flow,
     // device binding is enforced via post-login check in canLoginOnDevice
     const { error } = await signInWithGoogle();
     if (error) {
+      if (error === 'User cancelled login') return;
       let message = error;
       if (
         error === GOOGLE_PROVIDER_NOT_ENABLED ||
@@ -101,9 +118,20 @@ export default function LoginScreen() {
         message = t('login', 'googleDisallowedUserAgent');
       } else if (error === GOOGLE_EXPO_GO_REQUIRES_DEV_BUILD) {
         message = t('login', 'googleExpoGoNotSupported');
+      } else if (error === GOOGLE_NATIVE_SIGNIN_PACKAGE_MISSING) {
+        message = t('login', 'googleNativePackageMissing');
+      } else if (error.toLowerCase().includes('missing expo_public_google_web_client_id')) {
+        message = t('login', 'googleWebClientIdMissing');
+      } else if (
+        error.toLowerCase().includes('unacceptable audience') ||
+        error.toLowerCase().includes('audience in id_token')
+      ) {
+        message = t('login', 'googleAudienceMismatch');
       }
       showAlert(t('login', 'googleError'), message);
+      return;
     }
+    router.replace('/');
   };
 
   const handleLogin = async () => {
@@ -131,11 +159,16 @@ export default function LoginScreen() {
       return;
     }
 
-    const shouldShow = await shouldShowDeviceBindingNotification();
-    if (shouldShow) {
-      markDeviceBindingNotificationShown();
-      showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
+    const binding = await ensureDeviceBoundToAccount(emailNormalized, 'password', user.id);
+    if (!binding.allowed && binding.reason === 'device_bound_to_other_account') {
+      showAlert(t('common', 'error'), t('login', 'deviceBoundToOther'));
+      return;
     }
+
+    // Auth state may redirect away from this screen immediately after sign-in.
+    // Store a pending alert so app/index.tsx blocks the home redirect and shows
+    // the security message there until the user taps OK.
+    await AsyncStorage.setItem(PENDING_DEVICE_BINDING_ALERT_KEY, user.id);
     router.replace('/');
   };
 
@@ -169,8 +202,9 @@ export default function LoginScreen() {
       showAlert(t('common', 'error'), t('login', 'passwordMismatch'));
       return;
     }
-    const { error } = await verifyOTPAndLogin(
-      resetEmail.trim().toLowerCase(),
+    const resetEmailNormalized = resetEmail.trim().toLowerCase();
+    const { error, user: resetUser } = await verifyOTPAndLogin(
+      resetEmailNormalized,
       normalizeEmailOtpInput(resetOtp),
       { password: resetNewPassword }
     );
@@ -178,10 +212,14 @@ export default function LoginScreen() {
       showAlert(t('common', 'error'), error);
       return;
     }
-    showAlert(
-      language === 'fr' ? 'Mot de passe reinitialise' : 'Password reset',
-      language === 'fr' ? 'Votre mot de passe a ete mis a jour.' : 'Your password has been updated.'
-    );
+
+    const binding = await ensureDeviceBoundToAccount(resetEmailNormalized, 'password-reset', resetUser?.id);
+    if (!binding.allowed && binding.reason === 'device_bound_to_other_account') {
+      showAlert(t('common', 'error'), t('login', 'deviceBoundToOther'));
+      return;
+    }
+
+    await AsyncStorage.setItem(PENDING_DEVICE_BINDING_ALERT_KEY, resetUser?.id || resetEmailNormalized);
     router.replace('/');
   };
 
@@ -247,17 +285,15 @@ export default function LoginScreen() {
     if (error) {
       showAlert(t('common', 'error'), error);
     } else {
-      // Record successful account creation for device fingerprint tracking
-      recordAccountCreation(email.trim(), 'email').catch(() => {});
+      const emailNormalized = email.trim().toLowerCase();
+      const binding = await ensureDeviceBoundToAccount(emailNormalized, 'email', newUser?.id);
+      if (!binding.allowed && binding.reason === 'device_bound_to_other_account') {
+        showAlert(t('common', 'error'), t('login', 'deviceBoundToOther'));
+        return;
+      }
+
       // Clear 7-day temp data expiry since user is now registered
       clearTempDataExpiry().catch(() => {});
-      // Show one-time device binding notification
-      shouldShowDeviceBindingNotification().then(shouldShow => {
-        if (shouldShow) {
-          markDeviceBindingNotificationShown();
-          showAlert(t('login', 'deviceBindingTitle'), t('login', 'deviceBindingMessage'));
-        }
-      }).catch(() => {});
       // Track referral if code was provided
       if (referralCode.trim() && newUser?.id) {
         trackReferral(referralCode.trim(), newUser.id).then(({ success }) => {
@@ -267,23 +303,26 @@ export default function LoginScreen() {
           );
         }).catch(() => {});
       }
-      // Navigate to index so AuthRouter/ProfileChecker can handle routing
+
+      await AsyncStorage.setItem(PENDING_DEVICE_BINDING_ALERT_KEY, newUser?.id || emailNormalized);
       router.replace('/');
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    <SafeAreaView edges={['top']} style={styles.container}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { paddingBottom: Math.max(insets.bottom, 16) + 24 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        automaticallyAdjustKeyboardInsets
+        alwaysBounceVertical
       >
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
           {/* Header */}
           <Animated.View entering={FadeInDown.duration(500)} style={styles.header}>
             <Image
@@ -492,6 +531,22 @@ export default function LoginScreen() {
                   </>
                 )}
               </Pressable>
+
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>{t('common', 'or')}</Text>
+                <View style={styles.dividerLine} />
+              </View>
+
+              <Pressable
+                testID="register-google-button"
+                style={[styles.googleButton, operationLoading && styles.googleButtonDisabled]}
+                onPress={handleGoogleLogin}
+                disabled={operationLoading}
+              >
+                <MaterialIcons name="login" size={20} color={theme.textPrimary} />
+                <Text style={styles.googleButtonText}>{t('login', 'continueWithGoogle')}</Text>
+              </Pressable>
             </Animated.View>
           )}
 
@@ -658,24 +713,31 @@ export default function LoginScreen() {
           ) : null}
 
           {/* Footer */}
-          <Animated.View entering={FadeInDown.duration(500).delay(300)} style={styles.footer}>
-            <Pressable onPress={() => router.push('/terms')}>
-              <Text style={styles.footerText}>
-                {t('login', 'termsText')}
-              </Text>
-            </Pressable>
+          <View style={styles.footer}>
+            <Text style={styles.footerText}>
+              {t('login', 'termsText')}
+            </Text>
             <View style={styles.footerLinks}>
-              <Pressable onPress={() => router.push('/terms')}>
+              <Pressable
+                onPress={() => openPolicy('terms')}
+                hitSlop={8}
+                style={styles.footerLinkHit}
+                accessibilityRole="link"
+              >
                 <Text style={styles.footerLink}>{t('terms', 'title')}</Text>
               </Pressable>
               <Text style={styles.footerSeparator}>•</Text>
-              <Pressable onPress={() => router.push('/privacy-policy')}>
+              <Pressable
+                onPress={() => openPolicy('privacy')}
+                hitSlop={8}
+                style={styles.footerLinkHit}
+                accessibilityRole="link"
+              >
                 <Text style={styles.footerLink}>{t('privacy', 'title')}</Text>
               </Pressable>
-            </View>
-          </Animated.View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+          </View>
+        </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -691,15 +753,15 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 24,
-    paddingVertical: 32,
+    paddingTop: 24,
   },
   header: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 24,
   },
   logo: {
-    width: 200,
-    height: 200,
+    width: 140,
+    height: 140,
     marginBottom: 8,
   },
   tagline: {
@@ -807,25 +869,32 @@ const styles = StyleSheet.create({
   },
   footer: {
     marginTop: 'auto',
-    paddingTop: 32,
+    paddingTop: 28,
     alignItems: 'center',
   },
   footerText: {
     fontSize: 12,
     color: theme.textMuted,
     textAlign: 'center',
+    lineHeight: 18,
+    paddingHorizontal: 8,
   },
   footerLinks: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 8,
+    marginTop: 10,
+  },
+  footerLinkHit: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
   },
   footerLink: {
-    fontSize: 12,
+    fontSize: 13,
     color: theme.primary,
-    fontWeight: '500',
+    fontWeight: '600',
     textDecorationLine: 'underline',
   },
   footerSeparator: {

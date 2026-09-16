@@ -11,8 +11,8 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Image } from 'expo-image';
 import QRCode from 'react-native-qrcode-svg';
+import { getAppDownloadUrl } from '@/utils/appDownload';
 
-const APP_DOWNLOAD_URL = 'https://ultimatepetanque.app/download';
 const APP_LOGO = require('@/assets/images/logo-up-globe.png');
 
 /** Height constants for each size — cards use these to reserve bottom space */
@@ -70,7 +70,7 @@ export default function ShareCardWatermark({ variant = 'light', size = 'md', hid
         </View>
         {!hideQR ? (
           <View style={[s.qrWrap, { backgroundColor: qrBgColor }, isSm && s.qrWrapSm, isXs && s.qrWrapXs]}>
-            <QRCode value={APP_DOWNLOAD_URL} size={qrSize} color={qrColor} backgroundColor="transparent" />
+            <QRCode value={getAppDownloadUrl()} size={qrSize} color={qrColor} backgroundColor="transparent" />
           </View>
         ) : null}
       </View>

@@ -17,6 +17,28 @@ interface PlayerCrudDeps {
   players: Player[];
 }
 
+/** Map auth uid or stale id to the actual players.id row when they differ. */
+export function resolvePlayerRecordId(id: string, players: Player[], userId?: string): string {
+  if (players.some(p => p.id === id)) return id;
+  if (userId) {
+    const linked = players.find(p => p.userId === userId);
+    if (linked) return linked.id;
+  }
+  return id;
+}
+
+async function fetchPrimaryPlayerId(supabase: any, userId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('players')
+    .select('id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw error;
+  return data?.id ?? null;
+}
+
 export async function addPlayerOp(
   player: Omit<Player, 'id'>,
   deps: PlayerCrudDeps
@@ -80,16 +102,17 @@ export async function updatePlayerOp(
   deps: PlayerCrudDeps
 ): Promise<void> {
   const { supabase, userId, isConnected, setPlayers, sharedItemPermissions, players } = deps;
-  const oldPlayer = players.find(p => p.id === id);
+  const playerId = resolvePlayerRecordId(id, players, userId);
+  const oldPlayer = players.find(p => p.id === playerId);
 
   setPlayers(prev => prev.map(player =>
-    player.id === id ? { ...player, ...updates } : player
+    player.id === playerId ? { ...player, ...updates } : player
   ));
 
   if (!userId) return;
 
   if (!isConnected) {
-    enqueueOperation({ type: 'update', table: 'players', itemId: id, dbPayload: buildUpdateDbPayload('players', updates) });
+    enqueueOperation({ type: 'update', table: 'players', itemId: playerId, dbPayload: buildUpdateDbPayload('players', updates) });
     return;
   }
 
@@ -122,18 +145,44 @@ export async function updatePlayerOp(
     if ((updates as any).lastMatchDate !== undefined) dbUpdates.last_match_date = (updates as any).lastMatchDate;
     dbUpdates.updated_at = new Date().toISOString();
 
-    await supabase.from('players').update(dbUpdates).eq('id', id);
+    let targetId = playerId;
+    let { data, error } = await supabase
+      .from('players')
+      .update(dbUpdates)
+      .eq('id', targetId)
+      .select('id')
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (!data && userId) {
+      const resolvedId = await fetchPrimaryPlayerId(supabase, userId);
+      if (!resolvedId) throw new Error('Player record not found');
+      targetId = resolvedId;
+      const retry = await supabase
+        .from('players')
+        .update(dbUpdates)
+        .eq('id', targetId)
+        .select('id')
+        .maybeSingle();
+      if (retry.error) throw retry.error;
+      if (!retry.data) throw new Error('Player record not found');
+      setPlayers(prev => prev.map(player =>
+        player.id === targetId ? { ...player, ...updates } : player
+      ));
+    }
 
     // Log modification for shared items
-    if (sharedItemPermissions[id] === 'write' && oldPlayer) {
-      const { data: row } = await supabase.from('players').select('user_id').eq('id', id).single();
+    if (sharedItemPermissions[targetId] === 'write' && oldPlayer) {
+      const { data: row } = await supabase.from('players').select('user_id').eq('id', targetId).single();
       if (row?.user_id) {
         const changes = Object.keys(updates).filter(k => k !== 'stats' && (oldPlayer as any)[k] !== (updates as any)[k]).map(k => ({ field: k, oldValue: (oldPlayer as any)[k], newValue: (updates as any)[k] }));
-        logModification({ itemType: 'player', itemId: id, ownerId: row.user_id, changes }).catch(() => {});
+        logModification({ itemType: 'player', itemId: targetId, ownerId: row.user_id, changes }).catch(() => {});
       }
     }
   } catch (error) {
     console.log('Error updating player:', error);
+    throw error;
   }
 }
 

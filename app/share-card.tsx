@@ -55,7 +55,7 @@ import { fetchGeoLeaderboard } from '@/services/geoLeaderboardService';
 import { getContinent, getContinentLabel } from '@/constants/geoData';
 import { getSponsoredEvent, getEventParticipants, fetchEventLeaderboard, type SponsoredEvent, type EventLeaderboardEntry } from '@/services/sponsoredEventService';
 import { fetchAmbassadors, type Ambassador } from '@/services/ambassadorService';
-import { config } from '@/constants/config';
+import { buildAppDownloadLink } from '@/utils/appDownload';
 import { useBadges } from '@/hooks/useBadges';
 import { getBadgeName } from '@/services/badgeService';
 
@@ -996,7 +996,7 @@ export default function ShareCardScreen() {
             minWitnesses={sponsoredEvent.minWitnesses}
             status={sponsoredEvent.status}
             description={sponsoredEvent.description}
-            qrUrl={`${config.appDownloadUrl}?event=${sponsoredEvent.shareCode}`}
+            qrUrl={buildAppDownloadLink({ event: sponsoredEvent.shareCode })}
             language={language}
             colorTheme={activeTheme}
             format={activeFormat}

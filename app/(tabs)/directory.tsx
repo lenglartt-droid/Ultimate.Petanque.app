@@ -54,6 +54,7 @@ import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
+const DIRECTORY_TOURNAMENT_YELLOW = '#EAB308';
 type SortField = 'elo' | 'name' | 'win_rate' | 'members' | 'activity' | 'courts' | 'participants' | 'date' | 'city' | 'club' | 'country';
 type SortDirection = 'asc' | 'desc';
 type SortCriterion = { field: SortField; direction: SortDirection };
@@ -213,7 +214,7 @@ export default function DirectoryScreen() {
   const [eventsLoading, setEventsLoading] = useState(true);
 
   // Partner data for tier badges in directory — lazy loaded
-  const [partnerUserIds, setPartnerUserIds] = useState<Map<string, { tier: string; name: string }>>(new Map());
+  const [partnerUserIds, setPartnerUserIds] = useState<Map<string, any>>(new Map());
   const partnerLoaded = useRef(false);
   useEffect(() => {
     // Defer partner badge loading to avoid blocking initial render
@@ -221,10 +222,11 @@ export default function DirectoryScreen() {
       if (partnerLoaded.current) return;
       partnerLoaded.current = true;
       fetchAmbassadors().then(({ ambassadors }) => {
-        const map = new Map<string, { tier: string; name: string }>();
+        const map = new Map<string, any>();
         ambassadors.forEach(a => {
-          if (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner') {
-            const info = { tier: a.badgeType, name: a.displayName };
+          const isActiveSponsor = (a as any).isActive !== false && (a as any).status !== 'inactive' && (a as any).status !== 'disabled';
+          if (isActiveSponsor && (a.badgeType === 'gold_sponsor' || a.badgeType === 'sponsor' || a.badgeType === 'partner')) {
+            const info = { tier: a.badgeType, name: a.displayName, isActive: true, brandColor: (a as any).brandColor || null };
             map.set(a.userId, info);
             // Key by ambassador ID (for sponsorId lookups on clubs/terrains/tournaments)
             map.set(a.id, info);
@@ -256,7 +258,7 @@ export default function DirectoryScreen() {
     { id: 'players', label: t('directory', 'players'), icon: 'person', color: theme.primary },
     { id: 'clubs', label: t('directory', 'clubs'), icon: 'home', color: theme.accent },
     { id: 'terrains', label: t('directory', 'terrains'), icon: 'sports-soccer', color: theme.success },
-    { id: 'tournaments', label: t('directory', 'tournaments'), icon: 'emoji-events', color: theme.carreauColor },
+    { id: 'tournaments', label: t('directory', 'tournaments'), icon: 'emoji-events', color: DIRECTORY_TOURNAMENT_YELLOW },
     { id: 'events', label: language === 'fr' ? 'Defis' : 'Challenges', icon: 'campaign', color: '#7C3AED' },
   ], [language]);
 
@@ -266,7 +268,7 @@ export default function DirectoryScreen() {
       players: ['#0F172A', '#1E3A8A', '#2563EB'],
       clubs: ['#451A03', '#92400E', '#D97706'],
       terrains: ['#022C22', '#064E3B', '#10B981'],
-      tournaments: ['#451A03', '#78350F', '#B45309'],
+      tournaments: ['#422006', '#A16207', DIRECTORY_TOURNAMENT_YELLOW],
       events: ['#4C1D95', '#6D28D9', '#7C3AED'],
     };
     return gradients[activeTab];
@@ -277,7 +279,7 @@ export default function DirectoryScreen() {
       players: theme.primary,
       clubs: theme.accent,
       terrains: theme.success,
-      tournaments: theme.carreauColor,
+      tournaments: DIRECTORY_TOURNAMENT_YELLOW,
       events: '#7C3AED',
     };
     return colors[activeTab];
@@ -924,14 +926,25 @@ export default function DirectoryScreen() {
 
   // Filtered events for events tab
   const filteredEvents = useMemo(() => {
+    const getEffectiveEventStatus = (e: SponsoredEvent) => {
+      if (e.status === 'completed' || e.status === 'cancelled') return e.status;
+      const end = new Date(e.endTime || e.eventDate);
+      const start = new Date(e.startTime || e.eventDate);
+      const now = new Date();
+      if (!Number.isNaN(end.getTime()) && now.getTime() > end.getTime()) return 'completed';
+      if (e.status === 'upcoming' && !Number.isNaN(start.getTime()) && !Number.isNaN(end.getTime()) && now >= start && now <= end) return 'active';
+      return e.status;
+    };
+
     const filtered = sponsoredEvents.filter(e => {
+      const effectiveStatus = getEffectiveEventStatus(e);
       const q = searchQuery.toLowerCase();
       const matchesSearch = !searchQuery || e.title.toLowerCase().includes(q) || (e.ambassadorName || '').toLowerCase().includes(q) || (e.city || '').toLowerCase().includes(q);
-      const matchesStatus = filters.eventStatus === 'all' || e.status === filters.eventStatus;
+      const matchesStatus = filters.eventStatus === 'all' || effectiveStatus === filters.eventStatus;
       const matchesType = filters.eventType === 'all' || e.challengeType === filters.eventType;
       const matchesAmbassador = filters.eventAmbassador === 'all' || e.ambassadorId === filters.eventAmbassador;
       return matchesSearch && matchesStatus && matchesType && matchesAmbassador;
-    });
+    }).map(e => ({ ...e, status: getEffectiveEventStatus(e) as any }));
     if (sortCriteria.length > 0) return applyMultiSort(filtered);
     return filtered;
   }, [sponsoredEvents, searchQuery, filters.eventStatus, filters.eventType, filters.eventAmbassador, sortCriteria, applyMultiSort]);
@@ -1091,8 +1104,8 @@ export default function DirectoryScreen() {
   }, [favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, terrainActivityMap, user?.id]);
 
   const renderTournament = useCallback(({ item }: { item: Tournament }) => {
-    return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} t={t} language={language} getStatusLabel={getStatusLabel} userId={user?.id} />;
-  }, [getSharedPermission, t, language, user?.id]);
+    return <MemoizedTournamentCard item={item} getSharedPermission={getSharedPermission} partnerUserIds={partnerUserIds} t={t} language={language} getStatusLabel={getStatusLabel} userId={user?.id} />;
+  }, [getSharedPermission, partnerUserIds, t, language, user?.id]);
 
   const renderEvent = useCallback(({ item }: { item: any }) => {
     return <MemoizedEventCard item={item} language={language} />;
@@ -1744,7 +1757,7 @@ export default function DirectoryScreen() {
             )}
             {activeTab === 'events' && (
               <>
-                {filters.eventStatus !== 'all' && <ActiveFilterChip label={filters.eventStatus === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : filters.eventStatus === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : filters.eventStatus === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')} onRemove={() => setFilters(f => ({ ...f, eventStatus: 'all' }))} icon="event" />}
+                {filters.eventStatus !== 'all' && <ActiveFilterChip label={filters.eventStatus === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : filters.eventStatus === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : filters.eventStatus === 'completed' ? (language === 'fr' ? 'Termine' : 'Completed') : (language === 'fr' ? 'Annule' : 'Cancelled')} onRemove={() => setFilters(f => ({ ...f, eventStatus: 'all' }))} icon="event" />}
                 {filters.eventType !== 'all' && <ActiveFilterChip label={filters.eventType === '10_tirs' ? '10 Tirs' : filters.eventType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : 'Precision'} onRemove={() => setFilters(f => ({ ...f, eventType: 'all' }))} icon="track-changes" />}
                 {filters.eventAmbassador !== 'all' && (() => { const amb = sponsoredEvents.find(e => e.ambassadorId === filters.eventAmbassador); return <ActiveFilterChip label={amb?.ambassadorName || filters.eventAmbassador} onRemove={() => setFilters(f => ({ ...f, eventAmbassador: 'all' }))} icon="verified" />; })()}
               </>
@@ -1950,7 +1963,7 @@ export default function DirectoryScreen() {
                 player: { icon: 'person', color: theme.primary },
                 club: { icon: 'home', color: theme.accent },
                 terrain: { icon: 'sports-soccer', color: theme.success },
-                tournament: { icon: 'emoji-events', color: theme.carreauColor },
+                tournament: { icon: 'emoji-events', color: DIRECTORY_TOURNAMENT_YELLOW },
               };
               const cfg = typeIcons[dup.type] || typeIcons.player;
               return (
@@ -2193,7 +2206,7 @@ export default function DirectoryScreen() {
                   player: { icon: 'person', color: theme.primary },
                   club: { icon: 'home', color: theme.accent },
                   terrain: { icon: 'sports-soccer', color: theme.success },
-                  tournament: { icon: 'emoji-events', color: theme.carreauColor },
+                  tournament: { icon: 'emoji-events', color: DIRECTORY_TOURNAMENT_YELLOW },
                 };
                 const cfg = typeIcons[log.mergeType] || typeIcons.player;
                 const canUndo = isUndoable(log);
@@ -2517,9 +2530,16 @@ export default function DirectoryScreen() {
 // ============================================
 // MEMOIZED CARD COMPONENTS
 // ============================================
+function getActiveSponsorInfo(partnerUserIds: Map<string, any>, sponsorId?: string | null): any | undefined {
+  if (!sponsorId) return undefined;
+  const info = partnerUserIds.get(String(sponsorId));
+  if (!info || info.isActive === false) return undefined;
+  return info;
+}
+
 const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, partnerUserIds, t, language, handleInviteToMeetup, user }: {
   item: Player; selfPlayer: Player | null; getSharedPermission: (id: string) => string | null;
-  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
+  partnerUserIds: Map<string, any>; t: (s: string, k: string) => string;
   language: string; handleInviteToMeetup: (id: string, name: string) => void; user: any;
 }) => {
 
@@ -2531,8 +2551,8 @@ const MemoizedPlayerCard = React.memo(({ item, selfPlayer, getSharedPermission, 
 
   // Only show partner badge for players with explicit playerId link in ambassadors table
   const partnerInfo = partnerUserIds.get(item.id);
-  const hasSponsor = !!item.sponsorId;
-  const sponsorInfo = hasSponsor ? partnerUserIds.get(item.sponsorId!) : undefined;
+  const sponsorInfo = getActiveSponsorInfo(partnerUserIds, item.sponsorId);
+  const hasSponsor = !!sponsorInfo;
   return (
     <Pressable
       style={[styles.itemCard, isSelf && styles.selfCard]}
@@ -2644,14 +2664,14 @@ const MapLinkButton = React.memo(({ lat, lng, name }: { lat: number; lng: number
 
 const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermission, partnerUserIds, t, language, userId }: {
   item: Club; favoriteClubIds: string[]; getSharedPermission: (id: string) => string | null;
-  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string; language: string; userId?: string;
+  partnerUserIds: Map<string, any>; t: (s: string, k: string) => string; language: string; userId?: string;
 }) => {
   const isOwner = !!(userId && item.userId && item.userId === userId);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
   const isFavorite = favoriteClubIds.includes(item.id);
-  // Sponsor badge: show when item has explicit sponsor_id set (Silver/Gold sponsors only get banners, but badge shows for all)
-  const hasSponsor = !!(item as any).sponsorId;
+  const sponsorInfo = getActiveSponsorInfo(partnerUserIds, (item as any).sponsorId);
+  const hasSponsor = !!sponsorInfo;
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/club/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.accent }]}>
@@ -2707,7 +2727,7 @@ const MemoizedClubCard = React.memo(({ item, favoriteClubIds, getSharedPermissio
 
 const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPermission, partnerUserIds, t, language, getTerrainTypeConfig, activityInfo, userId }: {
   item: Terrain; favoriteTerrainIds: string[]; getSharedPermission: (id: string) => string | null;
-  partnerUserIds: Map<string, { tier: string; name: string }>; t: (s: string, k: string) => string;
+  partnerUserIds: Map<string, any>; t: (s: string, k: string) => string;
   language: string; getTerrainTypeConfig: (type: string) => any;
   activityInfo?: { score: number; matchCount: number; peakLabel: string; rank?: number; recentMatches?: number; recentChallenges?: number; recentTournaments?: number; isActiveNow?: boolean; activeNowLabel?: string; habitualScore?: number };
   userId?: string;
@@ -2717,7 +2737,8 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   const isFavorite = favoriteTerrainIds.includes(item.id);
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const hasSponsor = !!item.sponsorId;
+  const sponsorInfo = getActiveSponsorInfo(partnerUserIds, item.sponsorId);
+  const hasSponsor = !!sponsorInfo;
   const hasMultiPhotos = item.photos && item.photos.length > 1;
   const [photoIdx, setPhotoIdx] = React.useState(0);
   return (
@@ -2802,8 +2823,9 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   );
 });
 
-const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, language, getStatusLabel, userId }: {
+const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, partnerUserIds, t, language, getStatusLabel, userId }: {
   item: Tournament; getSharedPermission: (id: string) => string | null;
+  partnerUserIds: Map<string, any>;
   t: (s: string, k: string) => string; language: string; getStatusLabel: (s: string) => string; userId?: string;
 }) => {
   const isOwner = !!(userId && item.userId && item.userId === userId);
@@ -2815,13 +2837,14 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
   const status = statusConfig[item.status] || statusConfig['Terminé'];
   const sharedPerm = getSharedPermission(item.id);
   const isPublicItem = (item as any).isPublic;
-  const hasSponsor = !!(item as any).sponsorId;
+  const sponsorInfo = getActiveSponsorInfo(partnerUserIds, (item as any).sponsorId);
+  const hasSponsor = !!sponsorInfo;
   const posterUrl = item.posterUrl;
   const isPosterPdf = !!posterUrl && posterUrl.toLowerCase().endsWith('.pdf');
   const hasPosterImage = !!posterUrl && !isPosterPdf;
   return (
     <Pressable style={styles.itemCard} onPress={() => router.push(`/tournament/${item.id}`)}>
-      <View style={[styles.itemAvatar, { backgroundColor: theme.carreauColor }]}>
+      <View style={[styles.itemAvatar, { backgroundColor: DIRECTORY_TOURNAMENT_YELLOW }]}>
         {hasPosterImage ? (
           <Image source={{ uri: posterUrl }} style={styles.avatarImage} contentFit="cover" transition={200} placeholder={{ blurhash: blurhash.banner }} cachePolicy="memory-disk" recyclingKey={`${item.id}-poster`} />
         ) : isPosterPdf ? (
@@ -2837,8 +2860,8 @@ const MemoizedTournamentCard = React.memo(({ item, getSharedPermission, t, langu
           <Text style={styles.itemTitle} numberOfLines={1}>{item.name}</Text>
           {isOwner ? (
             <View style={styles.ownerBadge}>
-              <MaterialIcons name="person" size={9} color={theme.carreauColor} />
-              <Text style={[styles.ownerBadgeText, { color: theme.carreauColor }]}>{language === 'fr' ? 'Moi' : 'Mine'}</Text>
+              <MaterialIcons name="person" size={9} color={DIRECTORY_TOURNAMENT_YELLOW} />
+              <Text style={[styles.ownerBadgeText, { color: DIRECTORY_TOURNAMENT_YELLOW }]}>{language === 'fr' ? 'Moi' : 'Mine'}</Text>
             </View>
           ) : null}
           {hasSponsor ? (
@@ -2873,8 +2896,17 @@ const MemoizedEventCard = React.memo(({ item, language }: { item: any; language:
   const ev = item as SponsoredEvent;
   const evDate = new Date(ev.startTime);
   const endDate = new Date(ev.endTime);
-  const isActive = ev.status === 'active' || (ev.status === 'upcoming' && new Date() >= evDate && new Date() <= endDate);
-  const sc = isActive ? '#22C55E' : ev.status === 'completed' ? '#3B82F6' : ev.status === 'cancelled' ? '#EF4444' : '#F59E0B';
+  const now = new Date();
+  const effectiveStatus =
+    ev.status === 'cancelled' || ev.status === 'completed'
+      ? ev.status
+      : (!Number.isNaN(endDate.getTime()) && now.getTime() > endDate.getTime())
+        ? 'completed'
+        : (ev.status === 'upcoming' && !Number.isNaN(evDate.getTime()) && !Number.isNaN(endDate.getTime()) && now >= evDate && now <= endDate)
+          ? 'active'
+          : ev.status;
+  const isActive = effectiveStatus === 'active';
+  const sc = isActive ? '#22C55E' : effectiveStatus === 'completed' ? '#3B82F6' : effectiveStatus === 'cancelled' ? '#EF4444' : '#F59E0B';
   const typeColor: Record<string, string> = { '10_tirs': '#2563EB', '10_tirs_sautee': '#D97706', precision: '#7C3AED' };
   const tc = typeColor[ev.challengeType] || '#7C3AED';
   const challengeLabel = ev.challengeType === '10_tirs' ? '10 Tirs' : ev.challengeType === '10_tirs_sautee' ? (language === 'fr' ? '10 Tirs sautee' : '10 Lob Shots') : (language === 'fr' ? 'Precision' : 'Precision');
@@ -2890,7 +2922,7 @@ const MemoizedEventCard = React.memo(({ item, language }: { item: any; language:
           {ev.ambassadorName ? <View style={styles.metaItem}><MaterialIcons name="verified" size={12} color="#7C3AED" /><Text style={[styles.metaText, { color: '#7C3AED' }]}>{ev.ambassadorName}</Text></View> : null}
         </View>
         <View style={styles.itemTags}>
-          <View style={[styles.tag, { backgroundColor: sc + '15' }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc }} /><Text style={[styles.tagText, { color: sc }]}>{isActive ? (language === 'fr' ? 'En cours' : 'Active') : ev.status === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : ev.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Done') : (language === 'fr' ? 'Annule' : 'Cancelled')}</Text></View>
+          <View style={[styles.tag, { backgroundColor: sc + '15' }]}><View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: sc }} /><Text style={[styles.tagText, { color: sc }]}>{isActive ? (language === 'fr' ? 'En cours' : 'Active') : effectiveStatus === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : effectiveStatus === 'completed' ? (language === 'fr' ? 'Termine' : 'Completed') : (language === 'fr' ? 'Annule' : 'Cancelled')}</Text></View>
           <View style={[styles.tag, { backgroundColor: tc + '12' }]}><Text style={[styles.tagText, { color: tc }]}>{challengeLabel}</Text></View>
           <View style={[styles.tag, { backgroundColor: theme.backgroundSecondary }]}><MaterialIcons name="group" size={10} color={theme.textSecondary} /><Text style={[styles.tagText, { color: theme.textSecondary }]}>{ev.maxParticipants}</Text></View>
         </View>

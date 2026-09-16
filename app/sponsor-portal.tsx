@@ -17,6 +17,7 @@ import { SponsorPortalSkeleton } from '@/components/ui/SkeletonLoader';
 import { invalidateAmbassadorCache, AMBASSADOR_LEVELS, AmbassadorLevel } from '@/services/ambassadorService';
 import { fetchAmbassadorAnalytics, AmbassadorAnalytics, fetchDetailedBannerAnalytics, BannerDetailedAnalytics } from '@/services/ambassadorAnalyticsService';
 import { getMySponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
+import { getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 import Svg, { Polyline, Circle as SvgCircle, Rect as SvgRect } from 'react-native-svg';
 import * as ImagePicker from '@/services/imagePicker';
 import { decode } from '@/services/base64';
@@ -3314,7 +3315,7 @@ export default function SponsorPortalScreen() {
                         </Text>
                         <View style={{ flex: 1 }} />
                         <Text style={st.eventDate}>
-                          {new Date(ev.eventDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                          {(getSponsoredEventDisplayDate(ev) || new Date(ev.eventDate)).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                         </Text>
                       </View>
                       <Text style={st.eventTitle} numberOfLines={1}>{ev.title}</Text>

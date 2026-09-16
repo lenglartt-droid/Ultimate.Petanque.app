@@ -9,12 +9,14 @@ export default function TabLayout() {
   const insets = useSafeAreaInsets();
   const { t } = useLanguage();
 
+  const tabBarHeight = Platform.select({
+    ios: insets.bottom + 60,
+    android: insets.bottom + 60,
+    default: 70,
+  });
+
   const tabBarStyle = {
-    height: Platform.select({
-      ios: insets.bottom + 60,
-      android: insets.bottom + 60,
-      default: 70,
-    }),
+    height: tabBarHeight,
     paddingTop: 8,
     paddingBottom: Platform.select({
       ios: insets.bottom + 8,
@@ -25,6 +27,10 @@ export default function TabLayout() {
     backgroundColor: theme.background,
     borderTopWidth: 1,
     borderTopColor: theme.border,
+    ...Platform.select({
+      android: { elevation: 32, zIndex: 32 },
+      default: {},
+    }),
   };
 
   return (
@@ -75,6 +81,8 @@ export default function TabLayout() {
         options={{
           title: t('tabs', 'map'),
           tabBarTestID: 'tab-map',
+          lazy: true,
+          unmountOnBlur: true,
           tabBarIcon: ({ color, size }) => (
             <MaterialIcons name="map" size={size} color={color} />
           ),

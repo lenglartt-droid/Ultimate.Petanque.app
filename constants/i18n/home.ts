@@ -29,7 +29,7 @@ export const homeTranslations = {
     upcoming: { fr: 'À Venir', en: 'Upcoming' },
     shareApp: { fr: 'Partager l\'appli', en: 'Share app' },
     shareAppTitle: { fr: 'Invitez vos amis !', en: 'Invite your friends!' },
-    shareAppDesc: { fr: 'Scannez ce QR code pour telecharger Ultimate Petanque', en: 'Scan this QR code to download Ultimate Petanque' },
+    shareAppDesc: { fr: 'Scannez ce QR code pour telecharger Ultimate Petanque sur l\'App Store ou Google Play', en: 'Scan this QR code to download Ultimate Petanque on the App Store or Google Play' },
     shareAppNote: { fr: 'Montrez ce QR code aux joueurs autour de vous pour qu\'ils installent l\'application et rejoignent la communaute.', en: 'Show this QR code to players around you so they install the app and join the community.' },
     copyLink: { fr: 'Copier le lien', en: 'Copy link' },
     linkCopied: { fr: 'Lien copie dans le presse-papier', en: 'Link copied to clipboard' },
@@ -96,6 +96,18 @@ export const homeTranslations = {
     googleExpoGoNotSupported: {
       fr: 'La connexion Google ne fonctionne pas dans Expo Go. Lancez l\'app avec « npx expo run:android » ou un APK/EAS build, ou connectez-vous par email.',
       en: 'Google sign-in does not work in Expo Go. Run the app with « npx expo run:android » or an APK/EAS build, or use email sign-in.',
+    },
+    googleNativePackageMissing: {
+      fr: 'La connexion Google native n\'est pas installee dans cette version. Utilisez un build officiel ou connectez-vous par email.',
+      en: 'Native Google sign-in is not installed in this build. Use an official build or sign in with email.',
+    },
+    googleWebClientIdMissing: {
+      fr: 'Identifiant Google Web manquant. Contactez le support.',
+      en: 'Google Web client ID is missing. Please contact support.',
+    },
+    googleAudienceMismatch: {
+      fr: 'La connexion Google native ne correspond pas au projet Supabase. Reessayez : l\'application va ouvrir la connexion Google securisee.',
+      en: 'Native Google sign-in does not match this Supabase project. Please retry; the app will open the secure Google sign-in page.',
     },
     disposableEmail: { fr: 'Les adresses email temporaires ne sont pas acceptees. Utilisez une adresse email permanente.', en: 'Temporary email addresses are not accepted. Please use a permanent email address.' },
     maxAccountsReached: { fr: 'Un compte est deja enregistre sur cet appareil. Un seul compte par appareil est autorise. Contactez le support si necessaire.', en: 'An account is already registered on this device. Only one account per device is allowed. Contact support if needed.' },

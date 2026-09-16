@@ -26,7 +26,7 @@ import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth } from '@/template';
 import { router } from 'expo-router';
 import QRCode from 'react-native-qrcode-svg';
-import { config } from '@/constants/config';
+import { buildAppDownloadLink, getAppDownloadUrl } from '@/utils/appDownload';
 import { getEloRank, ELO_RANKS } from '@/services/eloService';
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -359,7 +359,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
         if (name) msg += `\n+ ${ai.type === 'club' ? 'Club' : 'Terrain'}: ${name}`;
       });
     }
-    msg += `\n\n${fr ? 'Telecharge l\'app' : 'Download the app'}: ${config.appDownloadUrl}`;
+    msg += `\n\n${fr ? 'Telecharge l\'app' : 'Download the app'}: ${getAppDownloadUrl()}`;
     return msg;
   }, [fr, typeLabelLower, itemName, shareCode, previewSubtitle, sharedAssociatedItems, associatedClub, associatedTerrain]);
 
@@ -1046,7 +1046,7 @@ export default function ShareModal({ visible, onClose, itemType, itemId, itemNam
                   </View>
                   <View style={s.qrBody}>
                     <View style={[s.qrWrapper, { borderColor: typeConfig.color + '20' }]}>
-                      <QRCode value={`${config.appDownloadUrl}?share=${shareCode}`} size={130} color={typeConfig.color} backgroundColor="#FFFFFF" />
+                      <QRCode value={buildAppDownloadLink({ share: shareCode })} size={130} color={typeConfig.color} backgroundColor="#FFFFFF" />
                     </View>
                     <Text style={s.qrHint}>{fr ? 'Scannez pour acceder a la fiche' : 'Scan to access the card'}</Text>
                   </View>

@@ -15,13 +15,15 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Keyboard,
+  InteractionManager,
+  type LayoutChangeEvent,
   type ViewStyle,
 } from 'react-native';
 // react-native-maps is loaded dynamically below (Platform !== 'web')
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { router, useLocalSearchParams } from 'expo-router';
-import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, useAnimatedProps, withRepeat, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, useAnimatedProps, withRepeat, withSequence, withTiming, cancelAnimation } from 'react-native-reanimated';
 import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Linking } from 'react-native';
@@ -48,12 +50,16 @@ import LocationPicker, { LocationData } from '@/components/ui/LocationPicker';
 import { Image as RNImage } from 'react-native'; // 👈 use RN Image, not expo-image
 import { fetchAmbassadors, invalidateAmbassadorCache, Ambassador } from '@/services/ambassadorService';
 import { ensureMapCoordinates, isMapPartnerBadge, isValidMapCoord as isValidMapCoordUtil } from '@/utils/mapPlayerLocation';
-import { useFocusEffect } from '@react-navigation/native';
+import { shouldUseNativeMapView } from '@/utils/shouldUseNativeMapView';
+import { useFocusEffect, useIsFocused } from '@react-navigation/native';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 // import MapView from "react-native-map-clustering";
 
 type MarkerType = 'all' | 'terrains' | 'clubs' | 'tournaments' | 'players' | 'events' | 'partners';
 type MapMode = 'all' | 'public';
+const LIVE_TERRAIN_PULSE_COLOR = '#EF4444';
+const HABITUAL_TERRAIN_PULSE_COLOR = '#22C55E';
+const TOURNAMENT_GOLD_COLOR = '#EAB308';
 
 let MapViewComponent: React.ComponentType<any> | null = null;
 let MarkerComponent: React.ComponentType<any> | null = null;
@@ -99,14 +105,15 @@ const MAP_MARKER_SHADOW = Platform.select({
 });
 
 const IS_ANDROID_MAP = Platform.OS === 'android';
+const USE_NATIVE_MAP = shouldUseNativeMapView();
 /**
  * Android rasterizes custom markers to a bitmap. Yoga/Fabric can under-report size → quarter-circle clip.
  * Fixed canvas + single disc child + patches/react-native-maps (MapMarker.createDrawable).
  */
 const MAP_MARKER_CANVAS = IS_ANDROID_MAP ? 64 : 56;
-const MAP_MARKER_DISC = IS_ANDROID_MAP ? 40 : 36;
+const MAP_MARKER_DISC = IS_ANDROID_MAP ? 36 : 36;
 /** Android bitmap must fit sonar rings (disc × ~1.8 scale) without clipping */
-const MAP_MARKER_PULSE_CANVAS = IS_ANDROID_MAP ? 88 : 72;
+const MAP_MARKER_PULSE_CANVAS = IS_ANDROID_MAP ? 124 : 72;
 
 function getMapMarkerNativeStyle(opts?: { pulse?: boolean }): ViewStyle | undefined {
   if (!IS_ANDROID_MAP) return undefined;
@@ -145,6 +152,7 @@ const MapMarkerDisc = React.memo(({
   borderWidth = 2,
   children,
   badge,
+  noCanvas = false,
 }: {
   size?: number;
   color: string;
@@ -152,8 +160,11 @@ const MapMarkerDisc = React.memo(({
   borderWidth?: number;
   children?: React.ReactNode;
   badge?: React.ReactNode;
-}) => (
-  <MapMarkerCanvas>
+  /** Skip the internal fixed-size MapMarkerCanvas wrapper — used when the caller
+   *  already provides its own (differently-sized) centered pulse canvas. */
+  noCanvas?: boolean;
+}) => {
+  const disc = (
     <View
       style={{
         width: size,
@@ -171,13 +182,15 @@ const MapMarkerDisc = React.memo(({
       {children}
       {badge}
     </View>
-  </MapMarkerCanvas>
-));
-
-/** @deprecated alias */
-const MapMarkerSlot = MapMarkerCanvas;
+  );
+  if (noCanvas) return disc;
+  return <MapMarkerCanvas>{disc}</MapMarkerCanvas>;
+});
 
 const MAP_MARKER_BUBBLE_ANCHOR = { x: 0.5, y: 0.5 };
+const ANDROID_PULSE_MARKER_ANCHOR = { x: 0.5, y: 0.5 };
+const ANDROID_PULSE_CONTENT_OFFSET = { x: 0, y: 0 };
+const ANDROID_LIVE_MARKER_CONTENT_OFFSET = { x: 0, y: 0 };
 /** Corner badge inside the disc (never outside canvas — avoids Android bitmap clip). */
 const MAP_MARKER_CORNER_BADGE = { position: 'absolute' as const, bottom: 0, right: 0 };
 
@@ -225,8 +238,42 @@ function getMapItemPhoto(item: any): string | null {
   }
 }
 
+function getMapItemSponsorId(item: any): string | null {
+  const sponsorId =
+    item?.sponsorId ??
+    item?.sponsor_id ??
+    item?.sponsoredById ??
+    item?.sponsored_by_id ??
+    item?.sponsor?.id ??
+    null;
+
+  return sponsorId ? String(sponsorId) : null;
+}
+
 function isSponsoredMapItem(item: any): boolean {
-  return !!(item?.sponsorId && (item._sponsorPhoto || item._sponsorColor));
+  if (!item) return false;
+
+  const itemType = item.itemType ?? item._itemType;
+  const canUseSponsoredSplit =
+    itemType === 'players' ||
+    itemType === 'terrains' ||
+    itemType === 'tournaments' ||
+    itemType === 'clubs';
+
+  if (!canUseSponsoredSplit) return false;
+
+  // Important: do NOT render half/half markers just because the item still
+  // has an old sponsorId/sponsorBrandColor saved on it. Those fields can stay
+  // on courts after a sponsor is removed. The split marker is shown only after
+  // the current active sponsor lookup confirms that the sponsor is still active.
+  return item._activeSponsor === true;
+}
+
+function isActiveSponsorRecord(sponsor: any): boolean {
+  if (!sponsor) return false;
+  if (sponsor.isActive === false || sponsor.is_active === false) return false;
+  const badgeType = sponsor.badgeType ?? sponsor.badge_type;
+  return badgeType === 'gold_sponsor' || badgeType === 'sponsor' || badgeType === 'partner';
 }
 
 function isPartnerMapItem(item: any): boolean {
@@ -297,7 +344,23 @@ interface Cluster {
   isCluster: boolean;
 }
 
-const MAX_VISIBLE_MARKERS = 200;
+/** Android: custom marker React views rasterize over the RN bridge and freeze JS taps. Use native pin/image markers instead. */
+const ANDROID_USE_SIMPLE_MARKERS = IS_ANDROID_MAP;
+/** Android/emulator: fewer markers = less native work on map open. */
+const MAX_VISIBLE_MARKERS = IS_ANDROID_MAP ? 24 : 200;
+
+type AndroidPinColor = 'red' | 'turquoise' | 'green' | 'yellow' | 'purple';
+
+function resolveAndroidPinColor(hex: string, opts?: { live?: boolean; habitual?: boolean }): AndroidPinColor {
+  if (opts?.live) return 'red';
+  if (opts?.habitual) return 'green';
+  const h = hex.toLowerCase();
+  if (h.includes('22c55e') || h.includes('10b981') || h.includes('064e3b')) return 'green';
+  if (h.includes('ef4444') || h.includes('dc2626') || h.includes('f87171')) return 'red';
+  if (h.includes('f59e0b') || h.includes('d97706') || h.includes('eab308')) return 'yellow';
+  if (h.includes('06b6d4') || h.includes('0ea5e9') || h.includes('14b8a6')) return 'turquoise';
+  return 'purple';
+}
 const ELO_RANKS_REVERSED = [...ELO_RANKS].reverse();
 
 function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; longitudeDelta: number; latitude?: number; longitude?: number } | null): Cluster[] {
@@ -336,7 +399,7 @@ function clusterMarkers(items: ClusterItem[], region: { latitudeDelta: number; l
   const cellFactor =
     region.latitudeDelta < 0.1 ? 0.028 :
     region.latitudeDelta < 1 ? 0.04 :
-    region.latitudeDelta < 8 ? 0.05 : 0.065;
+    region.latitudeDelta < 8 ? 0.05 : 0.04;
   const cellLat = Math.max(region.latitudeDelta * cellFactor, 0.006);
   const cellLng = Math.max(region.longitudeDelta * cellFactor, 0.006);
 
@@ -415,7 +478,7 @@ const PartnerMarkerView = React.memo(
     const [imageError, setImageError] = useState(false);
 
     const handleLoad = useCallback(() => {
-      setImageLoaded(true);
+      setImageLoaded(prev => (prev ? prev : true));
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
 
@@ -480,7 +543,7 @@ const ClubMarkerView = React.memo(
     const [imageError, setImageError] = useState(false);
 
     const handleLoad = useCallback(() => {
-      setImageLoaded(true);
+      setImageLoaded(prev => (prev ? prev : true));
       onReady?.(); // signal parent to set tracksViewChanges=false
     }, [onReady]);
 
@@ -542,10 +605,11 @@ const ClubMarkerView = React.memo(
 
 // ============================================
 // SPONSORED SPLIT MARKER COMPONENT
-// Shows half item photo/icon + half sponsor logo
+// Left half = sponsor picture/logo
+// Right half = sponsored card picture/icon
 // ============================================
-const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, sponsorPhoto, sponsorColor, size = 40, onReady }: {
-  itemIcon: string; itemColor: string; itemPhoto?: string | null; sponsorPhoto?: string | null; sponsorColor: string; size?: number; onReady?: () => void;
+const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, sponsorPhoto, sponsorColor, size = 40, noCanvas = false, onReady }: {
+  itemIcon: string; itemColor: string; itemPhoto?: string | null; sponsorPhoto?: string | null; sponsorColor: string; size?: number; noCanvas?: boolean; onReady?: () => void;
 }) => {
   const [itemImgLoaded, setItemImgLoaded] = useState(false);
   const [sponsorImgLoaded, setSponsorImgLoaded] = useState(false);
@@ -561,38 +625,39 @@ const SponsoredSplitMarkerView = React.memo(({ itemIcon, itemColor, itemPhoto, s
   }, [itemPhoto, sponsorPhoto, itemImgLoaded, itemImgError, sponsorImgLoaded, sponsorImgError, onReady]);
 
   return (
-    <MapMarkerDisc size={disc} color={itemColor} borderColor={sponsorColor} borderWidth={2.5} badge={(
+    <MapMarkerDisc size={disc} color={itemColor} borderColor={sponsorColor} borderWidth={2.5} noCanvas={noCanvas} badge={(
       <View style={[pMarkerStyles.badge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
         <MaterialIcons name="handshake" size={7} color="#FFF" />
       </View>
     )}>
       <View style={{ width: disc, height: disc, flexDirection: 'row', overflow: 'hidden' }}>
-        {/* Left half: item photo/icon */}
-        <View style={{ width: halfW, height: disc, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
-          {itemPhoto && !itemImgError ? (
-            <RNImage
-              source={{ uri: itemPhoto, cache: 'force-cache' }}
-              style={{ width: halfW + 4, height: disc, marginLeft: -2 }}
-              resizeMode="cover"
-              onLoad={() => setItemImgLoaded(true)}
-              onError={() => setItemImgError(true)}
-            />
-          ) : (
-            <MaterialIcons name={itemIcon as any} size={disc * 0.4} color="#FFF" />
-          )}
-        </View>
-        {/* Right half: sponsor logo */}
+        {/* Left half: sponsor picture/logo */}
         <View style={{ width: halfW, height: disc, backgroundColor: sponsorColor + '30', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
           {sponsorPhoto && !sponsorImgError ? (
             <RNImage
               source={{ uri: sponsorPhoto, cache: 'force-cache' }}
-              style={{ width: halfW + 4, height: disc, marginRight: -2 }}
+              style={{ width: halfW + 4, height: disc, marginLeft: -2 }}
               resizeMode="cover"
               onLoad={() => setSponsorImgLoaded(true)}
               onError={() => setSponsorImgError(true)}
             />
           ) : (
             <MaterialIcons name="handshake" size={disc * 0.35} color={sponsorColor} />
+          )}
+        </View>
+
+        {/* Right half: sponsored card picture/icon */}
+        <View style={{ width: halfW, height: disc, backgroundColor: itemColor, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+          {itemPhoto && !itemImgError ? (
+            <RNImage
+              source={{ uri: itemPhoto, cache: 'force-cache' }}
+              style={{ width: halfW + 4, height: disc, marginRight: -2 }}
+              resizeMode="cover"
+              onLoad={() => setItemImgLoaded(true)}
+              onError={() => setItemImgError(true)}
+            />
+          ) : (
+            <MaterialIcons name={itemIcon as any} size={disc * 0.4} color="#FFF" />
           )}
         </View>
       </View>
@@ -629,6 +694,8 @@ const EntityPhotoMarkerView = React.memo(({
   isPublic,
   borderColor,
   borderWidth,
+  size = MAP_MARKER_DISC,
+  noCanvas = false,
   onReady,
 }: {
   photo: string;
@@ -637,47 +704,77 @@ const EntityPhotoMarkerView = React.memo(({
   isPublic?: boolean;
   borderColor?: string;
   borderWidth?: number;
+  size?: number;
+  /** Skip the internal fixed-size MapMarkerCanvas wrapper — used when the caller
+   *  already provides its own (differently-sized) centered pulse canvas, so the
+   *  disc isn't nested inside two independently-composited native view layers. */
+  noCanvas?: boolean;
   onReady?: () => void;
 }) => {
-  const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
-  const disc = MAP_MARKER_DISC;
-  const imageSize = disc - 6;
+  const disc = size;
+  const imageSize = Math.max(1, disc - 6);
 
-  const handleLoad = useCallback(() => {
-    setImageLoaded(true);
-    onReady?.();
+  const handleImageDone = useCallback(() => {
+    // Android map markers are rasterized snapshots. Give RN a short frame window
+    // after the image appears before disabling tracksViewChanges in the parent.
+    setTimeout(() => onReady?.(), IS_ANDROID_MAP ? 450 : 0);
   }, [onReady]);
 
-  const handleError = useCallback(() => {
-    setImageError(true);
-    onReady?.();
-  }, [onReady]);
+  const discView = (
+      <View
+        collapsable={false}
+        pointerEvents="none"
+        style={{
+          width: disc,
+          height: disc,
+          borderRadius: disc / 2,
+          backgroundColor: color,
+          borderWidth: borderWidth ?? (isPublic ? 3 : 2),
+          borderColor: borderColor ?? (isPublic ? theme.success : '#FFF'),
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          ...MAP_MARKER_NO_HW_TEXTURE,
+        }}
+      >
+        {photo && !imageError ? (
+          <>
+            <MaterialIcons
+              name={icon as any}
+              size={14}
+              color="#FFF"
+              style={{ position: 'absolute' }}
+            />
+            <RNImage
+              source={{ uri: photo }}
+              style={{
+                width: imageSize,
+                height: imageSize,
+                borderRadius: imageSize / 2,
+                backgroundColor: color,
+              }}
+              resizeMode="cover"
+              onLoad={handleImageDone}
+              onLoadEnd={handleImageDone}
+              onError={() => {
+                setImageError(true);
+                handleImageDone();
+              }}
+            />
+          </>
+        ) : (
+          <MaterialIcons name={icon as any} size={14} color="#FFF" />
+        )}
+      </View>
+  );
+
+  if (noCanvas) return discView;
 
   return (
-    <MapMarkerDisc
-      size={disc}
-      color={color}
-      borderColor={borderColor ?? (isPublic ? theme.success : '#FFF')}
-      borderWidth={borderWidth ?? (isPublic ? 3 : 2)}
-    >
-      {photo && !imageError ? (
-        <>
-          {!imageLoaded ? (
-            <MaterialIcons name={icon as any} size={14} color="#FFF" style={{ position: 'absolute' }} />
-          ) : null}
-          <RNImage
-            source={{ uri: photo, cache: 'force-cache' }}
-            style={{ width: imageSize, height: imageSize, borderRadius: imageSize / 2, opacity: imageLoaded ? 1 : 0 }}
-            resizeMode="cover"
-            onLoad={handleLoad}
-            onError={handleError}
-          />
-        </>
-      ) : (
-        <MaterialIcons name={icon as any} size={14} color="#FFF" />
-      )}
-    </MapMarkerDisc>
+    <MapMarkerCanvas>
+      {discView}
+    </MapMarkerCanvas>
   );
 });
 
@@ -714,7 +811,7 @@ const pMarkerStyles = StyleSheet.create({
 // CLUSTER MARKER COMPONENT
 // ============================================
 // Animated pulse ring for LIVE / habitual terrain markers (rendered outside disc — not clipped)
-const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color?: string; ringSize?: number }) => {
+const ActiveNowPulse = React.memo(({ color = HABITUAL_TERRAIN_PULSE_COLOR, ringSize = 30 }: { color?: string; ringSize?: number }) => {
   const pulse1 = useSharedValue(0);
   const pulse2 = useSharedValue(0);
 
@@ -727,6 +824,7 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color
       -1,
       false
     );
+
     const timer = setTimeout(() => {
       pulse2.value = withRepeat(
         withSequence(
@@ -737,17 +835,29 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color
         false
       );
     }, 750);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(pulse1);
+      cancelAnimation(pulse2);
+      pulse1.value = 0;
+      pulse2.value = 0;
+    };
   }, [pulse1, pulse2]);
 
   const ring1Style = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse1.value * 0.8 }],
+    transform: [{ scale: 1 + pulse1.value * 0.4 }],
     opacity: 1 - pulse1.value,
   }));
+
   const ring2Style = useAnimatedStyle(() => ({
-    transform: [{ scale: 1 + pulse2.value * 0.8 }],
+    transform: [{ scale: 1 + pulse2.value * 0.4 }],
     opacity: 1 - pulse2.value,
   }));
+
+  // The ring scales to 1.4x, so the wrapper must be larger than ringSize.
+  // Otherwise Android rasterized markers clip the right/bottom side.
+  const maxRingSize = ringSize * 1.5;
 
   const ringBase = {
     position: 'absolute' as const,
@@ -760,7 +870,18 @@ const ActiveNowPulse = React.memo(({ color = '#22C55E', ringSize = 44 }: { color
   };
 
   return (
-    <View style={{ width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center' }} pointerEvents="none">
+    <View
+      style={{
+        width: maxRingSize,
+        height: maxRingSize,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'visible',
+        backgroundColor: 'transparent',
+      }}
+      pointerEvents="none"
+      collapsable={false}
+    >
       <Animated.View style={[ringBase, ring1Style]} />
       <Animated.View style={[ringBase, ring2Style]} />
     </View>
@@ -777,6 +898,8 @@ const MapPulseRingCircle = React.memo(({ center, color, delayMs = 0 }: {
   const rgb = useMemo(() => hexToRgb(color), [color]);
 
   React.useEffect(() => {
+    let delayTimer: ReturnType<typeof setTimeout> | null = null;
+
     const start = () => {
       progress.value = withRepeat(
         withSequence(
@@ -787,11 +910,18 @@ const MapPulseRingCircle = React.memo(({ center, color, delayMs = 0 }: {
         false
       );
     };
+
     if (delayMs > 0) {
-      const timer = setTimeout(start, delayMs);
-      return () => clearTimeout(timer);
+      delayTimer = setTimeout(start, delayMs);
+    } else {
+      start();
     }
-    start();
+
+    return () => {
+      if (delayTimer) clearTimeout(delayTimer);
+      cancelAnimation(progress);
+      progress.value = 0;
+    };
   }, [progress, delayMs]);
 
   const animatedProps = useAnimatedProps(() => {
@@ -811,16 +941,74 @@ const MapPulseRingCircle = React.memo(({ center, color, delayMs = 0 }: {
     <AnimatedMapCircle
       center={center}
       strokeWidth={2.5}
-      zIndex={0}
+      zIndex={999}
       animatedProps={animatedProps}
     />
+  );
+});
+
+const AndroidPulseMarker = React.memo(({ item }: {
+  item: { id: string; latitude: number; longitude: number; color: string };
+}) => {
+  if (!MarkerComponent) return null;
+
+  return (
+    <MarkerComponent
+      key={`android-pulse-${item.id}`}
+      coordinate={{ latitude: item.latitude, longitude: item.longitude }}
+      anchor={ANDROID_PULSE_MARKER_ANCHOR}
+      zIndex={1}
+      tappable={false}
+      tracksViewChanges={true}
+      style={{
+        width: MAP_MARKER_PULSE_CANVAS,
+        height: MAP_MARKER_PULSE_CANVAS,
+      }}
+    >
+      <View
+        collapsable={false}
+        pointerEvents="none"
+        style={{
+          width: MAP_MARKER_PULSE_CANVAS,
+          height: MAP_MARKER_PULSE_CANVAS,
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'visible',
+          backgroundColor: 'transparent',
+          transform: [
+            { translateX: ANDROID_PULSE_CONTENT_OFFSET.x },
+            { translateY: ANDROID_PULSE_CONTENT_OFFSET.y },
+          ],
+        }}
+      >
+        <ActiveNowPulse
+          color={item.color}
+          ringSize={MAP_MARKER_DISC + 7}
+        />
+      </View>
+    </MarkerComponent>
   );
 });
 
 const MapTerrainPulseLayer = React.memo(({ items }: {
   items: { id: string; latitude: number; longitude: number; color: string }[];
 }) => {
-  if (!AnimatedMapCircle || Platform.OS === 'web' || items.length === 0) return null;
+  if (Platform.OS === 'web' || items.length === 0) return null;
+
+  if (IS_ANDROID_MAP) {
+    if (!MarkerComponent) return null;
+
+    return (
+      <>
+        {items.map((item) => (
+          <AndroidPulseMarker key={`android-pulse-layer-${item.id}`} item={item} />
+        ))}
+      </>
+    );
+  }
+
+  if (!AnimatedMapCircle) return null;
+
   return (
     <>
       {items.map((item) => (
@@ -845,14 +1033,14 @@ const USE_IN_MARKER_PULSE = !IS_ANDROID_MAP;
 
 const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, fallbackSource, isVerified, isActiveNow, isLive, sponsorColor, onReady }: { color: string; icon: string; isPublic: boolean; accessIndicator?: 'public' | 'private' | null; fallbackSource?: 'terrain' | 'club' | null; isVerified?: boolean; isActiveNow?: boolean; isLive?: boolean; sponsorColor?: string | null; onReady?: () => void }) => {
   useEffect(() => { onReady?.(); }, [onReady]);
-  const pulseColor = isLive ? '#EF4444' : '#22C55E';
+  const pulseColor = isLive ? LIVE_TERRAIN_PULSE_COLOR : HABITUAL_TERRAIN_PULSE_COLOR;
   const showPulse = (isActiveNow || isLive) && USE_IN_MARKER_PULSE;
   const highlight = isActiveNow || isLive || !!sponsorColor;
   const discBorder = sponsorColor || (highlight ? pulseColor : '#FFF');
   const discBorderW = highlight ? 3 : isPublic ? 3 : 2;
   const discSize = MAP_MARKER_DISC;
   const canvasSize = showPulse ? MAP_MARKER_PULSE_CANVAS : (IS_ANDROID_MAP ? MAP_MARKER_CANVAS : 56);
-  const pulseRingSize = discSize + 4;
+  const pulseRingSize = discSize;
 
   const cornerBadge = sponsorColor ? (
     <View style={[styles.sponsorBadge, MAP_MARKER_CORNER_BADGE, { backgroundColor: sponsorColor }]}>
@@ -917,7 +1105,7 @@ const SingleMarkerView = React.memo(({ color, icon, isPublic, accessIndicator, f
 const CLUSTER_COLOR_MAP: Record<string, string> = {
   terrains: theme.success,
   clubs: theme.accent,
-  tournaments: theme.carreauColor,
+  tournaments: TOURNAMENT_GOLD_COLOR,
   players: theme.primary,
 };
 const CLUSTER_ICON_MAP: Record<string, string> = {
@@ -1086,7 +1274,7 @@ const TournamentSubFilters = React.memo(({ tournamentFormatFilter, tournamentSta
         <Text style={styles.subFilterLabelText}>Format</Text>
       </View>
       {(['Doublette', 'Triplette', 'Tete-a-tete'] as const).map(fmt => (
-        <SubFilterChip key={fmt} label={fmt} isActive={tournamentFormatFilter === fmt} color={theme.carreauColor} onPress={() => onFormatPress(fmt)} />
+        <SubFilterChip key={fmt} label={fmt} isActive={tournamentFormatFilter === fmt} color={TOURNAMENT_GOLD_COLOR} onPress={() => onFormatPress(fmt)} />
       ))}
     </ScrollView>
     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
@@ -1151,7 +1339,7 @@ const PlayerSubFilters = React.memo(({ eloRankFilter, eloRangeFilter, trustFilte
         <MaterialIcons name="verified-user" size={12} color={theme.textMuted} />
         <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Confiance' : 'Trust'}</Text>
       </View>
-      {([{ key: 'verified' as const, label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', color: '#22C55E' }, { key: 'high' as const, label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', color: '#3B82F6' }, { key: 'medium_low' as const, label: language === 'fr' ? '< Fiable' : '< Trusted', icon: 'warning', color: '#F97316' }]).map(opt => (
+      {([{ key: 'verified' as const, label: language === 'fr' ? 'Verifie' : 'Verified', icon: 'verified-user', color: HABITUAL_TERRAIN_PULSE_COLOR }, { key: 'high' as const, label: language === 'fr' ? 'Fiable' : 'Trusted', icon: 'shield', color: '#3B82F6' }, { key: 'medium_low' as const, label: language === 'fr' ? '< Fiable' : '< Trusted', icon: 'warning', color: '#F97316' }]).map(opt => (
         <SubFilterChip key={opt.key} label={opt.label} icon={opt.icon} isActive={trustFilter === opt.key} color={opt.color} onPress={() => onTrustPress(opt.key)} />
       ))}
     </ScrollView>
@@ -1171,7 +1359,7 @@ const PlayerSubFilters = React.memo(({ eloRankFilter, eloRangeFilter, trustFilte
 // LIST ITEM COMPONENT
 // ============================================
 const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, isPublicItem, onImport, t }: any) => {
-  const MARKER_COLORS: Record<string, string> = { terrains: theme.success, clubs: theme.accent, tournaments: theme.carreauColor, players: theme.primary };
+  const MARKER_COLORS: Record<string, string> = { terrains: theme.success, clubs: theme.accent, tournaments: TOURNAMENT_GOLD_COLOR, players: theme.primary };
   const MARKER_ICONS: Record<string, string> = { terrains: 'sports-soccer', clubs: 'home', tournaments: 'emoji-events', players: 'person' };
   const color = MARKER_COLORS[item.itemType] || theme.primary;
   const icon = MARKER_ICONS[item.itemType] || 'place';
@@ -1219,6 +1407,148 @@ const ListItem = React.memo(({ item, onPress, singularLabel, terrainTypeLabel, i
 // ============================================
 // MAIN COMPONENT
 // ============================================
+
+/**
+ * LIVE red pulse:
+ * only for terrain/court with real live activity:
+ * meetup, tournament, match, or challenge.
+ */
+function hasLiveCourtActivity(info: any): boolean {
+  if (!info) return false;
+
+  // Keep compatibility with your existing hook.
+  if (info.isActiveNow === true) return true;
+
+  // Optional fallback fields, depending on how useTerrainActivity is shaped.
+  return Boolean(
+    info.hasLiveMeetup ||
+    info.hasLiveTournament ||
+    info.hasLiveMatch ||
+    info.hasLiveChallenge ||
+    info.liveMeetupCount > 0 ||
+    info.liveTournamentCount > 0 ||
+    info.liveMatchCount > 0 ||
+    info.liveChallengeCount > 0 ||
+    info.liveActivities?.length > 0
+  );
+}
+
+function getMapDateValue(value: any): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function getMapDateTime(dateValue: any, timeValue?: any): Date | null {
+  if (!dateValue && !timeValue) return null;
+
+  if (timeValue && typeof timeValue === 'string' && timeValue.includes('T')) {
+    return getMapDateValue(timeValue);
+  }
+
+  if (dateValue && timeValue && typeof timeValue === 'string') {
+    const datePart = String(dateValue).split('T')[0];
+    const cleanTime = timeValue.length <= 5 ? `${timeValue}:00` : timeValue;
+    const combined = getMapDateValue(`${datePart}T${cleanTime}`);
+    if (combined) return combined;
+  }
+
+  return getMapDateValue(timeValue) || getMapDateValue(dateValue);
+}
+
+function startOfMapDay(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function normalizeMapStatus(value: any): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[_-]/g, ' ');
+}
+
+function getEffectiveTournamentMapStatus(tournament: any, now: Date = new Date()): 'upcoming' | 'active' | 'completed' | 'cancelled' {
+  const raw = normalizeMapStatus(tournament?.status);
+
+  if (raw.includes('cancel') || raw.includes('annul')) return 'cancelled';
+  if (raw.includes('termin') || raw.includes('complete') || raw.includes('completed') || raw.includes('finished') || raw.includes('done')) return 'completed';
+
+  const startDate =
+    getMapDateValue(tournament?.startDate) ||
+    getMapDateValue(tournament?.start_date) ||
+    getMapDateValue(tournament?.date) ||
+    getMapDateValue(tournament?.eventDate) ||
+    getMapDateValue(tournament?.event_date);
+
+  const endDate =
+    getMapDateValue(tournament?.endDate) ||
+    getMapDateValue(tournament?.end_date) ||
+    startDate;
+
+  if (startDate && endDate) {
+    const today = startOfMapDay(now).getTime();
+    const startDay = startOfMapDay(startDate).getTime();
+    const endDay = startOfMapDay(endDate).getTime();
+    if (today > endDay) return 'completed';
+    if (today >= startDay && today <= endDay) return 'active';
+    if (today < startDay) return 'upcoming';
+  }
+
+  if (raw.includes('en cours') || raw.includes('active') || raw.includes('progress')) return 'active';
+  return 'upcoming';
+}
+
+function getEffectiveChallengeMapStatus(event: any, now: Date = new Date()): 'upcoming' | 'active' | 'completed' | 'cancelled' {
+  const raw = normalizeMapStatus(event?.status);
+
+  if (raw.includes('cancel') || raw.includes('annul')) return 'cancelled';
+  if (raw.includes('complete') || raw.includes('completed') || raw.includes('termin') || raw.includes('finished') || raw.includes('done')) return 'completed';
+
+  const eventDate = event?.eventDate || event?.event_date || event?.date;
+  const startDate = getMapDateTime(eventDate, event?.startTime || event?.start_time);
+  const endDate = getMapDateTime(eventDate, event?.endTime || event?.end_time);
+  const dateOnly = getMapDateValue(event?.startTime || event?.start_time) || getMapDateValue(eventDate);
+
+  if (endDate && now.getTime() > endDate.getTime()) return 'completed';
+  if (startDate && endDate && now.getTime() >= startDate.getTime() && now.getTime() <= endDate.getTime()) return 'active';
+
+  if (dateOnly) {
+    const today = startOfMapDay(now).getTime();
+    const day = startOfMapDay(dateOnly).getTime();
+    if (day < today) return 'completed';
+    if (day === today) return raw.includes('active') || raw.includes('progress') ? 'active' : 'upcoming';
+    return 'upcoming';
+  }
+
+  if (raw.includes('active') || raw.includes('progress') || raw.includes('en cours')) return 'active';
+  return 'upcoming';
+}
+
+function shouldShowTournamentMarker(tournament: any): boolean {
+  const status = getEffectiveTournamentMapStatus(tournament);
+  return status === 'upcoming' || status === 'active';
+}
+
+function shouldShowChallengeMarker(event: any): boolean {
+  const status = getEffectiveChallengeMapStatus(event);
+  return status === 'upcoming' || status === 'active';
+}
+
+function normalizeSelectedMapStatus(status: any): 'upcoming' | 'active' | 'completed' | 'cancelled' | null {
+  const raw = normalizeMapStatus(status);
+  if (!raw) return null;
+  if (raw.includes('cancel') || raw.includes('annul')) return 'cancelled';
+  if (raw.includes('termin') || raw.includes('complete') || raw.includes('finished') || raw.includes('done')) return 'completed';
+  if (raw.includes('en cours') || raw.includes('active') || raw.includes('progress')) return 'active';
+  if (raw.includes('venir') || raw.includes('upcoming')) return 'upcoming';
+  return null;
+}
+
 export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, tournaments, terrains, players } = useAppData();
@@ -1235,19 +1565,91 @@ export default function MapScreen() {
   const { showToast } = useToast();
   const { t, language } = useLanguage();
   const { lat: paramLat, lng: paramLng, name: paramName, filter: paramFilter, activeNow: paramActiveNow, mf: paramMapFocus } = useLocalSearchParams<{ lat?: string; lng?: string; name?: string; filter?: string; activeNow?: string; mf?: string }>();
+
+  const initialMapRegion = useMemo(() => {
+    const lat = paramLat ? parseFloat(paramLat) : NaN;
+    const lng = paramLng ? parseFloat(paramLng) : NaN;
+
+    if (!Number.isNaN(lat) && !Number.isNaN(lng) && isValidMapCoord(lat, lng)) {
+      return {
+        latitude: lat,
+        longitude: lng,
+        latitudeDelta: 0.001,
+        longitudeDelta: 0.001,
+      };
+    }
+
+    return config.map.defaultRegion;
+  }, [paramLat, paramLng]);
+
   const [filter, setFilter] = useState<MarkerType>('all');
   const [selected, setSelected] = useState<any>(null);
   const [search, setSearch] = useState('');
   const [showSearch, setShowSearch] = useState(false);
   const [searchSuggestions, setSearchSuggestions] = useState<{ label: string; type: string; count?: number; lat?: number; lng?: number }[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const searchInputRef = useRef<TextInput>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [mapMode, setMapMode] = useState<MapMode>('all');
   const [showManageModal, setShowManageModal] = useState(false);
-  const [currentRegion, setCurrentRegion] = useState(config.map.defaultRegion);
+  const [currentRegion, setCurrentRegion] = useState(initialMapRegion);
 
+  const isMapFocused = useIsFocused();
+  const [mapMounted, setMapMounted] = useState(false);
+  const [mapTilesReady, setMapTilesReady] = useState(false);
+  /** Android: defer markers until map + UI are stable (avoids RN bridge saturation). */
+  const [markersReady, setMarkersReady] = useState(false);
+  const [mapChrome, setMapChrome] = useState({ top: 0, bottom: 0 });
+  const onHeroChromeLayout = useCallback((e: LayoutChangeEvent) => {
+    const top = e.nativeEvent.layout.height;
+    setMapChrome((prev) => (prev.top === top ? prev : { ...prev, top }));
+  }, []);
+  const onBottomChromeLayout = useCallback((e: LayoutChangeEvent) => {
+    const bottom = e.nativeEvent.layout.height;
+    setMapChrome((prev) => (prev.bottom === bottom ? prev : { ...prev, bottom }));
+  }, []);
+  const [showMapAd, setShowMapAd] = useState(false);
   const mapRef = useRef<any>(null);
   const regionDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const partnerLoadTaskRef = useRef<{ cancel?: () => void } | null>(null);
+
+  useEffect(() => {
+    const handleKeyboardShow = (event: any) => {
+      const screenHeight = Dimensions.get('window').height;
+      const endY = event?.endCoordinates?.screenY;
+      const eventHeight = event?.endCoordinates?.height;
+
+      const measuredHeight =
+        typeof eventHeight === 'number' && eventHeight > 0
+          ? eventHeight
+          : typeof endY === 'number'
+            ? Math.max(0, screenHeight - endY)
+            : 0;
+
+      setKeyboardHeight(measuredHeight);
+    };
+
+    const handleKeyboardHide = () => {
+      setKeyboardHeight(0);
+    };
+
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, handleKeyboardShow);
+    const hideSub = Keyboard.addListener(hideEvent, handleKeyboardHide);
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, []);
+
+  const keyboardLift = Platform.OS === 'android' && showSearch
+    ? Math.max(0, keyboardHeight - (insets.bottom || 68))
+    : 0;
 
   // Public items state
   const [publicPlayers, setPublicPlayers] = useState<any[]>([]);
@@ -1330,6 +1732,7 @@ export default function MapScreen() {
   const [partnerMarkers, setPartnerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
   const [partnerMarkersLoaded, setPartnerMarkersLoaded] = useState(false);
   const [partnerMarkersReloadKey, setPartnerMarkersReloadKey] = useState(0);
+  const [sponsorLookupById, setSponsorLookupById] = useState<Map<string, Ambassador>>(new Map());
 
   const [playerMarkers, setPlayerMarkers] = useState<(Ambassador & { _tier: string; _itemType: string; _itemId: string; location: any })[]>([]);
 
@@ -1371,7 +1774,7 @@ export default function MapScreen() {
   const MARKER_CONFIG = useMemo(() => ({
     terrains: { label: t('map', 'terrains'), singular: t('map', 'terrainSingular'), icon: 'sports-soccer', color: theme.success },
     clubs: { label: t('map', 'clubs'), singular: t('map', 'clubSingular'), icon: 'home', color: theme.accent },
-    tournaments: { label: t('map', 'tournaments'), singular: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor },
+    tournaments: { label: t('map', 'tournaments'), singular: t('map', 'tournamentSingular'), icon: 'emoji-events', color: TOURNAMENT_GOLD_COLOR },
     players: { label: t('map', 'players'), singular: t('map', 'playerSingular'), icon: 'person', color: theme.primary },
     events: { label: language === 'fr' ? 'Defis' : 'Challenges', singular: language === 'fr' ? 'Defi' : 'Challenge', icon: 'campaign', color: '#7C3AED' },
     partners: { label: language === 'fr' ? 'Partenaires' : 'Partners', singular: language === 'fr' ? 'Partenaire' : 'Partner', icon: 'handshake', color: '#D4A017' },
@@ -1383,7 +1786,7 @@ export default function MapScreen() {
       all: ['#0F172A', '#1E3A8A', '#2563EB'],
       terrains: ['#022C22', '#064E3B', '#10B981'],
       clubs: ['#451A03', '#92400E', '#D97706'],
-      tournaments: ['#451A03', '#78350F', '#B45309'],
+      tournaments: ['#422006', '#A16207', TOURNAMENT_GOLD_COLOR],
       players: ['#0F172A', '#1E3A8A', '#2563EB'],
       events: ['#2E1065', '#5B21B6', '#7C3AED'],
       partners: ['#451A03', '#78350F', '#D4A017'],
@@ -1396,7 +1799,7 @@ export default function MapScreen() {
       all: theme.primary,
       terrains: theme.success,
       clubs: theme.accent,
-      tournaments: theme.carreauColor,
+      tournaments: TOURNAMENT_GOLD_COLOR,
       players: theme.primary,
       events: '#7C3AED',
       partners: '#D4A017',
@@ -1421,13 +1824,6 @@ export default function MapScreen() {
     setPublicLoaded(true);
   }, [publicLoaded, user?.id]);
 
-  // Load public items on mount (deferred to avoid blocking initial render)
-  useEffect(() => {
-    if (!user?.id) return;
-    const timer = setTimeout(loadPublicItems, 800);
-    return () => clearTimeout(timer);
-  }, [user?.id]);
-
   // Load sponsored events for map markers
   useEffect(() => {
     if (sponsoredEventsLoaded) return;
@@ -1445,6 +1841,17 @@ export default function MapScreen() {
 
       const partnerTiers = ambassadors.filter(a => isMapPartnerBadge(a.badgeType));
       const ambassadorTiers = ambassadors.filter(a => !isMapPartnerBadge(a.badgeType));
+
+      // Sponsor lookup is separate from partner map markers. A sponsor may not have
+      // a public player/location, but we still need their photo/logo/color to draw
+      // half/half sponsored markers for sponsored players, courts, clubs and tournaments.
+      const sponsorLookup = new Map<string, Ambassador>();
+      partnerTiers.forEach((amb) => {
+        [amb.id, amb.userId, amb.playerId].filter(Boolean).forEach((id) => {
+          sponsorLookup.set(String(id), amb);
+        });
+      });
+      setSponsorLookupById(sponsorLookup);
 
       const resolveAmbassadorPlayer = async (amb: Ambassador) => {
         const ids = [...new Set([amb.playerId, amb.userId].filter(Boolean))] as string[];
@@ -1501,19 +1908,69 @@ export default function MapScreen() {
     }
   }, []);
 
+  // Partner/sponsor data is needed for half/half sponsored markers across players, courts,
+  // clubs and tournaments. Load it once after the map is stable; do not restrict this
+  // only to the Players/Partners filters.
   useEffect(() => {
-    const timer = setTimeout(loadPartnerMarkers, 800);
-    return () => clearTimeout(timer);
-  }, [loadPartnerMarkers, partnerMarkersReloadKey]);
+    if (!isMapFocused || !mapTilesReady || partnerMarkersLoaded) return;
+    const timer = setTimeout(() => {
+      partnerLoadTaskRef.current?.cancel?.();
+      partnerLoadTaskRef.current = InteractionManager.runAfterInteractions(() => {
+        loadPartnerMarkers();
+      });
+    }, IS_ANDROID_MAP ? 1200 : 500);
+    return () => {
+      clearTimeout(timer);
+      partnerLoadTaskRef.current?.cancel?.();
+      partnerLoadTaskRef.current = null;
+    };
+  }, [loadPartnerMarkers, partnerMarkersReloadKey, isMapFocused, mapTilesReady, partnerMarkersLoaded]);
 
+  // Mount MapView only while this tab is focused. Delay mount so tab transition finishes first;
+  // tear down immediately on blur so the Android SurfaceView cannot steal touches from other tabs.
   useFocusEffect(
     useCallback(() => {
-      if (!user?.id) return;
+      let mountTimer: ReturnType<typeof setTimeout> | null = null;
+      let adTimer: ReturnType<typeof setTimeout> | null = null;
+      let interactionTask: { cancel?: () => void } | null = null;
+
+      // Sponsor status can change from the admin/sponsor screens. Clear the
+      // previous lookup on every map focus so removed sponsors immediately stop
+      // rendering as half/half sponsored markers. The real active sponsor list is
+      // loaded again after the map tiles are ready.
+      setSponsorLookupById(new Map());
       setPartnerMarkersLoaded(false);
-      setPartnerMarkersReloadKey(k => k + 1);
-      refreshData();
-      loadPublicItems();
-    }, [user?.id, refreshData, loadPublicItems])
+      setPartnerMarkers([]);
+      setPartnerMarkersReloadKey(prev => prev + 1);
+
+      if (USE_NATIVE_MAP) {
+        interactionTask = InteractionManager.runAfterInteractions(() => {
+          mountTimer = setTimeout(() => setMapMounted(true), IS_ANDROID_MAP ? 350 : 120);
+        });
+      }
+      if (user?.id) {
+        InteractionManager.runAfterInteractions(() => {
+          loadPublicItems();
+        });
+      }
+      if (USE_NATIVE_MAP) {
+        adTimer = setTimeout(() => setShowMapAd(true), IS_ANDROID_MAP ? 3000 : 1200);
+      }
+      return () => {
+        interactionTask?.cancel?.();
+        if (mountTimer) clearTimeout(mountTimer);
+        if (adTimer) clearTimeout(adTimer);
+        setMapMounted(false);
+        setMapTilesReady(false);
+        setShowMapAd(false);
+        setSelected(null);
+        setSelectedPartner(null);
+        setBurstVisible(false);
+        if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
+        if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
+          if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+      };
+    }, [user?.id, loadPublicItems])
   );
 
   // Call this after loading partner markers
@@ -1540,10 +1997,81 @@ useEffect(() => {
   }
 }, [partnerMarkers]);
 
+  const getItemCoordinates = useCallback((item: any): { latitude: number; longitude: number } | null => {
+    const rawLat =
+      item?.location?.latitude ??
+      item?.location?.lat ??
+      item?.latitude ??
+      item?.lat ??
+      null;
+    const rawLng =
+      item?.location?.longitude ??
+      item?.location?.lng ??
+      item?.longitude ??
+      item?.lng ??
+      null;
+
+    const latitude = typeof rawLat === 'string' ? parseFloat(rawLat) : rawLat;
+    const longitude = typeof rawLng === 'string' ? parseFloat(rawLng) : rawLng;
+
+    if (!isValidMapCoordUtil(latitude, longitude)) return null;
+    return { latitude, longitude };
+  }, []);
+
   // Helper: check if a location has valid coordinates (not 0,0)
   const hasValidLocation = useCallback((item: any) => {
-    return isValidMapCoordUtil(item.location?.latitude, item.location?.longitude);
-  }, []);
+    return !!getItemCoordinates(item);
+  }, [getItemCoordinates]);
+
+  const withResolvedTournamentLocation = useCallback((tournament: any) => {
+    const direct = getItemCoordinates(tournament);
+    if (direct) {
+      return {
+        ...tournament,
+        location: {
+          ...(tournament.location || {}),
+          latitude: direct.latitude,
+          longitude: direct.longitude,
+        },
+      };
+    }
+
+    const linkedTerrainId = tournament.terrainId || tournament.terrain_id || tournament.courtId || tournament.court_id;
+    const linkedTerrain = linkedTerrainId
+      ? terrains.find((terrain: any) => terrain.id === linkedTerrainId)
+      : null;
+    const terrainCoords = linkedTerrain ? getItemCoordinates(linkedTerrain) : null;
+    if (terrainCoords) {
+      return {
+        ...tournament,
+        location: {
+          ...(tournament.location || {}),
+          ...terrainCoords,
+          city: tournament.location?.city || linkedTerrain.city,
+          name: tournament.location?.name || linkedTerrain.name,
+        },
+      };
+    }
+
+    const linkedClubId = tournament.clubId || tournament.club_id || tournament.organizingClubId || tournament.organizing_club_id;
+    const linkedClub = linkedClubId
+      ? clubs.find((club: any) => club.id === linkedClubId)
+      : null;
+    const clubCoords = linkedClub ? getItemCoordinates(linkedClub) : null;
+    if (clubCoords) {
+      return {
+        ...tournament,
+        location: {
+          ...(tournament.location || {}),
+          ...clubCoords,
+          city: tournament.location?.city || linkedClub.city,
+          name: tournament.location?.name || linkedClub.name,
+        },
+      };
+    }
+
+    return tournament;
+  }, [clubs, getItemCoordinates, terrains]);
 
   const isPlayerPublicOnMap = useCallback((player: any) => {
     return !!(player?.isPublic ?? player?.is_public);
@@ -1574,40 +2102,70 @@ useEffect(() => {
   // City-only profiles (onboarding): geocode city → lat/lng so pins can render
   const [mapGeocodedPlayers, setMapGeocodedPlayers] = useState(enrichedPlayers);
   useEffect(() => {
+    setMapGeocodedPlayers(enrichedPlayers);
+    if (!isMapFocused || !mapTilesReady) return;
     let cancelled = false;
-    (async () => {
-      const next = await Promise.all(
-        enrichedPlayers.map(async (p) => {
-          if (hasValidLocation(p)) return p;
-          const loc = await ensureMapCoordinates(p.location, p.city);
-          if (!loc) return p;
-          return { ...p, city: loc.city ?? p.city, location: { ...(p.location || {}), ...loc } };
-        })
-      );
-      if (!cancelled) setMapGeocodedPlayers(next as typeof enrichedPlayers);
-    })();
-    return () => { cancelled = true; };
-  }, [enrichedPlayers, hasValidLocation]);
+    const needsGeocode = enrichedPlayers.filter(p => !hasValidLocation(p));
+    if (needsGeocode.length === 0) return;
+    const timer = setTimeout(() => {
+      (async () => {
+        const byId = new Map(enrichedPlayers.map(p => [p.id, p]));
+        const batchSize = IS_ANDROID_MAP ? 2 : 6;
+        for (let i = 0; i < needsGeocode.length; i += batchSize) {
+          if (cancelled) break;
+          const batch = needsGeocode.slice(i, i + batchSize);
+          await Promise.all(batch.map(async (p) => {
+            const loc = await ensureMapCoordinates(p.location, p.city);
+            if (!loc) return;
+            byId.set(p.id, { ...p, city: loc.city ?? p.city, location: { ...(p.location || {}), ...loc } });
+          }));
+          if (!cancelled) setMapGeocodedPlayers(Array.from(byId.values()) as typeof enrichedPlayers);
+          if (IS_ANDROID_MAP) await new Promise(r => setTimeout(r, 120));
+        }
+      })();
+    }, IS_ANDROID_MAP ? 2000 : 600);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [enrichedPlayers, hasValidLocation, isMapFocused, mapTilesReady]);
 
-  // Own data with locations — only public items appear on map
-  const ownData = useMemo(() => ({
-    terrains: terrains.filter(t => hasValidLocation(t) && t.isPublic),
-    clubs: clubs.filter(c => hasValidLocation(c) && c.isPublic),
-    players: mapGeocodedPlayers.filter(p => {
-      if (!hasValidLocation(p)) return false;
-      const isSelf = p.id === user?.id || p.userId === user?.id;
-      return isPlayerPublicOnMap(p) || isSelf;
-    }),
-    tournaments: tournaments.filter(t => hasValidLocation(t) && (t as any).isPublic),
-  }), [terrains, clubs, mapGeocodedPlayers, tournaments, hasValidLocation, isPlayerPublicOnMap, user?.id]);
+  // Own data with locations. Owned tournaments should be available on the map
+  // even when they are not marked public; the status filter decides visibility.
+  const ownData = useMemo(() => {
+    const resolvedTournaments = tournaments.map(withResolvedTournamentLocation);
+    return {
+      terrains: terrains.filter(t => hasValidLocation(t) && t.isPublic),
+      clubs: clubs.filter(c => hasValidLocation(c) && c.isPublic),
+      players: mapGeocodedPlayers.filter(p => {
+        if (!hasValidLocation(p)) return false;
+        const isSelf = p.id === user?.id || p.userId === user?.id;
+        return isPlayerPublicOnMap(p) || isSelf;
+      }),
+      tournaments: resolvedTournaments.filter(t => hasValidLocation(t)),
+    };
+  }, [terrains, clubs, mapGeocodedPlayers, tournaments, hasValidLocation, isPlayerPublicOnMap, user?.id, withResolvedTournamentLocation]);
 
   // Public data with locations
-  const pubData = useMemo(() => ({
-    terrains: publicTerrains.filter(hasValidLocation),
-    clubs: publicClubs.filter(hasValidLocation),
-    players: publicPlayers.filter(hasValidLocation),
-    tournaments: publicTournaments.filter(hasValidLocation),
-  }), [publicTerrains, publicClubs, publicPlayers, publicTournaments, hasValidLocation]);
+  const pubData = useMemo(() => {
+    const resolvedPublicTournaments = publicTournaments.map(withResolvedTournamentLocation);
+    return {
+      terrains: publicTerrains.filter(hasValidLocation),
+      clubs: publicClubs.filter(hasValidLocation),
+      players: publicPlayers.filter(hasValidLocation),
+      tournaments: resolvedPublicTournaments.filter(hasValidLocation),
+    };
+  }, [publicTerrains, publicClubs, publicPlayers, publicTournaments, hasValidLocation, withResolvedTournamentLocation]);
+
+  // Terrain activity data from dedicated hook (accurate active-now detection)
+  const terrainActivityMap = useTerrainActivity();
+
+  // Active now / fire mode state must be declared before results,
+  // because results filters markers when fire mode is enabled.
+  const [activeNowMode, setActiveNowMode] = useState(false);
+  const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
+  const [liveTerrainIds, setLiveTerrainIds] = useState<Set<string>>(new Set());
+  const [habitualTerrainIds, setHabitualTerrainIds] = useState<Set<string>>(new Set());
 
   // Combined results
   const results = useMemo(() => {
@@ -1693,11 +2251,15 @@ useEffect(() => {
       if (showPublic) addItems(filterClubs(pubData.clubs), 'clubs', true);
     }
     if (filter === 'all' || filter === 'tournaments') {
-      // Only show upcoming/in-progress tournaments on map (exclude Terminé)
+      // Map should only show tournament markers that are upcoming or in progress.
+      // Completed/expired/cancelled tournaments stay available in Directory but not here.
       const filterTournaments = (arr: any[]) => {
-        let filtered = arr.filter(t => t.status !== 'Terminé');
+        let filtered = arr.filter(shouldShowTournamentMarker);
         if (tournamentFormatFilter) filtered = filtered.filter(t => t.format === tournamentFormatFilter);
-        if (tournamentStatusFilter) filtered = filtered.filter(t => t.status === tournamentStatusFilter);
+        if (tournamentStatusFilter) {
+          const selectedStatus = normalizeSelectedMapStatus(tournamentStatusFilter);
+          if (selectedStatus) filtered = filtered.filter(t => getEffectiveTournamentMapStatus(t) === selectedStatus);
+        }
         return filtered;
       };
       if (showOwn) addItems(filterTournaments(ownData.tournaments), 'tournaments', false);
@@ -1733,16 +2295,37 @@ useEffect(() => {
         });
       });
     }
-    if (filter === 'all' || filter === 'events') {
-      // Skip events when partner filter active
-      if (filter !== 'partners') sponsoredEvents.forEach(evt => {
-        const terrain = terrains.find(tr => tr.id === evt.terrainId);
-        const loc = terrain?.location;
-        if (loc && (loc.latitude || loc.longitude)) {
-          items.push({ ...evt, name: evt.title, location: loc, itemType: 'events', _isPublic: true });
-        }
-      });
-    }
+
+    // Challenges/events must only appear when All or Challenges is selected.
+    // Previously this used `filter !== 'partners'`, so challenges were still
+    // added for Courts/Clubs/Tournaments/Players and then appeared inside
+    // clusters when coordinates overlapped.
+    if (filter === 'all' || filter === 'events') sponsoredEvents.forEach(evt => {
+      // Map should only show challenge markers that are upcoming or in progress.
+      // Completed/expired/cancelled challenges stay available in Directory but not here.
+      if (!shouldShowChallengeMarker(evt)) return;
+
+      const linkedTerrainId = (evt as any).terrainId || (evt as any).terrain_id || (evt as any).courtId || (evt as any).court_id;
+      const terrain = terrains.find((tr: any) => tr.id === linkedTerrainId);
+      const directCoords = getItemCoordinates(evt as any);
+      const terrainCoords = terrain ? getItemCoordinates(terrain) : null;
+      const coords = directCoords || terrainCoords;
+
+      if (coords) {
+        items.push({
+          ...evt,
+          name: evt.title,
+          location: {
+            ...((evt as any).location || {}),
+            ...coords,
+            city: (evt as any).location?.city || terrain?.city || evt.city,
+            name: (evt as any).location?.name || terrain?.name || evt.terrainName,
+          },
+          itemType: 'events',
+          _isPublic: true,
+        });
+      }
+    });
 
     // Partner filter: add partner markers as results for list view
     if (filter === 'all' || filter === 'partners') {
@@ -1762,11 +2345,46 @@ useEffect(() => {
     });
 
     items.forEach((item: any) => {
-      if (item.sponsorId) {
-        const sponsorInfo = partnerMarkers.find(pm => pm.id === item.sponsorId);
-        if (sponsorInfo) {
-          item._sponsorPhoto = sponsorInfo.photo;
-          item._sponsorColor = sponsorInfo.brandColor || '#2563EB';
+      // Reset sponsor render fields on every rebuild. This prevents stale data
+      // such as Parc Asterix keeping a half/half marker after its sponsor was removed.
+      item._activeSponsor = false;
+      item._sponsorPhoto = null;
+      item._sponsorColor = null;
+
+      const sponsorId = getMapItemSponsorId(item);
+      if (sponsorId) {
+        const sponsorKey = String(sponsorId);
+        const sponsorInfo =
+          sponsorLookupById.get(sponsorKey) ||
+          partnerMarkers.find((pm: any) =>
+            String(pm.id) === sponsorKey ||
+            String(pm.userId || '') === sponsorKey ||
+            String(pm.playerId || '') === sponsorKey ||
+            String(pm._itemId || '') === sponsorKey
+          );
+
+        const embeddedSponsor = isActiveSponsorRecord(item.sponsor) ? item.sponsor : null;
+        const activeSponsor = isActiveSponsorRecord(sponsorInfo) ? sponsorInfo : embeddedSponsor;
+
+        if (activeSponsor) {
+          item._activeSponsor = true;
+          item._sponsorPhoto =
+            activeSponsor.photo ||
+            activeSponsor.logo ||
+            item.sponsorPhoto ||
+            item.sponsorLogo ||
+            item.sponsor?.photo ||
+            item.sponsor?.logo ||
+            null;
+
+          item._sponsorColor =
+            activeSponsor.brandColor ||
+            activeSponsor.brand_color ||
+            item.sponsorBrandColor ||
+            item.sponsorColor ||
+            item.sponsor?.brandColor ||
+            item.sponsor?.brand_color ||
+            '#2563EB';
         }
       }
       if (item.itemType === 'players') {
@@ -1780,35 +2398,64 @@ useEffect(() => {
     });
 
     return items.filter(it => {
+      // Final safety gate: when a category chip is selected, no other category
+      // can reach clustering/rendering, even if future code pushes it into items.
+      if (filter !== 'all' && it.itemType !== filter) return false;
+
       const key = `${it.itemType}-${it.id}`;
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
-  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter, playerMarkers, partnerMarkers]);
+  }, [ownData, pubData, filter, search, mapMode, eloRankFilter, eloRangeFilter, trustFilter, playerRoleFilter, terrainTypeFilter, terrainEnvFilter, terrainLightingFilter, terrainCoveredFilter, terrainParkingFilter, terrainToiletsFilter, terrainPublicAccessFilter, terrainMembersOnlyFilter, terrainMultiCourtsFilter, tournamentFormatFilter, tournamentStatusFilter, clubFacilityFilter, playerMarkers, partnerMarkers, sponsorLookupById, sponsoredEvents, terrains, getItemCoordinates]);
 
   useEffect(() => {
     if (results.length > 0) {
       precacheMarkerImages(results);
     }
-    setReadyMarkers(new Set());
+    if (!IS_ANDROID_MAP) {
+      setReadyMarkers(prev => (prev.size === 0 ? prev : new Set()));
+    }
   }, [results, precacheMarkerImages]);
 
-  // Compute clusters with debounced region to avoid expensive re-clustering on every pan
-  const clusterDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [debouncedClusterInput, setDebouncedClusterInput] = useState({ results, region: currentRegion });
+  // Fire mode must only pass active terrains to marker rendering/clustering.
+  // Otherwise, at max zoom-out, inactive courts can still be included inside a cluster
+  // popup even though renderMapMarkers hides their individual pins.
+  const visibleMapResults = useMemo(() => {
+    if (!activeNowMode) return results;
+    return results.filter((item: any) =>
+      item.itemType === 'terrains' &&
+      (liveTerrainIds.has(item.id) || habitualTerrainIds.has(item.id)) &&
+      isValidMapCoord(item.location?.latitude, item.location?.longitude)
+    );
+  }, [activeNowMode, results, liveTerrainIds, habitualTerrainIds]);
+
+  // Compute clusters with debounced region to avoid expensive re-clustering on every pan.
+  const [debouncedClusterInput, setDebouncedClusterInput] = useState({ results: visibleMapResults, region: currentRegion });
 
   useEffect(() => {
     if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
     clusterDebounceRef.current = setTimeout(() => {
-      setDebouncedClusterInput({ results, region: currentRegion });
+      setDebouncedClusterInput({ results: visibleMapResults, region: currentRegion });
     }, 120);
     return () => { if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current); };
-  }, [results, currentRegion]);
+  }, [visibleMapResults, currentRegion]);
 
   const clusters = useMemo(() => {
+    if (activeNowMode) {
+      // Do not cluster fire-mode courts. Each red/green marker must stay on its
+      // exact terrain coordinates so inactive nearby courts never appear in the
+      // grouped bottom sheet at maximum zoom-out.
+      return debouncedClusterInput.results.map((item: any) => ({
+        id: `fire-${item.itemType}-${item.id}`,
+        latitude: item.location?.latitude || 0,
+        longitude: item.location?.longitude || 0,
+        items: [item],
+        isCluster: false,
+      }));
+    }
     return clusterMarkers(debouncedClusterInput.results, debouncedClusterInput.region);
-  }, [debouncedClusterInput]);
+  }, [activeNowMode, debouncedClusterInput]);
 
   // Total items in directory (regardless of location)
   const totalCounts = useMemo(() => ({
@@ -1849,12 +2496,17 @@ useEffect(() => {
       .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'playerSingular'), icon: 'person', color: theme.primary, route: `/player/edit/${i.id}` }));
     tournaments
       .filter(i => !hasValidLocation(i) && canUserGeolocateItem(i))
-      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: theme.carreauColor, route: `/tournament/edit/${i.id}` }));
+      .forEach(i => items.push({ id: i.id, name: i.name, type: t('map', 'tournamentSingular'), icon: 'emoji-events', color: TOURNAMENT_GOLD_COLOR, route: `/tournament/edit/${i.id}` }));
     return items;
   }, [terrains, clubs, enrichedPlayers, tournaments, hasValidLocation, canUserGeolocateItem, t]);
 
   const counts = useMemo(() => {
-    const countType = (type: string) => results.filter(r => r.itemType === type).length;
+    // In fire mode, the header counters must reflect only the courts currently
+    // shown on the map: live red + habitual green active terrains.
+    // Otherwise the big court counter keeps showing all created courts while the
+    // small active-terrain legend shows the correct active count.
+    const countSource = activeNowMode ? visibleMapResults : results;
+    const countType = (type: string) => countSource.filter(r => r.itemType === type).length;
 
     return {
       terrains: countType('terrains'),
@@ -1863,10 +2515,10 @@ useEffect(() => {
       tournaments: countType('tournaments'),
       events: countType('events'),
       partners: countType('partners'),
-      total: results.length,
-      publicTotal: results.filter(r => r._isPublic).length,
+      total: countSource.length,
+      publicTotal: countSource.filter(r => r._isPublic).length,
     };
-  }, [results]);
+  }, [activeNowMode, results, visibleMapResults]);
 
   const handleSelect = useCallback((item: any, type: string) => {
     if (!item) return;
@@ -1957,7 +2609,7 @@ useEffect(() => {
       const tabMap: Record<string, { tab: string; labelKey: string; icon: string; color: string }> = {
         players: { tab: 'players', labelKey: 'playersTab', icon: 'person', color: '#4F46E5' },
         clubs: { tab: 'clubs', labelKey: 'clubsTab', icon: 'home', color: '#F97316' },
-        terrains: { tab: 'terrains', labelKey: 'terrainsTab', icon: 'sports-soccer', color: '#22C55E' },
+        terrains: { tab: 'terrains', labelKey: 'terrainsTab', icon: 'sports-soccer', color: HABITUAL_TERRAIN_PULSE_COLOR },
         tournaments: { tab: 'tournaments', labelKey: 'tournamentsTab', icon: 'emoji-events', color: '#EAB308' },
       };
       const tabInfo = tabMap[item.itemType];
@@ -1977,6 +2629,14 @@ useEffect(() => {
 
   const handleFilterPress = useCallback((f: MarkerType) => {
     Haptics.selectionAsync();
+
+    // Fire mode is a special "active courts" view.
+    // When the user selects any normal category (Players, Tournaments,
+    // Challenges, Clubs, etc.), turn fire mode off first so that the selected
+    // category markers are rendered normally.
+    setActiveNowMode(false);
+    setActiveNowTerrainIds(prev => (prev.size === 0 ? prev : new Set()));
+
     setFilter(f);
     setSelected(null);
     // Reset sub-filters when switching categories
@@ -2112,53 +2772,8 @@ useEffect(() => {
     return () => {
       if (regionDebounceRef.current) clearTimeout(regionDebounceRef.current);
       if (clusterDebounceRef.current) clearTimeout(clusterDebounceRef.current);
-      if (heatmapAnimRef.current) clearInterval(heatmapAnimRef.current);
     };
   }, []);
-
-  // Active now mode from directory
-  const [activeNowMode, setActiveNowMode] = useState(false);
-  const [activeNowTerrainIds, setActiveNowTerrainIds] = useState<Set<string>>(new Set());
-
-  // Terrain activity data from dedicated hook (accurate active-now detection)
-  const terrainActivityMap = useTerrainActivity();
-
-  const [freezeMarkers, setFreezeMarkers] = useState(true);
-  useEffect(() => {
-    const t = setTimeout(() => setFreezeMarkers(true), 500000);
-    return () => clearTimeout(t);
-  }, []);
-
-
-  // Player density heatmap
-  const [showHeatmap, setShowHeatmap] = useState(false);
-  const [heatmapPeriod, setHeatmapPeriod] = useState<'all' | 'week' | 'month' | '3months'>('all');
-  const [heatmapAnimating, setHeatmapAnimating] = useState(false);
-  const [heatmapAnimStep, setHeatmapAnimStep] = useState(0);
-  const HEATMAP_ANIM_STEPS = 4;
-  const heatmapAnimRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [heatmapCumulative, setHeatmapCumulative] = useState(false);
-
-  // Heatmap animation timer
-  useEffect(() => {
-    if (!heatmapAnimating) {
-      if (heatmapAnimRef.current) { clearInterval(heatmapAnimRef.current); heatmapAnimRef.current = null; }
-      return;
-    }
-    setHeatmapAnimStep(0);
-    heatmapAnimRef.current = setInterval(() => {
-      setHeatmapAnimStep(prev => (prev + 1) % HEATMAP_ANIM_STEPS);
-    }, 1500);
-    return () => { if (heatmapAnimRef.current) { clearInterval(heatmapAnimRef.current); heatmapAnimRef.current = null; } };
-  }, [heatmapAnimating]);
-
-  // Stop animation when heatmap is hidden or period is 'all'
-  useEffect(() => {
-    if (!showHeatmap || heatmapPeriod === 'all') {
-      setHeatmapAnimating(false);
-      setHeatmapAnimStep(0);
-    }
-  }, [showHeatmap, heatmapPeriod]);
 
   // Cluster burst animation
   const [burstVisible, setBurstVisible] = useState(false);
@@ -2192,93 +2807,6 @@ useEffect(() => {
     setTimeout(() => setBurstVisible(false), 550);
   }, []);
 
-  // Player density heatmap data
-  const heatmapData = useMemo(() => {
-    if (!showHeatmap) return [];
-    const allPlayersWithLoc = [...ownData.players, ...pubData.players].filter(p => {
-      const lat = p.location?.latitude;
-      const lng = p.location?.longitude;
-      return lat && lng && lat !== 0 && lng !== 0;
-    });
-    const seen = new Set<string>();
-    let uniquePlayers = allPlayersWithLoc.filter(p => {
-      if (seen.has(p.id)) return false;
-      seen.add(p.id);
-      return true;
-    });
-
-    // Time period filtering
-    const now = Date.now();
-    const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
-    const totalPeriod = periodMs[heatmapPeriod] || 0;
-    if (totalPeriod > 0) {
-      if (heatmapAnimating) {
-        const sliceDuration = totalPeriod / HEATMAP_ANIM_STEPS;
-        if (heatmapCumulative) {
-          // Cumulative: show all players from period start up to end of current slice
-          const periodStart = now - totalPeriod;
-          const cumulativeEnd = periodStart + (heatmapAnimStep + 1) * sliceDuration;
-          uniquePlayers = uniquePlayers.filter(p => {
-            const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
-            if (!lmd) return false;
-            const t = new Date(lmd).getTime();
-            return t >= periodStart && t < cumulativeEnd;
-          });
-        } else {
-          // Isolated: show only players active in current time slice
-          const sliceStart = now - totalPeriod + heatmapAnimStep * sliceDuration;
-          const sliceEnd = sliceStart + sliceDuration;
-          uniquePlayers = uniquePlayers.filter(p => {
-            const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
-            if (!lmd) return false;
-            const t = new Date(lmd).getTime();
-            return t >= sliceStart && t < sliceEnd;
-          });
-        }
-      } else {
-        // Static: show all players within period
-        const cutoff = now - totalPeriod;
-        uniquePlayers = uniquePlayers.filter(p => {
-          const lmd = (p as any).lastMatchDate || (p as any).last_match_date;
-          if (!lmd) return false;
-          return new Date(lmd).getTime() >= cutoff;
-        });
-      }
-    }
-
-    if (uniquePlayers.length === 0) return [];
-    const gridSize = 10;
-    const latStep = currentRegion.latitudeDelta / gridSize;
-    const lngStep = currentRegion.longitudeDelta / gridSize;
-    const minLat = currentRegion.latitude - currentRegion.latitudeDelta / 2;
-    const minLng = currentRegion.longitude - currentRegion.longitudeDelta / 2;
-    const grid = new Map<string, { lat: number; lng: number; count: number }>();
-    uniquePlayers.forEach(p => {
-      const lat = p.location.latitude;
-      const lng = p.location.longitude;
-      const r = Math.floor((lat - minLat) / latStep);
-      const c = Math.floor((lng - minLng) / lngStep);
-      if (r < 0 || r >= gridSize || c < 0 || c >= gridSize) return;
-      const key = `${r}-${c}`;
-      if (!grid.has(key)) grid.set(key, { lat: minLat + (r + 0.5) * latStep, lng: minLng + (c + 0.5) * lngStep, count: 0 });
-      grid.get(key)!.count++;
-    });
-    const cells = Array.from(grid.values()).filter(c => c.count > 0);
-    const maxCount = Math.max(...cells.map(c => c.count), 1);
-    const baseRadius = Math.max(currentRegion.latitudeDelta * 111000 / gridSize * 0.55, 300);
-    return cells.map(c => {
-      const ratio = c.count / maxCount;
-      const fillColor = ratio >= 0.7 ? 'rgba(239,68,68,0.35)' : ratio >= 0.4 ? 'rgba(245,158,11,0.30)' : ratio >= 0.15 ? 'rgba(59,130,246,0.25)' : 'rgba(147,197,253,0.20)';
-      const strokeColor = ratio >= 0.7 ? 'rgba(239,68,68,0.50)' : ratio >= 0.4 ? 'rgba(245,158,11,0.40)' : ratio >= 0.15 ? 'rgba(59,130,246,0.35)' : 'rgba(147,197,253,0.30)';
-      return { ...c, radius: baseRadius * (0.6 + ratio * 0.6), fillColor, strokeColor };
-    });
-  }, [showHeatmap, ownData.players, pubData.players, currentRegion, heatmapPeriod, heatmapAnimating, heatmapAnimStep, heatmapCumulative]);
-
-  const heatmapPlayerCount = useMemo(() => {
-    if (!showHeatmap) return 0;
-    return heatmapData.reduce((s, c) => s + c.count, 0);
-  }, [showHeatmap, heatmapData]);
-
   // Handle filter param from directory
   useEffect(() => {
     if (paramFilter === 'terrains') {
@@ -2290,77 +2818,114 @@ useEffect(() => {
     }
   }, [paramFilter, paramActiveNow]);
 
-  // Compute active-now terrain IDs from useTerrainActivity hook
-  // Separate truly LIVE terrains (red dot always visible) from habitual ones (green, only when mode on)
-  const [liveTerrainIds, setLiveTerrainIds] = useState<Set<string>>(new Set());
-
+  // Fire mode terrain IDs.
+  // Pulse markers are ONLY for terrains/courts and ONLY when activeNowMode is enabled.
   useEffect(() => {
-    const activeIds = new Set<string>();
     const liveIds = new Set<string>();
+    const habitualIds = new Set<string>();
+    const activeIds = new Set<string>();
+
     terrainActivityMap.forEach((info, terrainId) => {
-      if (info.isActiveNow) {
+      const isLive = hasLiveCourtActivity(info);
+      const isHabitualToday =
+        !isLive &&
+        Boolean((info as any).hasHabitualNow || (info.hasActivityToday && info.habitualScore > 0));
+
+      if (isLive) {
         liveIds.add(terrainId);
         activeIds.add(terrainId);
-      } else if (info.habitualScore > 10) {
+        return;
+      }
+
+      if (isHabitualToday) {
+        habitualIds.add(terrainId);
         activeIds.add(terrainId);
       }
     });
-    setActiveNowTerrainIds(activeIds);
+
     setLiveTerrainIds(liveIds);
+    setHabitualTerrainIds(habitualIds);
+    setActiveNowTerrainIds(activeIds);
   }, [terrainActivityMap]);
 
-  /** LIVE (red) + habitual (green, active-now mode) terrains — pulse drawn as map circles on Android. */
+  /**
+   * Pulse rings are shown only in fire mode.
+   * They are only for terrain/court markers.
+   */
   const terrainPulseItems = useMemo(() => {
-    const items: { id: string; latitude: number; longitude: number; color: string }[] = [];
-    for (const cluster of clusters) {
-      if (cluster.isCluster) continue;
-      const item = cluster.items[0];
-      if (item.itemType !== 'terrains') continue;
-      const live = liveTerrainIds.has(item.id);
-      const habitual = activeNowMode && activeNowTerrainIds.has(item.id) && !live;
-      if (!live && !habitual) continue;
-      const latitude = cluster.latitude;
-      const longitude = cluster.longitude;
-      if (!isValidMapCoord(latitude, longitude)) continue;
-      items.push({
-        id: item.id,
-        latitude,
-        longitude,
-        color: live ? '#EF4444' : '#22C55E',
-      });
-    }
-    return items;
-  }, [clusters, liveTerrainIds, activeNowTerrainIds, activeNowMode]);
+    if (!activeNowMode) return [];
+
+    return visibleMapResults
+      .filter((item: any) => item.itemType === 'terrains')
+      .map((item: any) => {
+        const latitude = item.location?.latitude;
+        const longitude = item.location?.longitude;
+        if (!isValidMapCoord(latitude, longitude)) return null;
+        const isLive = liveTerrainIds.has(item.id);
+        const isHabitualToday = habitualTerrainIds.has(item.id);
+        if (!isLive && !isHabitualToday) return null;
+        return {
+          id: item.id,
+          latitude,
+          longitude,
+          color: isLive ? LIVE_TERRAIN_PULSE_COLOR : HABITUAL_TERRAIN_PULSE_COLOR,
+        };
+      })
+      .filter(Boolean) as { id: string; latitude: number; longitude: number; color: string }[];
+  }, [activeNowMode, visibleMapResults, liveTerrainIds, habitualTerrainIds]);
 
   // Access matches for active-now computation
   const { matches: allMatches } = useAppData();
 
   // Zoom from deep links (home proximity, directory, terrain detail, etc.).
   // Callers pass mf (map focus nonce) so repeat navigation with the same lat/lng/name still re-runs this effect.
-  // Previously handledParamRef skipped the second visit; unchanged deps also skipped React's useEffect.
+  // Keep the focused coordinates as the current region too; otherwise Android can briefly
+  // animate to the terrain and then report the old/default region back through onRegionChangeComplete.
+  const lastMapFocusToastKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     if (!paramLat || !paramLng) return;
+
     const lat = parseFloat(paramLat);
     const lng = parseFloat(paramLng);
-    if (isNaN(lat) || isNaN(lng)) return;
+    if (Number.isNaN(lat) || Number.isNaN(lng) || !isValidMapCoord(lat, lng)) return;
+
+    const focusedRegion = {
+      latitude: lat,
+      longitude: lng,
+      latitudeDelta: 0.001,
+      longitudeDelta: 0.001,
+    };
+
+    const focusKey = `${paramLat}:${paramLng}:${paramMapFocus || ''}`;
+
+    if (regionDebounceRef.current) {
+      clearTimeout(regionDebounceRef.current);
+      regionDebounceRef.current = null;
+    }
+
+    setCurrentRegion(prev => {
+      const sameRegion =
+        Math.abs((prev?.latitude ?? 0) - focusedRegion.latitude) < 0.000001 &&
+        Math.abs((prev?.longitude ?? 0) - focusedRegion.longitude) < 0.000001 &&
+        Math.abs((prev?.latitudeDelta ?? 0) - focusedRegion.latitudeDelta) < 0.000001 &&
+        Math.abs((prev?.longitudeDelta ?? 0) - focusedRegion.longitudeDelta) < 0.000001;
+
+      return sameRegion ? prev : focusedRegion;
+    });
+
     const timer = setTimeout(() => {
       if (mapRef.current) {
-        mapRef.current.animateToRegion(
-          {
-            latitude: lat,
-            longitude: lng,
-            latitudeDelta: 0.001,
-            longitudeDelta: 0.001,
-          },
-          600
-        );
+        mapRef.current.animateToRegion(focusedRegion, 600);
       }
-      if (paramName) {
+      if (paramName && lastMapFocusToastKeyRef.current !== focusKey) {
+        lastMapFocusToastKeyRef.current = focusKey;
         showToast({ message: paramName, icon: 'place', iconColor: theme.success });
       }
-    }, 500);
+    }, mapTilesReady ? 150 : 500);
+
     return () => clearTimeout(timer);
-  }, [paramLat, paramLng, paramName, paramMapFocus, showToast]);
+  }, [paramLat, paramLng, paramName, paramMapFocus, mapTilesReady]);
 
   const loadManageData = useCallback(async () => {
     setLoadingManage(true);
@@ -2426,7 +2991,15 @@ useEffect(() => {
   const [readyMarkers, setReadyMarkers] = useState<Set<string>>(new Set());
 
   const handleMarkerReady = useCallback((id: string) => {
-    setReadyMarkers(prev => new Set([...prev, id]));
+    // Android does not use readyMarkers/tracksViewChanges; updating this state from
+    // image onLoad/onLoadEnd can cause repeated render loops on Google Maps markers.
+    if (IS_ANDROID_MAP) return;
+    setReadyMarkers(prev => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
   }, []);
 
   // iOS: stop tracksViewChanges if a marker never calls onReady (broken image URL, etc.)
@@ -2438,7 +3011,17 @@ useEffect(() => {
       .filter((id): id is string => !!id && !readyMarkers.has(id));
     if (pendingIds.length === 0) return;
     const timer = setTimeout(() => {
-      setReadyMarkers(prev => new Set([...prev, ...pendingIds]));
+      setReadyMarkers(prev => {
+        let changed = false;
+        const next = new Set(prev);
+        pendingIds.forEach(id => {
+          if (!next.has(id)) {
+            next.add(id);
+            changed = true;
+          }
+        });
+        return changed ? next : prev;
+      });
     }, 2500);
     return () => clearTimeout(timer);
   }, [clusters, readyMarkers]);
@@ -2452,34 +3035,275 @@ useEffect(() => {
     return () => clearTimeout(timer);
   }, [clusters]);
 
-  const renderMap = () => {
-    if (!MapViewComponent || !MarkerComponent) return renderList();
-    return (
-      <MapViewComponent
-        ref={mapRef}
-        provider={PROVIDER_GOOGLE}
-        style={StyleSheet.absoluteFillObject}
-        initialRegion={config.map.defaultRegion}
-        showsUserLocation
-        showsMyLocationButton={false}
-        scrollEnabled
-        zoomEnabled
-        zoomTapEnabled
-        rotateEnabled
-        pitchEnabled={false}
-        scrollDuringRotateOrZoomEnabled
-        zoomControlEnabled={IS_ANDROID_MAP}
-        onPress={() => { Keyboard.dismiss(); setSelected(null); setSelectedPartner(null); }}
-        onRegionChangeComplete={handleRegionChange}
-        mapPadding={{
-          top: 50,    // Shifts UI down (good for search bars)
-          right: 10,
-          bottom: 150, // Shifts UI up (good for bottom sheets)
-          left: 10,
-        }}
-      >
+  const handleMapReady = useCallback(() => {
+    requestAnimationFrame(() => {
+      setTimeout(() => setMapTilesReady(true), IS_ANDROID_MAP ? 200 : 50);
+    });
+  }, []);
 
-        {(filter !== '' )? clusters.map(cluster => {
+  useEffect(() => {
+    if (!mapTilesReady || !isMapFocused) {
+      setMarkersReady(false);
+      return;
+    }
+    if (!IS_ANDROID_MAP) {
+      setMarkersReady(true);
+      return;
+    }
+    const timer = setTimeout(() => setMarkersReady(true), 1200);
+    return () => {
+      clearTimeout(timer);
+      setMarkersReady(false);
+    };
+  }, [mapTilesReady, isMapFocused]);
+
+  const renderMapMarkers = () => {
+    if (!mapTilesReady || !MarkerComponent) return null;
+    if (IS_ANDROID_MAP && !markersReady) return null;
+
+    if (ANDROID_USE_SIMPLE_MARKERS) {
+      return clusters.map((cluster) => {
+        if (cluster.isCluster) {
+          return (
+            <MarkerComponent
+              key={cluster.id}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              pinColor="purple"
+              title={String(cluster.items.length)}
+              onPress={() => handleClusterPress(cluster)}
+              tappable
+              tracksViewChanges={false}
+            />
+          );
+        }
+        const item = cluster.items[0];
+        const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
+        if (!cfg) return null;
+        const isTerrain = item.itemType === 'terrains';
+        const terrainLive =
+          activeNowMode &&
+          isTerrain &&
+          liveTerrainIds.has(item.id);
+
+        const terrainHabitual =
+          activeNowMode &&
+          isTerrain &&
+          habitualTerrainIds.has(item.id);
+
+        // Fire mode: only terrains/courts with LIVE or habitual-today activity are shown.
+        // Everything else (courts with no recorded activity, and non-terrain items that
+        // slipped through) is hidden while activeNowMode is on.
+        if (activeNowMode && (!isTerrain || (!terrainLive && !terrainHabitual))) {
+          return null;
+        }
+
+        const typeConfig = isTerrain ? config.terrainTypes.find(tt => tt.id === item.type) : null;
+        const terrainIcon = typeConfig?.icon || getMapItemIcon(item.itemType, item.type);
+        const markerColor = cfg.color;
+        const markerIcon = terrainIcon || cfg.icon;
+        const imageUri = getMapItemPhoto(item);
+        const markerHasPulse = terrainLive || terrainHabitual;
+
+        // Sponsored items must be handled before normal photo/native pin rendering.
+        // Otherwise sponsored players with avatars still render as regular photo markers.
+        if (isSponsoredMapItem(item) && !isPartnerMapItem(item)) {
+          const markerReadyKey = `${item.itemType}-${item.id}`;
+          const onMarkerReady = () => handleMarkerReady(markerReadyKey);
+          const splitMarker = (
+            <SponsoredSplitMarkerView
+              itemIcon={markerIcon}
+              itemColor={markerColor}
+              itemPhoto={imageUri}
+              sponsorPhoto={item._sponsorPhoto}
+              sponsorColor={item._sponsorColor || item.sponsorBrandColor || '#2563EB'}
+              size={MAP_MARKER_DISC}
+              noCanvas={markerHasPulse}
+              onReady={onMarkerReady}
+            />
+          );
+
+          return (
+            <MarkerComponent
+              key={`${cluster.id}-sponsored-${markerHasPulse ? 'pulse' : 'static'}`}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              anchor={markerHasPulse ? ANDROID_PULSE_MARKER_ANCHOR : MAP_MARKER_BUBBLE_ANCHOR}
+              zIndex={terrainLive ? 20 : (terrainHabitual ? 10 : 3)}
+              onPress={() => handleSelect(item, item.itemType)}
+              tappable
+              tracksViewChanges={true}
+              style={markerHasPulse ? { width: MAP_MARKER_PULSE_CANVAS, height: MAP_MARKER_PULSE_CANVAS } : MAP_MARKER_NATIVE_STYLE}
+            >
+              {markerHasPulse ? (
+                <View
+                  collapsable={false}
+                  pointerEvents="none"
+                  style={{
+                    width: MAP_MARKER_PULSE_CANVAS,
+                    height: MAP_MARKER_PULSE_CANVAS,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'visible',
+                    backgroundColor: 'transparent',
+                    transform: [
+                      { translateX: ANDROID_LIVE_MARKER_CONTENT_OFFSET.x },
+                      { translateY: ANDROID_LIVE_MARKER_CONTENT_OFFSET.y },
+                    ],
+                  }}
+                >
+                  {splitMarker}
+                </View>
+              ) : splitMarker}
+            </MarkerComponent>
+          );
+        }
+
+        // If a court has a photo, always use the photo marker first — even for LIVE red pulse courts.
+        // For active terrain photo markers, use the same pulse canvas + Android offset as the red ring layer.
+        // This keeps the photo center aligned with the smallest red/green pulse ring center.
+        if (imageUri) {
+          const markerReadyKey = `${item.itemType}-${item.id}`;
+          const onMarkerReady = () => handleMarkerReady(markerReadyKey);
+          const photoDiscSize = MAP_MARKER_DISC;
+
+          return (
+            <MarkerComponent
+              key={`${cluster.id}-photo-${imageUri}-${markerHasPulse ? 'pulse' : 'static'}`}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              anchor={markerHasPulse ? ANDROID_PULSE_MARKER_ANCHOR : MAP_MARKER_BUBBLE_ANCHOR}
+              zIndex={terrainLive ? 20 : (terrainHabitual ? 10 : 2)}
+              onPress={() => handleSelect(item, item.itemType)}
+              tappable
+              tracksViewChanges={true}
+              style={markerHasPulse ? { width: MAP_MARKER_PULSE_CANVAS, height: MAP_MARKER_PULSE_CANVAS } : MAP_MARKER_NATIVE_STYLE}
+            >
+              {markerHasPulse ? (
+                <View
+                  collapsable={false}
+                  pointerEvents="none"
+                  style={{
+                    width: MAP_MARKER_PULSE_CANVAS,
+                    height: MAP_MARKER_PULSE_CANVAS,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'visible',
+                    backgroundColor: 'transparent',
+                    transform: [
+                      { translateX: ANDROID_LIVE_MARKER_CONTENT_OFFSET.x },
+                      { translateY: ANDROID_LIVE_MARKER_CONTENT_OFFSET.y },
+                    ],
+                  }}
+                >
+                  <EntityPhotoMarkerView
+                    photo={imageUri}
+                    color={markerColor}
+                    icon={markerIcon}
+                    isPublic={item._isPublic}
+                    borderColor={terrainLive ? LIVE_TERRAIN_PULSE_COLOR : HABITUAL_TERRAIN_PULSE_COLOR}
+                    borderWidth={3}
+                    size={photoDiscSize}
+                    noCanvas
+                    onReady={onMarkerReady}
+                  />
+                </View>
+              ) : (
+                <EntityPhotoMarkerView
+                  photo={imageUri}
+                  color={markerColor}
+                  icon={markerIcon}
+                  isPublic={item._isPublic}
+                  onReady={onMarkerReady}
+                />
+              )}
+            </MarkerComponent>
+          );
+        }
+
+        // Terrain/court without a photo should still use the same circular court marker style,
+        // with the correct terrain surface icon (sand, gravel, pebbles, etc.).
+        // Do not fall back to the default Google pin for courts.
+        if (isTerrain) {
+          const terrainMarkerColor = terrainLive
+            ? LIVE_TERRAIN_PULSE_COLOR
+            : terrainHabitual
+              ? HABITUAL_TERRAIN_PULSE_COLOR
+              : markerColor;
+
+          const courtIconDisc = (
+            <View
+              style={{
+                width: MAP_MARKER_DISC,
+                height: MAP_MARKER_DISC,
+                borderRadius: MAP_MARKER_DISC / 2,
+                backgroundColor: terrainMarkerColor,
+                borderWidth: markerHasPulse ? 3 : 2,
+                borderColor: '#FFF',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+                ...MAP_MARKER_NO_HW_TEXTURE,
+              }}
+            >
+              <MaterialIcons
+                name={terrainIcon as any}
+                size={Math.round(MAP_MARKER_DISC * 0.56)}
+                color="#FFF"
+                style={{ transform: [{ scaleX: -1 }] }}
+              />
+            </View>
+          );
+
+          return (
+            <MarkerComponent
+              key={`${cluster.id}-terrain-icon-${markerHasPulse ? 'pulse' : 'static'}`}
+              coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+              anchor={markerHasPulse ? ANDROID_PULSE_MARKER_ANCHOR : MAP_MARKER_BUBBLE_ANCHOR}
+              zIndex={terrainLive ? 20 : (terrainHabitual ? 10 : 2)}
+              onPress={() => handleSelect(item, item.itemType)}
+              tappable
+              tracksViewChanges={true}
+              style={markerHasPulse ? { width: MAP_MARKER_PULSE_CANVAS, height: MAP_MARKER_PULSE_CANVAS } : MAP_MARKER_NATIVE_STYLE}
+            >
+              {markerHasPulse ? (
+                <View
+                  collapsable={false}
+                  pointerEvents="none"
+                  style={{
+                    width: MAP_MARKER_PULSE_CANVAS,
+                    height: MAP_MARKER_PULSE_CANVAS,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    overflow: 'visible',
+                    backgroundColor: 'transparent',
+                    transform: [
+                      { translateX: ANDROID_LIVE_MARKER_CONTENT_OFFSET.x },
+                      { translateY: ANDROID_LIVE_MARKER_CONTENT_OFFSET.y },
+                    ],
+                  }}
+                >
+                  {courtIconDisc}
+                </View>
+              ) : (
+                <MapMarkerCanvas>{courtIconDisc}</MapMarkerCanvas>
+              )}
+            </MarkerComponent>
+          );
+        }
+
+        const pinColor = resolveAndroidPinColor(markerColor, { live: false, habitual: false });
+        return (
+          <MarkerComponent
+            key={cluster.id}
+            coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
+            pinColor={pinColor}
+            onPress={() => handleSelect(item, item.itemType)}
+            tappable
+            tracksViewChanges={false}
+          />
+        );
+      });
+    }
+
+    return clusters.map(cluster => {
           if (cluster.isCluster) {
             // Cluster marker
             const typeCounts: Record<string, number> = {};
@@ -2491,7 +3315,7 @@ useEffect(() => {
                 key={cluster.id}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleClusterPress(cluster)}
-                anchor={MAP_MARKER_BUBBLE_ANCHOR}
+                anchor={ANDROID_PULSE_MARKER_ANCHOR}
                 style={MAP_MARKER_NATIVE_STYLE}
                 tappable
                 tracksViewChanges={IS_ANDROID_MAP ? false : clusterTracksViewChanges}
@@ -2505,34 +3329,49 @@ useEffect(() => {
             const cfg = MARKER_CONFIG[item.itemType as keyof typeof MARKER_CONFIG];
             if (!cfg) return null;
             const tc = item.itemType === 'terrains' ? config.terrainTypes.find(tt => tt.id === item.type) : null;
-            const terrainLive = item.itemType === 'terrains' && liveTerrainIds.has(item.id);
-            const terrainHabitual = activeNowMode && item.itemType === 'terrains' && activeNowTerrainIds.has(item.id) && !terrainLive;
+            const isTerrain = item.itemType === 'terrains';
+
+            const terrainLive =
+              activeNowMode &&
+              isTerrain &&
+              liveTerrainIds.has(item.id);
+
+            const terrainHabitual =
+              activeNowMode &&
+              isTerrain &&
+              habitualTerrainIds.has(item.id);
+
+            // Fire mode: only terrains/courts with LIVE or habitual-today activity are shown.
+            if (activeNowMode && (!isTerrain || (!terrainLive && !terrainHabitual))) {
+              return null;
+            }
+
             const markerHasPulse = terrainLive || terrainHabitual;
             const markerIcon = tc?.icon || cfg.icon;
             const itemPhoto = getMapItemPhoto(item);
             const onMarkerReady = () => handleMarkerReady(item.id);
-            // Android: always false — true freezes map/tabs (see docs/map-marker-android-fix.md).
+            // Android: always false — true freezes map/tabs.
             // iOS: keep true until bitmap ready or pulse animating.
             const markerTracksViewChanges = IS_ANDROID_MAP
               ? false
               : (markerHasPulse || !readyMarkers.has(item.id));
             let markerContent: React.ReactNode;
-            if (isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) {
-              markerContent = (
-                <PartnerMarkerView
-                  partner={{ ...item, _tier: item._tier, photo: item.photo || item.avatar }}
-                  onReady={onMarkerReady}
-                />
-              );
-            } else if (isSponsoredMapItem(item)) {
+            if (isSponsoredMapItem(item) && !isPartnerMapItem(item)) {
               markerContent = (
                 <SponsoredSplitMarkerView
                   itemIcon={markerIcon}
                   itemColor={cfg.color}
                   itemPhoto={itemPhoto}
                   sponsorPhoto={item._sponsorPhoto}
-                  sponsorColor={item._sponsorColor || '#2563EB'}
+                  sponsorColor={item._sponsorColor || item.sponsorBrandColor || '#2563EB'}
                   size={40}
+                  onReady={onMarkerReady}
+                />
+              );
+            } else if (isPartnerMapItem(item) || isAmbassadorPlayerItem(item)) {
+              markerContent = (
+                <PartnerMarkerView
+                  partner={{ ...item, _tier: item._tier, photo: item.photo || item.avatar }}
                   onReady={onMarkerReady}
                 />
               );
@@ -2540,9 +3379,12 @@ useEffect(() => {
               markerContent = (
                 <EntityPhotoMarkerView
                   photo={itemPhoto}
-                  color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)}
+                  color={cfg.color}
                   icon={markerIcon}
                   isPublic={item._isPublic}
+                  borderColor={terrainLive ? LIVE_TERRAIN_PULSE_COLOR : (terrainHabitual ? HABITUAL_TERRAIN_PULSE_COLOR : undefined)}
+                  borderWidth={(terrainLive || terrainHabitual) ? 3 : undefined}
+                  size={MAP_MARKER_DISC}
                   onReady={onMarkerReady}
                 />
               );
@@ -2558,7 +3400,7 @@ useEffect(() => {
             } else {
               markerContent = (
                 <SingleMarkerView
-                  color={terrainLive ? '#EF4444' : (terrainHabitual ? '#22C55E' : cfg.color)}
+                  color={terrainLive ? LIVE_TERRAIN_PULSE_COLOR : (terrainHabitual ? HABITUAL_TERRAIN_PULSE_COLOR : cfg.color)}
                   icon={markerIcon}
                   isPublic={item._isPublic}
                   accessIndicator={item.itemType === 'terrains' ? (item.publicAccess !== false ? 'public' : 'private') : null}
@@ -2573,10 +3415,10 @@ useEffect(() => {
             }
             return (
               <MarkerComponent
-                key={cluster.id}
+                key={`${cluster.id}-${markerHasPulse ? 'pulse' : 'static'}`}
                 coordinate={{ latitude: cluster.latitude, longitude: cluster.longitude }}
                 onPress={() => handleSelect(item, item.itemType)}
-                anchor={MAP_MARKER_BUBBLE_ANCHOR}
+                anchor={ANDROID_PULSE_MARKER_ANCHOR}
                 style={IS_ANDROID_MAP ? MAP_MARKER_NATIVE_STYLE : (getMapMarkerNativeStyle({ pulse: markerHasPulse && USE_IN_MARKER_PULSE }) ?? MAP_MARKER_NATIVE_STYLE)}
                 tappable
                 tracksViewChanges={markerTracksViewChanges}
@@ -2585,20 +3427,37 @@ useEffect(() => {
               </MarkerComponent>
             );
           }
-        }) : null}
-        <MapTerrainPulseLayer items={terrainPulseItems} />
-        {/* Player density heatmap circles */}
-        {showHeatmap && CircleComponent ? heatmapData.map((cell, idx) => (
-          <CircleComponent
-            key={`heat-${idx}`}
-            center={{ latitude: cell.lat, longitude: cell.lng }}
-            radius={cell.radius}
-            fillColor={cell.fillColor}
-            strokeColor={cell.strokeColor}
-            strokeWidth={1}
-            zIndex={-1}
-          />
-        )) : null}
+        });
+  };
+
+  const renderMap = () => {
+    if (!MapViewComponent || !mapMounted || !isMapFocused) return null;
+    return (
+      <MapViewComponent
+        ref={mapRef}
+        provider={PROVIDER_GOOGLE}
+        style={styles.mapFill}
+        initialRegion={initialMapRegion}
+        showsUserLocation={false}
+        showsMyLocationButton={false}
+        loadingEnabled={IS_ANDROID_MAP}
+        moveOnMarkerPress={false}
+        scrollEnabled
+        zoomEnabled
+        zoomTapEnabled
+        rotateEnabled
+        pitchEnabled={false}
+        scrollDuringRotateOrZoomEnabled
+        zoomControlEnabled={IS_ANDROID_MAP}
+        onMapReady={handleMapReady}
+        onPress={() => { Keyboard.dismiss(); setSelected(null); setSelectedPartner(null); }}
+        onRegionChangeComplete={handleRegionChange}
+        mapPadding={{ top: 8, right: 8, bottom: 8, left: 8 }}
+      >
+        {(IS_ANDROID_MAP || mapTilesReady) ? (
+          <MapTerrainPulseLayer items={terrainPulseItems} />
+        ) : null}
+        {renderMapMarkers()}
       </MapViewComponent>
     );
   };
@@ -2621,6 +3480,31 @@ useEffect(() => {
         windowSize={5}
         removeClippedSubviews={true}
         getItemLayout={(_data, index) => ({ length: 64, offset: 64 * index, index })}
+      />
+    </View>
+  );
+
+  /** Android emulator: no MapView (freezes Nox/AVD). Same filters + scrollable results. */
+  const renderMapTabList = () => (
+    <View style={styles.mapTabListRoot}>
+      <View style={styles.emulatorMapBanner}>
+        <MaterialIcons name="info-outline" size={16} color={theme.primary} />
+        <Text style={styles.emulatorMapBannerText}>
+          {language === 'fr'
+            ? 'Mode liste sur emulateur. Carte interactive sur telephone.'
+            : 'List mode on emulator. Interactive map on a real phone.'}
+        </Text>
+      </View>
+      <FlatList
+        data={results}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        contentContainerStyle={styles.mapTabListScroll}
+        showsVerticalScrollIndicator={false}
+        initialNumToRender={12}
+        maxToRenderPerBatch={8}
+        windowSize={5}
+        removeClippedSubviews
       />
     </View>
   );
@@ -2701,12 +3585,309 @@ useEffect(() => {
 
 
   
+  const renderHeroHeader = () => (
+    <View style={[styles.heroSection, { paddingTop: insets.top }]} pointerEvents="box-none">
+      <View style={[styles.heroGradient, { backgroundColor: '#0F172A' }]} pointerEvents="auto">
+        <View style={styles.heroDecoCircle1} />
+        <View style={styles.heroDecoCircle2} />
+        <View style={styles.heroTop}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.heroTitle}>{t('map', 'map')}</Text>
+            <Text style={styles.heroSubtitle}>
+              {counts.total} {t('map', 'results')} {counts.publicTotal > 0 ? `• ${counts.publicTotal} ${t('map', 'publicLabel')}` : ''}
+            </Text>
+          </View>
+          <View style={styles.heroActions}>
+            <Pressable
+              style={styles.heroActionBtn}
+              onPress={() => {
+                Haptics.selectionAsync();
+                loadManageData();
+                setShowManageModal(true);
+              }}
+            >
+              <MaterialIcons name="public" size={18} color="#FFF" />
+            </Pressable>
+            <Pressable
+              style={[styles.heroActionBtn, showSearch && styles.heroActionBtnActive]}
+              onPress={() => {
+                Haptics.selectionAsync();
+
+                const nextShowSearch = !showSearch;
+                setShowSearch(nextShowSearch);
+
+                if (showSearch) {
+                  setSearch('');
+                  setSearchSuggestions([]);
+                  setShowSuggestions(false);
+                  Keyboard.dismiss();
+                } else {
+                  requestAnimationFrame(() => {
+                    searchInputRef.current?.focus();
+                  });
+                }
+              }}
+            >
+              <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color="#FFF" />
+            </Pressable>
+            <Pressable
+              style={[styles.heroActionBtn, activeNowMode && { backgroundColor: 'rgba(34,197,94,0.35)' }]}
+              onPress={() => {
+                Haptics.selectionAsync();
+                const next = !activeNowMode;
+                setActiveNowMode(next);
+                if (next) {
+                  setFilter('terrains');
+                }
+              }}
+            >
+              <MaterialIcons name="local-fire-department" size={18} color={activeNowMode ? '#FFF' : 'rgba(255,255,255,0.7)'} />
+            </Pressable>
+          </View>
+        </View>
+        <View style={styles.heroStatsSummary}>
+          {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map((k, i) => {
+            const isActive = filter === k;
+            return (
+              <React.Fragment key={k}>
+                {i > 0 ? <View style={styles.heroStatDivider} /> : null}
+                <Pressable style={styles.heroStatItem} onPress={() => handleFilterPress(k)}>
+                  <Text style={[styles.heroStatValue, isActive && { color: '#FFF', fontSize: 19 }]}>{counts[k]}</Text>
+                  <Text style={[styles.heroStatLabel, isActive && { color: 'rgba(255,255,255,0.7)' }]}>{MARKER_CONFIG[k].label}</Text>
+                </Pressable>
+              </React.Fragment>
+            );
+          })}
+        </View>
+      </View>
+      {showMapAd ? (
+        <View style={styles.heroAdBanner}>
+          <AdBanner position="inline" />
+        </View>
+      ) : null}
+    </View>
+  );
+
+  const renderBottomPanel = () => (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      enabled={Platform.OS === 'ios'}
+    >
+      <View style={styles.bottomPanel} pointerEvents="auto">
+        {showSearch ? (
+          <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
+            <View style={styles.searchBar}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchInput}
+                placeholder={language === 'fr' ? 'Ville, terrain, club, joueur...' : 'City, terrain, club, player...'}
+                placeholderTextColor={theme.textMuted}
+                value={search}
+                onChangeText={(text) => {
+                  setSearch(text);
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  if (text.trim().length < 2) { setSearchSuggestions([]); setShowSuggestions(false); return; }
+                  searchDebounceRef.current = setTimeout(() => {
+                    const q = text.toLowerCase().trim();
+                    const suggestions: { label: string; type: string; count?: number; lat?: number; lng?: number; icon?: string; color?: string }[] = [];
+                    const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
+                    [...ownData.terrains, ...ownData.clubs, ...ownData.players, ...pubData.terrains, ...pubData.clubs, ...pubData.players].forEach(item => {
+                      const city = item.city || item.location?.city;
+                      if (city && city.toLowerCase().includes(q)) {
+                        const existing = cityMap.get(city) || { count: 0 };
+                        existing.count++;
+                        if (!existing.lat && item.location?.latitude) { existing.lat = item.location.latitude; existing.lng = item.location.longitude; }
+                        cityMap.set(city, existing);
+                      }
+                    });
+                    cityMap.forEach((v, city) => {
+                      suggestions.push({ label: city, type: language === 'fr' ? 'Ville' : 'City', count: v.count, lat: v.lat, lng: v.lng, icon: 'location-city', color: '#3B82F6' });
+                    });
+                    const nameMatches: typeof suggestions = [];
+                    const typeLabels: Record<string, { label: string; icon: string; color: string }> = {
+                      terrains: { label: language === 'fr' ? 'Terrain' : 'Terrain', icon: 'sports-soccer', color: theme.success },
+                      clubs: { label: 'Club', icon: 'home', color: theme.accent },
+                      players: { label: language === 'fr' ? 'Joueur' : 'Player', icon: 'person', color: theme.primary },
+                    };
+                    const addNameMatches = (items: any[], itemType: string) => {
+                      items.filter(it => it.name?.toLowerCase().includes(q)).slice(0, 3).forEach(it => {
+                        const tl = typeLabels[itemType];
+                        if (tl) nameMatches.push({ label: it.name, type: tl.label, lat: it.location?.latitude, lng: it.location?.longitude, icon: tl.icon, color: tl.color });
+                      });
+                    };
+                    addNameMatches([...ownData.terrains, ...pubData.terrains], 'terrains');
+                    addNameMatches([...ownData.clubs, ...pubData.clubs], 'clubs');
+                    addNameMatches([...ownData.players, ...pubData.players], 'players');
+                    suggestions.push(...nameMatches.slice(0, 5));
+                    const seen = new Set<string>();
+                    const deduped = suggestions.filter(s => { const key = `${s.label}-${s.type}`; if (seen.has(key)) return false; seen.add(key); return true; });
+                    setSearchSuggestions(deduped.slice(0, 8));
+                    setShowSuggestions(deduped.length > 0);
+                  }, 200);
+                }}
+                autoFocus
+                showSoftInputOnFocus
+              />
+              {search.length > 0 ? (
+                <Pressable onPress={() => { setSearch(''); setSearchSuggestions([]); setShowSuggestions(false); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
+              ) : null}
+            </View>
+            {!search.trim() ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChipsRow}>
+                {[{ label: language === 'fr' ? 'Pres de moi' : 'Near me', icon: 'my-location', onPress: () => {
+                  if (mapRef.current) {
+                    mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
+                  }
+                }},
+                ...topCities.map(tc => ({
+                  label: tc.name, icon: 'location-city' as const,
+                  onPress: () => { setSearch(tc.name); if (tc.lat && tc.lng && mapRef.current) mapRef.current.animateToRegion({ latitude: tc.lat, longitude: tc.lng, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 500); },
+                })),
+                ].map((chip, i) => (
+                  <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
+                    <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />
+                    <Text style={styles.suggestionChipText}>{chip.label}</Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {showSuggestions && searchSuggestions.length > 0 ? (
+              <ScrollView style={styles.suggestionsContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                {searchSuggestions.map((sug, idx) => (
+                  <Pressable
+                    key={`${sug.label}-${sug.type}-${idx}`}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      setSearch(sug.label);
+                      setShowSuggestions(false);
+                      if (sug.lat && sug.lng && mapRef.current) {
+                        mapRef.current.animateToRegion({
+                          latitude: sug.lat,
+                          longitude: sug.lng,
+                          latitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                          longitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
+                        }, 500);
+                      }
+                    }}
+                  >
+                    <View style={[styles.suggestionIcon, { backgroundColor: ((sug as any).color || theme.primary) + '12' }]}>
+                      <MaterialIcons name={((sug as any).icon || 'place') as any} size={16} color={(sug as any).color || theme.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
+                      <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` • ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
+                    </View>
+                    {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : null}
+            {search.trim() && !showSuggestions ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
+          </Animated.View>
+        ) : null}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          contentContainerStyle={styles.filters}
+        >
+          <FilterChip label={t('map', 'all')} icon="layers" isActive={filter === 'all'} onPress={() => handleFilterPress('all')} />
+          {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
+            <FilterChip key={k} label={MARKER_CONFIG[k].label} icon={MARKER_CONFIG[k].icon} isActive={filter === k} activeColor={MARKER_CONFIG[k].color} onPress={() => handleFilterPress(k)} />
+          ))}
+        </ScrollView>
+        {filter === 'terrains' ? (
+          <TerrainSubFilters
+            terrainTypeFilter={terrainTypeFilter}
+            terrainEnvFilter={terrainEnvFilter}
+            terrainLightingFilter={terrainLightingFilter}
+            terrainCoveredFilter={terrainCoveredFilter}
+            terrainParkingFilter={terrainParkingFilter}
+            terrainToiletsFilter={terrainToiletsFilter}
+            terrainPublicAccessFilter={terrainPublicAccessFilter}
+            terrainMembersOnlyFilter={terrainMembersOnlyFilter}
+            terrainMultiCourtsFilter={terrainMultiCourtsFilter}
+            onTerrainTypePress={handleTerrainTypeToggle}
+            onTerrainEnvPress={handleTerrainEnvToggle}
+            onTerrainCharPress={handleTerrainCharToggle}
+            onClear={handleClearTerrainSubFilters}
+            count={counts.terrains}
+            language={language}
+          />
+        ) : null}
+        {filter === 'clubs' ? (
+          <View style={styles.subFiltersContainer}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
+              <View style={styles.subFilterLabel}>
+                <MaterialIcons name="build" size={12} color={theme.textMuted} />
+                <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Equipements' : 'Facilities'}</Text>
+              </View>
+              {(['Parking', 'Buvette', 'Toilettes', 'Eclairage', 'Boulodrome couvert', 'Vestiaires', 'Location de boules', 'Wi-Fi', 'Restaurant'] as const).map(fac => (
+                <SubFilterChip key={fac} label={fac} isActive={clubFacilityFilter === fac} color={theme.accent} onPress={() => handleClubFacilityToggle(fac)} />
+              ))}
+            </ScrollView>
+            {clubFacilityFilter ? (
+              <View style={styles.subFilterActiveBar}>
+                <Text style={styles.subFilterActiveText}>{counts.clubs} {language === 'fr' ? 'club(s) filtre(s)' : 'club(s) filtered'}</Text>
+                <Pressable style={styles.subFilterClearBtn} onPress={handleClearClubSubFilters}>
+                  <MaterialIcons name="close" size={12} color={theme.primary} />
+                  <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                </Pressable>
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+        {filter === 'tournaments' ? (
+          <TournamentSubFilters
+            tournamentFormatFilter={tournamentFormatFilter}
+            tournamentStatusFilter={tournamentStatusFilter}
+            onFormatPress={handleTournamentFormatToggle}
+            onStatusPress={handleTournamentStatusToggle}
+            onClear={handleClearTournamentSubFilters}
+            count={counts.tournaments}
+            language={language}
+          />
+        ) : null}
+        {filter === 'players' ? (
+          <PlayerSubFilters
+            eloRankFilter={eloRankFilter}
+            eloRangeFilter={eloRangeFilter}
+            trustFilter={trustFilter}
+            roleFilter={playerRoleFilter}
+            onEloRankPress={handleEloRankToggle}
+            onEloRangePress={handleEloRangeToggle}
+            onTrustPress={handleTrustToggle}
+            onRolePress={handlePlayerRoleToggle}
+            onClear={handleClearPlayerSubFilters}
+            count={counts.players}
+            language={language}
+          />
+        ) : null}
+      </View>
+    </KeyboardAvoidingView>
+  );
+
   return (
     <View style={styles.container}>
-      {Platform.OS === 'web' ? renderList() : renderMap()}
+      {Platform.OS === 'web' ? renderList() : (
+        <>
+          {USE_NATIVE_MAP ? (
+          <View
+            style={[styles.mapLayer, { top: mapChrome.top, bottom: mapChrome.bottom }]}
+            collapsable={false}
+            pointerEvents="box-none"
+          >
+            {mapMounted && isMapFocused ? renderMap() : (
+              <View style={styles.mapPlaceholder}>
+                <ActivityIndicator size="small" color={theme.primary} />
+              </View>
+            )}
 
       {/* Cluster burst animation overlay */}
-      {burstVisible ? (
+      {burstVisible && mapMounted ? (
         <View style={styles.burstOverlay} pointerEvents="none">
           <Animated.View style={[styles.burstRing, { borderColor: burstColor }, burstRing1Style]} />
           <Animated.View style={[styles.burstRing, { borderColor: burstColor, width: 48, height: 48, borderRadius: 24 }, burstRing2Style]} />
@@ -2714,34 +3895,9 @@ useEffect(() => {
         </View>
       ) : null}
 
-      {/* Active Now toggle button */}
-      {Platform.OS !== 'web' ? (
-        <Pressable
-          style={[styles.heatmapToggle, { top: insets.top + 138 }, activeNowMode && { backgroundColor: '#22C55E', borderColor: '#22C55E' }]}
-          onPress={() => {
-            Haptics.selectionAsync();
-            const next = !activeNowMode;
-            setActiveNowMode(next);
-            if (next) setFilter('terrains');
-          }}
-        >
-          <MaterialIcons name="local-fire-department" size={20} color={activeNowMode ? '#FFF' : theme.textSecondary} />
-        </Pressable>
-      ) : null}
-
-      {/* Heatmap toggle button */}
-      {Platform.OS !== 'web' ? (
-        <Pressable
-          style={[styles.heatmapToggle, { top: insets.top + 186 }, showHeatmap && styles.heatmapToggleActive]}
-          onPress={() => { Haptics.selectionAsync(); setShowHeatmap(prev => !prev); }}
-        >
-          <MaterialIcons name="blur-on" size={20} color={showHeatmap ? '#FFF' : theme.textSecondary} />
-        </Pressable>
-      ) : null}
-
       {/* Active Now legend */}
-      {activeNowMode && Platform.OS !== 'web' ? (
-        <View style={[styles.heatmapLegend, { top: insets.top + 138, minWidth: 160 }]}>
+      {activeNowMode && mapMounted ? (
+        <View style={[styles.heatmapLegend, { top: 8, minWidth: 160 }]} pointerEvents="none">
           <View style={styles.heatmapLegendHeader}>
             <MaterialIcons name="local-fire-department" size={14} color="#22C55E" />
             <Text style={[styles.heatmapLegendTitle, { color: '#166534' }]}>{language === 'fr' ? 'Terrains actifs' : 'Active terrains'}</Text>
@@ -2751,178 +3907,34 @@ useEffect(() => {
           </Text>
           <View style={styles.heatmapLegendScale}>
             <View style={styles.heatmapLegendItem}>
-              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFF' }} />
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: LIVE_TERRAIN_PULSE_COLOR, borderWidth: 2, borderColor: '#FFF' }} />
               <Text style={styles.heatmapLegendLabel}>LIVE</Text>
             </View>
             <View style={styles.heatmapLegendItem}>
-              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: '#22C55E' }} />
+              <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: HABITUAL_TERRAIN_PULSE_COLOR }} />
               <Text style={styles.heatmapLegendLabel}>{language === 'fr' ? 'Habituel' : 'Habitual'}</Text>
             </View>
           </View>
         </View>
       ) : null}
 
-      {/* Heatmap legend + controls */}
-      {showHeatmap && !activeNowMode && Platform.OS !== 'web' ? (
-        <View style={[styles.heatmapLegend, { top: insets.top + 186 }]}>
-          <View style={styles.heatmapLegendHeader}>
-            <MaterialIcons name="blur-on" size={14} color={theme.primary} />
-            <Text style={styles.heatmapLegendTitle}>{language === 'fr' ? 'Densite joueurs' : 'Player density'}</Text>
+
+
           </View>
-          <Text style={styles.heatmapLegendCount}>{heatmapPlayerCount} {language === 'fr' ? 'joueurs publics' : 'public players'}</Text>
-          <View style={styles.heatmapLegendScale}>
-            {[
-              { color: 'rgba(147,197,253,0.6)', label: language === 'fr' ? 'Faible' : 'Low' },
-              { color: 'rgba(59,130,246,0.7)', label: language === 'fr' ? 'Moyen' : 'Medium' },
-              { color: 'rgba(245,158,11,0.8)', label: language === 'fr' ? 'Eleve' : 'High' },
-              { color: 'rgba(239,68,68,0.85)', label: language === 'fr' ? 'Tres eleve' : 'Very high' },
-            ].map((item, i) => (
-              <View key={i} style={styles.heatmapLegendItem}>
-                <View style={[styles.heatmapLegendDot, { backgroundColor: item.color }]} />
-                <Text style={styles.heatmapLegendLabel}>{item.label}</Text>
-              </View>
-            ))}
-          </View>
-          {/* Period filter chips */}
-          <View style={styles.heatmapDivider} />
-          <Text style={styles.heatmapPeriodLabel}>{language === 'fr' ? 'Periode' : 'Period'}</Text>
-          <View style={styles.heatmapPeriodRow}>
-            {([{ key: 'all' as const, label: language === 'fr' ? 'Tout' : 'All' }, { key: 'week' as const, label: '7j' }, { key: 'month' as const, label: '30j' }, { key: '3months' as const, label: '3m' }]).map(p => (
-              <Pressable
-                key={p.key}
-                style={[styles.heatmapPeriodChip, heatmapPeriod === p.key && styles.heatmapPeriodChipActive]}
-                onPress={() => { Haptics.selectionAsync(); setHeatmapPeriod(p.key); }}
-              >
-                <Text style={[styles.heatmapPeriodChipText, heatmapPeriod === p.key && styles.heatmapPeriodChipTextActive]}>{p.label}</Text>
-              </Pressable>
-            ))}
-          </View>
-          {/* Animation controls */}
-          {heatmapPeriod !== 'all' ? (
-            <View style={{ gap: 6 }}>
-              <View style={styles.heatmapAnimRow}>
-                <Pressable
-                  style={[styles.heatmapAnimBtn, heatmapAnimating && styles.heatmapAnimBtnActive]}
-                  onPress={() => { Haptics.selectionAsync(); setHeatmapAnimating(prev => !prev); }}
-                >
-                  <MaterialIcons name={heatmapAnimating ? 'pause' : 'play-arrow'} size={16} color={heatmapAnimating ? '#FFF' : theme.primary} />
-                </Pressable>
-                {heatmapAnimating ? (
-                  <View style={styles.heatmapAnimInfo}>
-                    <View style={styles.heatmapAnimDots}>
-                      {Array.from({ length: HEATMAP_ANIM_STEPS }).map((_, i) => (
-                        <View key={i} style={[styles.heatmapAnimDot, i <= (heatmapCumulative ? heatmapAnimStep : -1) && styles.heatmapAnimDotFilled, i === heatmapAnimStep && styles.heatmapAnimDotActive]} />
-                      ))}
-                    </View>
-                    <Text style={styles.heatmapAnimLabel}>
-                      {(() => {
-                        const periodMs: Record<string, number> = { week: 7 * 86400000, month: 30 * 86400000, '3months': 90 * 86400000 };
-                        const total = periodMs[heatmapPeriod] || 0;
-                        const sliceDur = total / HEATMAP_ANIM_STEPS;
-                        const fmt = (d: Date) => `${d.getDate()}/${d.getMonth() + 1}`;
-                        if (heatmapCumulative) {
-                          const periodStart = new Date(Date.now() - total);
-                          const cumulativeEnd = new Date(periodStart.getTime() + (heatmapAnimStep + 1) * sliceDur);
-                          return `${fmt(periodStart)} \u2192 ${fmt(cumulativeEnd)}`;
-                        }
-                        const sliceStart = new Date(Date.now() - total + heatmapAnimStep * sliceDur);
-                        const sliceEnd = new Date(sliceStart.getTime() + sliceDur);
-                        return `${fmt(sliceStart)} - ${fmt(sliceEnd)}`;
-                      })()}
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={styles.heatmapAnimHint}>{language === 'fr' ? 'Evolution' : 'Evolution'}</Text>
-                )}
-              </View>
-              {/* Cumulative toggle */}
-              <Pressable
-                style={[styles.heatmapCumulativeToggle, heatmapCumulative && styles.heatmapCumulativeToggleActive]}
-                onPress={() => { Haptics.selectionAsync(); setHeatmapCumulative(prev => !prev); }}
-              >
-                <MaterialIcons name={heatmapCumulative ? 'stacked-bar-chart' : 'bar-chart'} size={13} color={heatmapCumulative ? '#FFF' : theme.textSecondary} />
-                <Text style={[styles.heatmapCumulativeText, heatmapCumulative && styles.heatmapCumulativeTextActive]}>
-                  {language === 'fr' ? 'Cumulatif' : 'Cumulative'}
-                </Text>
-              </Pressable>
-            </View>
           ) : null}
-        </View>
-      ) : null}
 
-      {/* ========== GRADIENT HERO HEADER ========== */}
-      <View style={[styles.heroHeader, { paddingTop: insets.top }]} pointerEvents="box-none">
-        <View style={[styles.heroGradient, { backgroundColor: '#0F172A' }]}>
-          {/* Decorative circles for glassmorphism depth */}
-          <View style={styles.heroDecoCircle1} />
-          <View style={styles.heroDecoCircle2} />
-
-          <View style={styles.heroTop}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroTitle}>{t('map', 'map')}</Text>
-              <Text style={styles.heroSubtitle}>
-                {counts.total} {t('map', 'results')} {counts.publicTotal > 0 ? `• ${counts.publicTotal} ${t('map', 'publicLabel')}` : ''}
-              </Text>
+          <View style={styles.mapChromeColumn} pointerEvents="box-none">
+            <View onLayout={onHeroChromeLayout} style={styles.mapChromeTop} pointerEvents="box-none">
+              {renderHeroHeader()}
             </View>
-            <View style={styles.heroActions}>
-              <Pressable
-                style={styles.heroActionBtn}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  loadManageData();
-                  setShowManageModal(true);
-                }}
-              >
-                <MaterialIcons name="public" size={18} color="#FFF" />
-              </Pressable>
-              <Pressable
-                style={[styles.heroActionBtn, showSearch && styles.heroActionBtnActive]}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  setShowSearch(!showSearch);
-                  if (showSearch) setSearch('');
-                }}
-              >
-                <MaterialIcons name={showSearch ? 'close' : 'search'} size={20} color="#FFF" />
-              </Pressable>
-            </View>
-          </View>
 
-          {/* Inline Stats Summary */}
-          <View style={styles.heroStatsSummary}>
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map((k, i) => {
-              const isActive = filter === k;
-              return (
-                <React.Fragment key={k}>
-                  {i > 0 ? <View style={styles.heroStatDivider} /> : null}
-                  <Pressable style={styles.heroStatItem} onPress={() => handleFilterPress(k)}>
-                    <Text style={[styles.heroStatValue, isActive && { color: '#FFF', fontSize: 19 }]}>{counts[k]}</Text>
-                    <Text style={[styles.heroStatLabel, isActive && { color: 'rgba(255,255,255,0.7)' }]}>{MARKER_CONFIG[k].label}</Text>
-                  </Pressable>
-                </React.Fragment>
-              );
-            })}
-          </View>
+            {!USE_NATIVE_MAP ? renderMapTabList() : (
+              <View style={styles.mapChromeSpacer} pointerEvents="none" />
+            )}
 
-
-        </View>
-      </View>
-
-
-
-      {/* Ad Banner - floating at top-center below hero header */}
-      {Platform.OS !== 'web' ? (
-        <View
-          style={[styles.floatingAdBanner, { bottom: undefined, top: insets.top + 130 }]}
-          pointerEvents="box-none"
-        >
-          <AdBanner position="inline" />
-        </View>
-      ) : null}
-
-      {/* No-Geo Banner */}
-      {noGeoCount > 0 && showNoGeoBanner && Platform.OS !== 'web' ? (
-        <Animated.View entering={FadeInDown.duration(300)} style={[styles.noGeoBanner, { bottom: 145 }]}>
+      {/* No-Geo Banner — above map layer for reliable touches */}
+      {noGeoCount > 0 && showNoGeoBanner ? (
+        <Animated.View entering={FadeInDown.duration(300)} style={styles.noGeoBannerDocked}>
           <View style={styles.noGeoBannerIcon}>
             <MaterialIcons name="location-off" size={20} color={theme.warning} />
           </View>
@@ -2939,226 +3951,13 @@ useEffect(() => {
         </Animated.View>
       ) : null}
 
-      <KeyboardAvoidingView
-        style={styles.mapOverlayRoot}
-        behavior={Platform.OS === 'ios' ? 'position' : undefined}
-        enabled={Platform.OS === 'ios'}
-        pointerEvents="box-none"
-      >
-        <View style={styles.bottomPanel} pointerEvents="box-none">
-          {/* Search bar (expandable) */}
-          {showSearch ? (
-            <Animated.View entering={FadeIn.duration(200)} style={styles.searchRowOuter}>
-              <View style={styles.searchBar}>
-                <MaterialIcons name="search" size={18} color={theme.textMuted} />
-                <TextInput
-                  style={styles.searchInput}
-                  placeholder={language === 'fr' ? 'Ville, terrain, club, joueur...' : 'City, terrain, club, player...'}
-                  placeholderTextColor={theme.textMuted}
-                  value={search}
-                  onChangeText={(text) => {
-                    setSearch(text);
-                    // Debounced suggestions
-                    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                    if (text.trim().length < 2) { setSearchSuggestions([]); setShowSuggestions(false); return; }
-                    searchDebounceRef.current = setTimeout(() => {
-                      const q = text.toLowerCase().trim();
-                      const suggestions: { label: string; type: string; count?: number; lat?: number; lng?: number; icon?: string; color?: string }[] = [];
-                      // City suggestions
-                      const cityMap = new Map<string, { count: number; lat?: number; lng?: number }>();
-                      [...ownData.terrains, ...ownData.clubs, ...ownData.players, ...pubData.terrains, ...pubData.clubs, ...pubData.players].forEach(item => {
-                        const city = item.city || item.location?.city;
-                        if (city && city.toLowerCase().includes(q)) {
-                          const existing = cityMap.get(city) || { count: 0 };
-                          existing.count++;
-                          if (!existing.lat && item.location?.latitude) { existing.lat = item.location.latitude; existing.lng = item.location.longitude; }
-                          cityMap.set(city, existing);
-                        }
-                      });
-                      cityMap.forEach((v, city) => {
-                        suggestions.push({ label: city, type: language === 'fr' ? 'Ville' : 'City', count: v.count, lat: v.lat, lng: v.lng, icon: 'location-city', color: '#3B82F6' });
-                      });
-                      // Item name suggestions (top 5)
-                      const nameMatches: typeof suggestions = [];
-                      const typeLabels: Record<string, { label: string; icon: string; color: string }> = {
-                        terrains: { label: language === 'fr' ? 'Terrain' : 'Terrain', icon: 'sports-soccer', color: theme.success },
-                        clubs: { label: 'Club', icon: 'home', color: theme.accent },
-                        players: { label: language === 'fr' ? 'Joueur' : 'Player', icon: 'person', color: theme.primary },
-                      };
-                      const addNameMatches = (items: any[], itemType: string) => {
-                        items.filter(it => it.name?.toLowerCase().includes(q)).slice(0, 3).forEach(it => {
-                          const tl = typeLabels[itemType];
-                          if (tl) nameMatches.push({ label: it.name, type: tl.label, lat: it.location?.latitude, lng: it.location?.longitude, icon: tl.icon, color: tl.color });
-                        });
-                      };
-                      addNameMatches([...ownData.terrains, ...pubData.terrains], 'terrains');
-                      addNameMatches([...ownData.clubs, ...pubData.clubs], 'clubs');
-                      addNameMatches([...ownData.players, ...pubData.players], 'players');
-                      suggestions.push(...nameMatches.slice(0, 5));
-                      // Dedup
-                      const seen = new Set<string>();
-                      const deduped = suggestions.filter(s => { const key = `${s.label}-${s.type}`; if (seen.has(key)) return false; seen.add(key); return true; });
-                      setSearchSuggestions(deduped.slice(0, 8));
-                      setShowSuggestions(deduped.length > 0);
-                    }, 200);
-                  }}
-                  autoFocus
-                />
-                {search.length > 0 ? (
-                  <Pressable onPress={() => { setSearch(''); setSearchSuggestions([]); setShowSuggestions(false); }} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable>
-                ) : null}
-              </View>
-              {/* Quick filter chips */}
-              {!search.trim() ? (
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.suggestionChipsRow}>
-                  {[{ label: language === 'fr' ? 'Pres de moi' : 'Near me', icon: 'my-location', onPress: () => {
-                    if (mapRef.current) {
-                      mapRef.current.animateToRegion({ ...currentRegion, latitudeDelta: 0.1, longitudeDelta: 0.1 }, 400);
-                    }
-                  }},
-                  ...topCities.map(tc => ({
-                    label: tc.name, icon: 'location-city' as const,
-                    onPress: () => { setSearch(tc.name); if (tc.lat && tc.lng && mapRef.current) mapRef.current.animateToRegion({ latitude: tc.lat, longitude: tc.lng, latitudeDelta: 0.12, longitudeDelta: 0.12 }, 500); },
-                  })),
-                  ].map((chip, i) => (
-                    <Pressable key={i} style={styles.suggestionChip} onPress={() => { Haptics.selectionAsync(); chip.onPress(); }}>
-                      <MaterialIcons name={chip.icon as any} size={13} color={theme.textSecondary} />
-                      <Text style={styles.suggestionChipText}>{chip.label}</Text>
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              ) : null}
-              {/* Suggestions dropdown */}
-              {showSuggestions && searchSuggestions.length > 0 ? (
-                <ScrollView style={styles.suggestionsContainer} nestedScrollEnabled showsVerticalScrollIndicator={false}>
-                  {searchSuggestions.map((sug, idx) => (
-                    <Pressable
-                      key={`${sug.label}-${sug.type}-${idx}`}
-                      style={styles.suggestionItem}
-                      onPress={() => {
-                        Haptics.selectionAsync();
-                        setSearch(sug.label);
-                        setShowSuggestions(false);
-                        // Zoom to suggestion location if available
-                        if (sug.lat && sug.lng && mapRef.current) {
-                          mapRef.current.animateToRegion({
-                            latitude: sug.lat,
-                            longitude: sug.lng,
-                            latitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
-                            longitudeDelta: sug.type === (language === 'fr' ? 'Ville' : 'City') ? 0.08 : 0.02,
-                          }, 500);
-                        }
-                      }}
-                    >
-                      <View style={[styles.suggestionIcon, { backgroundColor: ((sug as any).color || theme.primary) + '12' }]}>
-                        <MaterialIcons name={((sug as any).icon || 'place') as any} size={16} color={(sug as any).color || theme.primary} />
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <Text style={styles.suggestionLabel} numberOfLines={1}>{sug.label}</Text>
-                        <Text style={styles.suggestionMeta}>{sug.type}{sug.count ? ` • ${sug.count} ${language === 'fr' ? 'elements' : 'items'}` : ''}</Text>
-                      </View>
-                      {sug.lat ? <MaterialIcons name="near-me" size={14} color={theme.textMuted} /> : null}
-                    </Pressable>
-                  ))}
-                </ScrollView>
-              ) : null}
-              {search.trim() && !showSuggestions ? <Text style={styles.searchCount}>{counts.total} {counts.total !== 1 ? t('map', 'results') : t('map', 'result')}</Text> : null}
-            </Animated.View>
-          ) : null}
-
-
-
-          {/* Category filters */}
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filters}>
-            <FilterChip label={t('map', 'all')} icon="layers" isActive={filter === 'all'} onPress={() => handleFilterPress('all')} />
-            {(Object.keys(MARKER_CONFIG) as (keyof typeof MARKER_CONFIG)[]).map(k => (
-              <FilterChip key={k} label={MARKER_CONFIG[k].label} icon={MARKER_CONFIG[k].icon} isActive={filter === k} activeColor={MARKER_CONFIG[k].color} onPress={() => handleFilterPress(k)} />
-            ))}
-          </ScrollView>
-
-          {/* Terrain sub-filters: type & environment & characteristics */}
-          {filter === 'terrains' ? (
-            <TerrainSubFilters
-              terrainTypeFilter={terrainTypeFilter}
-              terrainEnvFilter={terrainEnvFilter}
-              terrainLightingFilter={terrainLightingFilter}
-              terrainCoveredFilter={terrainCoveredFilter}
-              terrainParkingFilter={terrainParkingFilter}
-              terrainToiletsFilter={terrainToiletsFilter}
-              terrainPublicAccessFilter={terrainPublicAccessFilter}
-              terrainMembersOnlyFilter={terrainMembersOnlyFilter}
-              terrainMultiCourtsFilter={terrainMultiCourtsFilter}
-              onTerrainTypePress={handleTerrainTypeToggle}
-              onTerrainEnvPress={handleTerrainEnvToggle}
-              onTerrainCharPress={handleTerrainCharToggle}
-              onClear={handleClearTerrainSubFilters}
-              count={counts.terrains}
-              language={language}
-            />
-          ) : null}
-
-          {/* Club sub-filters: facilities/equipment */}
-          {filter === 'clubs' ? (
-            <View style={styles.subFiltersContainer}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.subFiltersRow}>
-                <View style={styles.subFilterLabel}>
-                  <MaterialIcons name="build" size={12} color={theme.textMuted} />
-                  <Text style={styles.subFilterLabelText}>{language === 'fr' ? 'Equipements' : 'Facilities'}</Text>
-                </View>
-                {(['Parking', 'Buvette', 'Toilettes', 'Eclairage', 'Boulodrome couvert', 'Vestiaires', 'Location de boules', 'Wi-Fi', 'Restaurant'] as const).map(fac => (
-                  <SubFilterChip key={fac} label={fac} isActive={clubFacilityFilter === fac} color={theme.accent} onPress={() => handleClubFacilityToggle(fac)} />
-                ))}
-              </ScrollView>
-              {clubFacilityFilter ? (
-                <View style={styles.subFilterActiveBar}>
-                  <Text style={styles.subFilterActiveText}>{counts.clubs} {language === 'fr' ? 'club(s) filtre(s)' : 'club(s) filtered'}</Text>
-                  <Pressable style={styles.subFilterClearBtn} onPress={handleClearClubSubFilters}>
-                    <MaterialIcons name="close" size={12} color={theme.primary} />
-                    <Text style={styles.subFilterClearText}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
-                  </Pressable>
-                </View>
-              ) : null}
-            </View>
-          ) : null}
-
-          {/* Tournament sub-filters: format & status */}
-          {filter === 'tournaments' ? (
-            <TournamentSubFilters
-              tournamentFormatFilter={tournamentFormatFilter}
-              tournamentStatusFilter={tournamentStatusFilter}
-              onFormatPress={handleTournamentFormatToggle}
-              onStatusPress={handleTournamentStatusToggle}
-              onClear={handleClearTournamentSubFilters}
-              count={counts.tournaments}
-              language={language}
-            />
-          ) : null}
-
-          {/* Player sub-filters: ELO rank, role & trust score */}
-          {filter === 'players' ? (
-            <PlayerSubFilters
-              eloRankFilter={eloRankFilter}
-              eloRangeFilter={eloRangeFilter}
-              trustFilter={trustFilter}
-              roleFilter={playerRoleFilter}
-              onEloRankPress={handleEloRankToggle}
-              onEloRangePress={handleEloRangeToggle}
-              onTrustPress={handleTrustToggle}
-              onRolePress={handlePlayerRoleToggle}
-              onClear={handleClearPlayerSubFilters}
-              count={counts.players}
-              language={language}
-            />
-          ) : null}
-        </View>
-      </KeyboardAvoidingView>
       {/* Selected Card */}
       {selected ? (() => {
         const selectedCfg = MARKER_CONFIG[selected.itemType as keyof typeof MARKER_CONFIG];
         const selectedColor = selectedCfg?.color || theme.primary;
         const selectedIcon = getMapItemIcon(selected.itemType, selected.type);
         return (
-        <Animated.View entering={FadeInUp.duration(250)} style={[styles.selectedCard, { bottom: 155 }]}>
+        <Animated.View entering={FadeInUp.duration(250)} style={styles.selectedCardDocked}>
           <Pressable style={styles.selectedInner} onPress={selected._isPublic ? undefined : handleNavigate}>
             <View style={[styles.selectedIcon, { backgroundColor: selectedColor }]}>
               <MaterialIcons name={selectedIcon as any} size={22} color="#FFF" />
@@ -3201,7 +4000,7 @@ useEffect(() => {
                   if (!actInfo) return null;
                   if (actInfo.isActiveNow) return (
                     <View style={[styles.tag, { backgroundColor: '#FEF2F2', borderWidth: 1, borderColor: '#FECACA' }]}>
-                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#EF4444' }} />
+                      <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: LIVE_TERRAIN_PULSE_COLOR }} />
                       <Text style={[styles.tagText, { color: '#DC2626' }]}>LIVE</Text>
                     </View>
                   );
@@ -3228,7 +4027,7 @@ useEffect(() => {
                   <View style={styles.tag}><Text style={styles.tagText}>{selected.challengeType === '10_tirs' ? '10 Tirs' : selected.challengeType === '10_tirs_sautee' ? '10 Tirs sautee' : 'Precision'}</Text></View>
                 ) : null}
                 {selected.itemType === 'events' && selected.status ? (
-                  <View style={[styles.tag, { backgroundColor: selected.status === 'active' ? '#22C55E15' : '#F59E0B15' }]}><Text style={[styles.tagText, { color: selected.status === 'active' ? '#22C55E' : '#F59E0B' }]}>{selected.status === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : (language === 'fr' ? 'A venir' : 'Upcoming')}</Text></View>
+                  <View style={[styles.tag, { backgroundColor: selected.status === 'active' ? '#22C55E15' : '#F59E0B15' }]}><Text style={[styles.tagText, { color: selected.status === 'active' ? HABITUAL_TERRAIN_PULSE_COLOR : '#F59E0B' }]}>{selected.status === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : selected.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Completed') : selected.status === 'cancelled' ? (language === 'fr' ? 'Annule' : 'Cancelled') : (language === 'fr' ? 'A venir' : 'Upcoming')}</Text></View>
                 ) : null}
               </View>
             </View>
@@ -3290,7 +4089,7 @@ useEffect(() => {
         const ambassadorId = selectedPartner._itemId || selectedPartner.id;
 
         return (
-          <Animated.View entering={FadeInUp.duration(250)} style={[styles.partnerPopup, { bottom: 155 }]}>
+          <Animated.View entering={FadeInUp.duration(250)} style={styles.partnerPopupDocked}>
             <Pressable style={styles.partnerPopupClose} onPress={() => setSelectedPartner(null)} hitSlop={8}>
               <MaterialIcons name="close" size={16} color={theme.textMuted} />
             </Pressable>
@@ -3378,6 +4177,25 @@ useEffect(() => {
           </Animated.View>
         );
       })() : null}
+
+            <View
+              onLayout={onBottomChromeLayout}
+              style={[
+                styles.mapChromeBottom,
+                keyboardLift > 0
+                  ? {
+                      transform: [{ translateY: -keyboardLift }],
+                      paddingBottom: 8,
+                    }
+                  : null,
+              ]}
+              pointerEvents="box-none"
+            >
+              {renderBottomPanel()}
+            </View>
+          </View>
+        </>
+      )}
 
       {/* No-Geo Items Modal */}
       <Modal visible={showNoGeoModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => { setShowNoGeoModal(false); setBatchGeoMode(false); }}>
@@ -3639,13 +4457,80 @@ useEffect(() => {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: theme.backgroundSecondary },
-  /** Full-screen overlay host; pointerEvents box-none so the map stays pannable/zoomable in the middle. */
-  mapOverlayRoot: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'flex-end',
+  /** Map band between measured hero + bottom chrome — SurfaceView must not cover filters or tab bar. */
+  mapLayer: {
+    position: 'absolute' as const,
+    left: 0,
+    right: 0,
+    overflow: 'hidden' as const,
+    zIndex: 0,
+    backgroundColor: theme.backgroundSecondary,
   },
+  mapChromeColumn: {
+    flex: 1,
+    zIndex: 2,
+  },
+  mapChromeTop: {
+    zIndex: 3,
+    ...Platform.select({
+      android: { elevation: 20, renderToHardwareTextureAndroid: true } as ViewStyle,
+      default: {},
+    }),
+  },
+  mapChromeBottom: {
+    zIndex: 3,
+    ...Platform.select({
+      android: { elevation: 20, renderToHardwareTextureAndroid: true } as ViewStyle,
+      default: {},
+    }),
+  },
+  mapChromeSpacer: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mapRegion: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden' as const,
+    position: 'relative' as const,
+    backgroundColor: theme.backgroundSecondary,
+  },
+  mapFill: { flex: 1, width: '100%' as const },
+  mapPlaceholder: {
+    flex: 1,
+    width: '100%' as const,
+    backgroundColor: theme.backgroundSecondary,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  mapTabListRoot: { flex: 1, minHeight: 0 },
+  mapTabListScroll: { paddingHorizontal: 12, paddingBottom: 8, gap: 4 },
+  emulatorMapBanner: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginHorizontal: 12,
+    marginTop: 6,
+    marginBottom: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    backgroundColor: theme.primary + '12',
+    borderWidth: 1,
+    borderColor: theme.primary + '25',
+  },
+  emulatorMapBannerText: { flex: 1, fontSize: 11, fontWeight: '600' as const, color: theme.textSecondary },
   // ========== GRADIENT HERO HEADER ==========
-  heroHeader: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 },
+  heroSection: {
+    zIndex: 8,
+    backgroundColor: '#0F172A',
+    ...Platform.select({ android: { elevation: 8 }, default: {} }),
+  },
+  heroAdBanner: {
+    paddingHorizontal: 12,
+    paddingBottom: 6,
+    backgroundColor: '#0F172A',
+  },
   heroGradient: { paddingTop: 8, paddingBottom: 12, paddingHorizontal: 16, borderBottomLeftRadius: 20, borderBottomRightRadius: 20, overflow: 'hidden' as const, position: 'relative' as const },
   heroDecoCircle1: { position: 'absolute' as const, top: -40, right: -30, width: 140, height: 140, borderRadius: 70, backgroundColor: 'rgba(255,255,255,0.04)' },
   heroDecoCircle2: { position: 'absolute' as const, bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.03)' },
@@ -3662,12 +4547,13 @@ const styles = StyleSheet.create({
   heroStatDivider: { width: 1, height: 18, backgroundColor: 'rgba(255,255,255,0.08)' },
 
   bottomPanel: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
     backgroundColor: '#FFFFFF',
     borderTopLeftRadius: 20, borderTopRightRadius: 20,
     paddingBottom: Platform.select({ ios: 4, default: 4 }),
-    shadowColor: '#0F172A', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 16, elevation: 8,
+    shadowColor: '#0F172A', shadowOffset: { width: 0, height: -3 }, shadowOpacity: 0.1, shadowRadius: 16,
     borderTopWidth: 1, borderTopColor: '#E8EDF2',
+    zIndex: 8,
+    ...Platform.select({ android: { elevation: 8 }, default: {} }),
   },
 
   // Player sub-filters
@@ -3728,7 +4614,7 @@ const styles = StyleSheet.create({
   sponsorBadge: { width: 16, height: 16, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const, borderWidth: 1.5, borderColor: '#FFF', ...MAP_MARKER_SHADOW },
   sponsorBadgeText: { fontSize: 8, fontWeight: '900' as const, color: '#FFF' },
   markerFallback: { opacity: 0.85, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.6)' },
-  activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: '#22C55E' } as any,
+  activeNowPulseRing: { position: 'absolute' as const, width: 44, height: 44, borderRadius: 22, backgroundColor: 'transparent', borderWidth: 2.5, borderColor: HABITUAL_TERRAIN_PULSE_COLOR } as any,
   // Cluster markers
   clusterOuter: {
     position: 'absolute' as const,
@@ -3782,7 +4668,19 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   // Selected card
-  selectedCard: { position: 'absolute', left: 16, right: 16, backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated },
+  selectedCardDocked: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+    backgroundColor: theme.surface,
+    borderRadius: theme.borderRadius.lg,
+    ...theme.shadows.cardElevated,
+    zIndex: 40,
+    ...Platform.select({ android: { elevation: 40 }, default: {} }),
+  },
+  selectedCard: {
+    position: 'absolute', left: 16, right: 16,
+    backgroundColor: theme.surface, borderRadius: theme.borderRadius.lg, ...theme.shadows.cardElevated,
+  },
   selectedInner: { flexDirection: 'row', alignItems: 'center', padding: 14 },
   selectedIcon: { width: 48, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   selectedContent: { flex: 1 },
@@ -3891,6 +4789,12 @@ const styles = StyleSheet.create({
     opacity: 0.92, zIndex: 15,
   },
   // No-Geo Banner
+  noGeoBannerDocked: {
+    marginHorizontal: 12,
+    marginBottom: 6,
+    zIndex: 25,
+    ...Platform.select({ android: { elevation: 25 }, default: {} }),
+  },
   noGeoBanner: {
     position: 'absolute', left: 12, right: 12,
     flexDirection: 'row', alignItems: 'center',
@@ -3950,6 +4854,18 @@ const styles = StyleSheet.create({
   batchToggleBtnText: { fontSize: 12, fontWeight: '700' },
   batchToggleTextActive: { color: '#FFF' },
   // Partner popup
+  partnerPopupDocked: {
+    marginHorizontal: 16,
+    marginBottom: 6,
+    backgroundColor: theme.surface,
+    borderRadius: 20,
+    padding: 16,
+    ...theme.shadows.cardElevated,
+    borderWidth: 1,
+    borderColor: '#E8EDF2',
+    zIndex: 40,
+    ...Platform.select({ android: { elevation: 40 }, default: {} }),
+  },
   partnerPopup: {
     position: 'absolute' as const, left: 16, right: 16,
     backgroundColor: theme.surface, borderRadius: 20,

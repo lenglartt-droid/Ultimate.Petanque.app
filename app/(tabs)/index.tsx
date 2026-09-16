@@ -11,6 +11,7 @@ import {
   SectionList,
   Platform,
   Animated as RNAnimated,
+  InteractionManager,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -22,10 +23,9 @@ import { useAppData, useAppActions } from '@/contexts/AppContext';
 import { useAuth, getSupabaseClient } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import * as Haptics from '@/services/haptics';
-import { preloadInterstitial } from '@/services/adService';
 import MiniRankingWidget from '@/components/feature/MiniRankingWidget';
 import MiniGeoRankingWidget from '@/components/feature/MiniGeoRankingWidget';
-import LeaguePromotionModal from '@/components/ui/LeaguePromotionModal';
+const LeaguePromotionModal = React.lazy(() => import('@/components/ui/LeaguePromotionModal'));
 import AdBanner from '@/components/ui/AdBanner';
 import { Skeleton, LeaderboardSkeleton, TimelineSkeleton, HistorySkeleton } from '@/components/ui/SkeletonLoader';
 import WeeklyStatsCard from '@/components/ui/WeeklyStatsCard';
@@ -34,9 +34,9 @@ import TeamBuilderSection from '@/components/feature/TeamBuilderSection';
 import UpcomingTimeline from '@/components/feature/UpcomingTimeline';
 import CompactHistory from '@/components/feature/CompactHistory';
 import AmbassadorBanner from '@/components/feature/AmbassadorBanner';
-import TournamentPickerModal from '@/components/feature/TournamentPickerModal';
+const TournamentPickerModal = React.lazy(() => import('@/components/feature/TournamentPickerModal'));
 
-import QRShareModal from '@/components/feature/QRShareModal';
+const QRShareModal = React.lazy(() => import('@/components/feature/QRShareModal'));
 import { getLeagueTier, LeagueTier } from '@/services/globalRankingService';
 import { getFeaturedAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
@@ -45,6 +45,7 @@ import { LEADERBOARD_MIN_MATCHES } from '@/services/leaderboardService';
 import { getEloRank, ELO_INACTIVITY_THRESHOLD_DAYS, ELO_INACTIVITY_DECAY_PER_MONTH, isInPlacement, ELO_PLACEMENT_MATCHES } from '@/services/eloService';
 import { getPendingWitnessRequests, getUnreadEventNotificationCount, markEventNotificationRead, EventNotification } from '@/services/eventNotificationService';
 import { getSponsoredEvents, SponsoredEvent } from '@/services/sponsoredEventService';
+import { getSponsoredEventDisplayDate, startOfLocalDay } from '@/utils/calendarDate';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchActivityFeed } from '@/services/activityFeedService';
 import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@/services/terrainProximityService';
@@ -299,8 +300,18 @@ export default function HomeScreen() {
   const loadUpcomingEvents = useCallback(async () => {
     try {
       const { events } = await getSponsoredEvents();
-      const nowDate = new Date();
-      const upcoming = events.filter(e => (e.status === 'upcoming' || e.status === 'active') && new Date(e.eventDate) >= new Date(nowDate.toISOString().split('T')[0])).sort((a, b) => new Date(a.eventDate).getTime() - new Date(b.eventDate).getTime());
+      const today = startOfLocalDay(new Date());
+      const upcoming = events
+        .filter(e => {
+          if (e.status !== 'upcoming' && e.status !== 'active') return false;
+          const date = getSponsoredEventDisplayDate(e);
+          return !!date && startOfLocalDay(date) >= today;
+        })
+        .sort((a, b) => {
+          const da = getSponsoredEventDisplayDate(a)?.getTime() ?? 0;
+          const db = getSponsoredEventDisplayDate(b)?.getTime() ?? 0;
+          return da - db;
+        });
       setUpcomingEvents(upcoming);
     } catch { /* silent */ } finally { setEventsLoading(false); }
   }, []);
@@ -309,30 +320,6 @@ export default function HomeScreen() {
     const ambassadors = await getFeaturedAmbassadors();
     setFeaturedAmbassadors(ambassadors);
   }, []);
-
-  // === INITIAL LOAD — Phased: critical first, deferred second ===
-  useEffect(() => {
-    const loadCritical = async () => {
-      // Phase 1: Load only what's needed for above-the-fold content
-      await Promise.all([
-        loadWitnessRequests(),
-      ]);
-      setInitialLoading(false);
-
-      // Phase 2: Defer non-critical data (below-fold) by 1.5s
-      setTimeout(async () => {
-        await Promise.all([
-          loadAmbassadors(),
-          loadMeetups(),
-          loadUpcomingEvents(),
-          loadFeedUnread(),
-        ]);
-        // Phase 3: Proximity check + city detection (needs location permission, defer further)
-        setTimeout(() => { loadProximityAlert(); checkAutoCityDetection(); }, 2000);
-      }, 1500);
-    };
-    loadCritical();
-  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
 
   // Auto-city detection
   const checkAutoCityDetection = useCallback(async () => {
@@ -416,6 +403,34 @@ export default function HomeScreen() {
     } catch { setFeedUnreadCount(0); }
   }, []);
 
+  // === INITIAL LOAD — Phased: critical first, deferred second ===
+  useEffect(() => {
+    let cancelled = false;
+    const loadCritical = async () => {
+      await loadWitnessRequests();
+      if (cancelled) return;
+      setInitialLoading(false);
+
+      InteractionManager.runAfterInteractions(() => {
+        if (cancelled) return;
+        Promise.all([
+          loadAmbassadors(),
+          loadMeetups(),
+          loadUpcomingEvents(),
+          loadFeedUnread(),
+        ]).then(() => {
+          if (cancelled) return;
+          setTimeout(() => {
+            loadProximityAlert();
+            checkAutoCityDetection();
+          }, 2000);
+        });
+      });
+    };
+    loadCritical();
+    return () => { cancelled = true; };
+  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
+
   // Polling — unified into single interval to reduce timer overhead
   useEffect(() => {
     const pollAll = () => {
@@ -428,7 +443,9 @@ export default function HomeScreen() {
     return () => clearInterval(interval);
   }, [loadWitnessRequests]);
 
-  useEffect(() => { preloadInterstitial(); }, []);
+  useEffect(() => {
+    import('@/services/adService').then(({ preloadInterstitial }) => preloadInterstitial()).catch(() => {});
+  }, []);
 
   // === PULL-TO-REFRESH (no skeletons, just spinner) ===
   const handleRefresh = useCallback(async () => {
@@ -503,9 +520,9 @@ export default function HomeScreen() {
     if (selfPlayer?.isPublic && totalMatches < LEADERBOARD_MIN_MATCHES) s.push({ key: 'progress', data: ['progress'] });
     // Team Builder (always visible — shows create prompt if no tournaments)
     s.push({ key: 'teamBuilder' as SectionKey, data: ['teamBuilder' as SectionKey] });
-    s.push({ key: 'timeline', data: ['timeline'] });
-    // Ad banner after timeline — first natural break point
+    // Ad banner between Team Up and Upcoming section
     s.push({ key: 'adBanner1', data: ['adBanner1'] });
+    s.push({ key: 'timeline', data: ['timeline'] });
     if (matches.length > 0 || challenges.length > 0) s.push({ key: 'weeklyStats', data: ['weeklyStats'] });
     s.push({ key: 'divider1', data: ['divider1'] });
     if (featuredAmbassadors.length > 0) {
@@ -572,6 +589,17 @@ export default function HomeScreen() {
                 </Pressable>
               </View>
             </View>
+            {!user?.id ? (
+              <Pressable
+                style={st.guestCta}
+                onPress={() => router.push('/login')}
+              >
+                <MaterialIcons name="person-add" size={18} color="#0F172A" />
+                <Text style={st.guestCtaText}>
+                  {language === 'fr' ? 'Creer un compte / Se connecter' : 'Create an account / Sign in'}
+                </Text>
+              </Pressable>
+            ) : null}
             <View style={st.statsChipRow}>
               {[
                 { value: totalMatches, label: t('stats', 'matches'), color: theme.primary },
@@ -1126,19 +1154,21 @@ export default function HomeScreen() {
       </Modal>
 
 
-      <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} />
-      <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} />
-      {leaguePromotion ? (
-        <LeaguePromotionModal
-          visible={!!leaguePromotion}
-          onClose={() => setLeaguePromotion(null)}
-          type={leaguePromotion.type}
-          newTier={leaguePromotion.newTier}
-          previousTier={leaguePromotion.previousTier}
-          elo={leaguePromotion.elo}
-          language={language}
-        />
-      ) : null}
+      <React.Suspense fallback={null}>
+        {showQRModal ? <QRShareModal visible={showQRModal} onClose={() => setShowQRModal(false)} /> : null}
+        {showTournamentPicker ? <TournamentPickerModal visible={showTournamentPicker} onClose={() => setShowTournamentPicker(false)} tournaments={tournaments} /> : null}
+        {leaguePromotion ? (
+          <LeaguePromotionModal
+            visible={!!leaguePromotion}
+            onClose={() => setLeaguePromotion(null)}
+            type={leaguePromotion.type}
+            newTier={leaguePromotion.newTier}
+            previousTier={leaguePromotion.previousTier}
+            elo={leaguePromotion.elo}
+            language={language}
+          />
+        ) : null}
+      </React.Suspense>
     </SafeAreaView>
   );
 }
@@ -1158,6 +1188,8 @@ const st = StyleSheet.create({
   heroTopRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20 },
   heroGreeting: { fontSize: 14, fontWeight: '500', color: 'rgba(255,255,255,0.6)' },
   heroName: { fontSize: 24, fontWeight: '800', color: '#FFFFFF', marginTop: 2 },
+  guestCta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: '#F59E0B', borderRadius: 12, paddingVertical: 12, paddingHorizontal: 16, marginTop: 16 },
+  guestCtaText: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
   heroTopActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   heroIconBtn: { width: 40, height: 40, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.1)', alignItems: 'center', justifyContent: 'center', position: 'relative' as const },
   heroBadge: { position: 'absolute' as const, top: -3, right: -3, backgroundColor: theme.error, minWidth: 18, height: 18, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, borderWidth: 2, borderColor: '#0F172A' },

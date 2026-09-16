@@ -15,7 +15,7 @@ import {
 } from '@/services/sponsoredEventService';
 import { getSupabaseClient } from '@/template';
 import { Dimensions, Modal, FlatList, TextInput } from 'react-native';
-import { config } from '@/constants/config';
+import { buildAppDownloadLink, getAppDownloadUrl } from '@/utils/appDownload';
 import QRCode from 'react-native-qrcode-svg';
 import {
   scheduleEventReminders, cancelEventReminders, getScheduledEventReminders,
@@ -239,8 +239,8 @@ export default function SponsoredEventDetailScreen() {
     if (!event) return;
     Haptics.selectionAsync();
     const shareMsg = language === 'fr'
-      ? `Rejoins mon defi ambassadeur "${event.title}" sur Ultimate Petanque !\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Lieu: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nTelecharge l'app: ${config.appDownloadUrl}`
-      : `Join my ambassador challenge "${event.title}" on Ultimate Petanque!\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Location: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nDownload the app: ${config.appDownloadUrl}`;
+      ? `Rejoins mon defi ambassadeur "${event.title}" sur Ultimate Petanque !\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Lieu: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nTelecharge l'app: ${getAppDownloadUrl()}`
+      : `Join my ambassador challenge "${event.title}" on Ultimate Petanque!\nCode: ${event.shareCode}\nType: ${challengeName(event.challengeType)}\n${event.city ? `Location: ${event.city}` : ''}\nDate: ${new Date(event.startTime).toLocaleDateString('en-US', { day: 'numeric', month: 'long', year: 'numeric' })}\n\nDownload the app: ${getAppDownloadUrl()}`;
 
     if (option === 'native') {
       setShowShareModal(false);
@@ -1040,7 +1040,7 @@ export default function SponsoredEventDetailScreen() {
               <Text style={s.shareQRLabel}>{language === 'fr' ? 'QR Code de l\'evenement' : 'Event QR Code'}</Text>
               <View style={s.shareQRWrap}>
                 <QRCode
-                  value={`${config.appDownloadUrl}?event=${event?.shareCode || ''}`}
+                  value={buildAppDownloadLink({ event: event?.shareCode || '' })}
                   size={160}
                   color="#7C3AED"
                   backgroundColor="#FFFFFF"

@@ -31,6 +31,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { useAppData } from '@/contexts/AppContext';
 import * as Haptics from '@/services/haptics';
 import { getEloRank } from '@/services/eloService';
+import { getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 import { BADGES, getBadgeName, getBadgeDescription } from '@/services/badgeService';
 import { toggleReaction, fetchReactionsForItems, FeedItemReactions, ReactionType } from '@/services/feedReactionService';
 import {
@@ -156,7 +157,7 @@ const AmbassadorCarouselItem = React.memo(({ item, lang }: { item: any; lang: st
 });
 
 const EventCarouselItem = React.memo(({ item, lang }: { item: any; lang: string }) => {
-  const evDate = new Date(item.event_date);
+  const evDate = getSponsoredEventDisplayDate(item) || new Date();
   const typeColor: Record<string, string> = { '10_tirs': '#2563EB', '10_tirs_sautee': '#D97706', precision: '#7C3AED' };
   const color = typeColor[item.challenge_type] || '#7C3AED';
   const isActive = item.status === 'active';
@@ -270,11 +271,11 @@ const FeedBadgeCard = React.memo(({ data, lang, index }: { data: FeedBadgeUnlock
               <Text style={fs.cardTitleBold}>{data.username}</Text>
               {' '}{ft('badgeUnlocked', lang)}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2, paddingRight: 4 }}>
               <View style={{ width: 20, height: 20, borderRadius: 6, backgroundColor: (badge?.color || '#F59E0B') + '15', alignItems: 'center', justifyContent: 'center' }}>
                 <MaterialIcons name={(badge?.icon || 'emoji-events') as any} size={12} color={badge?.color || '#F59E0B'} />
               </View>
-              <Text style={[fs.cardSubtitle, { color: '#F59E0B', marginTop: 0 }]}>{badgeName}</Text>
+              <Text style={[fs.cardSubtitle, { color: '#F59E0B', marginTop: 0, flex: 1 }]} numberOfLines={2}>{badgeName}</Text>
             </View>
             {badgeDesc ? (
               <Text style={fs.badgeDesc} numberOfLines={2}>{badgeDesc}</Text>

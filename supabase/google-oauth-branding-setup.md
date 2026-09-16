@@ -44,7 +44,23 @@ https://xzkdtudhtprpuzlamjdt.supabase.co
 
 ---
 
-## Step 1 — Google Cloud Console (required)
+## Fix: Privacy Policy / Terms of Service open `https://ultimate.petanque.app`
+
+Google’s account picker (“Before using this app, you can review ultimatepetanque.app’s **Privacy Policy** and **Terms of Service**”) does **not** read URLs from this mobile repo. Those two blue links come only from **Google Auth Platform → Branding**.
+
+If they currently open `https://ultimate.petanque.app` (site can’t be reached / `ERR_NAME_NOT_RESOLVED`), Google still has the **wrong** URLs saved — often auto-filled from the support email `ultimate.petanque.app@gmail.com`. That hostname is not the website.
+
+1. Open [Google Auth Platform → Branding](https://console.cloud.google.com/auth/branding) in the **same** Cloud project as the OAuth **Web client** used by Supabase Google login.
+2. Set **Application home page** to: `https://ultimatepetanque.app/`
+3. Set **Privacy policy** to: `https://ultimatepetanque.app/privacy-policy`
+4. Set **Terms of service** to: `https://ultimatepetanque.app/terms-of-service`
+5. Save. Wait 5–15 minutes (sometimes up to an hour), force-close the app, then try Google sign-in again.
+
+Paste the full `https://ultimatepetanque.app/...` URLs. Do **not** paste the Gmail address. Leave the mailbox as `ultimate.petanque.app@gmail.com`.
+
+---
+
+
 
 Use the **same Google Cloud project** whose Web client ID is in Supabase → Authentication → Providers → Google.
 
@@ -54,8 +70,8 @@ Use the **same Google Cloud project** whose Web client ID is in Supabase → Aut
 3. Upload your **App logo** (same as store icon).
 4. Set **User support email** and **Developer contact**.
 5. **Application home page**: `https://ultimatepetanque.app/`
-6. **Privacy policy**: `https://ultimatepetanque.app/privacy-policy.html` (static site in repo `public/`).
-7. **Terms of service**: `https://ultimatepetanque.app/terms-of-service.html`.
+6. **Privacy policy**: `https://ultimatepetanque.app/privacy-policy`
+7. **Terms of service**: `https://ultimatepetanque.app/terms-of-service`
 8. **Authorized domains**: add `ultimatepetanque.app` (and `supabase.co` if required for redirect).
 9. If the app is **External** and in **Testing**, add test users’ Gmail addresses.
 10. Submit for **Brand verification** if Google prompts you (can take a few business days). Until verified, Google may still show the domain more prominently.

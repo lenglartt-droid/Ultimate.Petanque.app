@@ -17,6 +17,7 @@ import { getSupabaseClient } from '@/template';
 import { useAuth } from '@/template';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { SponsoredEvent } from '@/services/sponsoredEventService';
+import { getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 
 const GALLERY_PLACEHOLDER_HEIGHT = 220;
 
@@ -567,7 +568,7 @@ export default function PartnerDetailScreen() {
                       <Text style={st.eventTitle} numberOfLines={1}>{ev.title}</Text>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
                         <Text style={st.eventDate}>
-                          {new Date(ev.eventDate).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                          {(getSponsoredEventDisplayDate(ev) || new Date(ev.eventDate)).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
                         </Text>
                         {ev.city ? (
                           <>

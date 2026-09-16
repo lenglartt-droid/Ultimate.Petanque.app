@@ -1,4 +1,5 @@
 import { getSupabaseClient } from '@/template';
+import { parseLocalCalendarDate } from '@/utils/calendarDate';
 import { notifyWitnessesForResult, notifyAttestationReceived, notifyCreatorParticipantRegistered, notifyCreatorResultSubmitted, notifyCreatorAllWitnessesAttested } from './eventNotificationService';
 
 export interface SponsoredEvent {
@@ -59,6 +60,43 @@ export interface SponsoredEventWitness {
   createdAt: string;
   // Joined
   witnessName?: string;
+}
+
+
+export type SponsoredEventStatus = 'upcoming' | 'active' | 'completed' | 'cancelled';
+
+function getDateValue(value: any): Date | null {
+  if (!value) return null;
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+  return parseLocalCalendarDate(String(value));
+}
+
+/**
+ * UI-safe status. Some rows can stay `upcoming` in DB after the challenge date/time has passed.
+ * For display and map filtering, those rows must behave as completed.
+ */
+export function getEffectiveSponsoredEventStatus(event: Partial<SponsoredEvent> | any, now: Date = new Date()): SponsoredEventStatus {
+  const rawStatus = (event?.status || 'upcoming') as SponsoredEventStatus;
+  if (rawStatus === 'cancelled' || rawStatus === 'completed') return rawStatus;
+
+  const endDate =
+    getDateValue(event?.endTime) ||
+    getDateValue(event?.end_time) ||
+    getDateValue(event?.eventDate) ||
+    getDateValue(event?.event_date);
+
+  if (endDate && now.getTime() > endDate.getTime()) {
+    return 'completed';
+  }
+
+  const startDate = getDateValue(event?.startTime) || getDateValue(event?.start_time);
+  if (rawStatus === 'upcoming' && startDate && endDate && now.getTime() >= startDate.getTime() && now.getTime() <= endDate.getTime()) {
+    return 'active';
+  }
+
+  return rawStatus;
 }
 
 function generateEventCode(): string {
@@ -924,7 +962,7 @@ function mapEvent(e: any): SponsoredEvent {
     country: e.country,
     maxParticipants: e.max_participants,
     minWitnesses: e.min_witnesses,
-    status: e.status,
+    status: getEffectiveSponsoredEventStatus(e),
     shareCode: e.share_code,
     resultsPublished: e.results_published,
     createdAt: e.created_at,

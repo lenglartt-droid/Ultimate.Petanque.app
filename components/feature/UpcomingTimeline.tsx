@@ -17,6 +17,7 @@ import {
   resolveUpcomingItemCoords,
 } from '@/utils/homeDistanceCoords';
 import type { Terrain } from '@/types/petanque';
+import { calendarDaysUntil, getSponsoredEventDisplayDate } from '@/utils/calendarDate';
 
 interface UpcomingItem extends UpcomingItemLike {
   date: Date;
@@ -55,6 +56,8 @@ function UpcomingTimeline({
   const [distanceFilter, setDistanceFilter] = useState<DistanceFilter>('all');
   const { location: userLocation, loading: gpsLoading, denied: gpsDenied, requestLocation: requestGPS } = useHomeDistanceFilterLocation();
   const [itemCoordsMap, setItemCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
+  const [coordsLoading, setCoordsLoading] = useState(false);
+  const [coordsReady, setCoordsReady] = useState(false);
 
   useEffect(() => {
     if (distanceFilter !== 'all' && !userLocation && !gpsLoading) {
@@ -97,7 +100,10 @@ function UpcomingTimeline({
       .filter((tr: any) => tr.status === 'À venir' || tr.status === 'En cours')
       .forEach((tr: any) => built.push({ id: `t-${tr.id}`, type: 'tournament', date: new Date(tr.date), data: tr }));
     meetups.forEach(m => built.push({ id: `m-${m.id}`, type: 'meetup', date: new Date(m.date), data: m }));
-    upcomingEvents.forEach(e => built.push({ id: `e-${e.id}`, type: 'challenge', date: new Date(e.eventDate), data: e }));
+    upcomingEvents.forEach(e => {
+      const date = getSponsoredEventDisplayDate(e);
+      if (date) built.push({ id: `e-${e.id}`, type: 'challenge', date, data: e });
+    });
     built.sort((a, b) => a.date.getTime() - b.date.getTime());
     return built;
   }, [tournaments, meetups, upcomingEvents]);
@@ -105,22 +111,40 @@ function UpcomingTimeline({
   useEffect(() => {
     if (distanceFilter === 'all' || allItems.length === 0) {
       setItemCoordsMap(new Map());
+      setCoordsLoading(false);
+      setCoordsReady(false);
       return;
     }
+
     let cancelled = false;
-    buildCoordsMap(allItems, item => resolveUpcomingItemCoords(item, terrains)).then(map => {
-      if (!cancelled) setItemCoordsMap(map);
-    });
+    setCoordsLoading(true);
+    setCoordsReady(false);
+
+    buildCoordsMap(allItems, item => resolveUpcomingItemCoords(item, terrains))
+      .then(map => {
+        if (!cancelled) {
+          setItemCoordsMap(map);
+          setCoordsReady(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setCoordsLoading(false);
+      });
+
     return () => { cancelled = true; };
   }, [distanceFilter, allItems, terrains]);
 
   const items = useMemo(() => {
     if (distanceFilter === 'all') return allItems;
-    if (!userLocation) return [];
+
+    // Keep the original upcoming list visible while GPS/coordinates are still resolving.
+    // The distance filter is applied only when everything needed for the calculation is ready.
+    if (!userLocation || coordsLoading || !coordsReady) return allItems;
+
     const maxKm = Number(distanceFilter);
     const userLoc = { lat: userLocation.lat, lng: userLocation.lng };
     return filterItemsByDistance(allItems, itemCoordsMap, userLoc, maxKm);
-  }, [allItems, distanceFilter, userLocation, itemCoordsMap]);
+  }, [allItems, distanceFilter, userLocation, coordsLoading, coordsReady, itemCoordsMap]);
 
   const distanceLabels: Record<DistanceFilter, string> = {
     all: t('directory', 'distanceAll'),
@@ -134,7 +158,7 @@ function UpcomingTimeline({
   const renderEventCard = (item: UpcomingItem) => {
     const cfg = typeConfig[item.type];
     const d = item.date;
-    const daysUntil = Math.max(0, Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+    const daysUntil = calendarDaysUntil(d, new Date(now));
     const isToday = daysUntil === 0;
     const isTomorrow = daysUntil === 1;
 
@@ -261,7 +285,6 @@ function UpcomingTimeline({
                 onPress={() => {
                   Haptics.selectionAsync();
                   setDistanceFilter(option);
-                  if (option !== 'all') requestGPS();
                 }}
               >
                 <Text style={[s.filterChipText, active && s.filterChipTextActive]}>{distanceLabels[option]}</Text>
@@ -338,7 +361,7 @@ function UpcomingTimeline({
 
       {(meetupsLoading || eventsLoading) ? (
         <TimelineSkeleton items={3} />
-      ) : gpsLoading && distanceFilter !== 'all' && !userLocation ? (
+      ) : gpsLoading && distanceFilter !== 'all' && !userLocation && allItems.length === 0 ? (
         <View style={s.emptyWrap}>
           <View style={s.empty}>
             <ActivityIndicator size="large" color={theme.primary} />

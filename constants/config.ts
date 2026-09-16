@@ -49,8 +49,16 @@ export const config = {
   appName: 'PetanqueScore',
   version: '1.0.0',
   
-  // App download URL (replace with actual store link when published)
-  appDownloadUrl: 'https://ultimatepetanque.app/download',
+  // Smart download landing page. QRs and share cards always use this URL.
+  // Fill the store URLs below (or EXPO_PUBLIC_* env vars) when the app is published;
+  // /download redirects each phone to the correct store.
+  appDownloadUrl: (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_APP_DOWNLOAD_URL?.trim()) || 'https://ultimatepetanque.app/download',
+  iosAppStoreUrl: (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_IOS_APP_STORE_URL?.trim()) || '',
+  androidPlayStoreUrl: (typeof process !== 'undefined' && process.env?.EXPO_PUBLIC_ANDROID_PLAY_STORE_URL?.trim()) || '',
+
+  // Public legal pages (Google Auth Platform branding + store listings must use these).
+  privacyPolicyUrl: 'https://ultimatepetanque.app/privacy-policy',
+  termsOfServiceUrl: 'https://ultimatepetanque.app/terms-of-service',
   
   // Game Rules
   game: {

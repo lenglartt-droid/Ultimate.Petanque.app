@@ -240,7 +240,9 @@ export default function TermsScreen() {
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }]}
-        showsVerticalScrollIndicator={false}
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        nestedScrollEnabled
       >
         {/* Hero */}
         <Animated.View entering={FadeInDown.duration(300)} style={styles.heroSection}>
@@ -265,9 +267,8 @@ export default function TermsScreen() {
 
         {/* Sections */}
         {sections.map((section, index) => (
-          <Animated.View
+          <View
             key={index}
-            entering={FadeInDown.duration(300).delay(50 + index * 25)}
             style={styles.sectionCard}
           >
             <View style={styles.sectionHeader}>
@@ -277,7 +278,7 @@ export default function TermsScreen() {
               <Text style={styles.sectionTitle}>{section.title}</Text>
             </View>
             <Text style={styles.sectionContent}>{section.content}</Text>
-          </Animated.View>
+          </View>
         ))}
 
         {/* Contact CTA */}

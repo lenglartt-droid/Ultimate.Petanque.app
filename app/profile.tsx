@@ -64,6 +64,7 @@ export default function ProfileScreen() {
   const { showAlert } = useAlert();
   const { clubs, terrains, selfPlayer, userStats, matches, challenges, tournaments, boulesSets } = useAppData();
   const { addClub, updatePlayer, refreshData, addBoulesSet, updateBoulesSet, setPrimaryBoulesSet, setBatterySaver } = useAppActions();
+  const playerRecordId = selfPlayer?.id ?? user?.id;
   const { isPremium, isAdmin, batterySaverEnabled } = useAppUI();
   const supabase = getSupabaseClient();
   const { t, language, setLanguage } = useLanguage();
@@ -462,15 +463,10 @@ export default function ProfileScreen() {
 
       if (updateError) throw updateError;
 
-      // Update player record
-      await supabase
-        .from('players')
-        .update({ avatar: publicUrl })
-        .eq('id', user.id);
-
-      // Update local state
       setAvatarUrl(publicUrl);
-      await updatePlayer(user.id, { avatar: publicUrl });
+      if (playerRecordId) {
+        await updatePlayer(playerRecordId, { avatar: publicUrl });
+      }
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       showAlert(t('common', 'success'), t('profile', 'photoUpdated'));
@@ -505,14 +501,10 @@ export default function ProfileScreen() {
         .update({ avatar: null })
         .eq('id', user.id);
 
-      // Update player record
-      await supabase
-        .from('players')
-        .update({ avatar: null })
-        .eq('id', user.id);
-
       setAvatarUrl(null);
-      await updatePlayer(user.id, { avatar: undefined });
+      if (playerRecordId) {
+        await updatePlayer(playerRecordId, { avatar: undefined });
+      }
       
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (error) {
@@ -541,8 +533,8 @@ export default function ProfileScreen() {
 
       if (error) throw error;
 
-      // Also update the player record
-      if (user?.id) {
+      // Also update the player record (players.id is not always auth uid)
+      if (playerRecordId) {
         // Only build boulesData from manual fields if no equipment sets exist
         // When equipment sets exist, primary set is managed via the picker
         const hasEquipmentSets = boulesSets.length > 0;
@@ -580,7 +572,7 @@ export default function ProfileScreen() {
           };
         }
 
-        await updatePlayer(user.id, playerUpdates);
+        await updatePlayer(playerRecordId, playerUpdates);
       }
 
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -961,6 +953,25 @@ export default function ProfileScreen() {
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 32 }, isTablet && styles.scrollContentTablet]}
         showsVerticalScrollIndicator={false}
       >
+        {!user?.id ? (
+          <Pressable
+            style={styles.guestLoginBanner}
+            onPress={() => router.push('/login')}
+          >
+            <MaterialIcons name="person-add" size={22} color="#0F172A" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.guestLoginTitle}>
+                {language === 'fr' ? 'Creer un compte' : 'Create an account'}
+              </Text>
+              <Text style={styles.guestLoginSubtitle}>
+                {language === 'fr'
+                  ? 'Inscrivez-vous avec Google ou email pour retrouver vos matchs et accepter les CGU.'
+                  : 'Sign up with Google or email to restore your matches and accept the terms.'}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={22} color="#0F172A" />
+          </Pressable>
+        ) : null}
         {/* Profile Hero Section */}
         <View style={styles.heroSection}>
           {/* Avatar with photo picker */}
@@ -2073,7 +2084,7 @@ export default function ProfileScreen() {
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
               </Pressable>
               <View style={styles.compactMenuDivider} />
-              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/terms'); }}>
+              <Pressable style={styles.compactMenuItem} onPress={() => { Haptics.selectionAsync(); router.push('/terms-of-service'); }}>
                 <View style={[styles.compactMenuIcon, { backgroundColor: theme.accent + '15' }]}><MaterialIcons name="description" size={16} color={theme.accent} /></View>
                 <Text style={styles.compactMenuText}>{t('terms', 'title')}</Text>
                 <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
@@ -2092,7 +2103,7 @@ export default function ProfileScreen() {
               {showConsentDetail ? (
                 <>
                   <View style={styles.compactMenuDivider} />
-                  <Pressable style={[styles.compactMenuItem, { paddingLeft: 52 }]} onPress={() => { Haptics.selectionAsync(); router.push('/terms'); }}>
+                  <Pressable style={[styles.compactMenuItem, { paddingLeft: 52 }]} onPress={() => { Haptics.selectionAsync(); router.push('/terms-of-service'); }}>
                     <Text style={[styles.compactMenuText, { fontSize: 13 }]}>{t('profile', 'termsOfUse')}</Text>
                     <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
                   </Pressable>
@@ -2673,6 +2684,26 @@ const styles = StyleSheet.create({
     alignSelf: 'center' as const,
     width: '100%',
     paddingHorizontal: 24,
+  },
+  guestLoginBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#F59E0B',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+  },
+  guestLoginTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0F172A',
+  },
+  guestLoginSubtitle: {
+    fontSize: 12,
+    color: '#334155',
+    marginTop: 2,
+    lineHeight: 16,
   },
   // Hero Section
   heroSection: {

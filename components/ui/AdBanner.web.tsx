@@ -2,7 +2,7 @@
 // AdBanner - Web: Gold sponsor replacement or null
 // ============================================
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, AppState } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Image } from 'expo-image';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -43,13 +43,7 @@ const AdBanner = React.memo((_props: AdBannerProps) => {
     const unsubscribe = subscribeGoldSponsorAdRefresh(() => {
       refreshGoldSponsor();
     });
-    const appStateSub = AppState.addEventListener('change', state => {
-      if (state === 'active') refreshGoldSponsor();
-    });
-    return () => {
-      unsubscribe();
-      appStateSub.remove();
-    };
+    return () => unsubscribe();
   }, [refreshGoldSponsor]);
 
   useFocusEffect(useCallback(() => {
@@ -65,7 +59,16 @@ const AdBanner = React.memo((_props: AdBannerProps) => {
   // Hide all banners for premium users
   if (isPremium) return null;
 
-  if (!loaded || !sponsor) return null;
+  if (!loaded) return null;
+
+  // Gold sponsor replaces the normal ad banner.
+  if (!sponsor) {
+    return (
+      <View style={webStyles.adPlaceholder}>
+        <Text style={webStyles.adLabel}>ADVERTISEMENT</Text>
+      </View>
+    );
+  }
 
   return (
     <Pressable
@@ -103,6 +106,17 @@ const AdBanner = React.memo((_props: AdBannerProps) => {
 export default AdBanner;
 
 const webStyles = StyleSheet.create({
+  adPlaceholder: {
+    marginVertical: 12,
+    minHeight: 56,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    backgroundColor: '#F8FAFC',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+  },
+  adLabel: { fontSize: 10, fontWeight: '700' as const, color: '#94A3B8', letterSpacing: 1 },
   container: { marginVertical: 12, borderRadius: 14, overflow: 'hidden', borderWidth: 1.5, borderColor: '#F59E0B' },
   gradient: { borderRadius: 12, position: 'relative' as const },
   goldAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 2.5, backgroundColor: '#F59E0B' },
