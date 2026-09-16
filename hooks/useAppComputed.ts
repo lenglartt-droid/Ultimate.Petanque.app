@@ -143,11 +143,7 @@ export function computePlayersWithStats(players: Player[], matches: Match[]): Pl
 
 export function computeSelfPlayer(playersWithStats: Player[], userId: string | undefined): Player | null {
   if (!userId) return null;
-  return (
-    playersWithStats.find(p => p.id === userId)
-    ?? playersWithStats.find(p => p.userId === userId)
-    ?? null
-  );
+  return playersWithStats.find(p => p.id === userId) || null;
 }
 
 let _cwmCache: { clubsRef: Club[]; playersRef: Player[]; result: Club[] } | null = null;
