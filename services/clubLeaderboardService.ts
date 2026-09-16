@@ -42,15 +42,16 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
       clubMap.set(p.club, existing);
     }
 
-    // Try to fetch club details (logo, city) for matched clubs AND public clubs without leaderboard players
+    // Try to fetch club details for ALL visible clubs (RLS: own + public)
+    // Removed .eq('is_public', true) so user's own clubs always appear
     const supabase = getSupabaseClient();
-    let clubDetails = new Map<string, { logo?: string; city?: string; country?: string; id?: string; membersCount?: number }>();
+    let clubDetails = new Map<string, { logo?: string; city?: string; country?: string; id?: string; membersCount?: number; isPublic?: boolean }>();
 
     try {
+      // Fetch ALL clubs visible to the user (RLS handles visibility: own + public)
       const { data: clubsData } = await supabase
         .from('clubs')
-        .select('id, name, logo, city, country, members_count')
-        .eq('is_public', true);
+        .select('id, name, logo, city, country, members_count, is_public');
 
       if (clubsData) {
         for (const c of clubsData) {
@@ -60,8 +61,9 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
             city: c.city || undefined,
             country: c.country || undefined,
             membersCount: c.members_count || 0,
+            isPublic: c.is_public,
           });
-          // Add public clubs that have no leaderboard players to the map
+          // Add clubs that have no leaderboard players to the map
           if (!clubMap.has(c.name)) {
             clubMap.set(c.name, []);
           }
@@ -112,6 +114,13 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
         .slice(0, 3)
         .map(p => ({ name: p.name, avatar: p.avatar, winRate: p.stats.winRate }));
 
+      // ROBUST qualification check:
+      // A club has qualified players ONLY if:
+      // 1. There are leaderboard-filtered players associated with this club
+      // 2. Those players actually have matches (not just empty entries)
+      // 3. The composite score is > 0 (ensures real activity, not rounding artifacts)
+      const hasQualified = clubPlayers.length > 0 && totalMatches > 0 && compositeScore > 0;
+
       clubs.push({
         id: detail?.id || clubName,
         name: clubName,
@@ -120,7 +129,7 @@ export async function fetchClubLeaderboard(period?: LeaderboardPeriod): Promise<
         logo: detail?.logo,
         playerCount: clubPlayers.length > 0 ? clubPlayers.length : (detail?.membersCount || 0),
         totalMatches,
-        hasQualifiedPlayers: clubPlayers.length > 0,
+        hasQualifiedPlayers: hasQualified,
         stats: {
           avgWinRate,
           avgTirRate,

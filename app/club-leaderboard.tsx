@@ -180,7 +180,8 @@ export default function ClubLeaderboardScreen() {
     const rank = index + 1;
     const isTop3 = rank <= 3;
     const medalColors = ['#F59E0B', '#94A3B8', '#CD7F32'];
-    const isUnranked = !item.hasQualifiedPlayers;
+    // Multiple fallback checks to ensure badge shows for unqualified clubs
+    const isUnranked = !item.hasQualifiedPlayers || (item.totalMatches === 0 && item.totalWins === 0) || item.compositeScore === 0;
 
     return (
       <Pressable
@@ -271,7 +272,7 @@ export default function ClubLeaderboardScreen() {
         </Pressable>
         <View style={{ flex: 1 }}>
           <Text style={s.headerTitle}>{fr ? 'Classement des Clubs' : 'Club Leaderboard'}</Text>
-          <Text style={s.headerSubtitle}>{filteredData.length} {fr ? 'clubs publics' : 'public clubs'}</Text>
+          <Text style={s.headerSubtitle}>{filteredData.length} {fr ? 'clubs' : 'clubs'}</Text>
         </View>
       </View>
 

@@ -961,6 +961,15 @@ export async function reverseDeletedEloLoss(
 export const IMPOSSIBLE_TRAVEL_DISTANCE_KM = 500;
 export const IMPOSSIBLE_TRAVEL_TIME_HOURS = 6;
 
+/**
+ * Micro-teleportation thresholds. Two matches on courts more than 200 km
+ * apart within under 2 hours require sustained travel above ~100 km/h with
+ * no transit or warm-up buffer, which is not plausible between petanque
+ * sessions and points to a suspicious match log.
+ */
+export const TELEPORTATION_DISTANCE_KM = 200;
+export const TELEPORTATION_TIME_HOURS = 2;
+
 export interface MatchGeoPoint {
   matchId: string;
   date: Date | string | number;
@@ -1043,6 +1052,16 @@ export function detectImpossibleTravel(
     }
   }
   return pairs;
+}
+
+/**
+ * Convenience helper that runs `detectImpossibleTravel` against the
+ * teleportation thresholds (default 200 km / 2 h). Any pair returned means
+ * the player's two consecutive matches would require a physically
+ * implausible travel between them.
+ */
+export function detectTeleportation(points: MatchGeoPoint[]): ImpossibleTravelPair[] {
+  return detectImpossibleTravel(points, TELEPORTATION_DISTANCE_KM, TELEPORTATION_TIME_HOURS);
 }
 
 /**
