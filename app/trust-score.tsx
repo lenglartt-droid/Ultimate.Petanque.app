@@ -162,6 +162,11 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   micro_teleportation: { fr: 'Micro-teleportation (>200km en <2h)', en: 'Micro-teleportation (>200km in <2h)', icon: 'speed', color: '#F97316' },
   distant_from_home_city: { fr: 'Matchs eloignes de la ville declaree (>300km)', en: 'Matches far from declared city (>300km)', icon: 'location-off', color: '#F97316' },
   frequent_distant_from_home_city: { fr: 'Matchs frequemment eloignes de la ville declaree', en: 'Matches frequently far from declared city', icon: 'wrong-location', color: '#EF4444' },
+  unrealistic_duration: { fr: 'Duree de match irrealiste', en: 'Unrealistic match duration', icon: 'timer-off', color: '#F97316' },
+  unrealistic_duration_frequent: { fr: 'Durees irrealistes frequentes', en: 'Frequent unrealistic durations', icon: 'timer-off', color: '#EF4444' },
+  nocturnal_pattern: { fr: 'Activite nocturne recurrente (3h-6h)', en: 'Recurring nocturnal activity (3AM-6AM)', icon: 'nightlight-round', color: '#7C3AED' },
+  mass_submission: { fr: 'Soumission massive (>20/24h)', en: 'Mass submission (>20/24h)', icon: 'flash-on', color: '#DC2626' },
+  mass_submission_repeated: { fr: 'Soumissions massives repetees', en: 'Repeated mass submissions', icon: 'flash-on', color: '#B91C1C' },
 };
 
 // ============================================
@@ -652,6 +657,138 @@ export default function TrustScoreScreen() {
                       <MaterialIcons name="edit-location" size={14} color="#FFF" />
                       <Text style={geoSt.ctaText}>{isFr ? 'Mettre a jour ma ville' : 'Update my city'}</Text>
                     </Pressable>
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {/* Temporal Alerts (personal view) */}
+            {(
+              ((trustData.details?.unrealisticDuration?.count || 0) > 0) ||
+              ((trustData.details?.nocturnalActivity?.count || 0) > 0) ||
+              ((trustData.details?.massSubmission?.daysCount || 0) > 0)
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(240)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#8B5CF6' + '15' }]}>
+                    <MaterialIcons name="schedule" size={18} color="#8B5CF6" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Alertes temporelles' : 'Temporal Alerts'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Ces alertes reperent des durees de matchs improbables, des sessions nocturnes recurrentes ou des soumissions massives.'
+                    : 'These alerts flag unlikely match durations, recurring nocturnal sessions, or mass submissions.'}
+                </Text>
+
+                {/* Unrealistic Duration */}
+                {(trustData.details?.unrealisticDuration?.count || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="timer-off" size={14} color="#F97316" />
+                      <Text style={[geoSt.groupTitle, { color: '#F97316' }]}>
+                        {isFr ? 'Durees irrealistes' : 'Unrealistic durations'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#F9731615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#F97316' }]}>
+                          {trustData.details.unrealisticDuration.count}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? 'Matchs enregistres avec une duree < 5 min ou > 4 h. Verifiez que le chrono a bien ete mis a jour.'
+                        : 'Matches recorded with duration < 5 min or > 4 h. Verify the timer was updated correctly.'}
+                    </Text>
+                    {Array.isArray(trustData.details.unrealisticDuration.examples)
+                      ? trustData.details.unrealisticDuration.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#F97316' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {ex.durationMin} min - {ex.tooShort ? (isFr ? 'Trop court' : 'Too short') : (isFr ? 'Trop long' : 'Too long')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Nocturnal Pattern */}
+                {(trustData.details?.nocturnalActivity?.count || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="nightlight-round" size={14} color="#7C3AED" />
+                      <Text style={[geoSt.groupTitle, { color: '#7C3AED' }]}>
+                        {isFr ? 'Activite nocturne' : 'Nocturnal activity'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#7C3AED15' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#7C3AED' }]}>
+                          {trustData.details.nocturnalActivity.count}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? 'Matchs enregistres entre 3 h et 6 h heure locale du terrain. Peut refleter une erreur d\'horaire ou de fuseau.'
+                        : 'Matches recorded between 3 AM and 6 AM local terrain time. May reflect a timing or timezone error.'}
+                    </Text>
+                    {trustData.details.nocturnalActivity.timezoneAware ? (
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6, backgroundColor: '#7C3AED10', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 5 }}>
+                        <MaterialIcons name="public" size={12} color="#7C3AED" />
+                        <Text style={{ fontSize: 10, fontWeight: '600', color: '#7C3AED', flex: 1 }}>
+                          {isFr ? 'Detection basee sur le fuseau horaire du terrain' : 'Detection based on terrain timezone'}
+                        </Text>
+                      </View>
+                    ) : null}
+                    {Array.isArray(trustData.details.nocturnalActivity.examples)
+                      ? trustData.details.nocturnalActivity.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#7C3AED' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {isFr ? 'Heure locale' : 'Local hour'}: {String(ex.hour ?? 0).padStart(2, '0')}:00
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                            {ex.hasTerrainTz ? ` - UTC${ex.tzOffsetHours >= 0 ? '+' : ''}${ex.tzOffsetHours}` : ' - UTC'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Mass Submission */}
+                {(trustData.details?.massSubmission?.daysCount || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="flash-on" size={14} color="#DC2626" />
+                      <Text style={[geoSt.groupTitle, { color: '#DC2626' }]}>
+                        {isFr ? 'Soumission massive' : 'Mass submission'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#DC262615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#DC2626' }]}>
+                          {trustData.details.massSubmission.daysCount}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.massSubmission.daysCount} jour(s) avec plus de 20 matchs. Max ${trustData.details.massSubmission.maxDailyCount || 0} matchs/24 h.`
+                        : `${trustData.details.massSubmission.daysCount} day(s) with more than 20 matches. Peak ${trustData.details.massSubmission.maxDailyCount || 0} matches/24 h.`}
+                    </Text>
+                    {Array.isArray(trustData.details.massSubmission.examples)
+                      ? trustData.details.massSubmission.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#DC2626' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {ex.day ? new Date(ex.day).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.count} {isFr ? 'matchs enregistres' : 'matches recorded'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
                   </View>
                 ) : null}
               </Animated.View>

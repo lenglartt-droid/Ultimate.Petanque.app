@@ -72,6 +72,7 @@ export async function addTerrainOp(
       lighting: terrain.lighting,
       covered: terrain.covered,
       environment: terrain.environment || 'outdoor',
+      timezone: (terrain as any).timezone || null,
       parking: terrain.parking ?? false,
       toilets: terrain.toilets ?? false,
       google_place_id: (terrain as any).googlePlaceId || null,
@@ -98,6 +99,7 @@ export async function addTerrainOp(
         lighting: data.lighting,
         covered: data.covered,
         environment: data.environment || 'outdoor',
+        timezone: data.timezone || undefined,
         parking: data.parking ?? false,
         toilets: data.toilets ?? false,
         googlePlaceId: data.google_place_id || undefined,
@@ -155,6 +157,7 @@ export async function updateTerrainOp(
     if (updates.lighting !== undefined) dbUpdates.lighting = updates.lighting;
     if (updates.covered !== undefined) dbUpdates.covered = updates.covered;
     if (updates.environment !== undefined) dbUpdates.environment = updates.environment;
+    if ((updates as any).timezone !== undefined) dbUpdates.timezone = (updates as any).timezone;
     if (updates.parking !== undefined) dbUpdates.parking = updates.parking;
     if (updates.toilets !== undefined) dbUpdates.toilets = updates.toilets;
     dbUpdates.updated_at = new Date().toISOString();

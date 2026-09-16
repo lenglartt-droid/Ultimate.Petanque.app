@@ -12,6 +12,7 @@ import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
 import AdminQuickNav from '@/components/feature/AdminQuickNav';
 import AdminGuard from '@/components/feature/AdminGuard';
+import MiniTravelMap from '@/components/feature/MiniTravelMap';
 import PageErrorBoundary from '@/components/ui/PageErrorBoundary';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth, useAlert, getSupabaseClient } from '@/template';
@@ -29,7 +30,33 @@ import { useAdminCache } from '@/hooks/useAdminCache';
 
 const et = extraTranslations.trustScore;
 
-type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned';
+type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts';
+type TrustScoreFilter = 'all' | 'critical' | 'low' | 'medium' | 'high' | 'verified';
+type SortMode = 'default' | 'trustAsc' | 'trustDesc' | 'analysisRecent' | 'analysisOld' | 'nocturnalDesc' | 'unrealisticDurationDesc' | 'massSubmissionDesc';
+
+const GEO_ALERT_FLAGS = new Set<string>([
+  'impossible_travel',
+  'impossible_travel_repeated',
+  'micro_teleportation',
+  'distant_from_home_city',
+  'frequent_distant_from_home_city',
+]);
+
+const TEMPORAL_ALERT_FLAGS = new Set<string>([
+  'unrealistic_duration',
+  'unrealistic_duration_frequent',
+  'nocturnal_pattern',
+  'mass_submission',
+  'mass_submission_repeated',
+]);
+
+const TRUST_SCORE_RANGES: Record<Exclude<TrustScoreFilter, 'all'>, { min: number; max: number; color: string }> = {
+  critical: { min: 0, max: 24, color: '#EF4444' },
+  low: { min: 25, max: 44, color: '#F97316' },
+  medium: { min: 45, max: 64, color: '#D97706' },
+  high: { min: 65, max: 79, color: '#3B82F6' },
+  verified: { min: 80, max: 100, color: '#22C55E' },
+};
 
 export default function AdminAntiCheatScreen() {
   const insets = useSafeAreaInsets();
@@ -44,7 +71,10 @@ export default function AdminAntiCheatScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [scanning, setScanning] = useState(false);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [trustScoreFilter, setTrustScoreFilter] = useState<TrustScoreFilter>('all');
+  const [sortMode, setSortMode] = useState<SortMode>('default');
   const [search, setSearch] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   // ELO recalculation
   const [recalculating, setRecalculating] = useState(false);
@@ -75,6 +105,9 @@ export default function AdminAntiCheatScreen() {
   const [deletionTimeline, setDeletionTimeline] = useState<DeletionTimelinePoint[]>([]);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [reversingElo, setReversingElo] = useState(false);
+
+  // Terrain coordinates for MiniTravelMap in geo alert pairs (keyed by matchId)
+  const [pairCoordsMap, setPairCoordsMap] = useState<Map<string, { lat: number; lng: number }>>(new Map());
 
   // Bulk ELO reversal
   const [bulkReversing, setBulkReversing] = useState(false);
@@ -118,6 +151,54 @@ export default function AdminAntiCheatScreen() {
   }, [language]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Fetch terrain coords for pair match IDs when a player is selected
+  useEffect(() => {
+    if (!selectedPlayer) { setPairCoordsMap(new Map()); return; }
+    // Only fetch coords for pairs that don't already embed them (backward compat)
+    const collectMatchIds = (pairs: any[] | undefined): string[] => {
+      if (!Array.isArray(pairs)) return [];
+      const ids: string[] = [];
+      for (const p of pairs) {
+        const hasA = Number.isFinite(p?.latA) && Number.isFinite(p?.lngA);
+        const hasB = Number.isFinite(p?.latB) && Number.isFinite(p?.lngB);
+        if (hasA && hasB) continue;
+        if (!hasA && p?.matchAId) ids.push(p.matchAId);
+        if (!hasB && p?.matchBId) ids.push(p.matchBId);
+      }
+      return ids;
+    };
+    const allIds = Array.from(new Set<string>([
+      ...collectMatchIds(selectedPlayer.details?.impossibleTravel?.pairs),
+      ...collectMatchIds(selectedPlayer.details?.microTeleportation?.pairs),
+    ]));
+    if (allIds.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const { data: matchData } = await supabase.from('matches').select('id, terrain_id').in('id', allIds);
+        if (cancelled) return;
+        const terrainIds = Array.from(new Set((matchData || []).map((m: any) => m.terrain_id).filter(Boolean))) as string[];
+        if (terrainIds.length === 0) return;
+        const { data: terrainsData } = await supabase.from('terrains').select('id, location').in('id', terrainIds);
+        if (cancelled) return;
+        const terrainCoords = new Map<string, { lat: number; lng: number }>();
+        for (const t of terrainsData || []) {
+          const tlat = t.location?.latitude;
+          const tlng = t.location?.longitude;
+          if (Number.isFinite(tlat) && Number.isFinite(tlng)) terrainCoords.set(t.id, { lat: tlat, lng: tlng });
+        }
+        const matchCoords = new Map<string, { lat: number; lng: number }>();
+        for (const m of matchData || []) {
+          const tc = m.terrain_id ? terrainCoords.get(m.terrain_id) : null;
+          if (tc) matchCoords.set(m.id, tc);
+        }
+        if (!cancelled) setPairCoordsMap(matchCoords);
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPlayer?.id]);
 
   // Load deletion alerts
   useEffect(() => {
@@ -270,12 +351,39 @@ export default function AdminAntiCheatScreen() {
   };
 
   const filtered = players.filter(p => {
-    if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (statusFilter === 'geoAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => GEO_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter === 'temporalAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+    if (trustScoreFilter !== 'all') {
+      const range = TRUST_SCORE_RANGES[trustScoreFilter];
+      if (p.trustScore < range.min || p.trustScore > range.max) return false;
+    }
     if (search.trim()) {
       const q = search.toLowerCase();
       if (!(p.playerName || '').toLowerCase().includes(q) && !p.playerId.includes(q)) return false;
     }
     return true;
+  }).sort((a, b) => {
+    switch (sortMode) {
+      case 'trustAsc': return (a.trustScore ?? 0) - (b.trustScore ?? 0);
+      case 'trustDesc': return (b.trustScore ?? 0) - (a.trustScore ?? 0);
+      case 'analysisRecent': {
+        const aTime = a.analyzedAt ? new Date(a.analyzedAt).getTime() : 0;
+        const bTime = b.analyzedAt ? new Date(b.analyzedAt).getTime() : 0;
+        return bTime - aTime;
+      }
+      case 'analysisOld': {
+        const aTime = a.analyzedAt ? new Date(a.analyzedAt).getTime() : 0;
+        const bTime = b.analyzedAt ? new Date(b.analyzedAt).getTime() : 0;
+        return aTime - bTime;
+      }
+      case 'nocturnalDesc': return ((b.details?.nocturnalActivity?.count || 0) - (a.details?.nocturnalActivity?.count || 0));
+      case 'unrealisticDurationDesc': return ((b.details?.unrealisticDuration?.count || 0) - (a.details?.unrealisticDuration?.count || 0));
+      case 'massSubmissionDesc': return ((b.details?.massSubmission?.daysCount || 0) - (a.details?.massSubmission?.daysCount || 0));
+      default: return 0;
+    }
   });
 
   const statusCounts = {
@@ -285,6 +393,27 @@ export default function AdminAntiCheatScreen() {
     ok: players.filter(p => p.status === 'ok').length,
     dismissed: players.filter(p => p.status === 'dismissed').length,
     banned: players.filter(p => p.status === 'banned').length,
+    geoAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => GEO_ALERT_FLAGS.has(f))).length,
+    temporalAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))).length,
+  };
+
+  const trustScoreCounts = {
+    all: players.length,
+    critical: players.filter(p => p.trustScore <= 24).length,
+    low: players.filter(p => p.trustScore >= 25 && p.trustScore <= 44).length,
+    medium: players.filter(p => p.trustScore >= 45 && p.trustScore <= 64).length,
+    high: players.filter(p => p.trustScore >= 65 && p.trustScore <= 79).length,
+    verified: players.filter(p => p.trustScore >= 80).length,
+  };
+
+  const getTrustScoreLabel = (tf: TrustScoreFilter) => {
+    if (tf === 'all') return isFr ? 'Tous' : 'All';
+    if (tf === 'critical') return '0-24';
+    if (tf === 'low') return '25-44';
+    if (tf === 'medium') return '45-64';
+    if (tf === 'high') return '65-79';
+    if (tf === 'verified') return '80+';
+    return tf;
   };
 
 
@@ -296,17 +425,139 @@ export default function AdminAntiCheatScreen() {
       case 'ok': return '#22C55E';
       case 'dismissed': return '#6B7280';
       case 'banned': return '#DC2626';
+      case 'geoAlerts': return '#F59E0B';
+      case 'temporalAlerts': return '#8B5CF6';
       default: return theme.textMuted;
     }
   };
 
   const getStatusLabel = (status: string) => {
+    if (status === 'geoAlerts') return isFr ? 'Geo-alertes' : 'Geo alerts';
+    if (status === 'temporalAlerts') return isFr ? 'Alertes temporelles' : 'Temporal alerts';
     const labels: Record<string, any> = {
       ok: et.adminStatusOk, watch: et.adminStatusWatch,
       flagged: et.adminStatusFlagged, banned: et.adminStatusBanned,
       dismissed: et.adminStatusDismissed,
     };
     return (labels[status] as any)?.[language] || status;
+  };
+
+  // Bulk actions applied to the currently filtered set
+  const handleBulkDismissFiltered = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const targets = filtered.filter(p => p.status !== 'dismissed' && p.status !== 'banned');
+    if (targets.length === 0) {
+      showAlert(isFr ? 'Aucun joueur a ignorer' : 'No players to dismiss');
+      return;
+    }
+    showAlert(
+      isFr ? `Ignorer ${targets.length} joueur(s) ?` : `Dismiss ${targets.length} player(s)?`,
+      isFr ? 'Applique aux resultats filtres.' : 'Applied to the current filtered results.',
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: isFr ? 'Ignorer tout' : 'Dismiss all',
+          onPress: async () => {
+            setBulkBusy(true);
+            let ok = 0;
+            for (const p of targets) {
+              const { error } = await updateSuspiciousStatus(p.id, 'dismissed');
+              if (!error) ok++;
+            }
+            const ids = new Set(targets.map(t => t.id));
+            setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'dismissed' } : p));
+            setBulkBusy(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(isFr ? `${ok} joueur(s) ignore(s)` : `${ok} player(s) dismissed`);
+          },
+        },
+      ]
+    );
+  };
+
+  const handleBulkBanFiltered = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const targets = filtered.filter(p => p.status !== 'banned');
+    if (targets.length === 0) {
+      showAlert(isFr ? 'Aucun joueur a bannir' : 'No players to ban');
+      return;
+    }
+    showAlert(
+      isFr ? `Bannir ${targets.length} joueur(s) ?` : `Ban ${targets.length} player(s)?`,
+      isFr ? 'Action destructive: score de confiance reduit a 0.' : 'Destructive: trust score reduced to 0.',
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: isFr ? 'Bannir tout' : 'Ban all',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkBusy(true);
+            let ok = 0;
+            for (const p of targets) {
+              const { error } = await banPlayer(p.id, p.playerId || '');
+              if (!error) ok++;
+            }
+            const ids = new Set(targets.map(t => t.id));
+            setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
+            setBulkBusy(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(isFr ? `${ok} joueur(s) banni(s)` : `${ok} player(s) banned`);
+          },
+        },
+      ]
+    );
+  };
+
+  // Bulk temporal notify handler (sends a push reminder to all filtered players with temporal alerts)
+  const handleBulkTemporalNotify = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f)));
+    if (targets.length === 0) {
+      showAlert(isFr ? 'Aucun joueur cible' : 'No targets');
+      return;
+    }
+    showAlert(
+      isFr ? `Envoyer un rappel a ${targets.length} joueur(s) ?` : `Send reminder to ${targets.length} player(s)?`,
+      isFr ? 'Un push regroupe les alertes temporelles actives.' : 'A single push groups active temporal alerts.',
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: isFr ? 'Envoyer' : 'Send',
+          onPress: async () => {
+            setBulkBusy(true);
+            const supabase = getSupabaseClient();
+            let sent = 0;
+            try {
+              const userIds = targets.map(t => t.userId);
+              const { data: tokens } = await supabase
+                .from('push_tokens')
+                .select('user_id, token')
+                .in('user_id', userIds)
+                .eq('active', true);
+              const tokenList = (tokens || []).map((t: any) => ({
+                to: t.token,
+                title: isFr ? 'Verifiez vos matchs' : 'Check your matches',
+                body: isFr ? 'Des alertes temporelles ont ete detectees sur vos matchs recents.' : 'Temporal alerts detected on your recent matches.',
+                data: { type: 'temporal_alert', bulk: true },
+                channelId: 'tournament-reminders',
+                priority: 'high',
+              }));
+              sent = tokenList.length;
+              if (tokenList.length > 0) {
+                await fetch('https://exp.host/--/api/v2/push/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                  body: JSON.stringify(tokenList),
+                });
+              }
+            } catch { /* silent */ }
+            setBulkBusy(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(isFr ? `${sent} rappel(s) envoye(s)` : `${sent} reminder(s) sent`);
+          },
+        },
+      ]
+    );
   };
 
   // Bulk ELO reversal handler
@@ -1022,7 +1273,7 @@ export default function AdminAntiCheatScreen() {
 
       {/* Status filter chips */}
       <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
-        {(['all', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => (
+        {(['all', 'geoAlerts', 'temporalAlerts', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => (
           <Pressable
             key={sf}
             style={[st.filterChip, statusFilter === sf && { backgroundColor: sf === 'all' ? theme.primary : getStatusColor(sf), borderColor: sf === 'all' ? theme.primary : getStatusColor(sf) }]}
@@ -1036,12 +1287,115 @@ export default function AdminAntiCheatScreen() {
         ))}
       </ScrollView></View>
 
+      {/* Trust score range filter chips */}
+      <View style={st.trustFilterWrap}>
+        <View style={st.trustFilterHeader}>
+          <MaterialIcons name="verified-user" size={12} color={theme.textMuted} />
+          <Text style={st.trustFilterLabel}>{isFr ? 'Score de confiance' : 'Trust score'}</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
+          {(['all', 'verified', 'high', 'medium', 'low', 'critical'] as TrustScoreFilter[]).map(tf => {
+            const rangeColor = tf === 'all' ? theme.primary : TRUST_SCORE_RANGES[tf].color;
+            const isActive = trustScoreFilter === tf;
+            return (
+              <Pressable
+                key={tf}
+                style={[st.filterChip, isActive && { backgroundColor: rangeColor, borderColor: rangeColor }]}
+                onPress={() => { Haptics.selectionAsync(); setTrustScoreFilter(tf); }}
+              >
+                <Text style={[st.filterChipText, isActive && { color: '#FFF' }]}>{getTrustScoreLabel(tf)}</Text>
+                <View style={[st.filterCount, isActive && { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
+                  <Text style={[st.filterCountText, isActive && { color: '#FFF' }]}>{trustScoreCounts[tf]}</Text>
+                </View>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
+      {/* Sort mode chips */}
+      <View style={st.trustFilterWrap}>
+        <View style={st.trustFilterHeader}>
+          <MaterialIcons name="sort" size={12} color={theme.textMuted} />
+          <Text style={st.trustFilterLabel}>{isFr ? 'Trier par' : 'Sort by'}</Text>
+        </View>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
+          {(['default', 'trustAsc', 'trustDesc', 'analysisRecent', 'analysisOld', 'nocturnalDesc', 'unrealisticDurationDesc', 'massSubmissionDesc'] as SortMode[]).map(sm => {
+            const isActive = sortMode === sm;
+            const iconName: any = sm === 'trustAsc' ? 'arrow-upward'
+              : sm === 'trustDesc' ? 'arrow-downward'
+              : sm === 'analysisRecent' ? 'schedule'
+              : sm === 'analysisOld' ? 'history'
+              : sm === 'nocturnalDesc' ? 'nightlight-round'
+              : sm === 'unrealisticDurationDesc' ? 'timer-off'
+              : sm === 'massSubmissionDesc' ? 'flash-on'
+              : 'list';
+            const label = sm === 'default' ? (isFr ? 'Par defaut' : 'Default')
+              : sm === 'trustAsc' ? (isFr ? 'Score bas' : 'Score low')
+              : sm === 'trustDesc' ? (isFr ? 'Score haut' : 'Score high')
+              : sm === 'analysisRecent' ? (isFr ? 'Analyse recente' : 'Recent scan')
+              : sm === 'analysisOld' ? (isFr ? 'Analyse ancienne' : 'Old scan')
+              : sm === 'nocturnalDesc' ? (isFr ? 'Nocturnes' : 'Nocturnal')
+              : sm === 'unrealisticDurationDesc' ? (isFr ? 'Durees' : 'Durations')
+              : (isFr ? 'Volume' : 'Volume');
+            return (
+              <Pressable
+                key={sm}
+                style={[st.filterChip, isActive && { backgroundColor: '#7C3AED', borderColor: '#7C3AED' }]}
+                onPress={() => { Haptics.selectionAsync(); setSortMode(sm); }}
+              >
+                <MaterialIcons name={iconName} size={12} color={isActive ? '#FFF' : theme.textSecondary} />
+                <Text style={[st.filterChipText, isActive && { color: '#FFF' }]}>{label}</Text>
+              </Pressable>
+            );
+          })}
+        </ScrollView>
+      </View>
+
       {/* Search */}
       <View style={st.searchBar}>
         <MaterialIcons name="search" size={18} color={theme.textMuted} />
         <TextInput style={st.searchInput} value={search} onChangeText={setSearch} placeholder={isFr ? 'Rechercher un joueur...' : 'Search player...'} placeholderTextColor={theme.textMuted} />
         {search.length > 0 ? <Pressable onPress={() => setSearch('')} hitSlop={8}><MaterialIcons name="close" size={16} color={theme.textMuted} /></Pressable> : null}
       </View>
+
+      {/* Bulk actions on the currently filtered results */}
+      {(statusFilter !== 'all' || trustScoreFilter !== 'all' || search.trim().length > 0) && filtered.length > 0 ? (
+        <View style={st.bulkActionsBar}>
+          <View style={st.bulkActionsInfo}>
+            <MaterialIcons name="playlist-add-check" size={14} color={theme.primary} />
+            <Text style={st.bulkActionsCount}>{filtered.length} {isFr ? 'filtre(s)' : 'filtered'}</Text>
+          </View>
+          <View style={st.bulkActionsBtns}>
+            <Pressable
+              style={[st.bulkActionBtn, { backgroundColor: '#6B728015' }, bulkBusy && { opacity: 0.5 }]}
+              onPress={handleBulkDismissFiltered}
+              disabled={bulkBusy}
+            >
+              {bulkBusy ? <ActivityIndicator size="small" color="#6B7280" /> : <MaterialIcons name="check" size={13} color="#6B7280" />}
+              <Text style={[st.bulkActionBtnText, { color: '#6B7280' }]}>{isFr ? 'Ignorer tout' : 'Dismiss all'}</Text>
+            </Pressable>
+            <Pressable
+              style={[st.bulkActionBtn, { backgroundColor: '#EF444415' }, bulkBusy && { opacity: 0.5 }]}
+              onPress={handleBulkBanFiltered}
+              disabled={bulkBusy}
+            >
+              {bulkBusy ? <ActivityIndicator size="small" color="#EF4444" /> : <MaterialIcons name="block" size={13} color="#EF4444" />}
+              <Text style={[st.bulkActionBtnText, { color: '#EF4444' }]}>{isFr ? 'Bannir tout' : 'Ban all'}</Text>
+            </Pressable>
+            {statusFilter === 'temporalAlerts' ? (
+              <Pressable
+                style={[st.bulkActionBtn, { backgroundColor: '#8B5CF615' }, bulkBusy && { opacity: 0.5 }]}
+                onPress={handleBulkTemporalNotify}
+                disabled={bulkBusy}
+              >
+                {bulkBusy ? <ActivityIndicator size="small" color="#8B5CF6" /> : <MaterialIcons name="notifications-active" size={13} color="#8B5CF6" />}
+                <Text style={[st.bulkActionBtnText, { color: '#8B5CF6' }]}>{isFr ? 'Rappel push' : 'Notify'}</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+      ) : null}
 
       <View style={st.listInner}>
         {loading ? (
@@ -1405,6 +1759,384 @@ export default function AdminAntiCheatScreen() {
                 </View>
               ) : null}
 
+              {/* Home City Mismatch */}
+              {(selectedPlayer.flags.includes('distant_from_home_city') || selectedPlayer.flags.includes('frequent_distant_from_home_city')) && selectedPlayer.details?.homeCityConsistency ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="location-off" size={16} color="#F97316" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Matchs eloignes de la ville declaree' : 'Matches far from declared city'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F97316' }]}>{selectedPlayer.details.homeCityConsistency.distantMatchesCount || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Distants' : 'Distant'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details.homeCityConsistency.distantRatio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.homeCityConsistency.totalMatchesWithGeo || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total geo' : 'Geo total'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary, fontSize: 12 }]} numberOfLines={1}>{selectedPlayer.details.homeCityConsistency.homeCity || '-'}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ville declaree' : 'Home city'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.homeCityConsistency.examples) && selectedPlayer.details.homeCityConsistency.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.homeCityConsistency.examples.length})` : `Examples (${selectedPlayer.details.homeCityConsistency.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.homeCityConsistency.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#F9731615' }]}>
+                            <MaterialIcons name="place" size={14} color="#F97316" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>{ex.terrainName || (isFr ? 'Terrain inconnu' : 'Unknown terrain')}</Text>
+                            <Text style={st.geoAlertMeta}>
+                              {ex.distanceKm} km • {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                            </Text>
+                          </View>
+                          <View style={[st.geoAlertBadge, { backgroundColor: '#F9731615' }]}>
+                            <Text style={[st.geoAlertBadgeText, { color: '#F97316' }]}>{ex.distanceKm} km</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Impossible Travel */}
+              {selectedPlayer.details?.impossibleTravel && selectedPlayer.details.impossibleTravel.count > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="flight-takeoff" size={16} color="#EF4444" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Trajets geographiques impossibles' : 'Impossible geographic travel'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details.impossibleTravel.count}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Trajets' : 'Trips'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.impossibleTravel.matchesWithGeo || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs geo' : 'Geo matches'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444', fontSize: 12 }]}>{'> 500 km'}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? '< 6 h' : '< 6 h'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.impossibleTravel.pairs) && selectedPlayer.details.impossibleTravel.pairs.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Paires (${selectedPlayer.details.impossibleTravel.pairs.length})` : `Pairs (${selectedPlayer.details.impossibleTravel.pairs.length})`}
+                      </Text>
+                      {selectedPlayer.details.impossibleTravel.pairs.map((p: any, i: number) => {
+                        const coordsA = (Number.isFinite(p.latA) && Number.isFinite(p.lngA))
+                          ? { lat: p.latA, lng: p.lngA }
+                          : (p.matchAId ? pairCoordsMap.get(p.matchAId) : null);
+                        const coordsB = (Number.isFinite(p.latB) && Number.isFinite(p.lngB))
+                          ? { lat: p.latB, lng: p.lngB }
+                          : (p.matchBId ? pairCoordsMap.get(p.matchBId) : null);
+                        return (
+                        <View key={i} style={st.geoAlertPairCard}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <MaterialIcons name="place" size={12} color="#EF4444" />
+                            <Text style={st.geoAlertPairTerrain} numberOfLines={1}>{p.terrainA || (isFr ? 'Terrain A' : 'Terrain A')}</Text>
+                            <MaterialIcons name="arrow-forward" size={12} color={theme.textMuted} />
+                            <Text style={st.geoAlertPairTerrain} numberOfLines={1}>{p.terrainB || (isFr ? 'Terrain B' : 'Terrain B')}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#EF444415' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#EF4444' }]}>{p.distanceKm} km</Text>
+                            </View>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#F5A0B15' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#F97316' }]}>{p.hoursBetween} h</Text>
+                            </View>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#DC262615' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#DC2626' }]}>{p.requiredSpeedKmh} km/h</Text>
+                            </View>
+                          </View>
+                          {p.matchADate ? (
+                            <Text style={st.geoAlertPairDate}>
+                              {new Date(p.matchADate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {' → '}
+                              {p.matchBDate ? new Date(p.matchBDate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </Text>
+                          ) : null}
+                          {coordsA && coordsB ? (
+                            <MiniTravelMap
+                              latA={coordsA.lat} lngA={coordsA.lng}
+                              latB={coordsB.lat} lngB={coordsB.lng}
+                              labelA={p.terrainA} labelB={p.terrainB}
+                              distanceKm={p.distanceKm}
+                              color="#EF4444"
+                              height={130}
+                            />
+                          ) : null}
+                        </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Micro-Teleportation */}
+              {selectedPlayer.details?.microTeleportation && selectedPlayer.details.microTeleportation.count > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="speed" size={16} color="#F97316" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Micro-teleportations' : 'Micro-teleportations'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F97316' }]}>{selectedPlayer.details.microTeleportation.count}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Detectees' : 'Detected'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.microTeleportation.matchesWithGeo || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs geo' : 'Geo matches'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F97316', fontSize: 12 }]}>{'> 200 km'}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? '< 2 h' : '< 2 h'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.microTeleportation.pairs) && selectedPlayer.details.microTeleportation.pairs.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Paires (${selectedPlayer.details.microTeleportation.pairs.length})` : `Pairs (${selectedPlayer.details.microTeleportation.pairs.length})`}
+                      </Text>
+                      {selectedPlayer.details.microTeleportation.pairs.map((p: any, i: number) => {
+                        const coordsA = (Number.isFinite(p.latA) && Number.isFinite(p.lngA))
+                          ? { lat: p.latA, lng: p.lngA }
+                          : (p.matchAId ? pairCoordsMap.get(p.matchAId) : null);
+                        const coordsB = (Number.isFinite(p.latB) && Number.isFinite(p.lngB))
+                          ? { lat: p.latB, lng: p.lngB }
+                          : (p.matchBId ? pairCoordsMap.get(p.matchBId) : null);
+                        return (
+                        <View key={i} style={[st.geoAlertPairCard, { borderLeftColor: '#F97316' }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                            <MaterialIcons name="place" size={12} color="#F97316" />
+                            <Text style={st.geoAlertPairTerrain} numberOfLines={1}>{p.terrainA || (isFr ? 'Terrain A' : 'Terrain A')}</Text>
+                            <MaterialIcons name="arrow-forward" size={12} color={theme.textMuted} />
+                            <Text style={st.geoAlertPairTerrain} numberOfLines={1}>{p.terrainB || (isFr ? 'Terrain B' : 'Terrain B')}</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#F9731615' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#F97316' }]}>{p.distanceKm} km</Text>
+                            </View>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#D9770615' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#D97706' }]}>{p.hoursBetween} h</Text>
+                            </View>
+                            <View style={[st.geoAlertMetric, { backgroundColor: '#EA580C15' }]}>
+                              <Text style={[st.geoAlertMetricValue, { color: '#EA580C' }]}>{p.requiredSpeedKmh} km/h</Text>
+                            </View>
+                          </View>
+                          {p.matchADate ? (
+                            <Text style={st.geoAlertPairDate}>
+                              {new Date(p.matchADate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                              {' → '}
+                              {p.matchBDate ? new Date(p.matchBDate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '-'}
+                            </Text>
+                          ) : null}
+                          {coordsA && coordsB ? (
+                            <MiniTravelMap
+                              latA={coordsA.lat} lngA={coordsA.lng}
+                              latB={coordsB.lat} lngB={coordsB.lng}
+                              labelA={p.terrainA} labelB={p.terrainB}
+                              distanceKm={p.distanceKm}
+                              color="#F97316"
+                              height={130}
+                            />
+                          ) : null}
+                        </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Unrealistic Match Duration */}
+              {selectedPlayer.details?.unrealisticDuration && selectedPlayer.details.unrealisticDuration.count > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="timer-off" size={16} color="#F97316" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Durees de matchs irrealistes' : 'Unrealistic match durations'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F97316' }]}>{selectedPlayer.details.unrealisticDuration.count}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs' : 'Matches'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details.unrealisticDuration.ratio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.unrealisticDuration.totalWithDuration || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total dur.' : 'Total dur.'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#8B5CF6', fontSize: 11 }]}>{'<5m / >4h'}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Seuils' : 'Thresholds'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.unrealisticDuration.examples) && selectedPlayer.details.unrealisticDuration.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.unrealisticDuration.examples.length})` : `Examples (${selectedPlayer.details.unrealisticDuration.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.unrealisticDuration.examples.map((ex: any, i: number) => {
+                        const kind = ex.tooShort ? (isFr ? 'Trop court' : 'Too short') : (isFr ? 'Trop long' : 'Too long');
+                        const kindColor = ex.tooShort ? '#F97316' : '#EF4444';
+                        return (
+                          <View key={i} style={st.geoAlertRow}>
+                            <View style={[st.geoAlertIcon, { backgroundColor: kindColor + '15' }]}>
+                              <MaterialIcons name="schedule" size={14} color={kindColor} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={st.geoAlertTitle} numberOfLines={1}>{ex.durationMin} min - {kind}</Text>
+                              <Text style={st.geoAlertMeta}>{ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '-'}</Text>
+                            </View>
+                            <View style={[st.geoAlertBadge, { backgroundColor: kindColor + '15' }]}>
+                              <Text style={[st.geoAlertBadgeText, { color: kindColor }]}>{ex.durationMin}m</Text>
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Nocturnal Pattern */}
+              {selectedPlayer.details?.nocturnalActivity && selectedPlayer.details.nocturnalActivity.count > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="nightlight-round" size={16} color="#7C3AED" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Activite nocturne (3h-6h locale)' : 'Nocturnal activity (3AM-6AM local)'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#7C3AED' }]}>{selectedPlayer.details.nocturnalActivity.count}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs' : 'Matches'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#8B5CF6' }]}>{selectedPlayer.details.nocturnalActivity.ratio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.nocturnalActivity.totalMatches || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total' : 'Total'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#7C3AED', fontSize: 12 }]}>3h-6h</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Fenetre' : 'Window'}</Text>
+                    </View>
+                  </View>
+                  {selectedPlayer.details.nocturnalActivity.timezoneAware ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#7C3AED08', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <MaterialIcons name="public" size={12} color="#7C3AED" />
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: '#7C3AED', flex: 1 }}>
+                        {isFr ? 'Detection basee sur le fuseau horaire estime du terrain' : 'Detection based on estimated terrain timezone'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {Array.isArray(selectedPlayer.details.nocturnalActivity.examples) && selectedPlayer.details.nocturnalActivity.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.nocturnalActivity.examples.length})` : `Examples (${selectedPlayer.details.nocturnalActivity.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.nocturnalActivity.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#7C3AED15' }]}>
+                            <MaterialIcons name="nights-stay" size={14} color="#7C3AED" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>{isFr ? 'Heure locale' : 'Local hour'}: {String(ex.hour ?? 0).padStart(2, '0')}:00</Text>
+                            <Text style={st.geoAlertMeta}>
+                              {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                              {ex.hasTerrainTz ? ` - UTC${ex.tzOffsetHours >= 0 ? '+' : ''}${ex.tzOffsetHours}` : ' - UTC'}
+                            </Text>
+                          </View>
+                          <View style={[st.geoAlertBadge, { backgroundColor: '#7C3AED15' }]}>
+                            <Text style={[st.geoAlertBadgeText, { color: '#7C3AED' }]}>{String(ex.hour ?? 0).padStart(2, '0')}h</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Mass Submission */}
+              {selectedPlayer.details?.massSubmission && selectedPlayer.details.massSubmission.daysCount > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="flash-on" size={16} color="#DC2626" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Soumission massive de matchs' : 'Mass match submission'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#DC2626' }]}>{selectedPlayer.details.massSubmission.daysCount}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Jours' : 'Days'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details.massSubmission.maxDailyCount || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Max/jour' : 'Max/day'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary, fontSize: 12 }]}>{'>20 / 24h'}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Seuil' : 'Threshold'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.massSubmission.examples) && selectedPlayer.details.massSubmission.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.massSubmission.examples.length})` : `Examples (${selectedPlayer.details.massSubmission.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.massSubmission.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#DC262615' }]}>
+                            <MaterialIcons name="today" size={14} color="#DC2626" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>{ex.day ? new Date(ex.day).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'long', year: 'numeric' }) : '-'}</Text>
+                            <Text style={st.geoAlertMeta}>{ex.count} {isFr ? 'matchs enregistres' : 'matches recorded'}</Text>
+                          </View>
+                          <View style={[st.geoAlertBadge, { backgroundColor: '#DC262615' }]}>
+                            <Text style={[st.geoAlertBadgeText, { color: '#DC2626' }]}>{ex.count}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
               {/* Flags */}
               <View style={st.detailSection}>
                 <Text style={st.detailSectionTitle}>{(et.adminFlags as any)?.[language] || 'Flags'} ({selectedPlayer.flags.length})</Text>
@@ -1509,6 +2241,10 @@ const st = StyleSheet.create({
   filterChipText: { fontSize: 13, fontWeight: '600', color: theme.textSecondary },
   filterCount: { backgroundColor: theme.backgroundSecondary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, minWidth: 20, alignItems: 'center' },
   filterCountText: { fontSize: 10, fontWeight: '700', color: theme.textSecondary },
+
+  trustFilterWrap: { marginTop: 2, marginBottom: 4 },
+  trustFilterHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 16, paddingTop: 6, paddingBottom: 4 },
+  trustFilterLabel: { fontSize: 10, fontWeight: '700' as const, color: theme.textMuted, letterSpacing: 0.5, textTransform: 'uppercase' as const },
 
   searchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.surface, marginHorizontal: 16, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
   searchInput: { flex: 1, fontSize: 14, color: theme.textPrimary, padding: 0 },
@@ -1665,6 +2401,21 @@ const st = StyleSheet.create({
   // Heatmap
   heatmapContainer: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 12 },
 
+  // Geo alert rows (home city mismatch examples)
+  geoAlertRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 6 },
+  geoAlertIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  geoAlertTitle: { fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+  geoAlertMeta: { fontSize: 10, color: theme.textMuted, marginTop: 2, fontWeight: '500' as const },
+  geoAlertBadge: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
+  geoAlertBadgeText: { fontSize: 10, fontWeight: '800' as const },
+
+  // Geo alert pair cards (impossible travel + teleportation)
+  geoAlertPairCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 8, borderLeftWidth: 3, borderLeftColor: '#EF4444' },
+  geoAlertPairTerrain: { flex: 1, fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary },
+  geoAlertMetric: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  geoAlertMetricValue: { fontSize: 10, fontWeight: '800' as const },
+  geoAlertPairDate: { fontSize: 9, color: theme.textMuted, fontWeight: '500' as const, marginTop: 6 },
+
   // Device management
   deviceSection: { marginHorizontal: 16, marginBottom: 10, backgroundColor: theme.surface, borderRadius: 16, padding: 14, ...theme.shadows.card, borderWidth: 1, borderColor: '#0EA5E9' + '15' },
   deviceHeaderRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
@@ -1673,4 +2424,12 @@ const st = StyleSheet.create({
   deviceSubtitle: { fontSize: 10, color: theme.textMuted, marginTop: 1 },
   deviceCard: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, marginBottom: 6 },
   deviceUnlinkBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, backgroundColor: '#EF444410', paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10 },
+
+  // Bulk actions bar on filtered results
+  bulkActionsBar: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'space-between' as const, backgroundColor: theme.surface, marginHorizontal: 16, marginTop: 8, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.primary + '30', ...theme.shadows.card },
+  bulkActionsInfo: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6 },
+  bulkActionsCount: { fontSize: 12, fontWeight: '700' as const, color: theme.primary },
+  bulkActionsBtns: { flexDirection: 'row' as const, gap: 8 },
+  bulkActionBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  bulkActionBtnText: { fontSize: 11, fontWeight: '700' as const },
 });

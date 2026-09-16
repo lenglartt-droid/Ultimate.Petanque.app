@@ -154,6 +154,7 @@ export interface Terrain {
   parking: boolean;
   toilets: boolean;
   environment?: 'indoor' | 'outdoor';
+  timezone?: string;
   sponsorId?: string;
   googlePlaceId?: string;
   createdAt?: string;
