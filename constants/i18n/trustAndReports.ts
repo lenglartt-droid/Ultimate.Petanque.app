@@ -70,6 +70,8 @@ export const trustAndReportsTranslations = {
     many_very_short_matches: { fr: 'Matchs tres courts (<2min)', en: 'Very short matches (<2min)' },
     multiple_reports: { fr: 'Signalements multiples', en: 'Multiple reports' },
     has_reports: { fr: 'A ete signale', en: 'Has been reported' },
+    impossible_travel: { fr: 'Trajet impossible (>500km en <6h)', en: 'Impossible travel (>500km in <6h)' },
+    impossible_travel_repeated: { fr: 'Trajets impossibles repetes', en: 'Repeated impossible travels' },
     detectionTitle: { fr: 'Detection automatique', en: 'Automatic Detection' },
     runAnalysis: { fr: 'Lancer l analyse', en: 'Run Analysis' },
     running: { fr: 'Analyse en cours...', en: 'Running analysis...' },

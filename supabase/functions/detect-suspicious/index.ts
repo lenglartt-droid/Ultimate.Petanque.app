@@ -93,10 +93,10 @@ Deno.serve(async (req: Request) => {
 
     const playerUserIds = players.map((p: any) => p.user_id).filter(Boolean);
 
-    // 2. Fetch matches for these users
+    // 2. Fetch matches for these users (include terrain_id for geo-analysis)
     const { data: allMatches } = await supabaseClient
       .from('matches')
-      .select('id, user_id, team_a, team_b, winner, duration, date, created_at, participant_user_ids, player_actions')
+      .select('id, user_id, team_a, team_b, winner, duration, date, created_at, participant_user_ids, player_actions, terrain_id')
       .in('user_id', playerUserIds);
     const matches = allMatches || [];
 
@@ -156,6 +156,38 @@ Deno.serve(async (req: Request) => {
     const userEmailMap = new Map<string, string>();
     for (const up of userProfiles || []) {
       if (up.email) userEmailMap.set(up.id, up.email.toLowerCase());
+    }
+
+    // 8. Fetch terrain coordinates for impossible-travel geo-analysis
+    const allTerrainIds = Array.from(new Set(matches.map((m: any) => m.terrain_id).filter(Boolean))) as string[];
+    const terrainCoordsMap = new Map<string, { lat: number; lng: number; name?: string }>();
+    if (allTerrainIds.length > 0) {
+      const { data: terrainData } = await supabaseClient
+        .from('terrains')
+        .select('id, name, location')
+        .in('id', allTerrainIds);
+      for (const t of terrainData || []) {
+        const lat = t.location?.latitude;
+        const lng = t.location?.longitude;
+        if (Number.isFinite(lat) && Number.isFinite(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001)) {
+          terrainCoordsMap.set(t.id, { lat, lng, name: t.name });
+        }
+      }
+    }
+
+    // Haversine helper (declared once, reused across all players)
+    const IMPOSSIBLE_DISTANCE_KM = 500;
+    const IMPOSSIBLE_TIME_HOURS = 6;
+    function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+      const R = 6371;
+      const dLat = ((lat2 - lat1) * Math.PI) / 180;
+      const dLon = ((lon2 - lon1) * Math.PI) / 180;
+      const a =
+        Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+        Math.cos((lat1 * Math.PI) / 180) *
+        Math.cos((lat2 * Math.PI) / 180) *
+        Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     }
 
     // ============================================
@@ -552,6 +584,58 @@ Deno.serve(async (req: Request) => {
         if (!flags.includes('frequent_deletion_lost_matches') && !flags.includes('mass_deletion_lost_matches')) {
           flags.push('burst_deletion_7d');
         }
+      }
+
+      // ================================================
+      // FACTOR 14: Impossible Geographic Travel (20 pts)
+      // Flag consecutive matches whose distance cannot be
+      // covered in the elapsed time (> 500 km in < 6h).
+      // Uses Haversine on terrain coordinates.
+      // ================================================
+      const geoPoints = playerMatches
+        .map((m: any) => {
+          const coords = m.terrain_id ? terrainCoordsMap.get(m.terrain_id) : undefined;
+          if (!coords) return null;
+          const ts = new Date(m.date || m.created_at).getTime();
+          if (!Number.isFinite(ts)) return null;
+          return { matchId: m.id, ts, lat: coords.lat, lng: coords.lng, terrainName: coords.name };
+        })
+        .filter((p: any) => p !== null)
+        .sort((a: any, b: any) => a.ts - b.ts);
+
+      const impossiblePairs: any[] = [];
+      for (let gi = 1; gi < geoPoints.length; gi++) {
+        const gA = geoPoints[gi - 1];
+        const gB = geoPoints[gi];
+        const distKm = haversineKm(gA.lat, gA.lng, gB.lat, gB.lng);
+        const hoursBetween = (gB.ts - gA.ts) / (1000 * 60 * 60);
+        if (distKm > IMPOSSIBLE_DISTANCE_KM && hoursBetween < IMPOSSIBLE_TIME_HOURS) {
+          impossiblePairs.push({
+            matchAId: gA.matchId,
+            matchBId: gB.matchId,
+            matchADate: new Date(gA.ts).toISOString(),
+            matchBDate: new Date(gB.ts).toISOString(),
+            terrainA: gA.terrainName,
+            terrainB: gB.terrainName,
+            distanceKm: Math.round(distKm),
+            hoursBetween: Math.round(hoursBetween * 10) / 10,
+            requiredSpeedKmh: hoursBetween > 0 ? Math.round(distKm / hoursBetween) : 999999,
+          });
+        }
+      }
+
+      details.impossibleTravel = {
+        count: impossiblePairs.length,
+        matchesWithGeo: geoPoints.length,
+        pairs: impossiblePairs.slice(0, 5),
+      };
+
+      if (impossiblePairs.length >= 3) {
+        score -= 20;
+        flags.push('impossible_travel_repeated');
+      } else if (impossiblePairs.length >= 1) {
+        score -= 15;
+        flags.push('impossible_travel');
       }
 
       // ================================================

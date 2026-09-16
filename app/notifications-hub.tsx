@@ -68,8 +68,20 @@ import {
   getTeamSize,
   TeamInvitation,
 } from '@/services/teamInvitationService';
+import {
+  getPendingSponsorConsents,
+  getAllSponsorConsents,
+  acceptSponsorConsent,
+  refuseSponsorConsent,
+  removeSponsorFromItem,
+  getMyActiveSponsors,
+  autoExpirePendingConsents,
+  getConsentRemainingTime,
+  SponsorConsentRequest,
+  ActiveSponsorItem,
+} from '@/services/sponsorConsentService';
 
-type TabKey = 'invitations' | 'witness' | 'teams' | 'transfers' | 'claims' | 'tournaments' | 'preferences';
+type TabKey = 'invitations' | 'witness' | 'teams' | 'transfers' | 'claims' | 'sponsors' | 'tournaments' | 'preferences';
 
 const TABS: { key: TabKey; labelFr: string; labelEn: string; icon: string; color: string }[] = [
   { key: 'invitations', labelFr: 'Invitations', labelEn: 'Invitations', icon: 'mail', color: theme.primary },
@@ -77,6 +89,7 @@ const TABS: { key: TabKey; labelFr: string; labelEn: string; icon: string; color
   { key: 'witness', labelFr: 'Attestations', labelEn: 'Witness', icon: 'visibility', color: '#7C3AED' },
   { key: 'transfers', labelFr: 'Transferts', labelEn: 'Transfers', icon: 'swap-horiz', color: '#0EA5E9' },
   { key: 'claims', labelFr: 'Clubs', labelEn: 'Claims', icon: 'verified-user', color: '#2563EB' },
+  { key: 'sponsors', labelFr: 'Sponsors', labelEn: 'Sponsors', icon: 'handshake', color: '#D4A017' },
   { key: 'tournaments', labelFr: 'Tournois', labelEn: 'Tournaments', icon: 'emoji-events', color: theme.carreauColor },
   { key: 'preferences', labelFr: 'Réglages', labelEn: 'Settings', icon: 'tune', color: '#64748B' },
 ];
@@ -157,6 +170,17 @@ export default function NotificationsHubScreen() {
   const [claimFilter, setClaimFilter] = useState('all');
   const [proofFullscreen, setProofFullscreen] = useState<string | null>(null);
 
+  // Sponsor consent state
+  const [sponsorConsents, setSponsorConsents] = useState<SponsorConsentRequest[]>([]);
+  const [processingSponsorId, setProcessingSponsorId] = useState<string | null>(null);
+  const [sponsorFilter, setSponsorFilter] = useState('all');
+  const [refuseReasonModal, setRefuseReasonModal] = useState<string | null>(null);
+  const [refuseReason, setRefuseReason] = useState('');
+  const [activeSponsors, setActiveSponsors] = useState<ActiveSponsorItem[]>([]);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [removeReasonModal, setRemoveReasonModal] = useState<string | null>(null);
+  const [removeReason, setRemoveReason] = useState('');
+
   // Filter state
   const [invFilter, setInvFilter] = useState('all');
   const [witnessFilter, setWitnessFilter] = useState('all');
@@ -168,6 +192,7 @@ export default function NotificationsHubScreen() {
   const pendingWitnessCount = witnessInvitations.filter(i => i.status === 'pending').length;
   const pendingTeamCount = teamInvitations.filter(i => i.status === 'pending').length;
   const pendingTransferCount = transferRequests.filter(r => r.status === 'pending').length;
+  const pendingSponsorCount = sponsorConsents.filter(s => s.status === 'approved_awaiting_consent').length;
   const pendingClaimCount = clubClaims.filter(c => c.status === 'pending').length;
   const tabBadges: Record<TabKey, number> = {
     invitations: pendingMatchCount + pendingMeetupCount,
@@ -175,6 +200,7 @@ export default function NotificationsHubScreen() {
     witness: pendingWitnessCount,
     transfers: pendingTransferCount,
     claims: pendingClaimCount,
+    sponsors: pendingSponsorCount,
     tournaments: 0,
     preferences: 0,
   };
@@ -190,6 +216,7 @@ export default function NotificationsHubScreen() {
     setWitnessFilter('all');
     setTransferFilter('all');
     setClaimFilter('all');
+    setSponsorFilter('all');
     setTournamentFilter('all');
   }, []);
 
@@ -309,6 +336,17 @@ export default function NotificationsHubScreen() {
       // Load team invitations
       const { invitations: teamInvs } = await getPendingTeamInvitations();
       setTeamInvitations(teamInvs);
+
+      // Auto-expire pending consent requests older than 7 days
+      await autoExpirePendingConsents();
+
+      // Load sponsor consent requests
+      const { requests: sponsorReqs } = await getAllSponsorConsents();
+      setSponsorConsents(sponsorReqs);
+
+      // Load active sponsors on my items
+      const { items: mySponsors } = await getMyActiveSponsors();
+      setActiveSponsors(mySponsors);
 
       const prefs = await loadNotificationPreferences();
       setNotifPrefs(prefs);
@@ -1186,6 +1224,255 @@ export default function NotificationsHubScreen() {
                 </View>
               ) : renderEmpty('notifications-none', tournamentFilter !== 'all');
             })()}
+          </View>
+        ) : null}
+
+        {/* ========== SPONSORS TAB ========== */}
+        {activeTab === 'sponsors' ? (
+          <View>
+            {renderFilterChips([
+              { key: 'all', labelFr: 'Tout', labelEn: 'All', icon: 'list' },
+              { key: 'pending', labelFr: 'En attente', labelEn: 'Pending', icon: 'schedule' },
+              { key: 'accepted', labelFr: 'Acceptes', labelEn: 'Accepted', icon: 'check-circle' },
+              { key: 'refused', labelFr: 'Refuses', labelEn: 'Refused', icon: 'cancel' },
+            ], sponsorFilter, setSponsorFilter)}
+
+            <View style={s.tipBanner}>
+              <View style={[s.tipIcon, { backgroundColor: '#FEF3C7' }]}><MaterialIcons name="info-outline" size={16} color="#D4A017" /></View>
+              <Text style={[s.tipText, { color: '#92400E' }]}>{fr ? 'Un partenaire souhaite sponsoriser un de vos items. Acceptez pour afficher sa banniere, ou refusez. Les demandes expirent apres 7 jours.' : 'A partner wants to sponsor one of your items. Accept to display their banner, or decline. Requests expire after 7 days.'}</Text>
+            </View>
+
+            {(() => {
+              let filtered = sponsorConsents;
+              if (sponsorFilter === 'pending') filtered = filtered.filter(s => s.status === 'approved_awaiting_consent');
+              if (sponsorFilter === 'accepted') filtered = filtered.filter(s => s.status === 'active');
+              if (sponsorFilter === 'refused') filtered = filtered.filter(s => s.status === 'owner_refused');
+
+              const pending = filtered.filter(s => s.status === 'approved_awaiting_consent');
+              const history = filtered.filter(s => s.status !== 'approved_awaiting_consent');
+
+              if (filtered.length === 0 && activeSponsors.length === 0) return renderEmpty('handshake', sponsorFilter !== 'all');
+
+              const typeIcon = (t: string) => t === 'terrain' ? 'sports-soccer' : t === 'club' ? 'home' : t === 'player' ? 'person' : 'emoji-events';
+              const typeColor = (t: string) => t === 'terrain' ? '#10B981' : t === 'club' ? '#D97706' : t === 'player' ? '#3B82F6' : '#B45309';
+              const filteredActive = sponsorFilter === 'all' || sponsorFilter === 'accepted' ? activeSponsors : [];
+
+              return (
+                <>
+                  {pending.length > 0 ? (
+                    <View style={s.section}>
+                      <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#D4A017' }]} /><Text style={s.sectionLabel}>{fr ? 'En attente de votre accord' : 'Awaiting your consent'}</Text><Text style={s.sectionCount}>{pending.length}</Text></View>
+                      {pending.map((req, idx) => (
+                        <Animated.View key={req.id} entering={FadeInDown.duration(250).delay(idx * 40)}>
+                          <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: '#D4A017' }]}>
+                            <View style={s.cardRow}>
+                              <View style={[s.cardIconBg, { backgroundColor: typeColor(req.itemType) + '12' }]}>
+                                <MaterialIcons name={typeIcon(req.itemType) as any} size={20} color={typeColor(req.itemType)} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={s.cardTitle} numberOfLines={1}>{req.itemName}</Text>
+                                <Text style={s.cardMeta}>{fr ? 'Sponsor' : 'Sponsor'}: {req.ambassadorName}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                                  <View style={{ backgroundColor: typeColor(req.itemType) + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                                    <Text style={{ fontSize: 10, fontWeight: '700', color: typeColor(req.itemType) }}>{req.itemType === 'terrain' ? 'Terrain' : req.itemType === 'club' ? 'Club' : req.itemType === 'player' ? (fr ? 'Joueur' : 'Player') : (fr ? 'Tournoi' : 'Tournament')}</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 10, color: '#94A3B8' }}>{new Date(req.createdAt).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text>
+                                </View>
+                                {(() => {
+                                  const remaining = getConsentRemainingTime(req.createdAt);
+                                  return (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                                      <MaterialIcons name="timer" size={10} color={remaining.daysLeft <= 1 ? '#EF4444' : '#F59E0B'} />
+                                      <Text style={{ fontSize: 10, fontWeight: '600', color: remaining.daysLeft <= 1 ? '#EF4444' : '#F59E0B' }}>
+                                        {remaining.isExpired
+                                          ? (fr ? 'Expire' : 'Expired')
+                                          : remaining.daysLeft > 0
+                                            ? `${remaining.daysLeft}${fr ? 'j' : 'd'} ${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`
+                                            : `${remaining.hoursLeft}h ${fr ? 'restant' : 'left'}`}
+                                      </Text>
+                                    </View>
+                                  );
+                                })()}
+                              </View>
+                            </View>
+                            <View style={s.actionRow}>
+                              <Pressable
+                                style={s.declineBtn}
+                                onPress={() => { setRefuseReasonModal(req.id); setRefuseReason(''); }}
+                                disabled={processingSponsorId === req.id}
+                              >
+                                <MaterialIcons name="close" size={16} color={theme.error} />
+                                <Text style={s.declineBtnText}>{fr ? 'Refuser' : 'Decline'}</Text>
+                              </Pressable>
+                              <Pressable
+                                style={[s.acceptBtn, { backgroundColor: '#D4A017' }]}
+                                onPress={async () => {
+                                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+                                  setProcessingSponsorId(req.id);
+                                  const { error } = await acceptSponsorConsent(req.id);
+                                  setProcessingSponsorId(null);
+                                  if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+                                  setSponsorConsents(prev => prev.map(s => s.id === req.id ? { ...s, status: 'active', ownerResponse: 'accepted' } : s));
+                                  showAlert(fr ? 'Sponsoring accepte' : 'Sponsorship accepted', fr ? 'La banniere sponsor est maintenant visible sur votre fiche.' : 'The sponsor banner is now visible on your item.');
+                                }}
+                                disabled={processingSponsorId === req.id}
+                              >
+                                {processingSponsorId === req.id ? <ActivityIndicator size="small" color="#FFF" /> : (
+                                  <><MaterialIcons name="check" size={16} color="#FFF" /><Text style={s.acceptBtnText}>{fr ? 'Accepter' : 'Accept'}</Text></>
+                                )}
+                              </Pressable>
+                            </View>
+                          </View>
+                        </Animated.View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {/* Active sponsors with removal option */}
+                  {filteredActive.length > 0 ? (
+                    <View style={s.section}>
+                      <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: '#22C55E' }]} /><Text style={s.sectionLabel}>{fr ? 'Mes sponsors actifs' : 'My active sponsors'}</Text><Text style={s.sectionCount}>{filteredActive.length}</Text></View>
+                      {filteredActive.map((item, idx) => (
+                        <Animated.View key={item.proposalId} entering={FadeIn.duration(200).delay(idx * 25)}>
+                          <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: '#22C55E' }]}>
+                            <View style={s.cardRow}>
+                              <View style={[s.cardIconBg, { backgroundColor: typeColor(item.itemType) + '12' }]}>
+                                <MaterialIcons name={typeIcon(item.itemType) as any} size={20} color={typeColor(item.itemType)} />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={s.cardTitle} numberOfLines={1}>{item.itemName}</Text>
+                                <Text style={s.cardMeta}>{fr ? 'Sponsor' : 'Sponsor'}: {item.ambassadorName}</Text>
+                                <Text style={{ fontSize: 10, color: '#94A3B8', marginTop: 2 }}>{fr ? 'Actif depuis' : 'Active since'} {new Date(item.activeSince).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}</Text>
+                              </View>
+                              <Pressable
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#EF444412', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10, borderWidth: 1, borderColor: '#EF444420' }}
+                                onPress={() => { setRemoveReasonModal(item.proposalId); setRemoveReason(''); }}
+                                disabled={removingId === item.proposalId}
+                              >
+                                {removingId === item.proposalId ? <ActivityIndicator size="small" color="#EF4444" /> : (
+                                  <><MaterialIcons name="link-off" size={14} color="#EF4444" /><Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444' }}>{fr ? 'Retirer' : 'Remove'}</Text></>
+                                )}
+                              </Pressable>
+                            </View>
+                          </View>
+                        </Animated.View>
+                      ))}
+                    </View>
+                  ) : null}
+
+                  {history.length > 0 ? (
+                    <View style={s.section}>
+                      <View style={s.sectionRow}><View style={[s.sectionDot, { backgroundColor: theme.textMuted }]} /><Text style={s.sectionLabel}>{fr ? 'Historique' : 'History'}</Text></View>
+                      {history.map((req, idx) => {
+                        const color = req.status === 'active' ? '#22C55E' : '#EF4444';
+                        return (
+                          <Animated.View key={req.id} entering={FadeIn.duration(200).delay(idx * 25)}>
+                            <View style={[s.card, { borderLeftWidth: 3, borderLeftColor: color, opacity: 0.75 }]}>
+                              <View style={s.cardRow}>
+                                <View style={[s.cardIconBg, { backgroundColor: color + '10' }]}>
+                                  <MaterialIcons name={req.status === 'active' ? 'check-circle' : 'cancel'} size={20} color={color} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={s.cardTitle} numberOfLines={1}>{req.itemName}</Text>
+                                  <Text style={s.cardMeta}>{req.ambassadorName} {"\u2022"} {req.itemType === 'terrain' ? 'Terrain' : req.itemType === 'club' ? 'Club' : req.itemType === 'player' ? (fr ? 'Joueur' : 'Player') : (fr ? 'Tournoi' : 'Tournament')}</Text>
+                                  {req.ownerResponseReason ? <Text style={{ fontSize: 11, color: '#94A3B8', marginTop: 2, fontStyle: 'italic' }}>{req.ownerResponseReason}</Text> : null}
+                                </View>
+                                <View style={[s.statusChip, { backgroundColor: color + '12' }]}>
+                                  <Text style={[s.statusChipText, { color }]}>{req.status === 'active' ? (fr ? 'Accepte' : 'Accepted') : (fr ? 'Refuse' : 'Refused')}</Text>
+                                </View>
+                              </View>
+                            </View>
+                          </Animated.View>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+                </>
+              );
+            })()}
+
+            {/* Remove sponsor modal */}
+            {removeReasonModal ? (
+              <Modal visible transparent animationType="fade" onRequestClose={() => setRemoveReasonModal(null)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                  <View style={{ backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>{fr ? 'Retirer le sponsor' : 'Remove sponsor'}</Text>
+                    <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 16, lineHeight: 19 }}>{fr ? 'La banniere sponsor sera supprimee immediatement. Le partenaire sera notifie. Raison optionnelle :' : 'The sponsor banner will be removed immediately. The partner will be notified. Optional reason:'}</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', minHeight: 60, textAlignVertical: 'top' }}
+                      value={removeReason}
+                      onChangeText={setRemoveReason}
+                      placeholder={fr ? 'Raison (optionnel)...' : 'Reason (optional)...'}
+                      placeholderTextColor="#94A3B8"
+                      multiline
+                    />
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                      <Pressable style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9' }} onPress={() => setRemoveReasonModal(null)}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B' }}>{fr ? 'Annuler' : 'Cancel'}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={{ flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#EF4444' }}
+                        onPress={async () => {
+                          const id = removeReasonModal;
+                          setRemoveReasonModal(null);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          setRemovingId(id);
+                          const { error } = await removeSponsorFromItem(id, removeReason);
+                          setRemovingId(null);
+                          if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+                          setActiveSponsors(prev => prev.filter(s => s.proposalId !== id));
+                          showAlert(fr ? 'Sponsor retire' : 'Sponsor removed', fr ? 'La banniere sponsor a ete retiree de votre fiche.' : 'The sponsor banner has been removed from your item.');
+                        }}
+                      >
+                        <MaterialIcons name="link-off" size={16} color="#FFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Confirmer le retrait' : 'Confirm removal'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+            ) : null}
+
+            {/* Refuse reason modal */}
+            {refuseReasonModal ? (
+              <Modal visible transparent animationType="fade" onRequestClose={() => setRefuseReasonModal(null)}>
+                <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+                  <View style={{ backgroundColor: '#FFF', borderRadius: 20, padding: 24, width: '100%', maxWidth: 400 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: '#0F172A', marginBottom: 8 }}>{fr ? 'Refuser le sponsoring' : 'Decline sponsorship'}</Text>
+                    <Text style={{ fontSize: 13, color: '#64748B', marginBottom: 16, lineHeight: 19 }}>{fr ? 'Vous pouvez indiquer une raison (optionnel). Le partenaire sera notifie.' : 'You can provide a reason (optional). The partner will be notified.'}</Text>
+                    <TextInput
+                      style={{ backgroundColor: '#F8FAFC', borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, fontSize: 14, color: '#0F172A', borderWidth: 1, borderColor: '#E2E8F0', minHeight: 60, textAlignVertical: 'top' }}
+                      value={refuseReason}
+                      onChangeText={setRefuseReason}
+                      placeholder={fr ? 'Raison du refus (optionnel)...' : 'Reason for declining (optional)...'}
+                      placeholderTextColor="#94A3B8"
+                      multiline
+                    />
+                    <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                      <Pressable style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: '#F1F5F9' }} onPress={() => setRefuseReasonModal(null)}>
+                        <Text style={{ fontSize: 14, fontWeight: '600', color: '#64748B' }}>{fr ? 'Annuler' : 'Cancel'}</Text>
+                      </Pressable>
+                      <Pressable
+                        style={{ flex: 2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#EF4444' }}
+                        onPress={async () => {
+                          const id = refuseReasonModal;
+                          setRefuseReasonModal(null);
+                          Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                          setProcessingSponsorId(id);
+                          const { error } = await refuseSponsorConsent(id, refuseReason);
+                          setProcessingSponsorId(null);
+                          if (error) { showAlert(fr ? 'Erreur' : 'Error', error); return; }
+                          setSponsorConsents(prev => prev.map(s => s.id === id ? { ...s, status: 'owner_refused', ownerResponse: 'refused', ownerResponseReason: refuseReason || null } : s));
+                        }}
+                      >
+                        <MaterialIcons name="block" size={16} color="#FFF" />
+                        <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFF' }}>{fr ? 'Confirmer le refus' : 'Confirm decline'}</Text>
+                      </Pressable>
+                    </View>
+                  </View>
+                </View>
+              </Modal>
+            ) : null}
           </View>
         ) : null}
 

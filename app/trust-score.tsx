@@ -157,6 +157,8 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   witness_abuse_frequent_pair: { fr: 'Attestations trop frequentes (meme paire)', en: 'Too frequent attestations (same pair)', icon: 'visibility', color: '#F97316' },
   witness_abuse_extreme: { fr: 'Abus d attestations temoins', en: 'Witness attestation abuse', icon: 'visibility-off', color: '#EF4444' },
   witness_abuse_mutual_ring: { fr: 'Attestations mutuelles suspectes', en: 'Suspicious mutual attestations', icon: 'swap-horiz', color: '#F97316' },
+  impossible_travel: { fr: 'Trajet geographique impossible (>500km en <6h)', en: 'Impossible geographic travel (>500km in <6h)', icon: 'flight-takeoff', color: '#EF4444' },
+  impossible_travel_repeated: { fr: 'Trajets impossibles repetes', en: 'Repeated impossible travels', icon: 'flight', color: '#DC2626' },
 };
 
 // ============================================

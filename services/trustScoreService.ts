@@ -947,6 +947,159 @@ export async function reverseDeletedEloLoss(
   }
 }
 
+// ============================================
+// IMPOSSIBLE GEOGRAPHIC TRAVEL DETECTION
+// ============================================
+
+/**
+ * Threshold above which travel becomes physically implausible.
+ * 500 km in under 6 hours implies a sustained speed above ~83 km/h,
+ * which is not realistic when factoring in game duration, transit and
+ * check-in overhead. Above these bounds a player cannot legitimately
+ * appear at two different terrains, so the match is flagged as suspect.
+ */
+export const IMPOSSIBLE_TRAVEL_DISTANCE_KM = 500;
+export const IMPOSSIBLE_TRAVEL_TIME_HOURS = 6;
+
+export interface MatchGeoPoint {
+  matchId: string;
+  date: Date | string | number;
+  latitude: number;
+  longitude: number;
+  terrainId?: string;
+  terrainName?: string;
+}
+
+export interface ImpossibleTravelPair {
+  matchAId: string;
+  matchBId: string;
+  matchADate: string;
+  matchBDate: string;
+  matchATerrainName?: string;
+  matchBTerrainName?: string;
+  distanceKm: number;
+  hoursBetween: number;
+  requiredSpeedKmh: number;
+}
+
+/**
+ * Great-circle distance in kilometres between two coordinates using the
+ * Haversine formula. Returns 0 when either coordinate is invalid.
+ */
+export function haversineDistanceKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  if (!Number.isFinite(lat1) || !Number.isFinite(lon1) || !Number.isFinite(lat2) || !Number.isFinite(lon2)) {
+    return 0;
+  }
+  const R = 6371; // Earth radius in km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos((lat1 * Math.PI) / 180) *
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+/**
+ * Detect consecutive matches whose geographic gap makes travel physically
+ * impossible (default: > 500 km covered in < 6 hours). Points with missing
+ * or (0,0) coordinates are skipped since they carry no reliable location.
+ */
+export function detectImpossibleTravel(
+  points: MatchGeoPoint[],
+  distanceThresholdKm: number = IMPOSSIBLE_TRAVEL_DISTANCE_KM,
+  timeThresholdHours: number = IMPOSSIBLE_TRAVEL_TIME_HOURS,
+): ImpossibleTravelPair[] {
+  const valid = points
+    .map(p => ({ ...p, dateMs: new Date(p.date).getTime() }))
+    .filter(p =>
+      Number.isFinite(p.latitude) &&
+      Number.isFinite(p.longitude) &&
+      (Math.abs(p.latitude) > 0.0001 || Math.abs(p.longitude) > 0.0001) &&
+      Number.isFinite(p.dateMs)
+    )
+    .sort((a, b) => a.dateMs - b.dateMs);
+
+  const pairs: ImpossibleTravelPair[] = [];
+  for (let i = 1; i < valid.length; i++) {
+    const a = valid[i - 1];
+    const b = valid[i];
+    const distanceKm = haversineDistanceKm(a.latitude, a.longitude, b.latitude, b.longitude);
+    const hoursBetween = (b.dateMs - a.dateMs) / (1000 * 60 * 60);
+    if (distanceKm > distanceThresholdKm && hoursBetween < timeThresholdHours) {
+      const requiredSpeedKmh = hoursBetween > 0 ? distanceKm / hoursBetween : Number.POSITIVE_INFINITY;
+      pairs.push({
+        matchAId: a.matchId,
+        matchBId: b.matchId,
+        matchADate: new Date(a.dateMs).toISOString(),
+        matchBDate: new Date(b.dateMs).toISOString(),
+        matchATerrainName: a.terrainName,
+        matchBTerrainName: b.terrainName,
+        distanceKm: Math.round(distanceKm),
+        hoursBetween: Math.round(hoursBetween * 10) / 10,
+        requiredSpeedKmh: Number.isFinite(requiredSpeedKmh) ? Math.round(requiredSpeedKmh) : 999999,
+      });
+    }
+  }
+  return pairs;
+}
+
+/**
+ * Fetch the current user's recent matches with terrain coordinates and
+ * evaluate them against the impossible-travel rule. Returns the list of
+ * impossible pairs, sorted chronologically.
+ */
+export async function fetchOwnImpossibleTravelPairs(): Promise<ImpossibleTravelPair[]> {
+  const supabase = getSupabaseClient();
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return [];
+
+    const { data: matches } = await supabase
+      .from('matches')
+      .select('id, date, created_at, terrain_id')
+      .eq('user_id', user.id)
+      .order('date', { ascending: true })
+      .limit(500);
+
+    const terrainIds = Array.from(new Set((matches || []).map((m: any) => m.terrain_id).filter(Boolean))) as string[];
+    if (terrainIds.length === 0) return [];
+
+    const { data: terrains } = await supabase
+      .from('terrains')
+      .select('id, name, location')
+      .in('id', terrainIds);
+
+    const coordsMap = new Map<string, { lat: number; lng: number; name?: string }>();
+    for (const t of terrains || []) {
+      const lat = t.location?.latitude;
+      const lng = t.location?.longitude;
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        coordsMap.set(t.id, { lat, lng, name: t.name });
+      }
+    }
+
+    const geoPoints: MatchGeoPoint[] = [];
+    for (const m of matches || []) {
+      const coords = m.terrain_id ? coordsMap.get(m.terrain_id) : undefined;
+      if (!coords) continue;
+      geoPoints.push({
+        matchId: m.id,
+        date: m.date || m.created_at,
+        latitude: coords.lat,
+        longitude: coords.lng,
+        terrainId: m.terrain_id,
+        terrainName: coords.name,
+      });
+    }
+
+    return detectImpossibleTravel(geoPoints);
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Fetch deletion timeline for a player (weekly aggregation of deleted lost matches).
  */

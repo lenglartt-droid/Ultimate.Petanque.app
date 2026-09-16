@@ -65,8 +65,6 @@ export interface AuthConfig {
 
 export interface SendOTPOptions {
   shouldCreateUser?: boolean;
-  /** Include magic-link redirect in email (off by default; app uses numeric OTP in UI). */
-  includeMagicLinkRedirect?: boolean;
   emailRedirectTo?: string;
 }
 

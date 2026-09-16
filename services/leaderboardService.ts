@@ -271,6 +271,14 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       }
     }
 
+    // CRITICAL: Ensure playerStatsMap is NEVER null.
+    // If the match query returned 0 results (e.g. due to RLS), we must NOT
+    // fall back to stored stats which include solo/local matches.
+    // An empty Map means no one qualifies — which is correct.
+    if (!playerStatsMap) {
+      playerStatsMap = new Map();
+    }
+
     // Filter: only include REAL authenticated users
     // A player qualifies ONLY if:
     // 1. player.id === player.user_id (self-player, not a tracking card)
@@ -281,13 +289,8 @@ export async function fetchLeaderboard(period?: LeaderboardPeriod): Promise<{ pl
       if (!p.user_id || p.id !== p.user_id) return false;
       // CRITICAL: Verify player.id is an actual authenticated user
       if (!authIdSet.has(p.id)) return false;
-      if (playerStatsMap) {
-        const ps = playerStatsMap.get(p.id);
-        return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;
-      }
-      // Fallback: use stored stats (shouldn't reach here with anti-cheat)
-      const stats = p.stats || {};
-      return (stats.matchesPlayed || 0) >= LEADERBOARD_MIN_MATCHES;
+      const ps = playerStatsMap!.get(p.id);
+      return ps && ps.matchesPlayed >= LEADERBOARD_MIN_MATCHES;
     });
 
     // Fetch premium status for all player user_ids
