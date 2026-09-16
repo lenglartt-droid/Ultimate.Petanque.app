@@ -160,17 +160,17 @@ Deno.serve(async (req: Request) => {
 
     // 8. Fetch terrain coordinates for impossible-travel geo-analysis
     const allTerrainIds = Array.from(new Set(matches.map((m: any) => m.terrain_id).filter(Boolean))) as string[];
-    const terrainCoordsMap = new Map<string, { lat: number; lng: number; name?: string }>();
+    const terrainCoordsMap = new Map<string, { lat: number; lng: number; name?: string; timezone?: string }>();
     if (allTerrainIds.length > 0) {
       const { data: terrainData } = await supabaseClient
         .from('terrains')
-        .select('id, name, location')
+        .select('id, name, location, timezone')
         .in('id', allTerrainIds);
       for (const t of terrainData || []) {
         const lat = t.location?.latitude;
         const lng = t.location?.longitude;
         if (Number.isFinite(lat) && Number.isFinite(lng) && (Math.abs(lat) > 0.0001 || Math.abs(lng) > 0.0001)) {
-          terrainCoordsMap.set(t.id, { lat, lng, name: t.name });
+          terrainCoordsMap.set(t.id, { lat, lng, name: t.name, timezone: t.timezone || undefined });
         }
       }
     }
@@ -619,6 +619,10 @@ Deno.serve(async (req: Request) => {
           matchBDate: new Date(gB.ts).toISOString(),
           terrainA: gA.terrainName,
           terrainB: gB.terrainName,
+          latA: gA.lat,
+          lngA: gA.lng,
+          latB: gB.lat,
+          lngB: gB.lng,
           distanceKm: Math.round(distKm),
           hoursBetween: Math.round(hoursBetween * 10) / 10,
           requiredSpeedKmh: hoursBetween > 0 ? Math.round(distKm / hoursBetween) : 999999,
@@ -711,6 +715,149 @@ Deno.serve(async (req: Request) => {
           score -= 5;
           flags.push('distant_from_home_city');
         }
+      }
+
+      // ================================================
+      // FACTOR 16: Unrealistic Match Duration (15 pts)
+      // Match duration < 5 min or > 4 h (240 min) is
+      // implausible for a real petanque game. Frequent
+      // occurrences point to fabricated match logs.
+      // ================================================
+      const durationMatches = playerMatches.filter((m: any) => Number.isFinite(m.duration) && m.duration > 0);
+      const unrealisticDurationMatches = durationMatches.filter((m: any) => m.duration < 5 || m.duration > 240);
+      details.unrealisticDuration = {
+        count: unrealisticDurationMatches.length,
+        totalWithDuration: durationMatches.length,
+        ratio: durationMatches.length > 0
+          ? Math.round((unrealisticDurationMatches.length / durationMatches.length) * 100)
+          : 0,
+        examples: unrealisticDurationMatches.slice(0, 5).map((m: any) => ({
+          matchId: m.id,
+          durationMin: m.duration,
+          date: m.date || m.created_at,
+          tooShort: m.duration < 5,
+          tooLong: m.duration > 240,
+        })),
+      };
+
+      if (unrealisticDurationMatches.length >= 5) {
+        score -= 15;
+        flags.push('unrealistic_duration_frequent');
+      } else if (unrealisticDurationMatches.length >= 1) {
+        score -= 8;
+        flags.push('unrealistic_duration');
+      }
+
+      // ================================================
+      // FACTOR 17: Nocturnal Pattern (10 pts)
+      // Matches recurring between 3 AM and 6 AM local
+      // time (device timezone) point to either automation,
+      // mass catch-up sessions, or fabricated timestamps.
+      // ================================================
+      // Timezone-aware nocturnal detection: use terrain longitude to estimate
+      // the local UTC offset (rounded to the nearest hour, 15deg = 1h). This
+      // avoids false positives for players travelling abroad or recording
+      // matches from different timezones. Matches without terrain coords
+      // fall back to UTC (server time).
+      const computeLocalHour = (m: any): { localHour: number; utcHour: number; tzOffsetHours: number; hasTerrainTz: boolean; tzSource: string } | null => {
+        const d = new Date(m.date || m.created_at);
+        if (!Number.isFinite(d.getTime())) return null;
+        const coords = m.terrain_id ? terrainCoordsMap.get(m.terrain_id) : undefined;
+        const utcHour = d.getUTCHours();
+        // Prefer explicit terrain timezone when set (IANA identifier or UTC offset).
+        if (coords?.timezone) {
+          const tz = String(coords.timezone).trim();
+          if (tz.includes('/')) {
+            try {
+              const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour: 'numeric', hour12: false });
+              const parts = fmt.formatToParts(d);
+              const hourPart = parts.find(p => p.type === 'hour');
+              if (hourPart) {
+                const parsedHour = parseInt(hourPart.value, 10);
+                const localHour = ((parsedHour % 24) + 24) % 24;
+                let offset = localHour - utcHour;
+                if (offset > 12) offset -= 24;
+                if (offset < -12) offset += 24;
+                return { localHour, utcHour, tzOffsetHours: offset, hasTerrainTz: true, tzSource: 'iana' };
+              }
+            } catch { /* fall through */ }
+          }
+          const offMatch = tz.match(/([+-]?\d+)/);
+          if (offMatch) {
+            const off = parseInt(offMatch[1], 10);
+            const localHour = ((utcHour + off) % 24 + 24) % 24;
+            return { localHour, utcHour, tzOffsetHours: off, hasTerrainTz: true, tzSource: 'offset' };
+          }
+        }
+        // Fallback: estimate offset from terrain longitude (15deg = 1h).
+        const tzOffsetHours = coords ? Math.round(coords.lng / 15) : 0;
+        const localHour = ((utcHour + tzOffsetHours) % 24 + 24) % 24;
+        return { localHour, utcHour, tzOffsetHours, hasTerrainTz: !!coords, tzSource: coords ? 'lng' : 'utc' };
+      };
+      const nocturnalMatches = playerMatches.filter((m: any) => {
+        const info = computeLocalHour(m);
+        if (!info) return false;
+        return info.localHour >= 3 && info.localHour < 6;
+      });
+      const nocturnalRatio = playerMatches.length > 0 ? nocturnalMatches.length / playerMatches.length : 0;
+      const nocturnalHasTz = nocturnalMatches.some((m: any) => {
+        const info = computeLocalHour(m);
+        return info?.hasTerrainTz === true;
+      });
+      details.nocturnalActivity = {
+        count: nocturnalMatches.length,
+        totalMatches: playerMatches.length,
+        ratio: Math.round(nocturnalRatio * 100),
+        windowStartHour: 3,
+        windowEndHour: 6,
+        timezoneAware: nocturnalHasTz,
+        examples: nocturnalMatches.slice(0, 5).map((m: any) => {
+          const info = computeLocalHour(m);
+          return {
+            matchId: m.id,
+            date: m.date || m.created_at,
+            hour: info ? info.localHour : 0,
+            utcHour: info ? info.utcHour : 0,
+            tzOffsetHours: info ? info.tzOffsetHours : 0,
+            hasTerrainTz: info ? info.hasTerrainTz : false,
+          };
+        }),
+      };
+
+      if (nocturnalMatches.length >= 5 && nocturnalRatio > 0.3) {
+        score -= 10;
+        flags.push('nocturnal_pattern');
+      } else if (nocturnalMatches.length >= 3) {
+        score -= 5;
+        flags.push('nocturnal_pattern');
+      }
+
+      // ================================================
+      // FACTOR 18: Mass Submission (15 pts)
+      // > 20 matches recorded in a single 24 h window
+      // strongly suggests bulk imports or fake match
+      // spam. Reuses the daily bucket already computed
+      // in Factor 5 (dateCount).
+      // ================================================
+      const massSubmissionDays: Array<{ day: string; count: number }> = [];
+      for (const [day, count] of dateCount) {
+        if (count > 20) massSubmissionDays.push({ day, count });
+      }
+      massSubmissionDays.sort((a, b) => b.count - a.count);
+      const massMaxDaily = massSubmissionDays.length > 0 ? massSubmissionDays[0].count : 0;
+      details.massSubmission = {
+        daysCount: massSubmissionDays.length,
+        maxDailyCount: massMaxDaily,
+        threshold: 20,
+        examples: massSubmissionDays.slice(0, 5),
+      };
+
+      if (massSubmissionDays.length >= 3) {
+        score -= 15;
+        flags.push('mass_submission_repeated');
+      } else if (massSubmissionDays.length >= 1) {
+        score -= 10;
+        flags.push('mass_submission');
       }
 
       // ================================================
@@ -905,105 +1052,195 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    if (geoAlerts.length > 0) {
-      console.log(`[detect-suspicious] ${geoAlerts.length} geo alert(s) to send`);
+    // ============================================
+    // UNIFIED ANTI-CHEAT DIGEST PUSH
+    // Consolidate geo alerts, temporal alerts, and trust
+    // score improvements per user into a SINGLE digest push
+    // per run to prevent notification spam. Fires only on
+    // transitions (absent -> present) tracked earlier.
+    // ============================================
+    interface DigestAlert {
+      category: 'geo' | 'temporal' | 'trust_improved';
+      flagType: string;
+      count: number;
+      details: Record<string, any>;
+    }
+    const digestByUser = new Map<string, DigestAlert[]>();
+    for (const alert of geoAlerts) {
+      if (!digestByUser.has(alert.userId)) digestByUser.set(alert.userId, []);
+      digestByUser.get(alert.userId)!.push({ category: 'geo', flagType: alert.flagType, count: alert.count, details: alert.details });
+    }
+    for (const alert of temporalAlerts) {
+      if (!digestByUser.has(alert.userId)) digestByUser.set(alert.userId, []);
+      digestByUser.get(alert.userId)!.push({ category: 'temporal', flagType: alert.flagType, count: alert.count, details: alert.details });
+    }
+    for (const tc of thresholdCrossings) {
+      if (!digestByUser.has(tc.userId)) digestByUser.set(tc.userId, []);
+      digestByUser.get(tc.userId)!.push({ category: 'trust_improved', flagType: tc.newLevel, count: tc.newScore, details: { previousScore: tc.previousScore, playerId: tc.playerId } });
+    }
+
+    if (digestByUser.size > 0) {
+      console.log(`[detect-suspicious] Sending anti-cheat digest to ${digestByUser.size} user(s)`);
       try {
-        const alertUserIds = [...new Set(geoAlerts.map(a => a.userId))];
-        const { data: alertTokens } = await supabaseClient
+        const digestUserIds = Array.from(digestByUser.keys());
+        const { data: allTokens } = await supabaseClient
           .from('push_tokens')
           .select('user_id, token')
-          .in('user_id', alertUserIds)
+          .in('user_id', digestUserIds)
           .eq('active', true);
 
         const tokensByUser = new Map<string, string[]>();
-        (alertTokens || []).forEach((t: any) => {
+        (allTokens || []).forEach((t: any) => {
           if (!tokensByUser.has(t.user_id)) tokensByUser.set(t.user_id, []);
           tokensByUser.get(t.user_id)!.push(t.token);
         });
 
-        const geoPushMessages: any[] = [];
-        for (const alert of geoAlerts) {
-          const userTokens = tokensByUser.get(alert.userId) || [];
+        const digestMessages: any[] = [];
+        for (const [userId, alerts] of digestByUser) {
+          const userTokens = tokensByUser.get(userId) || [];
           if (userTokens.length === 0) continue;
 
           let title = '';
           let body = '';
-          if (alert.flagType === 'impossible_travel') {
-            title = '\u26A0\uFE0F Trajet geographique impossible detecte';
-            body = `${alert.count} trajet(s) impossibles (> 500 km en < 6 h) detectes entre vos matchs. Verifiez les terrains associes ou signalez une erreur.`;
-          } else if (alert.flagType === 'micro_teleportation') {
-            title = '\u26A0\uFE0F Deplacement rapide suspect';
-            body = `${alert.count} teleportation(s) (> 200 km en < 2 h) detectees entre matchs consecutifs. Verifiez les terrains associes.`;
-          } else if (alert.flagType === 'distant_from_home_city') {
-            const ratio = alert.details.distantRatio || 0;
-            title = '\u{1F4CD} Matchs eloignes de votre ville declaree';
-            body = `${alert.count} match(s) enregistres a plus de 300 km de votre ville (${ratio}%). Mettez a jour votre profil ou verifiez les terrains.`;
+          let notifType = 'anticheat_digest';
+
+          if (alerts.length === 1) {
+            const a = alerts[0];
+            if (a.category === 'geo' && a.flagType === 'impossible_travel') {
+              title = '\u26A0\uFE0F Trajet geographique impossible detecte';
+              body = `${a.count} trajet(s) impossibles (> 500 km en < 6 h). Verifiez les terrains associes.`;
+              notifType = 'geo_alert';
+            } else if (a.category === 'geo' && a.flagType === 'micro_teleportation') {
+              title = '\u26A0\uFE0F Deplacement rapide suspect';
+              body = `${a.count} teleportation(s) (> 200 km en < 2 h) detectees. Verifiez les terrains associes.`;
+              notifType = 'geo_alert';
+            } else if (a.category === 'geo' && a.flagType === 'distant_from_home_city') {
+              const ratio = a.details.distantRatio || 0;
+              title = '\u{1F4CD} Matchs eloignes de votre ville declaree';
+              body = `${a.count} match(s) a plus de 300 km de votre ville (${ratio}%). Mettez a jour votre profil.`;
+              notifType = 'geo_alert';
+            } else if (a.category === 'temporal' && a.flagType === 'unrealistic_duration') {
+              title = '\u23F1\uFE0F Durees de match irrealistes';
+              body = `${a.count} match(s) avec duree < 5 min ou > 4 h. Verifiez vos temps de match.`;
+              notifType = 'temporal_alert';
+            } else if (a.category === 'temporal' && a.flagType === 'nocturnal_pattern') {
+              title = '\u{1F319} Activite nocturne suspecte';
+              body = `${a.count} match(s) enregistres entre 3 h et 6 h heure locale.`;
+              notifType = 'temporal_alert';
+            } else if (a.category === 'temporal' && a.flagType === 'mass_submission') {
+              title = '\u26A1 Soumission massive de matchs';
+              body = `${a.count} jour(s) avec plus de 20 matchs en 24 h detectes.`;
+              notifType = 'temporal_alert';
+            } else if (a.category === 'trust_improved') {
+              const levelLabels: Record<string, string> = { verified: 'Verifie', high: 'Fiable', medium: 'Standard' };
+              const label = levelLabels[a.flagType] || a.flagType;
+              title = '\u{1F6E1}\uFE0F Score de confiance ameliore !';
+              body = `Votre score est passe a ${a.count}/100 (${label}). Bravo !`;
+              notifType = 'trust_score_improved';
+            }
+          } else {
+            // Multiple alerts: single grouped digest push per user
+            const geoCount = alerts.filter(a => a.category === 'geo').length;
+            const tempCount = alerts.filter(a => a.category === 'temporal').length;
+            const trustCount = alerts.filter(a => a.category === 'trust_improved').length;
+            title = `\u{1F4CB} Anti-triche : ${alerts.length} alertes actives`;
+            const parts: string[] = [];
+            if (geoCount > 0) parts.push(`${geoCount} geographique${geoCount > 1 ? 's' : ''}`);
+            if (tempCount > 0) parts.push(`${tempCount} temporelle${tempCount > 1 ? 's' : ''}`);
+            if (trustCount > 0) parts.push(`${trustCount} amelioration${trustCount > 1 ? 's' : ''}`);
+            body = parts.join(', ') + '. Consultez votre score de confiance.';
+            notifType = 'anticheat_digest';
           }
 
-          for (const tk of userTokens) {
-            geoPushMessages.push({
-              to: tk,
-              title,
-              body,
-              data: { type: 'geo_alert', flagType: alert.flagType, count: alert.count },
-              channelId: 'tournament-reminders',
-              priority: 'high',
-            });
+          if (title && body) {
+            for (const tk of userTokens) {
+              digestMessages.push({
+                to: tk,
+                title,
+                body,
+                data: {
+                  type: notifType,
+                  alerts: alerts.map(a => ({ category: a.category, flagType: a.flagType, count: a.count })),
+                  totalAlerts: alerts.length,
+                },
+                channelId: 'tournament-reminders',
+                priority: 'high',
+              });
+            }
           }
         }
 
-        if (geoPushMessages.length > 0) {
-          // Send in batches of 100 to respect Expo Push API limits
-          for (let i = 0; i < geoPushMessages.length; i += 100) {
-            const batch = geoPushMessages.slice(i, i + 100);
+        if (digestMessages.length > 0) {
+          for (let i = 0; i < digestMessages.length; i += 100) {
+            const batch = digestMessages.slice(i, i + 100);
             await fetch('https://exp.host/--/api/v2/push/send', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
               body: JSON.stringify(batch),
             });
           }
-          console.log(`[detect-suspicious] Sent ${geoPushMessages.length} geo alert push message(s)`);
+          console.log(`[detect-suspicious] Sent ${digestMessages.length} digest push message(s)`);
         }
       } catch (e) {
-        console.error('[detect-suspicious] Error sending geo alerts:', e);
+        console.error('[detect-suspicious] Error sending anti-cheat digest:', e);
       }
     }
 
-    // Send push notifications for threshold crossings
-    if (thresholdCrossings.length > 0) {
-      console.log(`[detect-suspicious] ${thresholdCrossings.length} threshold crossing(s) detected`);
-      for (const tc of thresholdCrossings) {
-        try {
-          const supabaseAnon = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY') ?? '');
-          // Use service role to invoke send-push internally
-          const { data: tokens } = await supabaseClient
-            .from('push_tokens')
-            .select('token')
-            .eq('user_id', tc.userId)
-            .eq('active', true);
+    // ============================================
+    // TEMPORAL ALERT NOTIFICATIONS FOR USERS
+    // Notify users when newly flagged for unrealistic match
+    // durations, nocturnal patterns, or mass submissions.
+    // Only fires on transitions (absent -> present) to avoid spam.
+    // ============================================
+    interface TemporalAlert {
+      userId: string;
+      flagType: 'unrealistic_duration' | 'nocturnal_pattern' | 'mass_submission';
+      count: number;
+      details: Record<string, any>;
+    }
+    const temporalAlerts: TemporalAlert[] = [];
 
-          if (tokens && tokens.length > 0) {
-            const levelLabels: Record<string, string> = { verified: 'Verifie', high: 'Fiable', medium: 'Standard' };
-            const label = levelLabels[tc.newLevel] || tc.newLevel;
-            // Import push helpers - use inline fetch to Expo Push API
-            const pushMessages = tokens.map((t: any) => ({
-              to: t.token,
-              title: '\u{1F6E1}\uFE0F Score de confiance ameliore !',
-              body: `Votre score est passe a ${tc.newScore}/100 (${label}). Bravo !`,
-              data: { type: 'trust_score_improved', newScore: tc.newScore, newLevel: tc.newLevel },
-              channelId: 'tournament-reminders',
-            }));
-            await fetch('https://exp.host/--/api/v2/push/send', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-              body: JSON.stringify(pushMessages),
-            });
-          }
-        } catch (e) {
-          console.error(`[detect-suspicious] Error sending trust score notification:`, e);
-        }
+    for (const r of results) {
+      const prevFlags = prevFlagsMap.get(r.player_id) || [];
+      const newFlags = r.flags;
+
+      const wasUnrealistic = prevFlags.includes('unrealistic_duration') || prevFlags.includes('unrealistic_duration_frequent');
+      const nowUnrealistic = newFlags.includes('unrealistic_duration') || newFlags.includes('unrealistic_duration_frequent');
+      if (!wasUnrealistic && nowUnrealistic) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'unrealistic_duration',
+          count: r.details.unrealisticDuration?.count || 0,
+          details: r.details.unrealisticDuration || {},
+        });
+      }
+
+      const wasNocturnal = prevFlags.includes('nocturnal_pattern');
+      const nowNocturnal = newFlags.includes('nocturnal_pattern');
+      if (!wasNocturnal && nowNocturnal) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'nocturnal_pattern',
+          count: r.details.nocturnalActivity?.count || 0,
+          details: r.details.nocturnalActivity || {},
+        });
+      }
+
+      const wasMass = prevFlags.includes('mass_submission') || prevFlags.includes('mass_submission_repeated');
+      const nowMass = newFlags.includes('mass_submission') || newFlags.includes('mass_submission_repeated');
+      if (!wasMass && nowMass) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'mass_submission',
+          count: r.details.massSubmission?.daysCount || 0,
+          details: r.details.massSubmission || {},
+        });
       }
     }
+
+    // Temporal alerts are now bundled with the unified digest push above.
+
+    // Trust score threshold crossings are now bundled with the unified digest push above.
 
     // ============================================
     // ADMIN PUSH NOTIFICATIONS FOR DELETION ALERTS
