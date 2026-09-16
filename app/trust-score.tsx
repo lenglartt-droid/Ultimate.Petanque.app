@@ -159,6 +159,9 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   witness_abuse_mutual_ring: { fr: 'Attestations mutuelles suspectes', en: 'Suspicious mutual attestations', icon: 'swap-horiz', color: '#F97316' },
   impossible_travel: { fr: 'Trajet geographique impossible (>500km en <6h)', en: 'Impossible geographic travel (>500km in <6h)', icon: 'flight-takeoff', color: '#EF4444' },
   impossible_travel_repeated: { fr: 'Trajets impossibles repetes', en: 'Repeated impossible travels', icon: 'flight', color: '#DC2626' },
+  micro_teleportation: { fr: 'Micro-teleportation (>200km en <2h)', en: 'Micro-teleportation (>200km in <2h)', icon: 'speed', color: '#F97316' },
+  distant_from_home_city: { fr: 'Matchs eloignes de la ville declaree (>300km)', en: 'Matches far from declared city (>300km)', icon: 'location-off', color: '#F97316' },
+  frequent_distant_from_home_city: { fr: 'Matchs frequemment eloignes de la ville declaree', en: 'Matches frequently far from declared city', icon: 'wrong-location', color: '#EF4444' },
 };
 
 // ============================================
