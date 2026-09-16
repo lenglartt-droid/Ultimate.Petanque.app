@@ -178,6 +178,8 @@ Deno.serve(async (req: Request) => {
     // Haversine helper (declared once, reused across all players)
     const IMPOSSIBLE_DISTANCE_KM = 500;
     const IMPOSSIBLE_TIME_HOURS = 6;
+    const TELEPORT_DISTANCE_KM = 200;
+    const TELEPORT_TIME_HOURS = 2;
     function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
       const R = 6371;
       const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -604,23 +606,27 @@ Deno.serve(async (req: Request) => {
         .sort((a: any, b: any) => a.ts - b.ts);
 
       const impossiblePairs: any[] = [];
+      const teleportPairs: any[] = [];
       for (let gi = 1; gi < geoPoints.length; gi++) {
         const gA = geoPoints[gi - 1];
         const gB = geoPoints[gi];
         const distKm = haversineKm(gA.lat, gA.lng, gB.lat, gB.lng);
         const hoursBetween = (gB.ts - gA.ts) / (1000 * 60 * 60);
+        const pair = {
+          matchAId: gA.matchId,
+          matchBId: gB.matchId,
+          matchADate: new Date(gA.ts).toISOString(),
+          matchBDate: new Date(gB.ts).toISOString(),
+          terrainA: gA.terrainName,
+          terrainB: gB.terrainName,
+          distanceKm: Math.round(distKm),
+          hoursBetween: Math.round(hoursBetween * 10) / 10,
+          requiredSpeedKmh: hoursBetween > 0 ? Math.round(distKm / hoursBetween) : 999999,
+        };
         if (distKm > IMPOSSIBLE_DISTANCE_KM && hoursBetween < IMPOSSIBLE_TIME_HOURS) {
-          impossiblePairs.push({
-            matchAId: gA.matchId,
-            matchBId: gB.matchId,
-            matchADate: new Date(gA.ts).toISOString(),
-            matchBDate: new Date(gB.ts).toISOString(),
-            terrainA: gA.terrainName,
-            terrainB: gB.terrainName,
-            distanceKm: Math.round(distKm),
-            hoursBetween: Math.round(hoursBetween * 10) / 10,
-            requiredSpeedKmh: hoursBetween > 0 ? Math.round(distKm / hoursBetween) : 999999,
-          });
+          impossiblePairs.push(pair);
+        } else if (distKm > TELEPORT_DISTANCE_KM && hoursBetween < TELEPORT_TIME_HOURS) {
+          teleportPairs.push(pair);
         }
       }
 
@@ -629,6 +635,11 @@ Deno.serve(async (req: Request) => {
         matchesWithGeo: geoPoints.length,
         pairs: impossiblePairs.slice(0, 5),
       };
+      details.microTeleportation = {
+        count: teleportPairs.length,
+        matchesWithGeo: geoPoints.length,
+        pairs: teleportPairs.slice(0, 5),
+      };
 
       if (impossiblePairs.length >= 3) {
         score -= 20;
@@ -636,6 +647,11 @@ Deno.serve(async (req: Request) => {
       } else if (impossiblePairs.length >= 1) {
         score -= 15;
         flags.push('impossible_travel');
+      }
+
+      if (teleportPairs.length >= 1) {
+        score -= 10;
+        flags.push('micro_teleportation');
       }
 
       // ================================================
