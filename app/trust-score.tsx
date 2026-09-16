@@ -530,6 +530,133 @@ export default function TrustScoreScreen() {
               )}
             </Animated.View>
 
+            {/* Geographic Alerts (personal view) */}
+            {(
+              ((trustData.details?.impossibleTravel?.count || 0) > 0) ||
+              ((trustData.details?.microTeleportation?.count || 0) > 0) ||
+              ((trustData.details?.homeCityConsistency?.distantMatchesCount || 0) >= 3)
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(220)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#EF4444' + '15' }]}>
+                    <MaterialIcons name="explore-off" size={18} color="#EF4444" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Alertes geographiques' : 'Geographic Alerts'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Ces alertes indiquent des incoherences geographiques dans vos matchs. Verifiez les terrains selectionnes ou mettez a jour votre ville.'
+                    : 'These alerts indicate geographic inconsistencies in your matches. Check selected terrains or update your city.'}
+                </Text>
+
+                {/* Impossible Travel */}
+                {(trustData.details?.impossibleTravel?.count || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="flight-takeoff" size={14} color="#EF4444" />
+                      <Text style={[geoSt.groupTitle, { color: '#EF4444' }]}>
+                        {isFr ? 'Trajets impossibles' : 'Impossible travel'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#EF444415' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#EF4444' }]}>
+                          {trustData.details.impossibleTravel.count}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? '> 500 km parcourus en < 6h entre 2 matchs. Un terrain a peut-etre ete mal selectionne.'
+                        : '> 500 km covered in < 6h between 2 matches. A terrain may have been mis-selected.'}
+                    </Text>
+                    {Array.isArray(trustData.details.impossibleTravel.pairs)
+                      ? trustData.details.impossibleTravel.pairs.slice(0, 3).map((p: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#EF4444' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {(p.terrainA || 'A') + '  ->  ' + (p.terrainB || 'B')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {p.distanceKm} km · {p.hoursBetween} h · {p.requiredSpeedKmh} km/h
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Micro-Teleportation */}
+                {(trustData.details?.microTeleportation?.count || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="speed" size={14} color="#F97316" />
+                      <Text style={[geoSt.groupTitle, { color: '#F97316' }]}>
+                        {isFr ? 'Micro-teleportations' : 'Micro-teleportations'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#F9731615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#F97316' }]}>
+                          {trustData.details.microTeleportation.count}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? '> 200 km en < 2h entre 2 matchs. Verifiez que les terrains selectionnes sont corrects.'
+                        : '> 200 km in < 2h between 2 matches. Check that the selected terrains are correct.'}
+                    </Text>
+                    {Array.isArray(trustData.details.microTeleportation.pairs)
+                      ? trustData.details.microTeleportation.pairs.slice(0, 3).map((p: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#F97316' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {(p.terrainA || 'A') + '  ->  ' + (p.terrainB || 'B')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {p.distanceKm} km · {p.hoursBetween} h · {p.requiredSpeedKmh} km/h
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Distant from Home City */}
+                {(trustData.details?.homeCityConsistency?.distantMatchesCount || 0) >= 3 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="location-off" size={14} color="#D97706" />
+                      <Text style={[geoSt.groupTitle, { color: '#D97706' }]}>
+                        {isFr ? 'Matchs eloignes de votre ville' : 'Matches far from your city'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#D9770615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#D97706' }]}>
+                          {trustData.details.homeCityConsistency.distantMatchesCount}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.homeCityConsistency.distantMatchesCount} match(s) a plus de 300 km de ${trustData.details.homeCityConsistency.homeCity || 'votre ville'} (${trustData.details.homeCityConsistency.distantRatio || 0}%). Si vous avez demenage, mettez a jour votre profil.`
+                        : `${trustData.details.homeCityConsistency.distantMatchesCount} match(es) more than 300 km from ${trustData.details.homeCityConsistency.homeCity || 'your city'} (${trustData.details.homeCityConsistency.distantRatio || 0}%). If you have moved, update your profile.`}
+                    </Text>
+                    {Array.isArray(trustData.details.homeCityConsistency.examples)
+                      ? trustData.details.homeCityConsistency.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#D97706' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {ex.terrainName || (isFr ? 'Terrain inconnu' : 'Unknown terrain')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.distanceKm} km · {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                    <Pressable style={[geoSt.cta, { backgroundColor: '#D97706' }]} onPress={() => router.push('/profile')}>
+                      <MaterialIcons name="edit-location" size={14} color="#FFF" />
+                      <Text style={geoSt.ctaText}>{isFr ? 'Mettre a jour ma ville' : 'Update my city'}</Text>
+                    </Pressable>
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
             {/* History Chart */}
             <Animated.View entering={FadeInDown.duration(400).delay(250)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
@@ -784,6 +911,21 @@ const st = StyleSheet.create({
   tipText: { fontSize: 13, color: theme.textPrimary, fontWeight: '500', lineHeight: 18 },
   tipActionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 10, alignSelf: 'flex-start', borderWidth: 1 },
   tipActionText: { fontSize: 12, fontWeight: '700' },
+});
+
+const geoSt = StyleSheet.create({
+  intro: { fontSize: 12, color: theme.textSecondary, lineHeight: 18, marginBottom: 12 },
+  group: { backgroundColor: theme.backgroundSecondary + '80', borderRadius: 12, padding: 12, marginBottom: 10 },
+  groupHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
+  groupTitle: { flex: 1, fontSize: 13, fontWeight: '700' },
+  groupBadge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
+  groupBadgeText: { fontSize: 11, fontWeight: '800' },
+  groupDesc: { fontSize: 11, color: theme.textSecondary, lineHeight: 16, marginBottom: 8 },
+  item: { backgroundColor: theme.surface, borderRadius: 8, padding: 8, marginBottom: 6, borderLeftWidth: 3 },
+  itemTitle: { fontSize: 12, fontWeight: '700', color: theme.textPrimary },
+  itemMeta: { fontSize: 10, color: theme.textMuted, marginTop: 2, fontWeight: '500' },
+  cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 4 },
+  ctaText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
 });
 
 const histSt = StyleSheet.create({

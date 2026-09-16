@@ -52,6 +52,7 @@ import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@
 import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 import { sendProximityTerrainNotification } from '@/services/notificationService';
 import { checkCityChange, markCityPromptShown, CityChangeDetection } from '@/services/autoCityDetectionService';
+import { detectHomeCityMismatch, markHomeCityMismatchPromptShown, HomeCityMismatchResult } from '@/services/homeCityMismatchService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -105,7 +106,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner' | 'cityMatchMismatch';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -224,6 +225,10 @@ export default function HomeScreen() {
   const [cityChangeDismissed, setCityChangeDismissed] = useState(false);
   const [cityUpdating, setCityUpdating] = useState(false);
 
+  // Home city mismatch (based on match analysis)
+  const [cityMismatch, setCityMismatch] = useState<HomeCityMismatchResult | null>(null);
+  const [cityMismatchDismissed, setCityMismatchDismissed] = useState(false);
+
   // Gold partner carousel
   const [goldCarouselIndex, setGoldCarouselIndex] = useState(0);
   const goldFadeAnim = React.useRef(new RNAnimated.Value(1)).current;
@@ -335,6 +340,19 @@ export default function HomeScreen() {
     } catch { /* silent */ }
   }, [selfPlayer]);
 
+  // Home city mismatch detection (match-based)
+  const checkHomeCityMismatch = useCallback(async () => {
+    if (!selfPlayer) return;
+    try {
+      const result = await detectHomeCityMismatch({
+        playerLat: selfPlayer.location?.latitude || null,
+        playerLng: selfPlayer.location?.longitude || null,
+        playerCity: selfPlayer.location?.city || (selfPlayer as any).city || null,
+      });
+      if (result?.detected) setCityMismatch(result);
+    } catch { /* silent */ }
+  }, [selfPlayer]);
+
   // Load nearby active terrains (proximity alert)
   const loadProximityAlert = useCallback(async () => {
     if (proximityLoadedRef.current) return;
@@ -423,13 +441,14 @@ export default function HomeScreen() {
           setTimeout(() => {
             loadProximityAlert();
             checkAutoCityDetection();
+            checkHomeCityMismatch();
           }, 2000);
         });
       });
     };
     loadCritical();
     return () => { cancelled = true; };
-  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
+  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection, checkHomeCityMismatch]);
 
   // Polling — unified into single interval to reduce timer overhead
   useEffect(() => {
@@ -509,6 +528,7 @@ export default function HomeScreen() {
     s.push({ key: 'actions', data: ['actions'] });
     if (nearbyTerrains.length > 0 && !proximityDismissed) s.push({ key: 'proximity' as SectionKey, data: ['proximity' as SectionKey] });
     if (cityChange && !cityChangeDismissed) s.push({ key: 'cityChange' as SectionKey, data: ['cityChange' as SectionKey] });
+    if (cityMismatch && !cityMismatchDismissed && !(cityChange && !cityChangeDismissed)) s.push({ key: 'cityMatchMismatch' as SectionKey, data: ['cityMatchMismatch' as SectionKey] });
     // Geographic Ranking Widget — above full leaderboard
     s.push({ key: 'geoRanking', data: ['geoRanking'] });
     // Leaderboard Hub — prominent position
@@ -535,7 +555,7 @@ export default function HomeScreen() {
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
-  }, [witnessRequests.length, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed]);
+  }, [witnessRequests.length, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed, cityMismatch, cityMismatchDismissed]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -691,6 +711,63 @@ export default function HomeScreen() {
                   onPress={() => { setCityChangeDismissed(true); markCityPromptShown(); }}
                 >
                   <Text style={st.cityChangeSkipText}>{language === 'fr' ? 'Non merci' : 'No thanks'}</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        ) : null;
+
+      // ===== HOME CITY MISMATCH ALERT (match-based) =====
+      case 'cityMatchMismatch' as SectionKey:
+        return cityMismatch && !cityMismatchDismissed ? (
+          <View style={[st.section, isTablet && st.sectionTablet]}>
+            <View style={st.cityMismatchCard}>
+              <Pressable
+                style={st.cityMismatchClose}
+                onPress={() => { setCityMismatchDismissed(true); markHomeCityMismatchPromptShown(); }}
+                hitSlop={8}
+              >
+                <MaterialIcons name="close" size={16} color="#B45309" />
+              </Pressable>
+              <View style={st.cityMismatchHeader}>
+                <View style={st.cityMismatchIconBg}>
+                  <MaterialIcons name="wrong-location" size={22} color="#D97706" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={st.cityMismatchTitle}>
+                    {language === 'fr' ? 'Votre ville a-t-elle change ?' : 'Has your city changed?'}
+                  </Text>
+                  <Text style={st.cityMismatchSub}>
+                    {Math.round(cityMismatch.ratio * 100)}% {language === 'fr' ? 'de vos matchs recents a > 300 km' : 'of your recent matches > 300 km'}
+                  </Text>
+                </View>
+              </View>
+              <Text style={st.cityMismatchDesc}>
+                {language === 'fr'
+                  ? `${cityMismatch.mismatchCount}/${cityMismatch.totalMatchesWithGeo} de vos matchs recents sont a plus de 300 km de ${cityMismatch.homeCity}${cityMismatch.dominantCity ? `, souvent a ${cityMismatch.dominantCity}` : ''}. Mettez a jour votre ville pour un classement geographique correct.`
+                  : `${cityMismatch.mismatchCount}/${cityMismatch.totalMatchesWithGeo} of your recent matches are more than 300 km from ${cityMismatch.homeCity}${cityMismatch.dominantCity ? `, often at ${cityMismatch.dominantCity}` : ''}. Update your city for accurate geographic ranking.`}
+              </Text>
+              <View style={st.cityMismatchActions}>
+                <Pressable
+                  style={st.cityMismatchCta}
+                  onPress={() => {
+                    markHomeCityMismatchPromptShown();
+                    setCityMismatchDismissed(true);
+                    router.push('/profile');
+                  }}
+                >
+                  <MaterialIcons name="edit-location" size={16} color="#FFF" />
+                  <Text style={st.cityMismatchCtaText}>
+                    {language === 'fr' ? 'Modifier ma ville' : 'Edit my city'}
+                  </Text>
+                </Pressable>
+                <Pressable
+                  style={st.cityMismatchSkip}
+                  onPress={() => { setCityMismatchDismissed(true); markHomeCityMismatchPromptShown(); }}
+                >
+                  <Text style={st.cityMismatchSkipText}>
+                    {language === 'fr' ? 'Plus tard' : 'Later'}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -1078,6 +1155,7 @@ export default function HomeScreen() {
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors, goldPartners, goldCarouselIndex,
     now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
     cityChange, cityChangeDismissed, cityUpdating,
+    cityMismatch, cityMismatchDismissed,
   ]);
 
   const keyExtractor = useCallback((item: SectionKey) => item, []);
@@ -1308,6 +1386,20 @@ const st = StyleSheet.create({
   cityChangeCtaText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
   cityChangeSkip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563EB12' },
   cityChangeSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#2563EB' },
+
+  // CITY MISMATCH ALERT (match-based)
+  cityMismatchCard: { backgroundColor: '#FFFBEB', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A', position: 'relative' as const },
+  cityMismatchClose: { position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#D9770612', alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10 },
+  cityMismatchHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 10, paddingRight: 32 },
+  cityMismatchIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#D9770618', alignItems: 'center' as const, justifyContent: 'center' as const },
+  cityMismatchTitle: { fontSize: 15, fontWeight: '700' as const, color: '#78350F' },
+  cityMismatchSub: { fontSize: 11, fontWeight: '600' as const, color: '#D97706', marginTop: 2 },
+  cityMismatchDesc: { fontSize: 13, color: '#92400E', lineHeight: 19, marginBottom: 14 },
+  cityMismatchActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
+  cityMismatchCta: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#D97706', paddingVertical: 12, borderRadius: 12 },
+  cityMismatchCtaText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+  cityMismatchSkip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#D9770612' },
+  cityMismatchSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#D97706' },
 
   // PROXIMITY ALERT
   proximityCard: { backgroundColor: '#F0FDF4', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BBF7D0', position: 'relative' as const },
