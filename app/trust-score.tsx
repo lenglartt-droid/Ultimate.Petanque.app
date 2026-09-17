@@ -194,6 +194,19 @@ export default function TrustScoreScreen() {
   const [showHowItWorks, setShowHowItWorks] = useState(false);
   const [behavioralDigestHistory, setBehavioralDigestHistory] = useState<Array<{ id: string; flags: string[]; alertSummary: string; sentAt: string; isResolved: boolean; resolvedAt: string | null }>>([]);
   const [bdhLoading, setBdhLoading] = useState(false);
+  const [bdhFilter, setBdhFilter] = useState<'active' | 'resolved' | 'all'>('all');
+
+  const bdhFiltered = useMemo(() => {
+    if (bdhFilter === 'active') return behavioralDigestHistory.filter(h => !h.isResolved);
+    if (bdhFilter === 'resolved') return behavioralDigestHistory.filter(h => h.isResolved);
+    return behavioralDigestHistory;
+  }, [behavioralDigestHistory, bdhFilter]);
+
+  const bdhCounts = useMemo(() => ({
+    all: behavioralDigestHistory.length,
+    active: behavioralDigestHistory.filter(h => !h.isResolved).length,
+    resolved: behavioralDigestHistory.filter(h => h.isResolved).length,
+  }), [behavioralDigestHistory]);
 
   const [screenW, setScreenW] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -971,7 +984,37 @@ export default function TrustScoreScreen() {
                     ? 'Vos 10 derniers rappels comportementaux. Un rappel resolu indique que le pattern detecte a disparu depuis.'
                     : 'Your last 10 behavioral alerts. A resolved alert means the detected pattern has since disappeared.'}
                 </Text>
-                {behavioralDigestHistory.map((h) => {
+                <View style={bdhSt.filterRow}>
+                  {(['all', 'active', 'resolved'] as const).map(f => {
+                    const isActive = bdhFilter === f;
+                    const chipColor = f === 'active' ? '#F43F5E' : f === 'resolved' ? '#22C55E' : theme.primary;
+                    const label = f === 'all' ? (isFr ? 'Tous' : 'All') : f === 'active' ? (isFr ? 'Actif' : 'Active') : (isFr ? 'Resolu' : 'Resolved');
+                    const count = bdhCounts[f];
+                    const icon = f === 'active' ? 'radio-button-checked' : f === 'resolved' ? 'check-circle' : 'list';
+                    return (
+                      <Pressable
+                        key={f}
+                        style={[bdhSt.filterChip, { borderColor: isActive ? chipColor : chipColor + '40' }, isActive && { backgroundColor: chipColor }]}
+                        onPress={() => setBdhFilter(f)}
+                      >
+                        <MaterialIcons name={icon as any} size={11} color={isActive ? '#FFF' : chipColor} />
+                        <Text style={[bdhSt.filterChipText, { color: isActive ? '#FFF' : chipColor }]}>{label}</Text>
+                        <View style={[bdhSt.filterCount, { backgroundColor: isActive ? 'rgba(255,255,255,0.3)' : chipColor + '15' }]}>
+                          <Text style={[bdhSt.filterCountText, { color: isActive ? '#FFF' : chipColor }]}>{count}</Text>
+                        </View>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {bdhFiltered.length === 0 ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center', gap: 6 }}>
+                    <MaterialIcons name="filter-list" size={26} color={theme.textMuted} />
+                    <Text style={{ fontSize: 12, color: theme.textMuted, textAlign: 'center' }}>
+                      {isFr ? 'Aucun rappel pour ce filtre' : 'No alerts for this filter'}
+                    </Text>
+                  </View>
+                ) : null}
+                {bdhFiltered.map((h) => {
                   const dateStr = new Date(h.sentAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
                   const resolvedColor = h.isResolved ? '#22C55E' : '#F43F5E';
                   return (
@@ -1285,6 +1328,11 @@ const geoSt = StyleSheet.create({
 });
 
 const bdhSt = StyleSheet.create({
+  filterRow: { flexDirection: 'row', gap: 6, marginBottom: 10, flexWrap: 'wrap' },
+  filterChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, backgroundColor: theme.surface, borderWidth: 1.5 },
+  filterChipText: { fontSize: 11, fontWeight: '700' },
+  filterCount: { paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, minWidth: 18, alignItems: 'center' },
+  filterCountText: { fontSize: 9, fontWeight: '800' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary + '80', borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 3 },
   date: { fontSize: 11, fontWeight: '700', color: theme.textSecondary },
   flagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
