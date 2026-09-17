@@ -557,7 +557,6 @@ export default function AdminAntiCheatScreen() {
     );
   };
 
-  const handleBulkBanBehavioral = async () => {
   const handleBulkTemporalNotify = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f)));

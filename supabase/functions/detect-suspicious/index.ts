@@ -1331,6 +1331,56 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================
+    // RESOLVE STALE BEHAVIORAL HISTORY
+    // Mark old behavioral_digest_history rows as resolved
+    // when the flag they were tracking no longer appears
+    // in the current scan (base flag or _frequent/_extreme/
+    // _dominant variants).
+    // ============================================
+    try {
+      const currentBehavioralFlagsByUser = new Map<string, Set<string>>();
+      for (const r of results) {
+        const behavSet = new Set<string>();
+        for (const f of r.flags) {
+          if (['self_match','self_match_frequent','symmetric_score_streak','symmetric_score_streak_extreme','ghost_opponents','ghost_opponents_dominant'].includes(f)) {
+            behavSet.add(f);
+          }
+        }
+        currentBehavioralFlagsByUser.set(r.user_id, behavSet);
+      }
+      const analyzedUserIds = Array.from(currentBehavioralFlagsByUser.keys());
+      if (analyzedUserIds.length > 0) {
+        const { data: unresolvedRows } = await supabaseClient
+          .from('behavioral_digest_history')
+          .select('id, user_id, flags')
+          .eq('is_resolved', false)
+          .in('user_id', analyzedUserIds);
+        const idsToResolve: string[] = [];
+        for (const row of unresolvedRows || []) {
+          const currentFlags = currentBehavioralFlagsByUser.get(row.user_id) || new Set();
+          const entryFlags = Array.isArray(row.flags) ? row.flags : [];
+          const anyStillActive = entryFlags.some((ef: string) => {
+            if (currentFlags.has(ef)) return true;
+            if (ef === 'self_match' && (currentFlags.has('self_match') || currentFlags.has('self_match_frequent'))) return true;
+            if (ef === 'symmetric_score_streak' && (currentFlags.has('symmetric_score_streak') || currentFlags.has('symmetric_score_streak_extreme'))) return true;
+            if (ef === 'ghost_opponents' && (currentFlags.has('ghost_opponents') || currentFlags.has('ghost_opponents_dominant'))) return true;
+            return false;
+          });
+          if (!anyStillActive) idsToResolve.push(row.id);
+        }
+        if (idsToResolve.length > 0) {
+          await supabaseClient
+            .from('behavioral_digest_history')
+            .update({ is_resolved: true, resolved_at: new Date().toISOString() })
+            .in('id', idsToResolve);
+          console.log(`[detect-suspicious] Resolved ${idsToResolve.length} behavioral_digest_history row(s)`);
+        }
+      }
+    } catch (e) {
+      console.error('[detect-suspicious] Error resolving behavioral history:', (e as any)?.message || e);
+    }
+
+    // ============================================
     // UNIFIED ANTI-CHEAT DIGEST PUSH
     // Consolidate geo alerts, temporal alerts, and trust
     // score improvements per user into a SINGLE digest push
@@ -1355,6 +1405,36 @@ Deno.serve(async (req: Request) => {
     for (const tc of thresholdCrossings) {
       if (!digestByUser.has(tc.userId)) digestByUser.set(tc.userId, []);
       digestByUser.get(tc.userId)!.push({ category: 'trust_improved', flagType: tc.newLevel, count: tc.newScore, details: { previousScore: tc.previousScore, playerId: tc.playerId } });
+    }
+    // 48h cooldown for behavioral notifications (bypassed when force=true) - avoids over-notifying on patterns that do not change quickly
+    if (!force && behavioralAlerts.length > 0) {
+      const behavioralUserIds = Array.from(new Set(behavioralAlerts.map(a => a.userId)));
+      try {
+        const { data: behavPrefs } = await supabaseClient
+          .from('user_preferences')
+          .select('user_id, last_behavioral_digest_sent')
+          .in('user_id', behavioralUserIds);
+        const behavioralCooldownMs = 48 * 60 * 60 * 1000;
+        const nowTs = Date.now();
+        const skipIds = new Set<string>();
+        for (const p of behavPrefs || []) {
+          if (p.last_behavioral_digest_sent) {
+            const lastSent = new Date(p.last_behavioral_digest_sent).getTime();
+            if (Number.isFinite(lastSent) && (nowTs - lastSent) < behavioralCooldownMs) {
+              skipIds.add(p.user_id);
+            }
+          }
+        }
+        if (skipIds.size > 0) {
+          const before = behavioralAlerts.length;
+          for (let i = behavioralAlerts.length - 1; i >= 0; i--) {
+            if (skipIds.has(behavioralAlerts[i].userId)) behavioralAlerts.splice(i, 1);
+          }
+          console.log(`[detect-suspicious] Behavioral 48h cooldown: filtered ${skipIds.size} user(s) (${before} -> ${behavioralAlerts.length} alerts)`);
+        }
+      } catch { /* silent */ }
+    } else if (force && behavioralAlerts.length > 0) {
+      console.log(`[detect-suspicious] Behavioral cooldown bypassed (force=true) - ${behavioralAlerts.length} alert(s) will be delivered`);
     }
     for (const alert of behavioralAlerts) {
       if (!digestByUser.has(alert.userId)) digestByUser.set(alert.userId, []);
@@ -1447,9 +1527,9 @@ Deno.serve(async (req: Request) => {
               body = `${a.count} matchs consecutifs avec des scores 13-0 ou 13-1 detectes.`;
               notifType = 'behavioral_alert';
             } else if (a.category === 'behavioral' && a.flagType === 'ghost_opponents') {
-              title = '\u{1F47B} Adversaires fantomes';
-              body = `${a.count} adversaire(s) n'apparaissent que dans vos matchs.`;
-              notifType = 'behavioral_alert';
+              title = '\u{1F47B} Invitez vos adversaires';
+              body = `${a.count} adversaire(s) fantome(s) detecte(s). Invitez-les a partager leurs matchs pour renforcer votre score.`;
+              notifType = 'ghost_invite';
             } else if (a.category === 'trust_improved') {
               const levelLabels: Record<string, string> = { verified: 'Verifie', high: 'Fiable', medium: 'Standard' };
               const label = levelLabels[a.flagType] || a.flagType;
@@ -1483,6 +1563,7 @@ Deno.serve(async (req: Request) => {
                   type: notifType,
                   alerts: alerts.map(a => ({ category: a.category, flagType: a.flagType, count: a.count })),
                   totalAlerts: alerts.length,
+                  deepLink: notifType === 'ghost_invite' ? '/share-hub' : undefined,
                 },
                 channelId: 'tournament-reminders',
                 priority: 'high',
@@ -1502,15 +1583,52 @@ Deno.serve(async (req: Request) => {
           }
           console.log(`[detect-suspicious] Sent ${digestMessages.length} digest push message(s)`);
 
-          // Persist cooldown timestamp for notified users so next cycle honors the 24 h window
+          // Persist cooldown timestamps: anti-cheat digest (24h) always, behavioral digest (48h) only for users who received behavioral alerts
           const notifiedIds = Array.from(digestByUser.keys());
+          const behavioralNotifiedIds = new Set(behavioralAlerts.map(a => a.userId));
           const nowIso = new Date().toISOString();
           for (const uid of notifiedIds) {
             try {
+              const upsertData: any = { user_id: uid, last_anticheat_digest_sent: nowIso };
+              if (behavioralNotifiedIds.has(uid)) upsertData.last_behavioral_digest_sent = nowIso;
               await supabaseClient
                 .from('user_preferences')
-                .upsert({ user_id: uid, last_anticheat_digest_sent: nowIso }, { onConflict: 'user_id' });
+                .upsert(upsertData, { onConflict: 'user_id' });
             } catch { /* silent */ }
+          }
+
+          // Persist behavioral digest history rows for users who actually received a behavioral push
+          if (behavioralAlerts.length > 0) {
+            try {
+              const behavByUser = new Map<string, typeof behavioralAlerts>();
+              for (const a of behavioralAlerts) {
+                if (!behavByUser.has(a.userId)) behavByUser.set(a.userId, [] as any);
+                behavByUser.get(a.userId)!.push(a);
+              }
+              const historyRows: any[] = [];
+              for (const [uid, alerts] of behavByUser) {
+                const flagsList = alerts.map(a => a.flagType);
+                const summary = alerts.map(a => `${a.flagType}(${a.count})`).join(', ');
+                const playerRec = players.find((p: any) => p.user_id === uid);
+                historyRows.push({
+                  user_id: uid,
+                  player_id: playerRec?.id || null,
+                  flags: flagsList,
+                  alert_summary: summary,
+                  sent_at: nowIso,
+                  is_resolved: false,
+                });
+              }
+              if (historyRows.length > 0) {
+                const { error: insErr } = await supabaseClient
+                  .from('behavioral_digest_history')
+                  .insert(historyRows);
+                if (insErr) console.error('[detect-suspicious] Error inserting behavioral_digest_history:', insErr.message);
+                else console.log(`[detect-suspicious] Inserted ${historyRows.length} behavioral_digest_history row(s)`);
+              }
+            } catch (e) {
+              console.error('[detect-suspicious] Error persisting behavioral history:', (e as any)?.message || e);
+            }
           }
         }
       } catch (e) {
