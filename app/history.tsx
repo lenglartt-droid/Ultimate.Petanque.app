@@ -40,7 +40,7 @@ const ShareModal = React.lazy(() => import('@/components/ui/ShareModal'));
 const ShareRequestModal = React.lazy(() => import('@/components/ui/ShareRequestModal'));
 const EditConflictModal = React.lazy(() => import('@/components/ui/EditConflictModal'));
 import SharedBadge from '@/components/ui/SharedBadge';
-import { getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
+import { getShareRequestsForItem, MatchShareRequest, getMatchVerificationStatus } from '@/services/matchShareService';
 import { checkEditConflict, computeChallengeDiffs, fetchUpdatedAt, DiffEntry } from '@/services/collaborativeEditService';
 import { logModification } from '@/services/modificationLogService';
 import { getSupabaseClient, useAuth } from '@/template';
@@ -52,6 +52,7 @@ import Svg, { Circle, Line, G, Polygon, Text as SvgText, Polyline as SvgPolyline
 import { LinearGradient } from 'expo-linear-gradient';
 import { Image } from 'expo-image';
 import { getMyMeetups, getInvitedMeetups, getMeetupResponses, Meetup, MeetupResponse } from '@/services/meetupService';
+import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 
 
 type ContentFilter = 'all' | 'training' | 'tournament' | 'meetups' | 'shared';
@@ -108,6 +109,7 @@ export default function HistoryScreen() {
   const [filterFormat, setFilterFormat] = useState<string>('all');
   const [filterOpponent, setFilterOpponent] = useState<string>('');
   const [filterTerrain, setFilterTerrain] = useState<string>('all');
+  const [filterVerified, setFilterVerified] = useState<'all' | 'verified' | 'unverified'>('all');
   const [viewingMatch, setViewingMatch] = useState<Match | null>(null);
   const [editingChallenge, setEditingChallenge] = useState<Challenge | null>(null);
   const [showChallengeShareRequest, setShowChallengeShareRequest] = useState(false);
@@ -138,6 +140,20 @@ export default function HistoryScreen() {
 
   // ELO history for season sparkline
   const [eloHistory, setEloHistory] = useState<EloHistoryEntry[]>([]);
+
+  // Match card timezone display preference (facility vs device)
+  const [matchCardPreferDevice, setMatchCardPreferDevice] = useState(false);
+  useEffect(() => {
+    loadNotificationPreferences().then(p => setMatchCardPreferDevice(!!p.match_card_display_device_time)).catch(() => {});
+  }, [user?.id]);
+
+  // Match verification map (accepted cross-player share requests → verified badge)
+  const [verifiedMatches, setVerifiedMatches] = useState<Map<string, boolean>>(new Map());
+  useEffect(() => {
+    if (!user?.id || matches.length === 0) return;
+    const ids = matches.slice(0, 100).map(m => m.id);
+    getMatchVerificationStatus(ids).then(setVerifiedMatches).catch(() => {});
+  }, [user?.id, matches.length]);
 
   // Load ELO history for current user to get match deltas + sparkline
   useEffect(() => {
@@ -337,6 +353,8 @@ export default function HistoryScreen() {
         result = result.filter(m => m.teamB.playerNames.some(n => n.toLowerCase().includes(q)) || m.teamA.playerNames.some(n => n.toLowerCase().includes(q)));
       }
       if (filterTerrain !== 'all') result = result.filter(m => m.terrainId === filterTerrain);
+      if (filterVerified === 'verified') result = result.filter(m => verifiedMatches.get(m.id) === true);
+      else if (filterVerified === 'unverified') result = result.filter(m => !verifiedMatches.get(m.id));
       return result;
     };
 
@@ -461,7 +479,7 @@ export default function HistoryScreen() {
         challengesCount: filteredChallengesData.length,
       },
     };
-  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups, sharedMatchIds, sharedChallengeIds, filterResult, filterFormat, filterOpponent, filterTerrain]);
+  }, [matches, challenges, contentFilter, trainingSubFilter, selectedPeriod, groupMatchesBySeries, language, allMeetups, sharedMatchIds, sharedChallengeIds, filterResult, filterFormat, filterOpponent, filterTerrain, filterVerified, verifiedMatches]);
 
   // Meetup sub-filter stats
   const meetupSubStats = useMemo(() => {
@@ -792,7 +810,8 @@ export default function HistoryScreen() {
       const matchData = item.data as Match;
       const matchIsShared = isSharedItem(matchData.id);
       const matchPerm = getSharedPermission(matchData.id);
-      const content = <MatchCard match={matchData} onPress={() => handleMatchPress(matchData)} t={t} language={language} isShared={matchIsShared} sharedPermission={matchPerm} eloDelta={eloDeltas.get(matchData.id) ?? null} />;
+      const matchTerrain = matchData.terrainId ? terrains.find(tr => tr.id === matchData.terrainId) : null;
+      const content = <MatchCard match={matchData} onPress={() => handleMatchPress(matchData)} t={t} language={language} isShared={matchIsShared} sharedPermission={matchPerm} eloDelta={eloDeltas.get(matchData.id) ?? null} terrainTimezone={(matchTerrain as any)?.timezone} preferDeviceTime={matchCardPreferDevice} isVerified={verifiedMatches.get(matchData.id) ?? false} />;
       return shouldAnimate ? <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>{content}</Animated.View> : content;
     }
     
@@ -801,7 +820,7 @@ export default function HistoryScreen() {
     const challPerm = getSharedPermission(challengeData.id);
     const content = <ChallengeCard challenge={challengeData} onPress={() => handleChallengePress(challengeData)} t={t} language={language} isShared={challIsShared} sharedPermission={challPerm} />;
     return shouldAnimate ? <Animated.View entering={FadeIn.duration(200).delay(Math.min(index * 20, 100))}>{content}</Animated.View> : content;
-  }, [handleMatchPress, handleChallengePress, t, isSharedItem, getSharedPermission, eloDeltas]);
+  }, [handleMatchPress, handleChallengePress, t, isSharedItem, getSharedPermission, eloDeltas, terrains, matchCardPreferDevice, verifiedMatches]);
 
   const keyExtractor = useCallback((item: HistoryItem) => {
     if (item.type === 'header') return `header-${item.title}`;
@@ -1017,7 +1036,7 @@ export default function HistoryScreen() {
             onPress={() => { Haptics.selectionAsync(); setShowAdvancedFilters(!showAdvancedFilters); }}
           >
             <MaterialIcons name="filter-list" size={18} color={showAdvancedFilters ? theme.accent : theme.textMuted} />
-            {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all') ? (
+            {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all' || filterVerified !== 'all') ? (
               <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.accent, position: 'absolute', top: 6, right: 6 }} />
             ) : null}
           </Pressable>
@@ -1101,9 +1120,21 @@ export default function HistoryScreen() {
               ) : null}
             </View>
           </View>
+          {/* Verified filter */}
+          <View style={styles.advFilterRow}>
+            <Text style={styles.advFilterLabel}>{language === 'fr' ? 'Verifie' : 'Verified'}</Text>
+            <View style={styles.advFilterChips}>
+              {([{ id: 'all', label: language === 'fr' ? 'Tous' : 'All', icon: 'layers' as const }, { id: 'verified', label: language === 'fr' ? 'Verifies' : 'Verified', icon: 'verified' as const }, { id: 'unverified', label: language === 'fr' ? 'Non verifies' : 'Unverified', icon: 'help-outline' as const }] as const).map(f => (
+                <Pressable key={f.id} style={[styles.advFilterChip, filterVerified === f.id && styles.advFilterChipActive, { flexDirection: 'row', alignItems: 'center', gap: 4 }]} onPress={() => { Haptics.selectionAsync(); setFilterVerified(f.id); }}>
+                  <MaterialIcons name={f.icon} size={12} color={filterVerified === f.id ? theme.accent : theme.textSecondary} />
+                  <Text style={[styles.advFilterChipText, filterVerified === f.id && styles.advFilterChipTextActive]}>{f.label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
           {/* Reset */}
-          {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all') ? (
-            <Pressable style={styles.advResetBtn} onPress={() => { Haptics.selectionAsync(); setFilterResult('all'); setFilterFormat('all'); setFilterOpponent(''); setFilterTerrain('all'); }}>
+          {(filterResult !== 'all' || filterFormat !== 'all' || filterOpponent.trim() || filterTerrain !== 'all' || filterVerified !== 'all') ? (
+            <Pressable style={styles.advResetBtn} onPress={() => { Haptics.selectionAsync(); setFilterResult('all'); setFilterFormat('all'); setFilterOpponent(''); setFilterTerrain('all'); setFilterVerified('all'); }}>
               <MaterialIcons name="refresh" size={14} color={theme.accent} />
               <Text style={styles.advResetBtnText}>{language === 'fr' ? 'Reinitialiser les filtres' : 'Reset filters'}</Text>
             </Pressable>

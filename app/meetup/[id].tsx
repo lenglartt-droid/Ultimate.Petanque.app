@@ -48,6 +48,7 @@ import {
   requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/services/notificationService';
+import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
 import { parseTerrainTimezone, formatTimeInTimezone, formatDateInTimezone, shortTimezoneLabel, getDeviceTimezone, timezonesDiffer } from '@/services/timezoneService';
 
@@ -99,6 +100,12 @@ export default function MeetupDetailScreen() {
   const [reminderOneHourBefore, setReminderOneHourBefore] = useState(true);
   const [notifPermission, setNotifPermission] = useState<boolean | null>(null);
   const [reminderSaving, setReminderSaving] = useState(false);
+
+  // Chat display TZ preference (facility vs device)
+  const [chatPreferDevice, setChatPreferDevice] = useState(false);
+  useEffect(() => {
+    loadNotificationPreferences().then(p => setChatPreferDevice(!!p.chat_display_device_time)).catch(() => {});
+  }, [user?.id]);
 
   const isCreator = meetup && user && meetup.creator_id === user.id;
   const terrain = meetup ? terrains.find(tr => tr.id === meetup.terrain_id) : null;
@@ -576,6 +583,7 @@ export default function MeetupDetailScreen() {
               isParticipant={isCreator || myStatus === 'accepted'}
               language={language}
               terrainTimezone={(terrain as any)?.timezone}
+              preferDeviceTime={chatPreferDevice}
             />
           </Animated.View>
         ) : null}

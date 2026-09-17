@@ -24,6 +24,7 @@ export const REPORT_REASONS = [
   'multiple_accounts',
   'inappropriate_content',
   'spam',
+  'fake_match',
   'other',
 ] as const;
 

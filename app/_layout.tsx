@@ -257,10 +257,10 @@ function LayoutInner() {
             router.push({ pathname: '/notifications-hub', params: { tab: 'invitations' } } as any);
             break;
           case 'share_request_expired':
-            router.push({ pathname: '/notifications-hub', params: { tab: 'sent' } } as any);
+            router.push('/share-requests-sent' as any);
             break;
           case 'impersonation_alert':
-            router.push('/player/me' as any);
+            router.push('/impersonation-alerts' as any);
             break;
           case 'share_request':
             router.push({ pathname: '/notifications-hub', params: { tab: 'invitations' } } as any);
@@ -864,6 +864,20 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="matches-mentioning-me" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="impersonation-alerts" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="share-requests-sent" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',

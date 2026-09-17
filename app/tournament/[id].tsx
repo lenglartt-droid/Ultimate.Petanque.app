@@ -52,6 +52,8 @@ import {
   sendTestNotification,
 } from '@/services/notificationService';
 import { detectLinkedPlayers, createShareRequests, getShareRequestsForItem, MatchShareRequest } from '@/services/matchShareService';
+import { TimezoneMismatchBanner, TimezoneBadge } from '@/components/ui/TimezoneBadge';
+import { parseTerrainTimezone, formatDateInTimezone, formatTimeInTimezone, shortTimezoneLabel, getDeviceTimezone, timezonesDiffer } from '@/services/timezoneService';
 
 // Phase IDs - DB values (French), translated at display time
 const PHASE_IDS = {
@@ -110,9 +112,18 @@ const PHASE_IDS = {
   } as Record<TournamentType, { id: string; labelKey: string; shortKey: string }[]>,
 } as const;
 
-const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (s: string, k: string) => string; language: string }) => {
+const TimelineMatchCard = React.memo(({ match, t, language, terrainTimezone }: { match: any; t: (s: string, k: string) => string; language: string; terrainTimezone?: string | null }) => {
   const isWin = match.winner === 'A';
   const dotColor = isWin ? theme.success : theme.error;
+  const matchDate = new Date(match.date);
+  const facilityTz = parseTerrainTimezone(terrainTimezone);
+  const deviceTz = getDeviceTimezone();
+  const localeStr = language === 'fr' ? 'fr-FR' : 'en-US';
+  const shortDate = formatDateInTimezone(matchDate, facilityTz, localeStr, { day: 'numeric', month: 'short' });
+  const facilityTime = facilityTz ? formatTimeInTimezone(matchDate, facilityTz, localeStr) : null;
+  const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+  const showTzConversion = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, matchDate);
+  const deviceTime = showTzConversion ? formatTimeInTimezone(matchDate, deviceTz, localeStr) : null;
 
   return (
     <Pressable
@@ -137,9 +148,16 @@ const TimelineMatchCard = React.memo(({ match, t, language }: { match: any; t: (
             </View>
           ) : null}
           <View style={{ flex: 1 }} />
-          <Text style={styles.tlDate}>
-            {new Date(match.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
-          </Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={styles.tlDate}>
+              {shortDate}{facilityTime ? ` • ${facilityTime}${tzLabel ? ` ${tzLabel}` : ''}` : ''}
+            </Text>
+            {showTzConversion && deviceTime ? (
+              <Text style={[styles.tlDate, { fontSize: 10, color: '#7C3AED', marginTop: 1 }]}>
+                ({deviceTime} {language === 'fr' ? 'chez vous' : 'your time'})
+              </Text>
+            ) : null}
+          </View>
         </View>
         <View style={styles.tlScoreRow}>
           <View style={styles.tlTeam}>
@@ -790,6 +808,12 @@ export default function TournamentDetailScreen() {
           />
         }
       >
+        {/* Timezone mismatch alert - shows host facility time when device timezone differs */}
+        <TimezoneMismatchBanner
+          terrainTimezone={(terrain as any)?.timezone}
+          facilityName={terrain?.name || tournament.location?.city}
+          locale={language === 'fr' ? 'fr-FR' : 'en-US'}
+        />
         {/* Tournament Hero Card */}
         <Animated.View entering={FadeInDown.duration(400)} style={[styles.heroCard, isTablet && styles.tournamentCardTablet]}>
           {/* Accent banner */}
@@ -816,10 +840,27 @@ export default function TournamentDetailScreen() {
               <View style={styles.heroMetaPill}>
                 <MaterialIcons name="event" size={13} color={theme.primary} />
                 <Text style={styles.heroMetaPillText}>
-                  {new Date(tournament.date).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  {tournament.endDate
-                    ? ` → ${new Date(tournament.endDate).toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}`
-                    : ''}
+                  {(() => {
+                    const facilityTz = parseTerrainTimezone((terrain as any)?.timezone);
+                    const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+                    const startDate = new Date(tournament.date);
+                    const startStr = formatDateInTimezone(
+                      startDate,
+                      facilityTz,
+                      language === 'fr' ? 'fr-FR' : 'en-US',
+                      { day: 'numeric', month: 'short', year: 'numeric' }
+                    );
+                    const startTimeStr = formatTimeInTimezone(startDate, facilityTz, language === 'fr' ? 'fr-FR' : 'en-US');
+                    const deviceTz = getDeviceTimezone();
+                    const differs = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, startDate);
+                    const deviceTimeStr = differs ? formatTimeInTimezone(startDate, deviceTz, language === 'fr' ? 'fr-FR' : 'en-US') : null;
+                    let base = tournament.endDate
+                      ? `${startStr} → ${formatDateInTimezone(new Date(tournament.endDate), facilityTz, language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}`
+                      : startStr;
+                    if (tzLabel) base = `${base} • ${startTimeStr} ${tzLabel}`;
+                    if (deviceTimeStr) base = `${base} (${deviceTimeStr} ${language === 'fr' ? 'chez vous' : 'your time'})`;
+                    return base;
+                  })()}
                 </Text>
               </View>
               <View style={styles.heroMetaPill}>
@@ -1281,7 +1322,7 @@ export default function TournamentDetailScreen() {
               <View style={styles.timelineLine} />
 
               {myMatches.map((match, idx) => (
-                <TimelineMatchCard key={match.id} match={match} t={t} language={language} />
+                <TimelineMatchCard key={match.id} match={match} t={t} language={language} terrainTimezone={(terrain as any)?.timezone} />
               ))}
             </View>
           ) : (
