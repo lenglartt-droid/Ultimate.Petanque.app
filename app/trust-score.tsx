@@ -211,14 +211,15 @@ export default function TrustScoreScreen() {
   // Nearby witness suggestions (shown when witness concentration >= 60%)
   const [nearbyWitnesses, setNearbyWitnesses] = useState<Array<{ id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number }>>([]);
 
-  // Witness invite modal (sends attestation request for the most recent match)
+  // Witness invite modal (sends attestation request; user selects from top 3 recent matches)
   const [inviteModal, setInviteModal] = useState<{
     visible: boolean;
     witness: { id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number } | null;
     message: string;
     sending: boolean;
-    preview: { id: string; date: string; teamAName: string; teamBName: string; scoreA: number; scoreB: number; winner: string | null } | null;
-  }>({ visible: false, witness: null, message: '', sending: false, preview: null });
+    matches: Array<{ id: string; date: string; teamAName: string; teamBName: string; scoreA: number; scoreB: number; winner: string | null }>;
+    selectedMatchId: string | null;
+  }>({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null });
 
   const bdhFiltered = useMemo(() => {
     if (bdhFilter === 'active') return behavioralDigestHistory.filter(h => !h.isResolved);
@@ -357,22 +358,22 @@ export default function TrustScoreScreen() {
 
   const openInviteModal = (witness: { id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number }) => {
     const defaultMsg = isFr
-      ? `Salut ${witness.name}, peux-tu attester mon dernier match ? Merci !`
-      : `Hi ${witness.name}, can you witness my last match? Thanks!`;
-    // Compute preview for most recent match so user can confirm which one will be attested
+      ? `Salut ${witness.name}, peux-tu attester mon match ? Merci !`
+      : `Hi ${witness.name}, can you witness my match? Thanks!`;
+    // Compute up to 3 most recent matches so user can pick which one to attest
     const list = (matches || []) as any[];
-    let preview: { id: string; date: string; teamAName: string; teamBName: string; scoreA: number; scoreB: number; winner: string | null } | null = null;
+    const matchesList: Array<{ id: string; date: string; teamAName: string; teamBName: string; scoreA: number; scoreB: number; winner: string | null }> = [];
     if (list.length > 0) {
       const sorted = [...list].sort((a: any, b: any) => {
         const dA = new Date(a.date || a.createdAt || 0).getTime();
         const dB = new Date(b.date || b.createdAt || 0).getTime();
         return dB - dA;
       });
-      const m: any = sorted[0];
-      if (m && m.id) {
+      for (const m of sorted.slice(0, 3)) {
+        if (!m || !m.id) continue;
         const tA = m.teamA || m.team_a || {};
         const tB = m.teamB || m.team_b || {};
-        preview = {
+        matchesList.push({
           id: m.id,
           date: m.date || m.createdAt || m.created_at || new Date().toISOString(),
           teamAName: tA.name || (isFr ? 'Equipe A' : 'Team A'),
@@ -380,39 +381,25 @@ export default function TrustScoreScreen() {
           scoreA: Number(tA.score) || 0,
           scoreB: Number(tB.score) || 0,
           winner: m.winner || null,
-        };
+        });
       }
     }
-    setInviteModal({ visible: true, witness, message: defaultMsg, sending: false, preview });
+    setInviteModal({ visible: true, witness, message: defaultMsg, sending: false, matches: matchesList, selectedMatchId: matchesList[0]?.id || null });
   };
 
   const handleSendInvite = async () => {
-    if (!inviteModal.witness) return;
-    const list = (matches || []) as any[];
-    if (list.length === 0) {
-      setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null });
-      showAlert(
-        isFr ? 'Aucun match a attester' : 'No match to witness',
-        isFr ? "Enregistrez un match avant d'inviter un temoin." : 'Record a match before inviting a witness.'
-      );
-      return;
-    }
-    const sorted = [...list].sort((a: any, b: any) => {
-      const dA = new Date(a.date || a.createdAt || 0).getTime();
-      const dB = new Date(b.date || b.createdAt || 0).getTime();
-      return dB - dA;
-    });
-    const recentMatch: any = sorted[0];
-    if (!recentMatch || !recentMatch.id) {
-      setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null });
+    if (!inviteModal.witness || !inviteModal.selectedMatchId) return;
+    const selected = inviteModal.matches.find(m => m.id === inviteModal.selectedMatchId);
+    if (!selected) {
+      setInviteModal({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null });
       showAlert(isFr ? 'Match introuvable' : 'Match not found');
       return;
     }
     const witnessId = inviteModal.witness.userId;
     const summary = inviteModal.message.trim();
     setInviteModal(prev => ({ ...prev, sending: true }));
-    const { error } = await requestWitnessAttestation(recentMatch.id, witnessId, summary);
-    setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null });
+    const { error } = await requestWitnessAttestation(selected.id, witnessId, summary);
+    setInviteModal({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null });
     if (error) {
       showAlert(isFr ? `Erreur: ${error}` : `Error: ${error}`);
     } else {
@@ -1564,7 +1551,7 @@ export default function TrustScoreScreen() {
         visible={inviteModal.visible}
         animationType="slide"
         transparent
-        onRequestClose={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null })}
+        onRequestClose={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null })}
       >
         <View style={inviteSt.overlay}>
           <View style={inviteSt.card}>
@@ -1577,7 +1564,7 @@ export default function TrustScoreScreen() {
                 <Text style={inviteSt.sub}>{isFr ? 'Attestation de votre dernier match' : 'Witness your last match'}</Text>
               </View>
               <Pressable
-                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null })}
+                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null })}
                 hitSlop={10}
               >
                 <MaterialIcons name="close" size={22} color={theme.textMuted} />
@@ -1597,46 +1584,58 @@ export default function TrustScoreScreen() {
                 </View>
               </View>
             ) : null}
-            {inviteModal.preview ? (
-              <View style={inviteSt.preview}>
-                <View style={inviteSt.previewHeader}>
+            {inviteModal.matches.length > 0 ? (
+              <View style={inviteSt.matchSelector}>
+                <View style={inviteSt.matchSelectorHeader}>
                   <MaterialIcons name="sports" size={12} color={theme.primary} />
-                  <Text style={inviteSt.previewLabel}>{isFr ? 'Match a attester' : 'Match to witness'}</Text>
-                  <View style={inviteSt.previewIdBadge}>
-                    <Text style={inviteSt.previewIdText}>#{inviteModal.preview.id.substring(0, 6)}</Text>
-                  </View>
-                </View>
-                <View style={inviteSt.previewScoreRow}>
-                  <View style={[inviteSt.previewTeam, inviteModal.preview.winner === 'A' && inviteSt.previewTeamWin]}>
-                    <Text style={inviteSt.previewTeamName} numberOfLines={1}>{inviteModal.preview.teamAName}</Text>
-                    <Text style={[inviteSt.previewScoreNumber, inviteModal.preview.winner === 'A' && { color: '#16A34A' }]}>
-                      {inviteModal.preview.scoreA}
-                    </Text>
-                    {inviteModal.preview.winner === 'A' ? (
-                      <View style={inviteSt.previewWinBadge}>
-                        <MaterialIcons name="emoji-events" size={9} color="#FFF" />
-                      </View>
-                    ) : null}
-                  </View>
-                  <Text style={inviteSt.previewVs}>vs</Text>
-                  <View style={[inviteSt.previewTeam, inviteModal.preview.winner === 'B' && inviteSt.previewTeamWin]}>
-                    <Text style={inviteSt.previewTeamName} numberOfLines={1}>{inviteModal.preview.teamBName}</Text>
-                    <Text style={[inviteSt.previewScoreNumber, inviteModal.preview.winner === 'B' && { color: '#16A34A' }]}>
-                      {inviteModal.preview.scoreB}
-                    </Text>
-                    {inviteModal.preview.winner === 'B' ? (
-                      <View style={inviteSt.previewWinBadge}>
-                        <MaterialIcons name="emoji-events" size={9} color="#FFF" />
-                      </View>
-                    ) : null}
-                  </View>
-                </View>
-                <View style={inviteSt.previewMeta}>
-                  <MaterialIcons name="event" size={10} color={theme.textMuted} />
-                  <Text style={inviteSt.previewMetaText}>
-                    {new Date(inviteModal.preview.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  <Text style={inviteSt.matchSelectorLabel}>
+                    {isFr ? `Choisir un match (${inviteModal.matches.length})` : `Choose a match (${inviteModal.matches.length})`}
                   </Text>
                 </View>
+                {inviteModal.matches.map(m => {
+                  const isSelected = inviteModal.selectedMatchId === m.id;
+                  const hasWinner = m.winner === 'A' || m.winner === 'B';
+                  return (
+                    <Pressable
+                      key={m.id}
+                      style={[inviteSt.matchOption, isSelected && inviteSt.matchOptionSelected]}
+                      onPress={() => { setInviteModal(prev => ({ ...prev, selectedMatchId: m.id })); }}
+                    >
+                      <View style={[inviteSt.matchRadio, isSelected && inviteSt.matchRadioSelected]}>
+                        {isSelected ? <View style={inviteSt.matchRadioDot} /> : null}
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <View style={inviteSt.matchOptionScoreRow}>
+                          <Text style={[inviteSt.matchOptionTeamName, m.winner === 'A' && { color: '#16A34A', fontWeight: '800' }]} numberOfLines={1}>
+                            {m.teamAName}
+                          </Text>
+                          <View style={inviteSt.matchOptionScorePill}>
+                            <Text style={[inviteSt.matchOptionScoreText, m.winner === 'A' && { color: '#16A34A' }]}>{m.scoreA}</Text>
+                            <Text style={inviteSt.matchOptionScoreSep}>-</Text>
+                            <Text style={[inviteSt.matchOptionScoreText, m.winner === 'B' && { color: '#16A34A' }]}>{m.scoreB}</Text>
+                          </View>
+                          <Text style={[inviteSt.matchOptionTeamName, m.winner === 'B' && { color: '#16A34A', fontWeight: '800' }]} numberOfLines={1}>
+                            {m.teamBName}
+                          </Text>
+                        </View>
+                        <View style={inviteSt.matchOptionMetaRow}>
+                          <MaterialIcons name="event" size={9} color={theme.textMuted} />
+                          <Text style={inviteSt.matchOptionDate}>
+                            {new Date(m.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' })}
+                          </Text>
+                          {hasWinner ? (
+                            <View style={inviteSt.matchOptionWinBadge}>
+                              <MaterialIcons name="emoji-events" size={8} color="#FFF" />
+                              <Text style={inviteSt.matchOptionWinText}>
+                                {isFr ? `Equipe ${m.winner}` : `Team ${m.winner}`}
+                              </Text>
+                            </View>
+                          ) : null}
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
               </View>
             ) : (
               <View style={inviteSt.previewEmpty}>
@@ -1669,15 +1668,15 @@ export default function TrustScoreScreen() {
             <View style={inviteSt.actions}>
               <Pressable
                 style={inviteSt.cancelBtn}
-                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, preview: null })}
+                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false, matches: [], selectedMatchId: null })}
                 disabled={inviteModal.sending}
               >
                 <Text style={inviteSt.cancelText}>{isFr ? 'Annuler' : 'Cancel'}</Text>
               </Pressable>
               <Pressable
-                style={[inviteSt.sendBtn, (inviteModal.sending || inviteModal.message.trim().length === 0 || !inviteModal.preview) && { opacity: 0.6 }]}
+                style={[inviteSt.sendBtn, (inviteModal.sending || inviteModal.message.trim().length === 0 || !inviteModal.selectedMatchId) && { opacity: 0.6 }]}
                 onPress={handleSendInvite}
-                disabled={inviteModal.sending || inviteModal.message.trim().length === 0 || !inviteModal.preview}
+                disabled={inviteModal.sending || inviteModal.message.trim().length === 0 || !inviteModal.selectedMatchId}
               >
                 {inviteModal.sending ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="send" size={14} color="#FFF" />}
                 <Text style={inviteSt.sendText}>{isFr ? 'Envoyer' : 'Send'}</Text>
@@ -1881,6 +1880,24 @@ const inviteSt = StyleSheet.create({
   previewMetaText: { fontSize: 10, fontWeight: '600', color: theme.textMuted },
   previewEmpty: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#FFFBEB', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A' },
   previewEmptyText: { flex: 1, fontSize: 11, fontWeight: '600', color: '#92400E', lineHeight: 15 },
+  // Match selector (choose from top 3 recent matches)
+  matchSelector: { backgroundColor: theme.primary + '08', borderRadius: 12, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: theme.primary + '25' },
+  matchSelectorHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 8 },
+  matchSelectorLabel: { flex: 1, fontSize: 10, fontWeight: '800', color: theme.primary, letterSpacing: 0.4, textTransform: 'uppercase' },
+  matchOption: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1.5, borderColor: theme.border },
+  matchOptionSelected: { borderColor: theme.primary, backgroundColor: theme.primary + '10' },
+  matchRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  matchRadioSelected: { borderColor: theme.primary },
+  matchRadioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.primary },
+  matchOptionScoreRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 },
+  matchOptionTeamName: { flex: 1, fontSize: 11, fontWeight: '700', color: theme.textSecondary },
+  matchOptionScorePill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.backgroundSecondary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+  matchOptionScoreText: { fontSize: 14, fontWeight: '900', color: theme.textPrimary },
+  matchOptionScoreSep: { fontSize: 10, fontWeight: '700', color: theme.textMuted },
+  matchOptionMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  matchOptionDate: { fontSize: 9, fontWeight: '600', color: theme.textMuted },
+  matchOptionWinBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#16A34A', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5, marginLeft: 4 },
+  matchOptionWinText: { fontSize: 8, fontWeight: '800', color: '#FFF', letterSpacing: 0.3 },
   messageLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' },
   messageInput: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, fontSize: 13, color: theme.textPrimary, minHeight: 72, textAlignVertical: 'top', borderWidth: 1, borderColor: theme.border },
   messageCount: { fontSize: 10, color: theme.textMuted, fontWeight: '600', textAlign: 'right', marginTop: 4, marginBottom: 12 },

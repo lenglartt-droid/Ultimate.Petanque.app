@@ -63,6 +63,27 @@ Deno.serve(async (req: Request) => {
 
     console.log(`[detect-suspicious] Mode: ${mode}, Admin: ${isAdmin}, Target: ${targetUserId}`);
 
+    // ============================================
+    // Load auto-ban configuration from app_config
+    // (email farm cluster threshold + hour window + enabled toggle)
+    // ============================================
+    let AUTO_BAN_MIN_CLUSTER = 5;
+    let AUTO_BAN_MAX_HOURS = 6;
+    let AUTO_BAN_ENABLED = true;
+    try {
+      const { data: cfgRow } = await supabaseClient
+        .from('app_config')
+        .select('email_farm_auto_ban_min_cluster, email_farm_auto_ban_max_hours, email_farm_auto_ban_enabled')
+        .eq('id', 'main')
+        .maybeSingle();
+      if (cfgRow) {
+        AUTO_BAN_MIN_CLUSTER = Number(cfgRow.email_farm_auto_ban_min_cluster) || 5;
+        AUTO_BAN_MAX_HOURS = Number(cfgRow.email_farm_auto_ban_max_hours) || 6;
+        AUTO_BAN_ENABLED = cfgRow.email_farm_auto_ban_enabled !== false;
+      }
+    } catch { /* silent: fall back to defaults */ }
+    console.log(`[detect-suspicious] Auto-ban config: minCluster=${AUTO_BAN_MIN_CLUSTER}, maxHours=${AUTO_BAN_MAX_HOURS}, enabled=${AUTO_BAN_ENABLED}`);
+
     // 1. Fetch players
     let players: any[] = [];
     if (mode === 'self' && targetUserId) {
@@ -453,10 +474,12 @@ Deno.serve(async (req: Request) => {
       if (recentSharedAccounts.size >= 2) { score -= 12; flags.push('shared_fingerprint_recent_multi'); }
       else if (recentSharedAccounts.size >= 1) { score -= 6; flags.push('shared_fingerprint_recent'); }
 
-      // Factor 25: Email farm
+      // Factor 25: Email farm (auto-ban threshold: clusterSize >= config AND spanHours < config)
       if (playerEmail) {
         const farmEntry = emailFarmMap.get(playerEmail);
         if (farmEntry) {
+          const autoBanEligible = AUTO_BAN_ENABLED && farmEntry.clusterSize >= AUTO_BAN_MIN_CLUSTER && farmEntry.spanHours < AUTO_BAN_MAX_HOURS;
+          const scoreBeforeEmailFarm = score;
           details.emailFarm = {
             domain: farmEntry.domain,
             prefix: farmEntry.prefix,
@@ -464,9 +487,23 @@ Deno.serve(async (req: Request) => {
             spanHours: farmEntry.spanHours,
             windowHours: 24,
             siblings: farmEntry.siblings,
+            autoBanEligible,
+            autoBanThresholdSize: AUTO_BAN_MIN_CLUSTER,
+            autoBanThresholdHours: AUTO_BAN_MAX_HOURS,
+            autoBanEnabled: AUTO_BAN_ENABLED,
+            preAutoBanScore: scoreBeforeEmailFarm,
           };
-          if (farmEntry.clusterSize >= 5) { score -= 15; flags.push('email_farm'); }
-          else { score -= 10; flags.push('email_farm'); }
+          if (autoBanEligible) {
+            score = 0;
+            if (!flags.includes('email_farm')) flags.push('email_farm');
+            flags.push('email_farm_auto_ban');
+          } else if (farmEntry.clusterSize >= 5) {
+            score -= 15;
+            flags.push('email_farm');
+          } else {
+            score -= 10;
+            flags.push('email_farm');
+          }
         }
       }
 
@@ -979,22 +1016,25 @@ Deno.serve(async (req: Request) => {
     // Fetch previous state
     const prevScoreMap = new Map<string, number>();
     const prevFlagsMap = new Map<string, string[]>();
+    const prevStatusMap = new Map<string, string>();
     if (results.length > 0) {
       const pids = results.map(r => r.player_id);
       try {
         const { data: prevData } = await supabaseClient
           .from('suspicious_players')
-          .select('player_id, trust_score, flags')
+          .select('player_id, trust_score, flags, status')
           .in('player_id', pids);
         (prevData || []).forEach((pd: any) => {
           prevScoreMap.set(pd.player_id, pd.trust_score);
           prevFlagsMap.set(pd.player_id, Array.isArray(pd.flags) ? pd.flags : []);
+          prevStatusMap.set(pd.player_id, pd.status || 'watch');
         });
       } catch { /* silent */ }
     }
 
     const thresholdCrossings: Array<{ userId: string; playerId: string; newScore: number; newLevel: string; previousScore: number }> = [];
     const getLevelStr = (s: number) => s >= 80 ? 'verified' : s >= 65 ? 'high' : s >= 45 ? 'medium' : s >= 25 ? 'low' : 'suspicious';
+    const autoBannedPlayers: Array<{ result: PlayerAnalysis; cluster: any }> = [];
     for (const r of results) {
       const prevScore = prevScoreMap.get(r.player_id);
       const newLevel = getLevelStr(r.trust_score);
@@ -1005,15 +1045,106 @@ Deno.serve(async (req: Request) => {
           thresholdCrossings.push({ userId: r.user_id, playerId: r.player_id, newScore: r.trust_score, newLevel, previousScore: prevScore });
         }
       }
+      const isAutoBan = r.flags.includes('email_farm_auto_ban');
+      if (isAutoBan) autoBannedPlayers.push({ result: r, cluster: r.details.emailFarm });
       const { error: upsertError } = await supabaseClient
         .from('suspicious_players')
         .upsert({
           player_id: r.player_id, user_id: r.user_id, trust_score: r.trust_score,
           flags: r.flags, details: r.details,
-          status: r.trust_score < 25 ? 'flagged' : r.trust_score < 50 ? 'watch' : 'ok',
+          status: isAutoBan ? 'banned' : (r.trust_score < 25 ? 'flagged' : r.trust_score < 50 ? 'watch' : 'ok'),
           analyzed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
         }, { onConflict: 'player_id' });
       if (upsertError) console.error(`[detect-suspicious] Upsert error:`, upsertError.message);
+    }
+
+    // ============================================
+    // AUTO-BAN PROCESSING (email farm clusters exceeding thresholds)
+    // ============================================
+    if (autoBannedPlayers.length > 0) {
+      console.log(`[detect-suspicious] Auto-banning ${autoBannedPlayers.length} account(s) via email_farm threshold`);
+      try {
+        // Attribute log to first admin (schema requires non-null admin_user_id)
+        const { data: firstAdmin } = await supabaseClient
+          .from('user_profiles')
+          .select('id')
+          .eq('is_admin', true)
+          .limit(1)
+          .maybeSingle();
+        const systemAdminId = firstAdmin?.id;
+        if (systemAdminId) {
+          const logRows = autoBannedPlayers.map(ab => {
+            const p = players.find((pl: any) => pl.id === ab.result.player_id);
+            const cluster = ab.cluster || {};
+            return {
+              admin_user_id: systemAdminId,
+              admin_name: 'System (Auto-ban)',
+              action_type: 'auto_ban_email_farm',
+              action_detail: `Auto-banned: ${cluster.prefix || '?'}@${cluster.domain || '?'} - ${cluster.clusterSize || 0} accounts in ${cluster.spanHours || 0}h`,
+              target_type: 'players',
+              target_id: ab.result.player_id,
+              target_name: p?.name || null,
+              metadata: {
+                reason: 'email_farm_auto_ban',
+                clusterSize: cluster.clusterSize || 0,
+                spanHours: cluster.spanHours || 0,
+                prefix: cluster.prefix || '',
+                domain: cluster.domain || '',
+                siblings: Array.isArray(cluster.siblings) ? cluster.siblings.slice(0, 20) : [],
+                thresholdSize: AUTO_BAN_MIN_CLUSTER,
+                thresholdHours: AUTO_BAN_MAX_HOURS,
+                preAutoBanScore: cluster.preAutoBanScore ?? 30,
+                previousStatus: prevStatusMap.get(ab.result.player_id) || 'watch',
+                userId: ab.result.user_id,
+                automated: true,
+              },
+            };
+          });
+          const { error: logErr } = await supabaseClient.from('admin_activity_logs').insert(logRows);
+          if (logErr) console.error('[detect-suspicious] Auto-ban log insert error:', logErr.message);
+        }
+
+        // Notify admins via push
+        const { data: allAdmins } = await supabaseClient
+          .from('user_profiles')
+          .select('id')
+          .eq('is_admin', true);
+        if (allAdmins && allAdmins.length > 0) {
+          const adminIds = allAdmins.map((a: any) => a.id);
+          const { data: adminTokens } = await supabaseClient
+            .from('push_tokens')
+            .select('token, user_id')
+            .in('user_id', adminIds)
+            .eq('active', true);
+          if (adminTokens && adminTokens.length > 0) {
+            const firstPlayerId = autoBannedPlayers[0]?.result.player_id;
+            const pushMessages = adminTokens.map((t: any) => ({
+              to: t.token,
+              title: `\u{1F6AB} Auto-ban : ${autoBannedPlayers.length} email farm(s)`,
+              body: `Cluster(s) >= 5 comptes en < 6h auto-bannis. Verifiez immediatement.`,
+              data: {
+                type: 'admin_critical_alert',
+                autoBan: true,
+                count: autoBannedPlayers.length,
+                playerId: firstPlayerId,
+                deepLink: '/admin-anticheat',
+              },
+              channelId: 'tournament-reminders',
+              priority: 'high',
+            }));
+            for (let i = 0; i < pushMessages.length; i += 100) {
+              const batch = pushMessages.slice(i, i + 100);
+              await fetch('https://exp.host/--/api/v2/push/send', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify(batch),
+              });
+            }
+          }
+        }
+      } catch (e) {
+        console.error('[detect-suspicious] Auto-ban processing error:', (e as any)?.message || e);
+      }
     }
 
     // Geo alert collection
@@ -1346,7 +1477,10 @@ Deno.serve(async (req: Request) => {
       const prevFlags = prevFlagsMap.get(r.player_id) || [];
       const newFlags = r.flags;
       const alertTypes: string[] = [];
-      if (!prevFlags.includes('email_farm') && newFlags.includes('email_farm')) alertTypes.push('email_farm');
+      // Skip email_farm critical alert if auto-ban already fired to avoid duplicate push
+      if (!prevFlags.includes('email_farm') && newFlags.includes('email_farm') && !newFlags.includes('email_farm_auto_ban')) {
+        alertTypes.push('email_farm');
+      }
       const wasArtificial = prevFlags.includes('artificial_progression') || prevFlags.includes('suspiciously_linear_elo');
       const nowArtificial = newFlags.includes('artificial_progression') || newFlags.includes('suspiciously_linear_elo');
       if (!wasArtificial && nowArtificial) alertTypes.push('artificial_progression');
