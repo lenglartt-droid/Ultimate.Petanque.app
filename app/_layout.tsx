@@ -158,6 +158,21 @@ function LayoutInner() {
       .catch(() => {});
   }, []);
 
+  // Run share reminder pipeline (24h + 72h reminders, 7d auto-decline) on foreground
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      import('@/services/shareReminderService')
+        .then(({ runShareReminderPipeline }) => runShareReminderPipeline())
+        .then((result) => {
+          if (result.reminders24h + result.reminders72h + result.autoDeclined > 0) {
+            console.log('[ShareReminder] pipeline:', result);
+          }
+        })
+        .catch(() => {});
+    }, 12000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Check temp data expiry for non-registered users & update retention on login
   React.useEffect(() => {
     import('@/services/retentionNotificationService')
@@ -230,6 +245,22 @@ function LayoutInner() {
             } else if (data.action === 'invite_partner') {
               router.push('/share-hub' as any);
             }
+            break;
+          case 'match_mentioned':
+            if (data.matchId) {
+              router.push('/matches-mentioning-me' as any);
+            } else {
+              router.push('/matches-mentioning-me' as any);
+            }
+            break;
+          case 'share_request_reminder':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'invitations' } } as any);
+            break;
+          case 'share_request_expired':
+            router.push({ pathname: '/notifications-hub', params: { tab: 'sent' } } as any);
+            break;
+          case 'impersonation_alert':
+            router.push('/player/me' as any);
             break;
           case 'share_request':
             router.push({ pathname: '/notifications-hub', params: { tab: 'invitations' } } as any);
@@ -819,6 +850,20 @@ function LayoutInner() {
               />
               <Stack.Screen 
                 name="admin-anticheat-config" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-timezone-migration" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="matches-mentioning-me" 
                 options={{ 
                   presentation: 'card',
                   animation: 'slide_from_right',

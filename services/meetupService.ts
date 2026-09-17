@@ -525,7 +525,15 @@ export async function inviteUsersToMeetup(
     // Trigger server-side push for each invited user (fire-and-forget)
     const _pushModule = await import('./pushTokenService').catch(() => null);
     if (_pushModule) {
-      const meetupData = (await supabase.from('terrain_meetups').select('title, date').eq('id', meetupId).maybeSingle()).data;
+      const meetupData = (await supabase.from('terrain_meetups').select('title, date, terrain_id').eq('id', meetupId).maybeSingle()).data;
+      // Resolve terrain timezone + name so server-side push body renders in facility local time
+      let terrainTimezone: string | null = null;
+      let terrainName: string | null = null;
+      if (meetupData?.terrain_id) {
+        const { data: t } = await supabase.from('terrains').select('timezone, name').eq('id', meetupData.terrain_id).maybeSingle();
+        terrainTimezone = t?.timezone || null;
+        terrainName = t?.name || null;
+      }
       const inviterProfile = (await supabase.from('user_profiles').select('username').eq('id', (await supabase.auth.getUser()).data?.user?.id || '').maybeSingle()).data;
       const inviterName = inviterProfile?.username || 'Un joueur';
       for (const uid of newUserIds) {
@@ -535,6 +543,8 @@ export async function inviteUsersToMeetup(
           invitedUserId: uid,
           inviterName,
           meetupDate: meetupData?.date,
+          terrainTimezone,
+          terrainName,
         }).catch(() => {});
       }
     }
