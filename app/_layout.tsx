@@ -856,6 +856,20 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="trust-score-factors" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
+                name="admin-faq-analytics" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="admin-timezone-migration" 
                 options={{ 
                   presentation: 'card',

@@ -35,6 +35,7 @@ import {
   importPublicItemToDirectory,
   PublicTerrain,
 } from '@/services/publicItemsService';
+import { guessTimezoneFromLongitude, shortTimezoneLabel, parseTerrainTimezone } from '@/services/timezoneService';
 
 // Store last selected placeId for duplicate detection
 let lastPlaceId: string | undefined;
@@ -156,6 +157,7 @@ export default function NewTerrainScreen() {
   const [toilets, setToilets] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [timezone, setTimezone] = useState<string>('');
+  const [timezoneSource, setTimezoneSource] = useState<'manual' | 'google' | 'longitude' | null>(null);
   const [photos, setPhotos] = useState<string[]>([]);
   const [location, setLocation] = useState<LocationData>({ address: '', city: '', country: 'France', latitude: 0, longitude: 0 });
 
@@ -177,7 +179,25 @@ export default function NewTerrainScreen() {
     lastPhotoRef = loc.googlePhotoRef;
     // Auto-populate timezone from Google Places `utcOffsetMinutes` when user has not entered one manually.
     if (loc.timezone) {
-      setTimezone(prev => (prev.trim() ? prev : (loc.timezone as string)));
+      setTimezone(prev => {
+        if (prev.trim()) return prev;
+        setTimezoneSource('google');
+        return loc.timezone as string;
+      });
+    } else if (
+      Number.isFinite(loc.longitude) &&
+      (Math.abs(loc.longitude) > 0.01 || Math.abs(loc.latitude) > 0.01)
+    ) {
+      // Fallback: guess UTC offset from longitude when Google Places did not
+      // return `utcOffsetMinutes`. Useful for manually-entered coordinates.
+      const guess = guessTimezoneFromLongitude(loc.longitude);
+      if (guess) {
+        setTimezone(prev => {
+          if (prev.trim()) return prev;
+          setTimezoneSource('longitude');
+          return guess;
+        });
+      }
     }
 
     const hasCoords =
@@ -386,10 +406,20 @@ export default function NewTerrainScreen() {
 
           {/* 2b. Fuseau horaire (optionnel) */}
           <SectionCard title={language === 'fr' ? 'Fuseau horaire (optionnel)' : 'Timezone (optional)'} icon="access-time" color="#8B5CF6" delay={175}>
+            {timezone && timezoneSource && timezoneSource !== 'manual' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: (timezoneSource === 'google' ? '#4285F4' : '#F59E0B') + '10', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10, borderWidth: 1, borderColor: (timezoneSource === 'google' ? '#4285F4' : '#F59E0B') + '30' }}>
+                <MaterialIcons name={timezoneSource === 'google' ? 'auto-awesome' : 'my-location'} size={14} color={timezoneSource === 'google' ? '#4285F4' : '#F59E0B'} />
+                <Text style={{ flex: 1, fontSize: 11, fontWeight: '700', color: timezoneSource === 'google' ? '#4285F4' : '#F59E0B' }}>
+                  {timezoneSource === 'google'
+                    ? (language === 'fr' ? `Detecte via Google Places : ${shortTimezoneLabel(timezone)}` : `Detected via Google Places: ${shortTimezoneLabel(timezone)}`)
+                    : (language === 'fr' ? `Estime via longitude : ${timezone}` : `Estimated via longitude: ${timezone}`)}
+                </Text>
+              </View>
+            ) : null}
             <TextInput
               style={styles.textInput}
               value={timezone}
-              onChangeText={setTimezone}
+              onChangeText={(txt) => { setTimezone(txt); if (txt.trim()) setTimezoneSource('manual'); }}
               placeholder={language === 'fr' ? 'Europe/Paris ou UTC+1' : 'Europe/Paris or UTC+1'}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="none"
@@ -402,16 +432,29 @@ export default function NewTerrainScreen() {
                   <Pressable
                     key={tz}
                     style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: isActive ? '#8B5CF6' : theme.backgroundSecondary, borderWidth: 1, borderColor: isActive ? '#8B5CF6' : theme.border }}
-                    onPress={() => { Haptics.selectionAsync(); setTimezone(tz); }}
+                    onPress={() => { Haptics.selectionAsync(); setTimezone(tz); setTimezoneSource('manual'); }}
                   >
                     <Text style={{ fontSize: 11, fontWeight: '600', color: isActive ? '#FFF' : theme.textSecondary }}>{tz}</Text>
                   </Pressable>
                 );
               })}
+              {location.latitude && location.longitude && (Math.abs(location.latitude) > 0.01 || Math.abs(location.longitude) > 0.01) && !timezone ? (
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F59E0B15', borderWidth: 1, borderColor: '#F59E0B30' }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    const guess = guessTimezoneFromLongitude(location.longitude);
+                    if (guess) { setTimezone(guess); setTimezoneSource('longitude'); }
+                  }}
+                >
+                  <MaterialIcons name="my-location" size={12} color="#F59E0B" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#F59E0B' }}>{language === 'fr' ? 'Estimer' : 'Estimate'}</Text>
+                </Pressable>
+              ) : null}
               {timezone ? (
                 <Pressable
                   style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.error + '15', borderWidth: 1, borderColor: theme.error + '30' }}
-                  onPress={() => { Haptics.selectionAsync(); setTimezone(''); }}
+                  onPress={() => { Haptics.selectionAsync(); setTimezone(''); setTimezoneSource(null); }}
                 >
                   <Text style={{ fontSize: 11, fontWeight: '600', color: theme.error }}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
                 </Pressable>
@@ -419,8 +462,8 @@ export default function NewTerrainScreen() {
             </View>
             <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: 'italic' }}>
               {language === 'fr'
-                ? 'Ameliore la detection nocturne (3h-6h locales) pour les terrains hors fuseau serveur.'
-                : 'Improves nocturnal detection (3AM-6AM local) for terrains outside the server timezone.'}
+                ? 'Ameliore la detection nocturne (3h-6h locales) et l\'affichage des horaires pour les terrains hors fuseau serveur.'
+                : 'Improves nocturnal detection (3AM-6AM local) and schedule display for terrains outside the server timezone.'}
             </Text>
           </SectionCard>
 

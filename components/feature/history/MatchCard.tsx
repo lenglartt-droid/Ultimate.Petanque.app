@@ -3,6 +3,7 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import theme from '@/constants/theme';
 import type { Match } from '@/types/petanque';
+import { parseTerrainTimezone, timezonesDiffer, getDeviceTimezone, formatTimeInTimezone, shortTimezoneLabel } from '@/services/timezoneService';
 
 interface MatchCardProps {
   match: Match;
@@ -13,11 +14,24 @@ interface MatchCardProps {
   isShared?: boolean;
   sharedPermission?: 'read' | 'write' | null;
   eloDelta?: number | null;
+  terrainTimezone?: string | null;
+  /** When true, force device-time display regardless of terrainTimezone (user preference override). */
+  preferDeviceTime?: boolean;
+  /** True when at least one participant has accepted a share request — renders a Verified badge. */
+  isVerified?: boolean;
 }
 
-export const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission, eloDelta }: MatchCardProps) => {
+export const MatchCard = React.memo(({ match, onPress, compact = false, t, language, isShared, sharedPermission, eloDelta, terrainTimezone, preferDeviceTime, isVerified }: MatchCardProps) => {
   const isWin = match.winner === 'A';
   const isTournament = match.mode === 'Tournoi';
+  const facilityTz = preferDeviceTime ? null : parseTerrainTimezone(terrainTimezone);
+  const deviceTz = getDeviceTimezone();
+  const localeStr = language === 'fr' ? 'fr-FR' : 'en-US';
+  const matchDate = new Date(match.date);
+  const facilityTime = facilityTz ? formatTimeInTimezone(matchDate, facilityTz, localeStr) : matchDate.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit' });
+  const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+  const showTzConversion = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, matchDate);
+  const deviceTime = showTzConversion ? formatTimeInTimezone(matchDate, deviceTz, localeStr) : null;
 
   if (compact) {
     return (
@@ -50,10 +64,18 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
             </Text>
           </View>
           <Text style={styles.timeText}>
-            {new Date(match.date).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+            {facilityTime}{tzLabel ? ` ${tzLabel}` : ''}
           </Text>
         </View>
         {isTournament && match.tournamentName ? <Text style={styles.tournamentName} numberOfLines={1}>{match.tournamentName}</Text> : null}
+        {showTzConversion && deviceTime ? (
+          <View style={styles.tzChip}>
+            <MaterialIcons name="public" size={9} color="#7C3AED" />
+            <Text style={styles.tzChipText} numberOfLines={1}>
+              {deviceTime} {language === 'fr' ? 'chez vous' : 'your time'}
+            </Text>
+          </View>
+        ) : null}
         <View style={styles.scoreRow}>
           <View style={styles.teamCol}>
             <Text style={styles.teamLabel}>{t('history', 'me')}</Text>
@@ -92,6 +114,14 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
               </Text>
             </View>
           ) : null}
+          {/* Verified / Unverified badge — flags matches whose cross-player share requests
+              have been accepted (validated) versus creator-only local entries. */}
+          <View style={[styles.verifiedBadge, isVerified ? styles.verifiedBadgeYes : styles.verifiedBadgeNo]}>
+            <MaterialIcons name={isVerified ? 'verified' : 'help-outline'} size={10} color={isVerified ? '#16A34A' : '#B45309'} />
+            <Text style={[styles.verifiedBadgeText, { color: isVerified ? '#16A34A' : '#B45309' }]}>
+              {isVerified ? (language === 'fr' ? 'Verifie' : 'Verified') : (language === 'fr' ? 'Non-verifie' : 'Unverified')}
+            </Text>
+          </View>
           <Text style={styles.formatText}>{t('formats', match.format)}</Text>
         </View>
       </View>
@@ -106,6 +136,9 @@ export const MatchCard = React.memo(({ match, onPress, compact = false, t, langu
     prev.isShared === next.isShared &&
     prev.sharedPermission === next.sharedPermission &&
     prev.eloDelta === next.eloDelta &&
+    prev.terrainTimezone === next.terrainTimezone &&
+    prev.preferDeviceTime === next.preferDeviceTime &&
+    prev.isVerified === next.isVerified &&
     prev.language === next.language;
 });
 
@@ -145,6 +178,12 @@ const styles = StyleSheet.create({
   compactScoreSep: { fontSize: 12, color: theme.textMuted },
   eloDeltaBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: theme.borderRadius.full },
   eloDeltaText: { fontSize: 10, fontWeight: '800' },
+  tzChip: { flexDirection: 'row', alignItems: 'center', gap: 3, alignSelf: 'flex-start' as const, backgroundColor: '#8B5CF610', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, marginBottom: 6, borderWidth: 1, borderColor: '#8B5CF620' },
+  tzChipText: { fontSize: 9, fontWeight: '700' as const, color: '#7C3AED' },
+  verifiedBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 2, borderRadius: theme.borderRadius.full, borderWidth: 1 },
+  verifiedBadgeYes: { backgroundColor: '#22C55E12', borderColor: '#22C55E30' },
+  verifiedBadgeNo: { backgroundColor: '#F59E0B10', borderColor: '#F59E0B25' },
+  verifiedBadgeText: { fontSize: 9, fontWeight: '800' as const, letterSpacing: 0.2 },
 });
 
 // Custom comparator for React.memo — avoid re-renders from stable-content object references
