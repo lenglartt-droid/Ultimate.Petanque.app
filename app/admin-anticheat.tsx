@@ -186,6 +186,9 @@ export default function AdminAntiCheatScreen() {
   // Email farm cluster bulk ban
   const [emailFarmBusy, setEmailFarmBusy] = useState(false);
 
+  // Email farm cluster registration timeline (fetched on demand)
+  const [farmClusterTimeline, setFarmClusterTimeline] = useState<Array<{ email: string; ts: number; offsetHours: number; isCurrentUser: boolean }>>([]);
+
   // Admin behavioral digest history (last 30 entries, all players)
   const [adminDigestHistory, setAdminDigestHistory] = useState<Array<{
     id: string;
@@ -295,6 +298,50 @@ export default function AdminAntiCheatScreen() {
     })();
     return () => { cancelled = true; };
   }, [selectedPlayer?.id]);
+
+  // Fetch registration timestamps for the email farm cluster of the selected player.
+  useEffect(() => {
+    const emailFarm = selectedPlayer?.details?.emailFarm;
+    const siblings: string[] = Array.isArray(emailFarm?.siblings) ? emailFarm.siblings : [];
+    if (!emailFarm || siblings.length < 2 || !selectedPlayer?.userId) {
+      setFarmClusterTimeline([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const [regRes, profRes] = await Promise.all([
+          supabase.from('device_registrations').select('email, registered_at').in('email', siblings),
+          supabase.from('user_profiles').select('email').eq('id', selectedPlayer.userId).single(),
+        ]);
+        if (cancelled) return;
+        const data = regRes.data;
+        const currentEmail = String((profRes.data as any)?.email || '').toLowerCase();
+        if (!data || data.length === 0) { setFarmClusterTimeline([]); return; }
+        const emailMap = new Map<string, number>();
+        for (const r of data) {
+          if (!r.email || !r.registered_at) continue;
+          const ts = new Date(r.registered_at).getTime();
+          if (!Number.isFinite(ts)) continue;
+          const emailLower = String(r.email).toLowerCase();
+          if (!emailMap.has(emailLower) || ts < emailMap.get(emailLower)!) {
+            emailMap.set(emailLower, ts);
+          }
+        }
+        const entries = Array.from(emailMap.entries()).sort((a, b) => a[1] - b[1]);
+        if (entries.length === 0) { setFarmClusterTimeline([]); return; }
+        const minTs = entries[0][1];
+        setFarmClusterTimeline(entries.map(([email, ts]) => ({
+          email,
+          ts,
+          offsetHours: (ts - minTs) / (1000 * 60 * 60),
+          isCurrentUser: email === currentEmail,
+        })));
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [selectedPlayer?.id, selectedPlayer?.userId, selectedPlayer?.details?.emailFarm?.siblings?.length]);
 
   // Load deletion alerts
   useEffect(() => {
@@ -1042,6 +1089,13 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.headerTitle}>{(et.adminTitle as any)?.[language] || 'Anti-cheat'}</Text>
           <Text style={st.headerSub}>{filtered.length} {(et.adminDesc as any)?.[language] || 'players'}</Text>
         </View>
+        <Pressable
+          style={[st.eloRecalcBtn, { backgroundColor: '#991B1B' }]}
+          onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat-config' as any); }}
+        >
+          <MaterialIcons name="tune" size={16} color="#FFF" />
+          <Text style={st.eloRecalcBtnText}>{isFr ? 'Auto-ban' : 'Auto-ban'}</Text>
+        </Pressable>
         <Pressable
           style={[st.eloRecalcBtn, recalculating && { opacity: 0.6 }]}
           onPress={async () => {
@@ -3245,6 +3299,65 @@ export default function AdminAntiCheatScreen() {
                       ))}
                     </View>
                   ) : null}
+                  {farmClusterTimeline.length >= 2 ? (
+                    <View style={{ marginTop: 14 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+                        <MaterialIcons name="schedule" size={12} color="#DC2626" />
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, textTransform: 'uppercase', letterSpacing: 0.4, flex: 1 }}>
+                          {isFr ? 'Timeline du cluster' : 'Cluster timeline'}
+                        </Text>
+                        <View style={{ backgroundColor: '#DC262615', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
+                          <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626' }}>
+                            {selectedPlayer.details.emailFarm.spanHours || 0}h / 24h
+                          </Text>
+                        </View>
+                      </View>
+                      {(() => {
+                        const maxOffset = Math.max(...farmClusterTimeline.map(e => e.offsetHours), 0.1);
+                        const displayMax = Math.max(0.5, maxOffset);
+                        return farmClusterTimeline.map((entry, i) => {
+                          const barPct = Math.min(100, (entry.offsetHours / displayMax) * 100);
+                          const color = entry.isCurrentUser ? '#EF4444' : '#F97316';
+                          const localPart = entry.email.split('@')[0];
+                          const offsetLabel = entry.offsetHours < 0.017
+                            ? '+0m'
+                            : entry.offsetHours < 1
+                              ? `+${Math.round(entry.offsetHours * 60)}m`
+                              : `+${entry.offsetHours.toFixed(1)}h`;
+                          return (
+                            <View key={i} style={st.farmTimelineRow}>
+                              <View style={st.farmTimelineLabel}>
+                                <Text style={[st.farmTimelineEmail, entry.isCurrentUser && { color: '#EF4444', fontWeight: '800' as const }]} numberOfLines={1}>
+                                  {localPart}
+                                </Text>
+                                {entry.isCurrentUser ? (
+                                  <Text style={st.farmTimelineCurrent}>{isFr ? 'Ce joueur' : 'This player'}</Text>
+                                ) : null}
+                              </View>
+                              <View style={st.farmTimelineBar}>
+                                <View style={st.farmTimelineTrack} />
+                                <View style={[st.farmTimelineFill, { width: `${Math.max(2, barPct)}%`, backgroundColor: color + '55' }]} />
+                                <View style={[st.farmTimelineDot, { left: `${barPct}%`, backgroundColor: color }]} />
+                              </View>
+                              <Text style={[st.farmTimelineOffset, entry.isCurrentUser && { color: '#EF4444' }]}>
+                                {offsetLabel}
+                              </Text>
+                            </View>
+                          );
+                        });
+                      })()}
+                      <View style={{ flexDirection: 'row', gap: 12, marginTop: 6, marginLeft: 96 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                          <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Ce joueur' : 'This player'}</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F97316' }} />
+                          <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Autre compte' : 'Other'}</Text>
+                        </View>
+                      </View>
+                    </View>
+                  ) : null}
                   <Pressable
                     style={[st.emailFarmBanBtn, emailFarmBusy && { opacity: 0.6 }]}
                     onPress={handleBulkBanEmailFarmCluster}
@@ -3481,6 +3594,48 @@ export default function AdminAntiCheatScreen() {
                 <Text style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 17, marginBottom: 10 }}>
                   {isFr ? 'R2 eleve = progression trop lineaire. CV faible = variance suspecte.' : 'High R2 = too-linear progression. Low CV = suspicious variance.'}
                 </Text>
+                {(() => {
+                  const r2Val = selectedPlayer.details.eloVariance.linearityR2 || 0;
+                  if (r2Val > 0.95) {
+                    return (
+                      <View style={st.r2AlertCritical}>
+                        <MaterialIcons name="warning" size={16} color="#EF4444" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={st.r2AlertTitle}>{isFr ? `R2 critique : ${r2Val} (> 0.95)` : `Critical R2: ${r2Val} (> 0.95)`}</Text>
+                          <Text style={st.r2AlertText}>
+                            {isFr
+                              ? 'Progression tres lineaire, quasiment sans variance naturelle. Manipulation ELO fortement probable, action recommandee.'
+                              : 'Very linear progression, near-zero natural variance. ELO manipulation highly probable, action recommended.'}
+                          </Text>
+                          <Pressable style={st.r2AlertLink} onPress={() => router.push('/trust-score' as any)}>
+                            <MaterialIcons name="open-in-new" size={11} color="#EF4444" />
+                            <Text style={st.r2AlertLinkText}>{isFr ? 'Doc anti-triche' : 'Anti-cheat docs'}</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  }
+                  if (r2Val > 0.9) {
+                    return (
+                      <View style={st.r2AlertWarning}>
+                        <MaterialIcons name="report-problem" size={16} color="#F97316" />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[st.r2AlertTitle, { color: '#F97316' }]}>{isFr ? `R2 eleve : ${r2Val} (> 0.9)` : `High R2: ${r2Val} (> 0.9)`}</Text>
+                          <Text style={st.r2AlertText}>
+                            {isFr
+                              ? 'Progression trop reguliere pour etre naturelle. A verifier attentivement.'
+                              : 'Progression too regular to be natural. Requires careful review.'}
+                          </Text>
+                          <Pressable style={[st.r2AlertLink, { borderColor: '#F9731630' }]} onPress={() => router.push('/trust-score' as any)}>
+                            <MaterialIcons name="open-in-new" size={11} color="#F97316" />
+                            <Text style={[st.r2AlertLinkText, { color: '#F97316' }]}>{isFr ? 'Doc anti-triche' : 'Anti-cheat docs'}</Text>
+                          </Pressable>
+                        </View>
+                      </View>
+                    );
+                  }
+                  return null;
+                })()}
                 <View style={st.deletionSummaryRow}>
                   <View style={st.deletionSummaryItem}>
                     <Text style={[st.deletionSummaryValue, { color: '#DB2777' }]}>{selectedPlayer.details.eloVariance.matchesAnalyzed}</Text>
@@ -3521,21 +3676,76 @@ export default function AdminAntiCheatScreen() {
                     <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
                       {isFr ? `Courbe cumulative (${statEloHistory.length} matchs)` : `Cumulative curve (${statEloHistory.length} matches)`}
                     </Text>
-                    <View style={st.eloSparkline}>
-                      {(() => {
-                        const cum: number[] = [];
-                        let running = 0;
-                        for (const h of statEloHistory) { running += h.delta; cum.push(running); }
-                        const minVal = Math.min(...cum, 0);
-                        const maxVal = Math.max(...cum, 0);
-                        const range = Math.max(1, maxVal - minVal);
-                        return cum.map((v, i) => {
-                          const pct = (v - minVal) / range;
-                          const barH = Math.max(2, pct * 44);
-                          const color = statEloHistory[i].delta >= 0 ? '#22C55E' : '#EF4444';
-                          return <View key={i} style={{ flex: 1, height: barH, backgroundColor: color, borderRadius: 1, opacity: 0.85 }} />;
-                        });
-                      })()}
+                    <View style={{ position: 'relative' as const }}>
+                      <View style={st.eloSparkline}>
+                        {(() => {
+                          const cum: number[] = [];
+                          let running = 0;
+                          for (const h of statEloHistory) { running += h.delta; cum.push(running); }
+                          const minVal = Math.min(...cum, 0);
+                          const maxVal = Math.max(...cum, 0);
+                          const range = Math.max(1, maxVal - minVal);
+                          return cum.map((v, i) => {
+                            const pct = (v - minVal) / range;
+                            const barH = Math.max(2, pct * 40);
+                            const color = statEloHistory[i].delta >= 0 ? '#22C55E' : '#EF4444';
+                            return <View key={i} style={{ flex: 1, height: barH, backgroundColor: color, borderRadius: 1, opacity: 0.55 }} />;
+                          });
+                        })()}
+                      </View>
+                      {/* Linear regression overlay: predicted values */}
+                      <View pointerEvents="none" style={{ position: 'absolute' as const, top: 6, left: 6, right: 6, bottom: 6 }}>
+                        {(() => {
+                          const cum: number[] = [];
+                          let running = 0;
+                          for (const h of statEloHistory) { running += h.delta; cum.push(running); }
+                          const minVal = Math.min(...cum, 0);
+                          const maxVal = Math.max(...cum, 0);
+                          const range = Math.max(1, maxVal - minVal);
+                          const nElo = cum.length;
+                          let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0;
+                          for (let i = 0; i < nElo; i++) {
+                            sumX += i; sumY += cum[i]; sumXY += i * cum[i]; sumX2 += i * i;
+                          }
+                          const denom = nElo * sumX2 - sumX * sumX;
+                          const slope = denom !== 0 ? (nElo * sumXY - sumX * sumY) / denom : 0;
+                          const intercept = nElo > 0 ? (sumY - slope * sumX) / nElo : 0;
+                          return cum.map((_, i) => {
+                            const predicted = slope * i + intercept;
+                            const pct = range > 0 ? (predicted - minVal) / range : 0.5;
+                            const yBottom = Math.max(0, Math.min(40, pct * 40));
+                            const xPct = nElo > 1 ? (i / (nElo - 1)) * 100 : 50;
+                            return (
+                              <View
+                                key={`reg-${i}`}
+                                style={{
+                                  position: 'absolute' as const,
+                                  left: `${xPct}%`,
+                                  bottom: yBottom,
+                                  width: 5,
+                                  height: 5,
+                                  borderRadius: 2.5,
+                                  backgroundColor: '#DB2777',
+                                  marginLeft: -2.5,
+                                  marginBottom: -2.5,
+                                  borderWidth: 1,
+                                  borderColor: '#FFF',
+                                }}
+                              />
+                            );
+                          });
+                        })()}
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'center', marginTop: 6 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 10, height: 6, borderRadius: 2, backgroundColor: '#22C55E', opacity: 0.55 }} />
+                        <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Reel' : 'Actual'}</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <View style={{ width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#DB2777', borderWidth: 1, borderColor: '#FFF' }} />
+                        <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Regression lineaire predite' : 'Linear regression predicted'}</Text>
+                      </View>
                     </View>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
                       <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>
@@ -3850,4 +4060,23 @@ const st = StyleSheet.create({
   // Email farm bulk ban button
   emailFarmBanBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 12, marginTop: 12 },
   emailFarmBanBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+
+  // Farm cluster timeline visualization
+  farmTimelineRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, marginBottom: 8 },
+  farmTimelineLabel: { width: 96 },
+  farmTimelineEmail: { fontSize: 11, fontWeight: '600' as const, color: theme.textPrimary },
+  farmTimelineCurrent: { fontSize: 8, fontWeight: '800' as const, color: '#EF4444', marginTop: 1 },
+  farmTimelineBar: { flex: 1, height: 14, position: 'relative' as const },
+  farmTimelineTrack: { position: 'absolute' as const, left: 0, right: 0, top: 6, height: 2, backgroundColor: theme.border, borderRadius: 1 },
+  farmTimelineFill: { position: 'absolute' as const, left: 0, top: 4, height: 6, borderRadius: 3 },
+  farmTimelineDot: { position: 'absolute' as const, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#FFF', marginLeft: -6, top: 1 },
+  farmTimelineOffset: { fontSize: 10, fontWeight: '800' as const, color: '#DC2626', width: 44, textAlign: 'right' as const },
+
+  // R2 threshold alerts (statistical modal)
+  r2AlertCritical: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, backgroundColor: '#FEF2F2', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#FECACA' },
+  r2AlertWarning: { flexDirection: 'row' as const, alignItems: 'flex-start' as const, gap: 8, backgroundColor: '#FFFBEB', borderRadius: 10, padding: 10, marginBottom: 12, borderWidth: 1, borderColor: '#FDE68A' },
+  r2AlertTitle: { fontSize: 12, fontWeight: '800' as const, color: '#EF4444', marginBottom: 3 },
+  r2AlertText: { fontSize: 10, color: theme.textSecondary, lineHeight: 14, marginBottom: 6 },
+  r2AlertLink: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EF444430' },
+  r2AlertLinkText: { fontSize: 9, fontWeight: '800' as const, color: '#EF4444' },
 });
