@@ -9,6 +9,7 @@ import {
   RefreshControl,
   Dimensions,
   Modal,
+  TextInput,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -17,7 +18,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth, getSupabaseClient } from '@/template';
+import { useAuth, useAlert, getSupabaseClient } from '@/template';
 import { useAppData } from '@/contexts/AppContext';
 import {
   fetchTrustScore,
@@ -32,6 +33,7 @@ import {
   fetchTrustScoreHistory,
   TrustScoreHistoryPoint,
   saveTrustScoreSnapshot,
+  requestWitnessAttestation,
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import Svg, { Circle } from 'react-native-svg';
@@ -191,6 +193,7 @@ export default function TrustScoreScreen() {
   const insets = useSafeAreaInsets();
   const { t, language } = useLanguage();
   const { user } = useAuth();
+  const { showAlert } = useAlert();
   const { selfPlayer, matches } = useAppData();
   const isFr = language === 'fr';
 
@@ -206,6 +209,14 @@ export default function TrustScoreScreen() {
   const [bdhFilter, setBdhFilter] = useState<'active' | 'resolved' | 'all'>('all');
   // Nearby witness suggestions (shown when witness concentration >= 60%)
   const [nearbyWitnesses, setNearbyWitnesses] = useState<Array<{ id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number }>>([]);
+
+  // Witness invite modal (sends attestation request for the most recent match)
+  const [inviteModal, setInviteModal] = useState<{
+    visible: boolean;
+    witness: { id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number } | null;
+    message: string;
+    sending: boolean;
+  }>({ visible: false, witness: null, message: '', sending: false });
 
   const bdhFiltered = useMemo(() => {
     if (bdhFilter === 'active') return behavioralDigestHistory.filter(h => !h.isResolved);
@@ -340,6 +351,50 @@ export default function TrustScoreScreen() {
       }
       setRecomputing(false);
     }, 3000);
+  };
+
+  const openInviteModal = (witness: { id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number }) => {
+    const defaultMsg = isFr
+      ? `Salut ${witness.name}, peux-tu attester mon dernier match ? Merci !`
+      : `Hi ${witness.name}, can you witness my last match? Thanks!`;
+    setInviteModal({ visible: true, witness, message: defaultMsg, sending: false });
+  };
+
+  const handleSendInvite = async () => {
+    if (!inviteModal.witness) return;
+    const list = (matches || []) as any[];
+    if (list.length === 0) {
+      setInviteModal({ visible: false, witness: null, message: '', sending: false });
+      showAlert(
+        isFr ? 'Aucun match a attester' : 'No match to witness',
+        isFr ? "Enregistrez un match avant d'inviter un temoin." : 'Record a match before inviting a witness.'
+      );
+      return;
+    }
+    const sorted = [...list].sort((a: any, b: any) => {
+      const dA = new Date(a.date || a.createdAt || 0).getTime();
+      const dB = new Date(b.date || b.createdAt || 0).getTime();
+      return dB - dA;
+    });
+    const recentMatch: any = sorted[0];
+    if (!recentMatch || !recentMatch.id) {
+      setInviteModal({ visible: false, witness: null, message: '', sending: false });
+      showAlert(isFr ? 'Match introuvable' : 'Match not found');
+      return;
+    }
+    const witnessId = inviteModal.witness.userId;
+    const summary = inviteModal.message.trim();
+    setInviteModal(prev => ({ ...prev, sending: true }));
+    const { error } = await requestWitnessAttestation(recentMatch.id, witnessId, summary);
+    setInviteModal({ visible: false, witness: null, message: '', sending: false });
+    if (error) {
+      showAlert(isFr ? `Erreur: ${error}` : `Error: ${error}`);
+    } else {
+      showAlert(
+        isFr ? 'Invitation envoyee' : 'Invitation sent',
+        isFr ? 'Votre temoin recevra une notification push.' : 'Your witness will receive a push notification.'
+      );
+    }
   };
 
   const details = trustData?.details || {};
@@ -1317,7 +1372,7 @@ export default function TrustScoreScreen() {
                         <Pressable
                           key={w.id}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 10, padding: 10, marginBottom: 6 }}
-                          onPress={() => router.push(`/player/${w.id}` as any)}
+                          onPress={() => openInviteModal(w)}
                         >
                           <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' }}>
                             <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B' }}>{(w.name || '?').charAt(0).toUpperCase()}</Text>
@@ -1328,7 +1383,10 @@ export default function TrustScoreScreen() {
                               {w.club || w.city || (isFr ? 'A proximite' : 'Nearby')} - ELO {w.eloRating}
                             </Text>
                           </View>
-                          <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#F59E0B15', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 }}>
+                            <MaterialIcons name="person-add" size={12} color="#F59E0B" />
+                            <Text style={{ fontSize: 10, fontWeight: '800', color: '#F59E0B' }}>{isFr ? 'Inviter' : 'Invite'}</Text>
+                          </View>
                         </Pressable>
                       ))}
                     </View>
@@ -1474,6 +1532,85 @@ export default function TrustScoreScreen() {
           </>
         )}
       </ScrollView>
+
+      {/* Witness invite modal - sends attestation request for the user's most recent match */}
+      <Modal
+        visible={inviteModal.visible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setInviteModal({ visible: false, witness: null, message: '', sending: false })}
+      >
+        <View style={inviteSt.overlay}>
+          <View style={inviteSt.card}>
+            <View style={inviteSt.header}>
+              <View style={inviteSt.icon}>
+                <MaterialIcons name="person-add" size={20} color="#F59E0B" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={inviteSt.title}>{isFr ? 'Inviter comme temoin' : 'Invite as witness'}</Text>
+                <Text style={inviteSt.sub}>{isFr ? 'Attestation de votre dernier match' : 'Witness your last match'}</Text>
+              </View>
+              <Pressable
+                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false })}
+                hitSlop={10}
+              >
+                <MaterialIcons name="close" size={22} color={theme.textMuted} />
+              </Pressable>
+            </View>
+            {inviteModal.witness ? (
+              <View style={inviteSt.witnessRow}>
+                <View style={inviteSt.witnessAvatar}>
+                  <Text style={inviteSt.witnessInitial}>{(inviteModal.witness.name || '?').charAt(0).toUpperCase()}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={inviteSt.witnessName}>{inviteModal.witness.name}</Text>
+                  <Text style={inviteSt.witnessMeta}>
+                    {inviteModal.witness.club || inviteModal.witness.city || (isFr ? 'A proximite' : 'Nearby')}
+                    {'  ELO '}{inviteModal.witness.eloRating}
+                  </Text>
+                </View>
+              </View>
+            ) : null}
+            <Text style={inviteSt.messageLabel}>{isFr ? 'Message personnalise' : 'Personalized message'}</Text>
+            <TextInput
+              style={inviteSt.messageInput}
+              value={inviteModal.message}
+              onChangeText={txt => setInviteModal(prev => ({ ...prev, message: txt }))}
+              multiline
+              numberOfLines={3}
+              maxLength={280}
+              placeholder={isFr ? 'Ecrivez un message court...' : 'Write a short message...'}
+              placeholderTextColor={theme.textMuted}
+            />
+            <Text style={inviteSt.messageCount}>{inviteModal.message.length}/280</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12, backgroundColor: '#F59E0B10', borderRadius: 8, padding: 8 }}>
+              <MaterialIcons name="info-outline" size={13} color="#F59E0B" />
+              <Text style={{ flex: 1, fontSize: 10, color: '#B45309', lineHeight: 14 }}>
+                {isFr
+                  ? 'Une notification push sera envoyee au temoin pour attester votre dernier match.'
+                  : 'A push notification will be sent to the witness to attest your last match.'}
+              </Text>
+            </View>
+            <View style={inviteSt.actions}>
+              <Pressable
+                style={inviteSt.cancelBtn}
+                onPress={() => setInviteModal({ visible: false, witness: null, message: '', sending: false })}
+                disabled={inviteModal.sending}
+              >
+                <Text style={inviteSt.cancelText}>{isFr ? 'Annuler' : 'Cancel'}</Text>
+              </Pressable>
+              <Pressable
+                style={[inviteSt.sendBtn, (inviteModal.sending || inviteModal.message.trim().length === 0) && { opacity: 0.6 }]}
+                onPress={handleSendInvite}
+                disabled={inviteModal.sending || inviteModal.message.trim().length === 0}
+              >
+                {inviteModal.sending ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="send" size={14} color="#FFF" />}
+                <Text style={inviteSt.sendText}>{isFr ? 'Envoyer' : 'Send'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -1638,4 +1775,26 @@ const histSt = StyleSheet.create({
   xAxis: { flexDirection: 'row', marginLeft: 34, marginTop: 4 },
   xLabelSlot: { flex: 1, alignItems: 'center' },
   xLabel: { fontSize: 8, color: theme.textMuted, fontWeight: '600' },
+});
+
+const inviteSt = StyleSheet.create({
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' },
+  card: { backgroundColor: theme.surface, borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 14 },
+  icon: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B15', alignItems: 'center', justifyContent: 'center' },
+  title: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  sub: { fontSize: 11, color: theme.textMuted, marginTop: 1 },
+  witnessRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 10, marginBottom: 12 },
+  witnessAvatar: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' },
+  witnessInitial: { fontSize: 14, fontWeight: '800', color: '#F59E0B' },
+  witnessName: { fontSize: 13, fontWeight: '700', color: theme.textPrimary },
+  witnessMeta: { fontSize: 10, color: theme.textMuted, marginTop: 1, fontWeight: '500' },
+  messageLabel: { fontSize: 11, fontWeight: '700', color: theme.textSecondary, marginBottom: 6, letterSpacing: 0.4, textTransform: 'uppercase' },
+  messageInput: { backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, fontSize: 13, color: theme.textPrimary, minHeight: 72, textAlignVertical: 'top', borderWidth: 1, borderColor: theme.border },
+  messageCount: { fontSize: 10, color: theme.textMuted, fontWeight: '600', textAlign: 'right', marginTop: 4, marginBottom: 12 },
+  actions: { flexDirection: 'row', gap: 10 },
+  cancelBtn: { flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12, backgroundColor: theme.backgroundSecondary },
+  cancelText: { fontSize: 13, fontWeight: '700', color: theme.textSecondary },
+  sendBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, borderRadius: 12, backgroundColor: '#F59E0B' },
+  sendText: { fontSize: 13, fontWeight: '800', color: '#FFF' },
 });
