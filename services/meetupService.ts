@@ -1,6 +1,7 @@
 import { getSupabaseClient } from '@/template';
 import { Platform } from 'react-native';
 import * as Notifications from './nativeNotifications';
+import { formatTimeInTimezone, formatDateInTimezone, parseTerrainTimezone, shortTimezoneLabel, getDeviceTimezone, timezonesDiffer } from './timezoneService';
 
 export interface Meetup {
   id: string;
@@ -323,9 +324,12 @@ export interface MeetupReminderSettings {
 }
 
 /**
- * Schedule a local reminder notification for a meetup (legacy - single 1h reminder)
+ * Schedule a local reminder notification for a meetup (legacy - single 1h reminder).
+ * Reminder time is displayed in the FACILITY'S local timezone (with a device-time
+ * conversion appended when they differ), so a user in Montreal always sees
+ * "20:00 Paris (14:00 chez vous)" for a Paris meetup rather than a bare 14:00.
  */
-export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string): Promise<string | null> {
+export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string, terrainTimezone?: string | null): Promise<string | null> {
   if (Platform.OS === 'web') return null;
   try {
     const meetupDate = new Date(meetup.date);
@@ -334,12 +338,19 @@ export async function scheduleMeetupReminder(meetup: Meetup, terrainName: string
 
     if (reminderDate <= new Date()) return null;
 
-    const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const facilityTz = parseTerrainTimezone(terrainTimezone);
+    const deviceTz = getDeviceTimezone();
+    const facilityTime = formatTimeInTimezone(meetupDate, facilityTz, 'fr-FR');
+    const label = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+    let timeText = label ? `${facilityTime} ${label}` : facilityTime;
+    if (facilityTz && timezonesDiffer(facilityTz, deviceTz, meetupDate)) {
+      timeText += ` (${formatTimeInTimezone(meetupDate, deviceTz, 'fr-FR')} chez vous)`;
+    }
 
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title: '\u{1F3AF} RDV Petanque dans 1h !',
-        body: `${meetup.title} a ${terrainName} - ${formattedTime}`,
+        body: `${meetup.title} a ${terrainName} - ${timeText}`,
         data: { meetupId: meetup.id, type: 'meetup_reminder' },
         sound: 'default',
         ...(Platform.OS === 'android' && { channelId: 'meetup-reminders' }),
@@ -371,12 +382,21 @@ export async function cancelMeetupReminder(meetupId: string): Promise<void> {
 }
 
 /**
- * Schedule configurable meetup reminder notifications
+ * Schedule configurable meetup reminder notifications.
+ *
+ * Trigger moments (T-1d / T-3h / T-1h) are absolute instants, so a user in
+ * Montreal and a user in Paris both get the T-1h notification at the same
+ * absolute moment (i.e. one facility-local hour before start). Time DISPLAY
+ * inside the notification is always formatted in the FACILITY'S timezone with
+ * a device-time conversion appended when the two differ. This ensures a user
+ * in Montreal viewing a Paris meetup sees "20:00 Paris (14:00 chez vous)"
+ * rather than a raw 14:00 that could be mistaken for the meetup slot.
  */
 export async function scheduleMeetupNotifications(
   meetup: Meetup,
   terrainName: string,
-  settings: MeetupReminderSettings
+  settings: MeetupReminderSettings,
+  terrainTimezone?: string | null
 ): Promise<string[]> {
   if (Platform.OS === 'web') return [];
   await cancelAllMeetupReminders(meetup.id);
@@ -384,8 +404,18 @@ export async function scheduleMeetupNotifications(
   const notificationIds: string[] = [];
   const now = new Date();
   const meetupDate = new Date(meetup.date);
-  const formattedTime = meetupDate.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  const formattedDate = meetupDate.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  const facilityTz = parseTerrainTimezone(terrainTimezone);
+  const deviceTz = getDeviceTimezone();
+  const differs = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, meetupDate);
+  const facilityLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+  const facilityTime = formatTimeInTimezone(meetupDate, facilityTz, 'fr-FR');
+  const facilityDate = formatDateInTimezone(meetupDate, facilityTz, 'fr-FR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const formattedTime = facilityLabel ? `${facilityTime} ${facilityLabel}` : facilityTime;
+  const formattedTimeWithLocal = differs
+    ? `${formattedTime} (${formatTimeInTimezone(meetupDate, deviceTz, 'fr-FR')} chez vous)`
+    : formattedTime;
+  const formattedDate = facilityDate;
 
   const scheduleOne = async (triggerDate: Date, title: string, body: string, identifier: string): Promise<string | null> => {
     if (triggerDate <= now) return null;
@@ -416,21 +446,21 @@ export async function scheduleMeetupNotifications(
     const d = new Date(meetupDate);
     d.setDate(d.getDate() - 1);
     d.setHours(9, 0, 0, 0);
-    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque demain !', `${meetup.title} a ${terrainName} - ${formattedDate} a ${formattedTime}`, `meetup_${meetup.id}_1day`);
+    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque demain !', `${meetup.title} a ${terrainName} - ${formattedDate} a ${formattedTimeWithLocal}`, `meetup_${meetup.id}_1day`);
     if (id) notificationIds.push(id);
   }
 
   if (settings.threeHoursBefore) {
     const d = new Date(meetupDate);
     d.setHours(d.getHours() - 3);
-    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque dans 3h !', `${meetup.title} a ${terrainName} - ${formattedTime}`, `meetup_${meetup.id}_3hours`);
+    const id = await scheduleOne(d, '\u{1F3AF} RDV Petanque dans 3h !', `${meetup.title} a ${terrainName} - ${formattedTimeWithLocal}`, `meetup_${meetup.id}_3hours`);
     if (id) notificationIds.push(id);
   }
 
   if (settings.oneHourBefore) {
     const d = new Date(meetupDate);
     d.setHours(d.getHours() - 1);
-    const id = await scheduleOne(d, '\u26A1 RDV Petanque dans 1h !', `${meetup.title} a ${terrainName} - ${formattedTime}. Preparez-vous !`, `meetup_${meetup.id}_1hour`);
+    const id = await scheduleOne(d, '\u26A1 RDV Petanque dans 1h !', `${meetup.title} a ${terrainName} - ${formattedTimeWithLocal}. Preparez-vous !`, `meetup_${meetup.id}_1hour`);
     if (id) notificationIds.push(id);
   }
 

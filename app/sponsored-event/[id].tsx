@@ -25,6 +25,8 @@ import { requestNotificationPermissions, areNotificationsEnabled } from '@/servi
 import * as Haptics from '@/services/haptics';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { Switch } from 'react-native';
+import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
+import { parseTerrainTimezone, formatTimeInTimezone, formatDateInTimezone, shortTimezoneLabel, getDeviceTimezone, timezonesDiffer } from '@/services/timezoneService';
 
 export default function SponsoredEventDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -38,6 +40,7 @@ export default function SponsoredEventDetailScreen() {
   const [event, setEvent] = useState<SponsoredEvent | null>(null);
   const [participants, setParticipants] = useState<SponsoredEventParticipant[]>([]);
   const [myStatus, setMyStatus] = useState<string | null>(null);
+  const [terrainTimezone, setTerrainTimezone] = useState<string | null>(null);
 
   // Reminders state
   const [reminderDay, setReminderDay] = useState(false);
@@ -71,6 +74,18 @@ export default function SponsoredEventDetailScreen() {
   }, [id]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Fetch venue timezone so schedules display in facility local time
+  useEffect(() => {
+    if (!event?.terrainId) { setTerrainTimezone(null); return; }
+    const supabase = getSupabaseClient();
+    supabase
+      .from('terrains')
+      .select('timezone')
+      .eq('id', event.terrainId)
+      .maybeSingle()
+      .then(({ data }) => setTerrainTimezone(data?.timezone || null));
+  }, [event?.terrainId]);
 
   // Detect new participants for badge animation
   useEffect(() => {
@@ -483,11 +498,33 @@ export default function SponsoredEventDetailScreen() {
             <Text style={s.statusText}>{event.status === 'upcoming' ? (language === 'fr' ? 'A venir' : 'Upcoming') : event.status === 'active' ? (language === 'fr' ? 'En cours' : 'Active') : event.status === 'completed' ? (language === 'fr' ? 'Termine' : 'Completed') : (language === 'fr' ? 'Annule' : 'Cancelled')}</Text>
           </View>
           <Text style={s.heroTitle}>{event.title}</Text>
-          <View style={s.heroMeta}>
-            <View style={s.heroMetaItem}><MaterialIcons name="track-changes" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{challengeName(event.challengeType)}</Text></View>
-            <View style={s.heroMetaItem}><MaterialIcons name="event" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{eventDateObj.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}</Text></View>
-            <View style={s.heroMetaItem}><MaterialIcons name="schedule" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{eventDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - {endDateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</Text></View>
-          </View>
+          {(() => {
+            const facilityTz = parseTerrainTimezone(terrainTimezone);
+            const deviceTz = getDeviceTimezone();
+            const localeStr = language === 'fr' ? 'fr-FR' : 'en-US';
+            const facilityStart = formatTimeInTimezone(eventDateObj, facilityTz, localeStr);
+            const facilityEnd = formatTimeInTimezone(endDateObj, facilityTz, localeStr);
+            const dateStr = formatDateInTimezone(eventDateObj, facilityTz, localeStr, { day: 'numeric', month: 'short' });
+            const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+            const differs = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, eventDateObj);
+            const deviceStart = differs ? formatTimeInTimezone(eventDateObj, deviceTz, localeStr) : null;
+            const deviceEnd = differs ? formatTimeInTimezone(endDateObj, deviceTz, localeStr) : null;
+            return (
+              <>
+                <View style={s.heroMeta}>
+                  <View style={s.heroMetaItem}><MaterialIcons name="track-changes" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{challengeName(event.challengeType)}</Text></View>
+                  <View style={s.heroMetaItem}><MaterialIcons name="event" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{dateStr}</Text></View>
+                  <View style={s.heroMetaItem}><MaterialIcons name="schedule" size={14} color="rgba(255,255,255,0.7)" /><Text style={s.heroMetaText}>{facilityStart} - {facilityEnd}{tzLabel ? ` ${tzLabel}` : ''}</Text></View>
+                </View>
+                {differs && deviceStart && deviceEnd ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.15)', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 8 }}>
+                    <MaterialIcons name="public" size={12} color="rgba(255,255,255,0.85)" />
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: '#FFF' }}>{deviceStart} - {deviceEnd} ({language === 'fr' ? 'chez vous' : 'your time'})</Text>
+                  </View>
+                ) : null}
+              </>
+            );
+          })()}
           {event.ambassadorName ? (
             <View style={s.sponsorRow}>
               {event.ambassadorPhoto ? <Image source={{ uri: event.ambassadorPhoto }} style={s.sponsorAvatar} contentFit="cover" transition={200} cachePolicy="memory-disk" /> : null}

@@ -24,6 +24,16 @@ import {
   loadNotificationPreferences,
   saveNotificationPreferences,
 } from '@/services/notificationPreferencesService';
+import {
+  DisplayTimezoneMode,
+  DisplayTimezonePrefs,
+  loadDisplayTimezonePrefs,
+  saveDisplayTimezonePrefs,
+  getDeviceTimezone,
+  shortTimezoneLabel,
+  COMMON_TIMEZONES,
+} from '@/services/timezoneService';
+import { Modal, FlatList, TextInput } from 'react-native';
 
 interface NotifCategory {
   titleFr: string;
@@ -217,6 +227,12 @@ export default function NotificationPreferencesScreen() {
   const [prefs, setPrefs] = useState<NotificationPreferences>({ ...DEFAULT_NOTIFICATION_PREFERENCES });
   const [loaded, setLoaded] = useState(false);
 
+  // Display timezone preferences (facility TZ reference for schedule display)
+  const [tzPrefs, setTzPrefs] = useState<DisplayTimezonePrefs>({ mode: 'auto', customTimezone: null });
+  const [showTzPicker, setShowTzPicker] = useState(false);
+  const [tzSearch, setTzSearch] = useState('');
+  const deviceTz = getDeviceTimezone();
+
   useEffect(() => {
     if (!user?.id) return;
     loadNotificationPreferences().then((p) => {
@@ -228,7 +244,38 @@ export default function NotificationPreferencesScreen() {
       setPrefs(cleaned);
       setLoaded(true);
     });
+    loadDisplayTimezonePrefs().then(setTzPrefs);
   }, [user?.id]);
+
+  const handleTzModeChange = (mode: DisplayTimezoneMode) => {
+    Haptics.selectionAsync();
+    const updated: DisplayTimezonePrefs = {
+      mode,
+      customTimezone: mode === 'custom' ? (tzPrefs.customTimezone || deviceTz) : null,
+    };
+    setTzPrefs(updated);
+    saveDisplayTimezonePrefs(updated).catch(() => {});
+    if (mode === 'custom' && !tzPrefs.customTimezone) {
+      setShowTzPicker(true);
+    }
+  };
+
+  const handlePickCustomTz = (tz: string) => {
+    Haptics.selectionAsync();
+    const updated: DisplayTimezonePrefs = { mode: 'custom', customTimezone: tz };
+    setTzPrefs(updated);
+    saveDisplayTimezonePrefs(updated).catch(() => {});
+    setShowTzPicker(false);
+    setTzSearch('');
+  };
+
+  const filteredTzList = React.useMemo(() => {
+    const q = tzSearch.trim().toLowerCase();
+    if (!q) return COMMON_TIMEZONES;
+    return COMMON_TIMEZONES
+      .map(group => ({ ...group, zones: group.zones.filter(z => z.toLowerCase().includes(q)) }))
+      .filter(group => group.zones.length > 0);
+  }, [tzSearch]);
 
   const handleToggle = (key: keyof NotificationPreferences) => {
     Haptics.selectionAsync();
@@ -306,6 +353,70 @@ export default function NotificationPreferencesScreen() {
             </Pressable>
           </View>
         </Animated.View>
+
+        {/* Timezone display settings */}
+        {loaded ? (
+          <Animated.View entering={FadeInDown.duration(250)} style={s.tzSection}>
+            <View style={s.tzHeader}>
+              <View style={s.tzHeaderIcon}>
+                <MaterialIcons name="public" size={20} color="#7C3AED" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.tzTitle}>{fr ? 'Fuseau horaire de reference' : 'Reference timezone'}</Text>
+                <Text style={s.tzSub}>
+                  {fr
+                    ? 'Comment afficher les horaires (RDV, tournois, evenements) lorsque le terrain est dans un autre fuseau'
+                    : 'How to display schedules (meetups, tournaments, events) when the venue is in a different timezone'}
+                </Text>
+              </View>
+            </View>
+            <View style={s.tzModes}>
+              {([
+                { id: 'auto' as const, icon: 'auto-mode', labelFr: 'Automatique', labelEn: 'Automatic', descFr: 'Utilise le fuseau du terrain, sinon celui du telephone', descEn: 'Use venue timezone, else device timezone' },
+                { id: 'terrain' as const, icon: 'place', labelFr: 'Terrain', labelEn: 'Venue', descFr: 'Toujours utiliser le fuseau du terrain', descEn: 'Always use the venue timezone' },
+                { id: 'custom' as const, icon: 'tune', labelFr: 'Personnalise', labelEn: 'Custom', descFr: 'Choisir un fuseau IANA precis', descEn: 'Pick a specific IANA timezone' },
+              ]).map(opt => {
+                const isActive = tzPrefs.mode === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    style={[s.tzMode, isActive && s.tzModeActive]}
+                    onPress={() => handleTzModeChange(opt.id)}
+                  >
+                    <View style={[s.tzModeIcon, isActive && { backgroundColor: '#7C3AED' }]}>
+                      <MaterialIcons name={opt.icon as any} size={16} color={isActive ? '#FFF' : '#7C3AED'} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[s.tzModeLabel, isActive && { color: '#7C3AED' }]}>{fr ? opt.labelFr : opt.labelEn}</Text>
+                      <Text style={s.tzModeDesc}>{fr ? opt.descFr : opt.descEn}</Text>
+                    </View>
+                    {isActive ? <MaterialIcons name="check-circle" size={18} color="#7C3AED" /> : <View style={s.tzModeRadio} />}
+                  </Pressable>
+                );
+              })}
+            </View>
+            {tzPrefs.mode === 'custom' ? (
+              <Pressable style={s.tzCustomRow} onPress={() => setShowTzPicker(true)}>
+                <MaterialIcons name="schedule" size={16} color="#7C3AED" />
+                <View style={{ flex: 1 }}>
+                  <Text style={s.tzCustomLabel}>{fr ? 'Fuseau selectionne' : 'Selected timezone'}</Text>
+                  <Text style={s.tzCustomValue} numberOfLines={1}>
+                    {tzPrefs.customTimezone || (fr ? 'Non defini' : 'Not set')}
+                  </Text>
+                </View>
+                <MaterialIcons name="chevron-right" size={18} color="#7C3AED" />
+              </Pressable>
+            ) : null}
+            <View style={s.tzHint}>
+              <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+              <Text style={s.tzHintText}>
+                {fr
+                  ? `Fuseau de l'appareil actuel : ${shortTimezoneLabel(deviceTz)} (${deviceTz})`
+                  : `Current device timezone: ${shortTimezoneLabel(deviceTz)} (${deviceTz})`}
+              </Text>
+            </View>
+          </Animated.View>
+        ) : null}
 
         {/* Loading */}
         {!loaded ? (
@@ -393,6 +504,70 @@ export default function NotificationPreferencesScreen() {
           </Text>
         </View>
       </ScrollView>
+
+      {/* Custom timezone picker modal */}
+      <Modal visible={showTzPicker} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowTzPicker(false)}>
+        <SafeAreaView edges={['top']} style={s.tzModal}>
+          <View style={s.tzModalHeader}>
+            <Text style={s.tzModalTitle}>{fr ? 'Choisir un fuseau' : 'Choose a timezone'}</Text>
+            <Pressable style={s.tzModalClose} onPress={() => { setShowTzPicker(false); setTzSearch(''); }}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+          </View>
+          <View style={s.tzSearchBar}>
+            <MaterialIcons name="search" size={18} color={theme.textMuted} />
+            <TextInput
+              style={s.tzSearchInput}
+              value={tzSearch}
+              onChangeText={setTzSearch}
+              placeholder={fr ? 'Rechercher (Paris, Tokyo...)' : 'Search (Paris, Tokyo...)'}
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            {tzSearch.length > 0 ? (
+              <Pressable onPress={() => setTzSearch('')} hitSlop={8}>
+                <MaterialIcons name="close" size={18} color={theme.textMuted} />
+              </Pressable>
+            ) : null}
+          </View>
+          <FlatList
+            data={filteredTzList}
+            keyExtractor={(g) => g.region}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
+            keyboardShouldPersistTaps="handled"
+            ListEmptyComponent={
+              <View style={{ alignItems: 'center', paddingVertical: 40 }}>
+                <MaterialIcons name="search-off" size={40} color={theme.textMuted} />
+                <Text style={{ fontSize: 14, color: theme.textMuted, marginTop: 8 }}>
+                  {fr ? 'Aucun fuseau trouve' : 'No timezone found'}
+                </Text>
+              </View>
+            }
+            renderItem={({ item: group }) => (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={s.tzGroupTitle}>{group.region}</Text>
+                {group.zones.map(tz => {
+                  const isActive = tzPrefs.customTimezone === tz;
+                  return (
+                    <Pressable
+                      key={tz}
+                      style={[s.tzOption, isActive && s.tzOptionActive]}
+                      onPress={() => handlePickCustomTz(tz)}
+                    >
+                      <View style={s.tzOptionMain}>
+                        <Text style={[s.tzOptionName, isActive && { color: '#7C3AED' }]}>{shortTimezoneLabel(tz)}</Text>
+                        <Text style={s.tzOptionZone}>{tz}</Text>
+                      </View>
+                      {isActive ? <MaterialIcons name="check-circle" size={20} color="#7C3AED" /> : null}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            )}
+          />
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -555,4 +730,44 @@ const s = StyleSheet.create({
     borderColor: theme.border,
   },
   infoText: { flex: 1, fontSize: 12, color: theme.textMuted, lineHeight: 18 },
+
+  // Timezone section
+  tzSection: {
+    backgroundColor: theme.surface,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#7C3AED20',
+  },
+  tzHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 14 },
+  tzHeaderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED12', alignItems: 'center', justifyContent: 'center' },
+  tzTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  tzSub: { fontSize: 12, color: theme.textMuted, marginTop: 3, lineHeight: 16 },
+  tzModes: { gap: 8 },
+  tzMode: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 12, borderWidth: 1.5, borderColor: 'transparent' },
+  tzModeActive: { borderColor: '#7C3AED', backgroundColor: '#7C3AED06' },
+  tzModeIcon: { width: 30, height: 30, borderRadius: 10, backgroundColor: '#7C3AED15', alignItems: 'center', justifyContent: 'center' },
+  tzModeLabel: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  tzModeDesc: { fontSize: 11, color: theme.textMuted, marginTop: 2, lineHeight: 15 },
+  tzModeRadio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2, borderColor: theme.border },
+  tzCustomRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10, backgroundColor: '#7C3AED08', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: '#7C3AED25' },
+  tzCustomLabel: { fontSize: 10, fontWeight: '700', color: '#7C3AED', textTransform: 'uppercase', letterSpacing: 0.5 },
+  tzCustomValue: { fontSize: 14, fontWeight: '600', color: theme.textPrimary, marginTop: 1 },
+  tzHint: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 10 },
+  tzHintText: { fontSize: 10, color: theme.textMuted, fontStyle: 'italic', flex: 1 },
+
+  // Timezone picker modal
+  tzModal: { flex: 1, backgroundColor: theme.backgroundSecondary },
+  tzModalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border },
+  tzModalTitle: { fontSize: 17, fontWeight: '700', color: theme.textPrimary },
+  tzModalClose: { padding: 8 },
+  tzSearchBar: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: theme.surface, marginHorizontal: 16, marginVertical: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: theme.border },
+  tzSearchInput: { flex: 1, fontSize: 14, color: theme.textPrimary, padding: 0 },
+  tzGroupTitle: { fontSize: 11, fontWeight: '800', color: theme.textMuted, letterSpacing: 1, textTransform: 'uppercase', marginBottom: 8, marginTop: 4 },
+  tzOption: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.surface, borderRadius: 12, padding: 12, marginBottom: 6, borderWidth: 1.5, borderColor: 'transparent' },
+  tzOptionActive: { borderColor: '#7C3AED', backgroundColor: '#7C3AED06' },
+  tzOptionMain: { flex: 1 },
+  tzOptionName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
+  tzOptionZone: { fontSize: 11, color: theme.textMuted, marginTop: 1, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
 });
