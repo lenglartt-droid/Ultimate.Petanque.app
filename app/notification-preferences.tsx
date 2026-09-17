@@ -418,6 +418,64 @@ export default function NotificationPreferencesScreen() {
           </Animated.View>
         ) : null}
 
+        {/* Display timezone preferences per surface (chat / match cards) */}
+        {loaded ? (
+          <Animated.View entering={FadeInDown.duration(250).delay(30)} style={s.displaySection}>
+            <View style={s.displayHeader}>
+              <View style={s.displayHeaderIcon}>
+                <MaterialIcons name="visibility" size={20} color="#3B82F6" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.displayTitle}>{fr ? 'Affichage des horaires' : 'Time display'}</Text>
+                <Text style={s.displaySub}>
+                  {fr
+                    ? 'Basculer certaines surfaces sur l\'heure de votre appareil au lieu du terrain'
+                    : 'Switch certain surfaces to your device time instead of the venue timezone'}
+                </Text>
+              </View>
+            </View>
+            <View style={s.displayRow}>
+              <View style={s.displayRowIcon}>
+                <MaterialIcons name="chat-bubble-outline" size={18} color={theme.primary} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.displayRowLabel}>{fr ? 'Chat des RDV' : 'Meetup chat'}</Text>
+                <Text style={s.displayRowDesc}>
+                  {prefs.chat_display_device_time
+                    ? (fr ? 'Timestamps affiches en heure locale de votre appareil' : 'Timestamps shown in your device local time')
+                    : (fr ? 'Timestamps affiches dans le fuseau du terrain' : 'Timestamps shown in the venue timezone')}
+                </Text>
+              </View>
+              <Switch
+                value={prefs.chat_display_device_time}
+                onValueChange={() => handleToggle('chat_display_device_time')}
+                trackColor={{ false: theme.border, true: theme.primary + '60' }}
+                thumbColor={prefs.chat_display_device_time ? theme.primary : theme.textMuted}
+              />
+            </View>
+            <View style={s.displayRowBorder} />
+            <View style={s.displayRow}>
+              <View style={[s.displayRowIcon, { backgroundColor: theme.accent + '12' }]}>
+                <MaterialIcons name="sports" size={18} color={theme.accent} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.displayRowLabel}>{fr ? 'Cartes matchs (Historique)' : 'Match cards (History)'}</Text>
+                <Text style={s.displayRowDesc}>
+                  {prefs.match_card_display_device_time
+                    ? (fr ? 'Heure de fin de match dans le fuseau de votre appareil' : 'Match time in your device timezone')
+                    : (fr ? 'Heure de fin de match dans le fuseau du terrain' : 'Match time in the venue timezone')}
+                </Text>
+              </View>
+              <Switch
+                value={prefs.match_card_display_device_time}
+                onValueChange={() => handleToggle('match_card_display_device_time')}
+                trackColor={{ false: theme.border, true: theme.accent + '60' }}
+                thumbColor={prefs.match_card_display_device_time ? theme.accent : theme.textMuted}
+              />
+            </View>
+          </Animated.View>
+        ) : null}
+
         {/* Loading */}
         {!loaded ? (
           <View style={s.loadingBox}>
@@ -770,4 +828,16 @@ const s = StyleSheet.create({
   tzOptionMain: { flex: 1 },
   tzOptionName: { fontSize: 14, fontWeight: '700', color: theme.textPrimary },
   tzOptionZone: { fontSize: 11, color: theme.textMuted, marginTop: 1, fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace' },
+
+  // Display preferences (chat / match cards)
+  displaySection: { backgroundColor: theme.surface, borderRadius: 16, padding: 16, marginBottom: 20, borderWidth: 1, borderColor: '#3B82F620' },
+  displayHeader: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginBottom: 12 },
+  displayHeaderIcon: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#3B82F612', alignItems: 'center', justifyContent: 'center' },
+  displayTitle: { fontSize: 15, fontWeight: '700', color: theme.textPrimary },
+  displaySub: { fontSize: 12, color: theme.textMuted, marginTop: 3, lineHeight: 16 },
+  displayRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  displayRowIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: theme.primary + '12', alignItems: 'center', justifyContent: 'center' },
+  displayRowLabel: { fontSize: 14, fontWeight: '600', color: theme.textPrimary },
+  displayRowDesc: { fontSize: 11, color: theme.textMuted, marginTop: 2, lineHeight: 15 },
+  displayRowBorder: { height: 1, backgroundColor: theme.border, marginHorizontal: -4, marginVertical: 4 },
 });

@@ -10,6 +10,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { updateEloAfterMatch, getScoreMarginMultiplier } from '@/services/eloService';
 import { getMatchValidationWeight } from '@/services/trustScoreService';
 import { sendStatsSyncedNotification } from '@/services/notificationService';
+import { notifyMentionedUser } from '@/services/mentionsService';
 
 const LAST_SEEN_SHARE_REQUESTS_KEY = '@lastSeenShareRequestIds';
 
@@ -133,6 +134,19 @@ export async function createShareRequests(params: {
         permission: r.permission,
         itemSummary,
       }).catch(() => {});
+    }
+
+    // Also send a "match_mentioned" push to notify recipients that they
+    // appear in a match (helps them find it via /matches-mentioning-me)
+    if (itemType === 'match') {
+      for (const r of recipients) {
+        notifyMentionedUser({
+          matchId: itemId,
+          mentionedUserId: r.userId,
+          creatorName: senderName,
+          matchSummary: itemSummary || '',
+        }).catch(() => {});
+      }
     }
 
     return { requests, error: null };
@@ -695,6 +709,42 @@ export async function getSharedChallengeIds(): Promise<{ challengeIds: string[];
     return { challengeIds: (data || []).map((r: any) => r.item_id), error: null };
   } catch (e: any) {
     return { challengeIds: [], error: e.message };
+  }
+}
+
+/**
+ * Determine whether a match is "verified" — i.e. at least one participant
+ * (other than the creator) has accepted a share request, giving the match
+ * cross-user validation. Otherwise the match is treated as "unverified"
+ * (creator-only, local entry).
+ */
+export async function getMatchVerificationStatus(
+  matchIds: string[]
+): Promise<Map<string, boolean>> {
+  const result = new Map<string, boolean>();
+  if (matchIds.length === 0) return result;
+
+  const supabase = getSupabaseClient();
+  try {
+    const { data } = await supabase
+      .from('match_share_requests')
+      .select('item_id, status')
+      .eq('item_type', 'match')
+      .eq('status', 'accepted')
+      .in('item_id', matchIds);
+
+    (data || []).forEach((r: any) => {
+      result.set(r.item_id, true);
+    });
+
+    // Ensure all queried IDs have an entry (default false)
+    for (const id of matchIds) {
+      if (!result.has(id)) result.set(id, false);
+    }
+
+    return result;
+  } catch {
+    return result;
   }
 }
 

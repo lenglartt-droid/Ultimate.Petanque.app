@@ -35,6 +35,7 @@ import { isFollowingPlayer, toggleFollowPlayer, getFollowerCount, getFollowingCo
 import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+import { TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
 
 // Gold pulse dot for Gold partner badges
 const GoldPulseDot = React.memo(({ color }: { color: string }) => {
@@ -700,6 +701,13 @@ export default function PlayerDetailScreen() {
                       <Text style={{ fontSize: 13, fontWeight: '600', color: theme.success }}>{language === 'fr' ? 'Voir sur la carte' : 'View on map'}</Text>
                       <MaterialIcons name="chevron-right" size={16} color={theme.success} />
                     </Pressable>
+                  ) : null}
+                  {terrainEntity && (terrainEntity as any).timezone ? (
+                    <TimezoneMismatchBanner
+                      terrainTimezone={(terrainEntity as any).timezone}
+                      facilityName={terrainEntity.name}
+                      locale={language === 'fr' ? 'fr-FR' : 'en-US'}
+                    />
                   ) : null}
                 </View>
               ) : null}
