@@ -37,6 +37,7 @@ import {
 } from '@/services/trustScoreService';
 import { extraTranslations } from '@/constants/i18nExtra';
 import Svg, { Circle } from 'react-native-svg';
+import { Pressable as RNPressable } from 'react-native';
 
 const et = extraTranslations.trustScore;
 
@@ -592,6 +593,14 @@ export default function TrustScoreScreen() {
                 <Pressable style={[st.recomputeBtn, { alignSelf: 'center', marginTop: 12 }]} onPress={handleRecompute} disabled={recomputing}>
                   {recomputing ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="refresh" size={16} color="#FFF" />}
                   <Text style={st.recomputeBtnText}>{isFr ? 'Recalculer' : 'Recompute'}</Text>
+                </Pressable>
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, alignSelf: 'center', marginTop: 10, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, backgroundColor: 'rgba(255,255,255,0.08)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' }}
+                  onPress={() => router.push('/trust-score-factors' as any)}
+                >
+                  <MaterialIcons name="list-alt" size={16} color={scoreColor} />
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: scoreColor }}>{isFr ? 'Voir les 26 facteurs' : 'View 26 factors'}</Text>
+                  <MaterialIcons name="chevron-right" size={16} color={scoreColor} />
                 </Pressable>
               </LinearGradient>
             </Animated.View>
