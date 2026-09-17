@@ -30,7 +30,7 @@ import { useAdminCache } from '@/hooks/useAdminCache';
 
 const et = extraTranslations.trustScore;
 
-type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts';
+type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts' | 'behavioralAlerts';
 type TrustScoreFilter = 'all' | 'critical' | 'low' | 'medium' | 'high' | 'verified';
 type SortMode = 'default' | 'trustAsc' | 'trustDesc' | 'analysisRecent' | 'analysisOld' | 'nocturnalDesc' | 'unrealisticDurationDesc' | 'massSubmissionDesc';
 
@@ -48,6 +48,15 @@ const TEMPORAL_ALERT_FLAGS = new Set<string>([
   'nocturnal_pattern',
   'mass_submission',
   'mass_submission_repeated',
+]);
+
+const BEHAVIORAL_ALERT_FLAGS = new Set<string>([
+  'self_match',
+  'self_match_frequent',
+  'symmetric_score_streak',
+  'symmetric_score_streak_extreme',
+  'ghost_opponents',
+  'ghost_opponents_dominant',
 ]);
 
 const TRUST_SCORE_RANGES: Record<Exclude<TrustScoreFilter, 'all'>, { min: number; max: number; color: string }> = {
@@ -134,6 +143,10 @@ export default function AdminAntiCheatScreen() {
   // Temporal alert trends (last 8 weeks): nocturnal matches, unrealistic durations, mass submission days
   const [temporalTrends, setTemporalTrends] = useState<Array<{ week: string; nocturnal: number; unrealistic: number; massSub: number }>>([]);
   const [temporalTrendsLoading, setTemporalTrendsLoading] = useState(false);
+
+  // Behavioral alert trends (last 8 weeks): self-matches, symmetric-score matches, ghost proxy (solo matches)
+  const [behavioralTrends, setBehavioralTrends] = useState<Array<{ week: string; selfMatch: number; symmetric: number; ghost: number }>>([]);
+  const [behavioralTrendsLoading, setBehavioralTrendsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -360,6 +373,8 @@ export default function AdminAntiCheatScreen() {
       if (!Array.isArray(p.flags) || !p.flags.some((f: string) => GEO_ALERT_FLAGS.has(f))) return false;
     } else if (statusFilter === 'temporalAlerts') {
       if (!Array.isArray(p.flags) || !p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter === 'behavioralAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f))) return false;
     } else if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (trustScoreFilter !== 'all') {
       const range = TRUST_SCORE_RANGES[trustScoreFilter];
@@ -400,6 +415,7 @@ export default function AdminAntiCheatScreen() {
     banned: players.filter(p => p.status === 'banned').length,
     geoAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => GEO_ALERT_FLAGS.has(f))).length,
     temporalAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))).length,
+    behavioralAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f))).length,
   };
 
   const trustScoreCounts = {
@@ -432,6 +448,7 @@ export default function AdminAntiCheatScreen() {
       case 'banned': return '#DC2626';
       case 'geoAlerts': return '#F59E0B';
       case 'temporalAlerts': return '#8B5CF6';
+      case 'behavioralAlerts': return '#EC4899';
       default: return theme.textMuted;
     }
   };
@@ -439,6 +456,7 @@ export default function AdminAntiCheatScreen() {
   const getStatusLabel = (status: string) => {
     if (status === 'geoAlerts') return isFr ? 'Geo-alertes' : 'Geo alerts';
     if (status === 'temporalAlerts') return isFr ? 'Alertes temporelles' : 'Temporal alerts';
+    if (status === 'behavioralAlerts') return isFr ? 'Comportement' : 'Behavioral';
     const labels: Record<string, any> = {
       ok: et.adminStatusOk, watch: et.adminStatusWatch,
       flagged: et.adminStatusFlagged, banned: et.adminStatusBanned,
@@ -544,6 +562,58 @@ export default function AdminAntiCheatScreen() {
                 title: isFr ? 'Verifiez vos matchs' : 'Check your matches',
                 body: isFr ? 'Des alertes temporelles ont ete detectees sur vos matchs recents.' : 'Temporal alerts detected on your recent matches.',
                 data: { type: 'temporal_alert', bulk: true },
+                channelId: 'tournament-reminders',
+                priority: 'high',
+              }));
+              sent = tokenList.length;
+              if (tokenList.length > 0) {
+                await fetch('https://exp.host/--/api/v2/push/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                  body: JSON.stringify(tokenList),
+                });
+              }
+            } catch { /* silent */ }
+            setBulkBusy(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(isFr ? `${sent} rappel(s) envoye(s)` : `${sent} reminder(s) sent`);
+          },
+        },
+      ]
+    );
+  };
+
+  // Bulk behavioral notify handler (sends a push reminder to all filtered players with behavioral alerts)
+  const handleBulkBehavioralNotify = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f)));
+    if (targets.length === 0) {
+      showAlert(isFr ? 'Aucun joueur cible' : 'No targets');
+      return;
+    }
+    showAlert(
+      isFr ? `Envoyer un rappel a ${targets.length} joueur(s) ?` : `Send reminder to ${targets.length} player(s)?`,
+      isFr ? 'Un push regroupe les alertes comportementales actives.' : 'A single push groups active behavioral alerts.',
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: isFr ? 'Envoyer' : 'Send',
+          onPress: async () => {
+            setBulkBusy(true);
+            const supabase = getSupabaseClient();
+            let sent = 0;
+            try {
+              const userIds = targets.map(t => t.userId);
+              const { data: tokens } = await supabase
+                .from('push_tokens')
+                .select('user_id, token')
+                .in('user_id', userIds)
+                .eq('active', true);
+              const tokenList = (tokens || []).map((t: any) => ({
+                to: t.token,
+                title: isFr ? 'Verifiez vos matchs' : 'Check your matches',
+                body: isFr ? 'Des alertes comportementales ont ete detectees sur vos matchs recents.' : 'Behavioral alerts detected on your recent matches.',
+                data: { type: 'behavioral_alert', bulk: true },
                 channelId: 'tournament-reminders',
                 priority: 'high',
               }));
@@ -1219,6 +1289,146 @@ export default function AdminAntiCheatScreen() {
         ) : null}
       </View>
 
+      {/* ============ BEHAVIORAL ALERT TRENDS (last 8 weeks) ============ */}
+      <View style={st.deviceSection}>
+        <Pressable
+          style={st.deviceHeaderRow}
+          onPress={async () => {
+            if (behavioralTrends.length > 0) { setBehavioralTrends([]); return; }
+            setBehavioralTrendsLoading(true);
+            try {
+              const supabase = getSupabaseClient();
+              const eightWeeksAgo = new Date(); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+              const { data: matchData } = await supabase
+                .from('matches')
+                .select('id, date, created_at, team_a, team_b, participant_user_ids')
+                .gte('created_at', eightWeeksAgo.toISOString())
+                .order('created_at', { ascending: true });
+              const weekMap = new Map<string, { selfMatch: number; symmetric: number; ghost: number }>();
+              for (const m of matchData || []) {
+                const d = new Date(m.date || m.created_at);
+                if (!Number.isFinite(d.getTime())) continue;
+                const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7)); monday.setHours(0, 0, 0, 0);
+                const wk = monday.toISOString().split('T')[0];
+                if (!weekMap.has(wk)) weekMap.set(wk, { selfMatch: 0, symmetric: 0, ghost: 0 });
+                const w = weekMap.get(wk)!;
+                const teamA = (m.team_a?.players || []) as string[];
+                const teamB = (m.team_b?.players || []) as string[];
+                if (teamA.length > 0 && teamB.length > 0) {
+                  const setA = new Set(teamA);
+                  if (teamB.some((p: string) => setA.has(p))) w.selfMatch++;
+                }
+                const sa = Number(m.team_a?.score) || 0;
+                const sb = Number(m.team_b?.score) || 0;
+                if ((sa === 13 && sb <= 1) || (sb === 13 && sa <= 1)) w.symmetric++;
+                const pids = m.participant_user_ids || [];
+                if (!Array.isArray(pids) || pids.length <= 1) w.ghost++;
+              }
+              const weeks = Array.from(weekMap.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .slice(-8)
+                .map(([week, stats]) => ({ week: week.substring(5), selfMatch: stats.selfMatch, symmetric: stats.symmetric, ghost: stats.ghost }));
+              setBehavioralTrends(weeks);
+            } catch { /* silent */ }
+            setBehavioralTrendsLoading(false);
+          }}
+        >
+          <View style={[st.deviceIcon, { backgroundColor: '#EC489915' }]}>
+            <MaterialIcons name="psychology" size={18} color="#EC4899" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Tendances alertes comportementales' : 'Behavioral Alert Trends'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? '8 dernieres semaines (auto-affrontements, scores extremes, solo)' : 'Last 8 weeks (self-matches, extreme scores, solo)'}</Text>
+          </View>
+          {behavioralTrendsLoading ? <ActivityIndicator size="small" color="#EC4899" /> : (
+            <MaterialIcons name={behavioralTrends.length > 0 ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+        {behavioralTrends.length > 0 ? (
+          <View style={{ paddingTop: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 100, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 10, paddingBottom: 24 }}>
+              {(() => {
+                const avgSum = behavioralTrends.length > 0
+                  ? behavioralTrends.reduce((s, x) => s + x.selfMatch + x.symmetric + x.ghost, 0) / behavioralTrends.length
+                  : 0;
+                const alertThreshold = avgSum * 2;
+                const maxVal = Math.max(...behavioralTrends.map(x => Math.max(x.selfMatch, x.symmetric, x.ghost)), 1);
+                return behavioralTrends.map((w) => {
+                  const smH = Math.max(2, (w.selfMatch / maxVal) * 60);
+                  const syH = Math.max(2, (w.symmetric / maxVal) * 60);
+                  const ghH = Math.max(2, (w.ghost / maxVal) * 60);
+                  const sum = w.selfMatch + w.symmetric + w.ghost;
+                  const isAlert = alertThreshold > 0 && sum > alertThreshold;
+                  return (
+                    <View key={w.week} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      {isAlert ? (
+                        <View style={{ backgroundColor: '#EF4444', borderRadius: 6, width: 12, height: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>
+                          <MaterialIcons name="priority-high" size={8} color="#FFF" />
+                        </View>
+                      ) : null}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+                        {w.selfMatch > 0 ? <View style={{ width: 5, height: smH, borderRadius: 3, backgroundColor: '#EC4899' }} /> : null}
+                        {w.symmetric > 0 ? <View style={{ width: 5, height: syH, borderRadius: 3, backgroundColor: '#F43F5E' }} /> : null}
+                        {w.ghost > 0 ? <View style={{ width: 5, height: ghH, borderRadius: 3, backgroundColor: '#A855F7' }} /> : null}
+                      </View>
+                      <Text style={{ fontSize: 7, color: isAlert ? '#EF4444' : theme.textMuted, fontWeight: isAlert ? '800' : '500' }}>{w.week}</Text>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EC4899' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Auto-affrontements' : 'Self-matches'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F43F5E' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Scores 13-0/13-1' : '13-0/13-1 scores'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#A855F7' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Solo (proxy fantomes)' : 'Solo (ghost proxy)'}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#EC4899' }}>{behavioralTrends.reduce((s, w) => s + w.selfMatch, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Auto-affr.' : 'Self-m.'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#F43F5E' }}>{behavioralTrends.reduce((s, w) => s + w.symmetric, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Symetriques' : 'Symmetric'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#A855F7' }}>{behavioralTrends.reduce((s, w) => s + w.ghost, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Solo' : 'Solo'}</Text>
+              </View>
+            </View>
+            {(() => {
+              const avgSum = behavioralTrends.length > 0
+                ? behavioralTrends.reduce((s, x) => s + x.selfMatch + x.symmetric + x.ghost, 0) / behavioralTrends.length
+                : 0;
+              const alertThreshold = avgSum * 2;
+              const alertWeeks = alertThreshold > 0
+                ? behavioralTrends.filter(x => (x.selfMatch + x.symmetric + x.ghost) > alertThreshold).length
+                : 0;
+              if (alertWeeks === 0) return null;
+              return (
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EF444415', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: '#EF444430' }}>
+                  <MaterialIcons name="warning" size={14} color="#EF4444" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', flex: 1 }}>
+                    {isFr
+                      ? `${alertWeeks} semaine(s) au-dessus de 2x la moyenne (${Math.round(alertThreshold)})`
+                      : `${alertWeeks} week(s) above 2x average (${Math.round(alertThreshold)})`}
+                  </Text>
+                </View>
+              );
+            })()}
+          </View>
+        ) : null}
+      </View>
+
       {/* ============ DEVICE TRANSFER REQUESTS ============ */}
       <View style={st.deviceSection}>
         <Pressable
@@ -1437,18 +1647,26 @@ export default function AdminAntiCheatScreen() {
 
       {/* Status filter chips */}
       <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
-        {(['all', 'geoAlerts', 'temporalAlerts', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => (
-          <Pressable
-            key={sf}
-            style={[st.filterChip, statusFilter === sf && { backgroundColor: sf === 'all' ? theme.primary : getStatusColor(sf), borderColor: sf === 'all' ? theme.primary : getStatusColor(sf) }]}
-            onPress={() => { Haptics.selectionAsync(); setStatusFilter(sf); }}
-          >
-            <Text style={[st.filterChipText, statusFilter === sf && { color: '#FFF' }]}>{sf === 'all' ? (isFr ? 'Tous' : 'All') : getStatusLabel(sf)}</Text>
-            <View style={[st.filterCount, statusFilter === sf && { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
-              <Text style={[st.filterCountText, statusFilter === sf && { color: '#FFF' }]}>{statusCounts[sf]}</Text>
-            </View>
-          </Pressable>
-        ))}
+        {(['all', 'geoAlerts', 'temporalAlerts', 'behavioralAlerts', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => {
+          const isAlertFilter = sf === 'geoAlerts' || sf === 'temporalAlerts' || sf === 'behavioralAlerts';
+          const isActive = statusFilter === sf;
+          const alertColor = isAlertFilter ? getStatusColor(sf) : theme.textSecondary;
+          return (
+            <Pressable
+              key={sf}
+              style={[st.filterChip, isAlertFilter && !isActive && { borderColor: alertColor, borderWidth: 1.5, backgroundColor: alertColor + '08' }, isActive && { backgroundColor: sf === 'all' ? theme.primary : getStatusColor(sf), borderColor: sf === 'all' ? theme.primary : getStatusColor(sf) }]}
+              onPress={() => { Haptics.selectionAsync(); setStatusFilter(sf); }}
+            >
+              {isAlertFilter && !isActive ? (
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: alertColor }} />
+              ) : null}
+              <Text style={[st.filterChipText, isAlertFilter && !isActive && { color: alertColor, fontWeight: '700' }, isActive && { color: '#FFF' }]}>{sf === 'all' ? (isFr ? 'Tous' : 'All') : getStatusLabel(sf)}</Text>
+              <View style={[st.filterCount, isAlertFilter && !isActive && { backgroundColor: alertColor + '20' }, isActive && { backgroundColor: 'rgba(255,255,255,0.3)' }]}>
+                <Text style={[st.filterCountText, isAlertFilter && !isActive && { color: alertColor }, isActive && { color: '#FFF' }]}>{statusCounts[sf]}</Text>
+              </View>
+            </Pressable>
+          );
+        })}
       </ScrollView></View>
 
       {/* Trust score range filter chips */}
@@ -1555,6 +1773,16 @@ export default function AdminAntiCheatScreen() {
               >
                 {bulkBusy ? <ActivityIndicator size="small" color="#8B5CF6" /> : <MaterialIcons name="notifications-active" size={13} color="#8B5CF6" />}
                 <Text style={[st.bulkActionBtnText, { color: '#8B5CF6' }]}>{isFr ? 'Rappel push' : 'Notify'}</Text>
+              </Pressable>
+            ) : null}
+            {statusFilter === 'behavioralAlerts' ? (
+              <Pressable
+                style={[st.bulkActionBtn, { backgroundColor: '#EC489915' }, bulkBusy && { opacity: 0.5 }]}
+                onPress={handleBulkBehavioralNotify}
+                disabled={bulkBusy}
+              >
+                {bulkBusy ? <ActivityIndicator size="small" color="#EC4899" /> : <MaterialIcons name="psychology" size={13} color="#EC4899" />}
+                <Text style={[st.bulkActionBtnText, { color: '#EC4899' }]}>{isFr ? 'Rappel push' : 'Notify'}</Text>
               </Pressable>
             ) : null}
           </View>
@@ -2294,6 +2522,175 @@ export default function AdminAntiCheatScreen() {
                           <View style={[st.geoAlertBadge, { backgroundColor: '#DC262615' }]}>
                             <Text style={[st.geoAlertBadgeText, { color: '#DC2626' }]}>{ex.count}</Text>
                           </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Self-Match Detection */}
+              {selectedPlayer.details?.selfMatches && selectedPlayer.details.selfMatches.count > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="content-copy" size={16} color="#EC4899" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Auto-affrontements detectes' : 'Self-match detection'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EC4899' }]}>{selectedPlayer.details.selfMatches.count}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs' : 'Matches'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#DB2777' }]}>{selectedPlayer.details.selfMatches.ratio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.selfMatches.totalMatches || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total' : 'Total'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.selfMatches.examples) && selectedPlayer.details.selfMatches.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.selfMatches.examples.length})` : `Examples (${selectedPlayer.details.selfMatches.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.selfMatches.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#EC489915' }]}>
+                            <MaterialIcons name={ex.directOverlap ? 'person' : 'people'} size={14} color="#EC4899" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>
+                              {ex.directOverlap ? (isFr ? 'Meme joueur des deux cotes' : 'Same player on both sides') : (isFr ? 'Meme proprietaire' : 'Same owner')}
+                            </Text>
+                            <Text style={st.geoAlertMeta}>
+                              {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                              {Array.isArray(ex.overlappingPlayers) && ex.overlappingPlayers.length > 0 ? ` - ${ex.overlappingPlayers.join(', ')}` : ''}
+                            </Text>
+                          </View>
+                          <View style={[st.geoAlertBadge, { backgroundColor: '#EC489915' }]}>
+                            <Text style={[st.geoAlertBadgeText, { color: '#EC4899' }]}>{ex.directOverlap ? (isFr ? 'Direct' : 'Direct') : (isFr ? 'Owner' : 'Owner')}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Symmetric Score Streak */}
+              {selectedPlayer.details?.symmetricScores && selectedPlayer.details.symmetricScores.maxConsecutiveStreak > 5 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="repeat" size={16} color="#F43F5E" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Serie de scores symetriques' : 'Symmetric score streak'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#F43F5E' }]}>{selectedPlayer.details.symmetricScores.maxConsecutiveStreak}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Max serie' : 'Max streak'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#E11D48' }]}>{selectedPlayer.details.symmetricScores.totalSymmetricMatches || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total sym.' : 'Total sym.'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#BE123C' }]}>{selectedPlayer.details.symmetricScores.ratio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary, fontSize: 12 }]}>13-0/13-1</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Motif' : 'Pattern'}</Text>
+                    </View>
+                  </View>
+                  {selectedPlayer.details.symmetricScores.streakStartDate ? (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#F43F5E08', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                      <MaterialIcons name="date-range" size={12} color="#F43F5E" />
+                      <Text style={{ fontSize: 10, fontWeight: '600', color: '#F43F5E', flex: 1 }}>
+                        {new Date(selectedPlayer.details.symmetricScores.streakStartDate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                        {' - '}
+                        {selectedPlayer.details.symmetricScores.streakEndDate ? new Date(selectedPlayer.details.symmetricScores.streakEndDate).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                      </Text>
+                    </View>
+                  ) : null}
+                  {Array.isArray(selectedPlayer.details.symmetricScores.examples) && selectedPlayer.details.symmetricScores.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.symmetricScores.examples.length})` : `Examples (${selectedPlayer.details.symmetricScores.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.symmetricScores.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#F43F5E15' }]}>
+                            <MaterialIcons name="emoji-events" size={14} color="#F43F5E" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>{isFr ? 'Score' : 'Score'}: {ex.score}</Text>
+                            <Text style={st.geoAlertMeta}>{ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}</Text>
+                          </View>
+                          <View style={[st.geoAlertBadge, { backgroundColor: '#F43F5E15' }]}>
+                            <Text style={[st.geoAlertBadgeText, { color: '#F43F5E' }]}>{ex.score}</Text>
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
+              ) : null}
+
+              {/* Ghost Opponents */}
+              {selectedPlayer.details?.ghostOpponents && selectedPlayer.details.ghostOpponents.ghostCount > 0 ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="person-off" size={16} color="#A855F7" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Adversaires fantomes' : 'Ghost opponents'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#A855F7' }]}>{selectedPlayer.details.ghostOpponents.ghostCount}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Fantomes' : 'Ghosts'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#9333EA' }]}>{selectedPlayer.details.ghostOpponents.ratio || 0}%</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Ratio' : 'Ratio'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary }]}>{selectedPlayer.details.ghostOpponents.totalOpponents || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Total adv.' : 'Total opp.'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: '#A855F708', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 }}>
+                    <MaterialIcons name="info" size={12} color="#A855F7" />
+                    <Text style={{ fontSize: 10, fontWeight: '600', color: '#A855F7', flex: 1 }}>
+                      {isFr ? 'Joueurs jamais rencontres dans les matchs d\'autres utilisateurs' : 'Players never seen in other users\' matches'}
+                    </Text>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.ghostOpponents.examples) && selectedPlayer.details.ghostOpponents.examples.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Exemples (${selectedPlayer.details.ghostOpponents.examples.length})` : `Examples (${selectedPlayer.details.ghostOpponents.examples.length})`}
+                      </Text>
+                      {selectedPlayer.details.ghostOpponents.examples.map((ex: any, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#A855F715' }]}>
+                            <MaterialIcons name={ex.sameOwner ? 'account-circle' : 'person'} size={14} color="#A855F7" />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={st.geoAlertTitle} numberOfLines={1}>{ex.opponentName || (isFr ? 'Inconnu' : 'Unknown')}</Text>
+                            <Text style={st.geoAlertMeta}>{ex.sameOwner ? (isFr ? 'Cree par le meme utilisateur' : 'Created by same user') : (isFr ? 'Aucun autre match enregistre' : 'No other matches recorded')}</Text>
+                          </View>
+                          {ex.sameOwner ? (
+                            <View style={[st.geoAlertBadge, { backgroundColor: '#EC489915' }]}>
+                              <Text style={[st.geoAlertBadgeText, { color: '#EC4899' }]}>{isFr ? 'Meme user' : 'Same user'}</Text>
+                            </View>
+                          ) : null}
                         </View>
                       ))}
                     </View>
