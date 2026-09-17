@@ -25,6 +25,15 @@ export interface NotificationPreferences {
   terrain_activity: boolean; // Push when favorite terrains become active
 }
 
+/**
+ * Display timezone reference mode. Persisted in
+ * `user_preferences.display_timezone` and `user_preferences.custom_timezone`.
+ *   - auto    : use the terrain's timezone when known, else the device's
+ *   - terrain : always use the terrain's timezone (fall back to device)
+ *   - custom  : always use a user-supplied IANA timezone
+ */
+export type DisplayTimezoneMode = 'auto' | 'terrain' | 'custom';
+
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   event_created: true,
   meetup_invitation: true,

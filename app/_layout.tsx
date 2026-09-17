@@ -818,6 +818,13 @@ function LayoutInner() {
                 }} 
               />
               <Stack.Screen 
+                name="admin-anticheat-config" 
+                options={{ 
+                  presentation: 'card',
+                  animation: 'slide_from_right',
+                }} 
+              />
+              <Stack.Screen 
                 name="partnerships" 
                 options={{ 
                   presentation: 'card',

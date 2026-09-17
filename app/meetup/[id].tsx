@@ -48,6 +48,8 @@ import {
   requestNotificationPermissions,
   areNotificationsEnabled,
 } from '@/services/notificationService';
+import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
+import { parseTerrainTimezone, formatTimeInTimezone, formatDateInTimezone, shortTimezoneLabel, getDeviceTimezone, timezonesDiffer } from '@/services/timezoneService';
 
 const ResponseItem = React.memo(({ response: r, t }: { response: MeetupResponse; t: (s: string, k: string) => string }) => (
   <View style={styles.responseItem}>
@@ -180,7 +182,7 @@ export default function MeetupDetailScreen() {
 
     // Schedule/cancel reminder
     if (status === 'accepted' && terrain) {
-      await scheduleMeetupReminder(meetup, terrain.name);
+      await scheduleMeetupReminder(meetup, terrain.name, (terrain as any).timezone);
     } else {
       await cancelMeetupReminder(meetup.id);
     }
@@ -242,7 +244,7 @@ export default function MeetupDetailScreen() {
       };
       const anyEnabled = settings.oneDayBefore || settings.threeHoursBefore || settings.oneHourBefore;
       if (anyEnabled) {
-        const ids = await scheduleMeetupNotifications(meetup, terrain.name, settings);
+        const ids = await scheduleMeetupNotifications(meetup, terrain.name, settings, (terrain as any).timezone);
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showAlert(t('meetup', 'remindersScheduled'), `${ids.length} ${t('meetup', 'remindersScheduledCount')}`);
       } else {
@@ -344,8 +346,15 @@ export default function MeetupDetailScreen() {
     );
   }
 
-  const dateFormatted = meetupDate!.toLocaleDateString(language === 'fr' ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const timeFormatted = meetupDate!.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
+  const facilityTz = parseTerrainTimezone((terrain as any)?.timezone);
+  const deviceTz = getDeviceTimezone();
+  const tzDiffers = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, meetupDate!);
+  const localeStr = language === 'fr' ? 'fr-FR' : 'en-US';
+  const dateFormatted = formatDateInTimezone(meetupDate!, facilityTz, localeStr, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const timeFormatted = formatTimeInTimezone(meetupDate!, facilityTz, localeStr);
+  const endTimeFormatted = endTime ? formatTimeInTimezone(endTime, facilityTz, localeStr) : null;
+  const facilityLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+  const deviceTimeFormatted = tzDiffers ? formatTimeInTimezone(meetupDate!, deviceTz, localeStr) : null;
 
   return (
     <SafeAreaView edges={['top']} style={styles.container}>
@@ -376,6 +385,12 @@ export default function MeetupDetailScreen() {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 100 }]}
         showsVerticalScrollIndicator={false}
       >
+        {/* Timezone mismatch alert (device ≠ facility) */}
+        <TimezoneMismatchBanner
+          terrainTimezone={(terrain as any)?.timezone}
+          facilityName={terrain?.name}
+          locale={localeStr}
+        />
         {/* Status Banner */}
         {isArchived ? (
           <View style={[styles.statusBanner, { backgroundColor: isCancelled ? theme.error + '15' : '#64748B15' }]}>
@@ -404,8 +419,19 @@ export default function MeetupDetailScreen() {
           </View>
           <View style={styles.heroInfoRow}>
             <MaterialIcons name="schedule" size={16} color={theme.textSecondary} />
-            <Text style={styles.heroInfoText}>{timeFormatted}{endTime ? ` → ${endTime.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}` : ''}</Text>
+            <Text style={styles.heroInfoText}>
+              {timeFormatted}{facilityLabel ? ` ${facilityLabel}` : ''}
+              {endTimeFormatted ? ` → ${endTimeFormatted}` : ''}
+            </Text>
           </View>
+          {tzDiffers && deviceTimeFormatted ? (
+            <View style={styles.heroInfoRow}>
+              <MaterialIcons name="public" size={14} color="#8B5CF6" />
+              <Text style={[styles.heroInfoText, { fontSize: 13, color: '#7C3AED', fontWeight: '600' }]}>
+                {language === 'fr' ? 'Chez vous' : 'Your time'} : {deviceTimeFormatted}
+              </Text>
+            </View>
+          ) : null}
           
           {terrain ? (
             <Pressable style={styles.terrainRow} onPress={() => router.push(`/terrain/${terrain.id}`)}>
