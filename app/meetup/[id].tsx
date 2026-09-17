@@ -575,6 +575,7 @@ export default function MeetupDetailScreen() {
               userAvatar={null}
               isParticipant={isCreator || myStatus === 'accepted'}
               language={language}
+              terrainTimezone={(terrain as any)?.timezone}
             />
           </Animated.View>
         ) : null}

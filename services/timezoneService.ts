@@ -215,6 +215,32 @@ export function formatTimeWithLabel(
   return label ? `${t} ${label}` : t;
 }
 
+/**
+ * Rough fallback: derive a UTC offset string (e.g. "UTC+2") from a longitude
+ * value when the facility's true IANA timezone is unknown. Every 15° of
+ * longitude ~= one hour offset from UTC. Useful when Google Places did not
+ * return a `utcOffsetMinutes` value at terrain creation time.
+ */
+export function guessTimezoneFromLongitude(longitude: number): string | null {
+  if (!Number.isFinite(longitude) || Math.abs(longitude) > 180) return null;
+  const hours = Math.max(-12, Math.min(14, Math.round(longitude / 15)));
+  if (hours === 0) return 'UTC';
+  return `UTC${hours >= 0 ? '+' : ''}${hours}`;
+}
+
+/**
+ * Curated list of common IANA timezones for the display-timezone custom
+ * picker. Grouped by region for readability. Keep short enough to fit in a
+ * settings modal without a full search UI.
+ */
+export const COMMON_TIMEZONES: { region: string; zones: string[] }[] = [
+  { region: 'Europe', zones: ['Europe/Paris', 'Europe/London', 'Europe/Berlin', 'Europe/Madrid', 'Europe/Rome', 'Europe/Lisbon', 'Europe/Amsterdam', 'Europe/Brussels', 'Europe/Zurich', 'Europe/Athens', 'Europe/Moscow'] },
+  { region: 'Americas', zones: ['America/New_York', 'America/Chicago', 'America/Denver', 'America/Los_Angeles', 'America/Anchorage', 'America/Toronto', 'America/Montreal', 'America/Vancouver', 'America/Mexico_City', 'America/Sao_Paulo', 'America/Buenos_Aires'] },
+  { region: 'Africa', zones: ['Africa/Casablanca', 'Africa/Algiers', 'Africa/Tunis', 'Africa/Cairo', 'Africa/Johannesburg', 'Africa/Lagos', 'Africa/Nairobi'] },
+  { region: 'Asia', zones: ['Asia/Dubai', 'Asia/Kolkata', 'Asia/Bangkok', 'Asia/Singapore', 'Asia/Hong_Kong', 'Asia/Shanghai', 'Asia/Tokyo', 'Asia/Seoul', 'Asia/Jerusalem'] },
+  { region: 'Oceania', zones: ['Australia/Sydney', 'Australia/Melbourne', 'Australia/Perth', 'Pacific/Auckland', 'Pacific/Honolulu'] },
+];
+
 // ============================================
 // User preference loading (single-user helper)
 // ============================================

@@ -49,6 +49,11 @@ export default function AdminAntiCheatConfigScreen() {
   const [draft, setDraft] = useState<{ minCluster: string; maxHours: string; enabled: boolean }>({ minCluster: '5', maxHours: '6', enabled: true });
   const [saving, setSaving] = useState(false);
 
+  // Whitelist state (trusted domains excluded from auto-ban)
+  const [whitelistDomains, setWhitelistDomains] = useState<string[]>([]);
+  const [whitelistDraft, setWhitelistDraft] = useState<string[]>([]);
+  const [newDomain, setNewDomain] = useState('');
+
   // Auto-ban logs (past 24h)
   const [autoBanLogs, setAutoBanLogs] = useState<AutoBanLog[]>([]);
   const [undoingId, setUndoingId] = useState<string | null>(null);
@@ -59,7 +64,7 @@ export default function AdminAntiCheatConfigScreen() {
       // Config
       const { data: cfgData } = await supabase
         .from('app_config')
-        .select('email_farm_auto_ban_min_cluster, email_farm_auto_ban_max_hours, email_farm_auto_ban_enabled')
+        .select('email_farm_auto_ban_min_cluster, email_farm_auto_ban_max_hours, email_farm_auto_ban_enabled, email_farm_auto_ban_whitelist')
         .eq('id', 'main')
         .single();
       if (cfgData) {
@@ -70,6 +75,11 @@ export default function AdminAntiCheatConfigScreen() {
         };
         setConfig(cfg);
         setDraft({ minCluster: String(cfg.minCluster), maxHours: String(cfg.maxHours), enabled: cfg.enabled });
+        const wl = Array.isArray(cfgData.email_farm_auto_ban_whitelist)
+          ? cfgData.email_farm_auto_ban_whitelist.map((d: any) => String(d).toLowerCase().trim()).filter(Boolean)
+          : [];
+        setWhitelistDomains(wl);
+        setWhitelistDraft(wl);
       }
 
       // Logs (past 24h)
@@ -127,6 +137,7 @@ export default function AdminAntiCheatConfigScreen() {
           email_farm_auto_ban_min_cluster: minCluster,
           email_farm_auto_ban_max_hours: maxHours,
           email_farm_auto_ban_enabled: draft.enabled,
+          email_farm_auto_ban_whitelist: whitelistDraft,
           updated_at: new Date().toISOString(),
         })
         .eq('id', 'main');
@@ -134,13 +145,14 @@ export default function AdminAntiCheatConfigScreen() {
         showAlert('Error', error.message);
       } else {
         setConfig({ minCluster, maxHours, enabled: draft.enabled });
+        setWhitelistDomains(whitelistDraft);
         await supabase.from('admin_activity_logs').insert({
           admin_user_id: user?.id,
           admin_name: (user as any)?.username || user?.email || 'Admin',
           action_type: 'update_auto_ban_config',
-          action_detail: `Email farm auto-ban: cluster>=${minCluster}, span<${maxHours}h, enabled=${draft.enabled}`,
+          action_detail: `Email farm auto-ban: cluster>=${minCluster}, span<${maxHours}h, enabled=${draft.enabled}, whitelist=${whitelistDraft.length}`,
           target_type: 'app_config',
-          metadata: { minCluster, maxHours, enabled: draft.enabled },
+          metadata: { minCluster, maxHours, enabled: draft.enabled, whitelist: whitelistDraft },
         });
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showAlert(isFr ? 'Configuration sauvegardee' : 'Configuration saved');
@@ -216,10 +228,34 @@ export default function AdminAntiCheatConfigScreen() {
     setUndoingId(null);
   };
 
+  const handleAddDomain = () => {
+    const domain = newDomain.trim().toLowerCase().replace(/^@+/, '');
+    if (!domain) return;
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+      showAlert(isFr ? 'Domaine invalide' : 'Invalid domain', isFr ? 'Format attendu: exemple.com' : 'Expected format: example.com');
+      return;
+    }
+    if (whitelistDraft.includes(domain)) {
+      showAlert(isFr ? 'Domaine deja present' : 'Domain already listed');
+      return;
+    }
+    setWhitelistDraft(prev => [...prev, domain]);
+    setNewDomain('');
+    Haptics.selectionAsync();
+  };
+
+  const handleRemoveDomain = (domain: string) => {
+    setWhitelistDraft(prev => prev.filter(d => d !== domain));
+    Haptics.selectionAsync();
+  };
+
+  const whitelistDirty = JSON.stringify([...whitelistDraft].sort()) !== JSON.stringify([...whitelistDomains].sort());
+
   const isDirty =
     parseInt(draft.minCluster, 10) !== config.minCluster ||
     parseInt(draft.maxHours, 10) !== config.maxHours ||
-    draft.enabled !== config.enabled;
+    draft.enabled !== config.enabled ||
+    whitelistDirty;
 
   return (
     <PageErrorBoundary pageName="AntiCheatConfig">
@@ -313,12 +349,74 @@ export default function AdminAntiCheatConfigScreen() {
                     </View>
                   </Pressable>
 
+                  {/* Whitelist section (trusted domains excluded from auto-ban) */}
+                  <View style={st.whitelistBox}>
+                    <View style={st.whitelistHeader}>
+                      <View style={[st.sectionIcon, { backgroundColor: '#22C55E15', width: 28, height: 28 }]}>
+                        <MaterialIcons name="verified-user" size={14} color="#22C55E" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={st.whitelistTitle}>{isFr ? 'Domaines de confiance' : 'Trusted domains'}</Text>
+                        <Text style={st.whitelistHint}>
+                          {isFr ? 'Exclus de l\'auto-ban (ecoles, entreprises legitimes)' : 'Excluded from auto-ban (schools, legitimate orgs)'}
+                        </Text>
+                      </View>
+                      <View style={st.whitelistCount}>
+                        <Text style={st.whitelistCountText}>{whitelistDraft.length}</Text>
+                      </View>
+                    </View>
+                    <View style={st.whitelistInputRow}>
+                      <View style={st.whitelistInputWrap}>
+                        <MaterialIcons name="alternate-email" size={13} color={theme.textMuted} />
+                        <TextInput
+                          style={st.whitelistInput}
+                          value={newDomain}
+                          onChangeText={setNewDomain}
+                          placeholder={isFr ? 'exemple.com' : 'example.com'}
+                          placeholderTextColor={theme.textMuted}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                          onSubmitEditing={handleAddDomain}
+                          returnKeyType="done"
+                        />
+                      </View>
+                      <Pressable
+                        style={[st.whitelistAddBtn, !newDomain.trim() && { opacity: 0.4 }]}
+                        onPress={handleAddDomain}
+                        disabled={!newDomain.trim()}
+                      >
+                        <MaterialIcons name="add" size={16} color="#FFF" />
+                        <Text style={st.whitelistAddText}>{isFr ? 'Ajouter' : 'Add'}</Text>
+                      </Pressable>
+                    </View>
+                    {whitelistDraft.length === 0 ? (
+                      <View style={st.whitelistEmpty}>
+                        <MaterialIcons name="info-outline" size={12} color={theme.textMuted} />
+                        <Text style={st.whitelistEmptyText}>
+                          {isFr ? 'Aucun domaine liste' : 'No domains listed'}
+                        </Text>
+                      </View>
+                    ) : (
+                      <View style={st.whitelistChips}>
+                        {whitelistDraft.map(domain => (
+                          <View key={domain} style={st.whitelistChip}>
+                            <MaterialIcons name="verified" size={11} color="#16A34A" />
+                            <Text style={st.whitelistChipText}>{domain}</Text>
+                            <Pressable onPress={() => handleRemoveDomain(domain)} hitSlop={8}>
+                              <MaterialIcons name="close" size={13} color="#EF4444" />
+                            </Pressable>
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+
                   <View style={st.infoBox}>
                     <MaterialIcons name="info-outline" size={14} color="#3B82F6" />
                     <Text style={st.infoText}>
                       {isFr
-                        ? `Auto-ban actuel : cluster de ${config.minCluster}+ comptes créés en moins de ${config.maxHours} heures avec le même préfixe sur un même domaine.`
-                        : `Current auto-ban: cluster of ${config.minCluster}+ accounts created within ${config.maxHours} hours sharing the same prefix on one domain.`}
+                        ? `Auto-ban actuel : cluster de ${config.minCluster}+ comptes créés en moins de ${config.maxHours} heures avec le même préfixe sur un même domaine. Les domaines de confiance sont exclus.`
+                        : `Current auto-ban: cluster of ${config.minCluster}+ accounts created within ${config.maxHours} hours sharing the same prefix on one domain. Trusted domains are excluded.`}
                     </Text>
                   </View>
 
@@ -473,4 +571,22 @@ const st = StyleSheet.create({
   logWindowText: { flex: 1, fontSize: 10, color: theme.textMuted, fontWeight: '600' },
   undoBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#991B1B', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10 },
   undoBtnText: { fontSize: 12, fontWeight: '800', color: '#FFF' },
+
+  // Whitelist section (trusted domains excluded from auto-ban)
+  whitelistBox: { backgroundColor: '#F0FDF4', borderRadius: 12, padding: 12, marginBottom: 12, borderWidth: 1, borderColor: '#22C55E30' },
+  whitelistHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+  whitelistTitle: { fontSize: 13, fontWeight: '800', color: '#166534' },
+  whitelistHint: { fontSize: 10, color: '#15803D', marginTop: 2, fontWeight: '500', lineHeight: 13 },
+  whitelistCount: { backgroundColor: '#22C55E', borderRadius: 8, minWidth: 22, height: 22, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 7 },
+  whitelistCountText: { fontSize: 11, fontWeight: '800', color: '#FFF' },
+  whitelistInputRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 },
+  whitelistInputWrap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, borderWidth: 1.5, borderColor: '#22C55E30' },
+  whitelistInput: { flex: 1, fontSize: 13, color: theme.textPrimary, padding: 0 },
+  whitelistAddBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: '#22C55E', paddingHorizontal: 12, paddingVertical: 9, borderRadius: 10 },
+  whitelistAddText: { fontSize: 12, fontWeight: '800', color: '#FFF' },
+  whitelistEmpty: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, backgroundColor: '#FFF', borderRadius: 8, borderWidth: 1, borderColor: '#22C55E30', borderStyle: 'dashed' },
+  whitelistEmptyText: { fontSize: 11, color: theme.textMuted, fontWeight: '600' },
+  whitelistChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+  whitelistChip: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#FFF', paddingLeft: 8, paddingRight: 6, paddingVertical: 6, borderRadius: 8, borderWidth: 1, borderColor: '#22C55E40' },
+  whitelistChipText: { fontSize: 11, fontWeight: '700', color: '#166534' },
 });

@@ -70,19 +70,25 @@ Deno.serve(async (req: Request) => {
     let AUTO_BAN_MIN_CLUSTER = 5;
     let AUTO_BAN_MAX_HOURS = 6;
     let AUTO_BAN_ENABLED = true;
+    let AUTO_BAN_WHITELIST: string[] = [];
     try {
       const { data: cfgRow } = await supabaseClient
         .from('app_config')
-        .select('email_farm_auto_ban_min_cluster, email_farm_auto_ban_max_hours, email_farm_auto_ban_enabled')
+        .select('email_farm_auto_ban_min_cluster, email_farm_auto_ban_max_hours, email_farm_auto_ban_enabled, email_farm_auto_ban_whitelist')
         .eq('id', 'main')
         .maybeSingle();
       if (cfgRow) {
         AUTO_BAN_MIN_CLUSTER = Number(cfgRow.email_farm_auto_ban_min_cluster) || 5;
         AUTO_BAN_MAX_HOURS = Number(cfgRow.email_farm_auto_ban_max_hours) || 6;
         AUTO_BAN_ENABLED = cfgRow.email_farm_auto_ban_enabled !== false;
+        if (Array.isArray(cfgRow.email_farm_auto_ban_whitelist)) {
+          AUTO_BAN_WHITELIST = cfgRow.email_farm_auto_ban_whitelist
+            .map((d: any) => String(d).toLowerCase().trim())
+            .filter(Boolean);
+        }
       }
     } catch { /* silent: fall back to defaults */ }
-    console.log(`[detect-suspicious] Auto-ban config: minCluster=${AUTO_BAN_MIN_CLUSTER}, maxHours=${AUTO_BAN_MAX_HOURS}, enabled=${AUTO_BAN_ENABLED}`);
+    console.log(`[detect-suspicious] Auto-ban config: minCluster=${AUTO_BAN_MIN_CLUSTER}, maxHours=${AUTO_BAN_MAX_HOURS}, enabled=${AUTO_BAN_ENABLED}, whitelist=${AUTO_BAN_WHITELIST.length}`);
 
     // 1. Fetch players
     let players: any[] = [];
@@ -475,10 +481,12 @@ Deno.serve(async (req: Request) => {
       else if (recentSharedAccounts.size >= 1) { score -= 6; flags.push('shared_fingerprint_recent'); }
 
       // Factor 25: Email farm (auto-ban threshold: clusterSize >= config AND spanHours < config)
+      // Whitelisted domains (schools, legitimate orgs) are excluded from all email_farm penalties.
       if (playerEmail) {
         const farmEntry = emailFarmMap.get(playerEmail);
         if (farmEntry) {
-          const autoBanEligible = AUTO_BAN_ENABLED && farmEntry.clusterSize >= AUTO_BAN_MIN_CLUSTER && farmEntry.spanHours < AUTO_BAN_MAX_HOURS;
+          const isWhitelistedDomain = AUTO_BAN_WHITELIST.includes(farmEntry.domain.toLowerCase());
+          const autoBanEligible = AUTO_BAN_ENABLED && !isWhitelistedDomain && farmEntry.clusterSize >= AUTO_BAN_MIN_CLUSTER && farmEntry.spanHours < AUTO_BAN_MAX_HOURS;
           const scoreBeforeEmailFarm = score;
           details.emailFarm = {
             domain: farmEntry.domain,
@@ -488,6 +496,7 @@ Deno.serve(async (req: Request) => {
             windowHours: 24,
             siblings: farmEntry.siblings,
             autoBanEligible,
+            isWhitelistedDomain,
             autoBanThresholdSize: AUTO_BAN_MIN_CLUSTER,
             autoBanThresholdHours: AUTO_BAN_MAX_HOURS,
             autoBanEnabled: AUTO_BAN_ENABLED,
@@ -497,6 +506,9 @@ Deno.serve(async (req: Request) => {
             score = 0;
             if (!flags.includes('email_farm')) flags.push('email_farm');
             flags.push('email_farm_auto_ban');
+          } else if (isWhitelistedDomain) {
+            // Whitelisted domain: skip email_farm penalty entirely
+            // (schools, corporate emails, legitimate organizations)
           } else if (farmEntry.clusterSize >= 5) {
             score -= 15;
             flags.push('email_farm');

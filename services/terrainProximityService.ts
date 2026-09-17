@@ -6,6 +6,12 @@
  */
 import { getSupabaseClient } from '@/template';
 import { getCurrentPositionAsync, requestForegroundPermissionsAsync, Accuracy } from '@/services/location';
+import {
+  parseTerrainTimezone,
+  getWeekdayInTimezone,
+  getHourInTimezone,
+  getDateStringInTimezone,
+} from '@/services/timezoneService';
 
 export interface NearbyActiveTerrain {
   id: string;
@@ -61,27 +67,29 @@ async function getUserLocation(): Promise<{ latitude: number; longitude: number 
 
 /**
  * Fetch all terrains with valid locations from Supabase (own + public).
+ * Includes the facility timezone so activity scoring can compare match times
+ * in the FACILITY'S local time rather than the device's.
  */
 async function fetchTerrainsWithLocations(): Promise<
-  { id: string; name: string; city: string; type: string; latitude: number; longitude: number; userId: string }[]
+  { id: string; name: string; city: string; type: string; latitude: number; longitude: number; userId: string; timezone: string | null }[]
 > {
   const supabase = getSupabaseClient();
   const { data: userData } = await supabase.auth.getUser();
   const userId = userData?.user?.id;
 
-  const results: { id: string; name: string; city: string; type: string; latitude: number; longitude: number; userId: string }[] = [];
+  const results: { id: string; name: string; city: string; type: string; latitude: number; longitude: number; userId: string; timezone: string | null }[] = [];
   const seen = new Set<string>();
 
   // Own terrains
   if (userId) {
     const { data: own } = await supabase
       .from('terrains')
-      .select('id, name, city, type, location, user_id')
+      .select('id, name, city, type, location, user_id, timezone')
       .eq('user_id', userId);
     (own || []).forEach((t: any) => {
       if (t.location?.latitude && t.location?.longitude && !seen.has(t.id)) {
         seen.add(t.id);
-        results.push({ id: t.id, name: t.name, city: t.city, type: t.type, latitude: t.location.latitude, longitude: t.location.longitude, userId: t.user_id });
+        results.push({ id: t.id, name: t.name, city: t.city, type: t.type, latitude: t.location.latitude, longitude: t.location.longitude, userId: t.user_id, timezone: t.timezone || null });
       }
     });
   }
@@ -89,12 +97,12 @@ async function fetchTerrainsWithLocations(): Promise<
   // Public terrains
   const { data: pub } = await supabase
     .from('terrains')
-    .select('id, name, city, type, location, user_id')
+    .select('id, name, city, type, location, user_id, timezone')
     .eq('is_public', true);
   (pub || []).forEach((t: any) => {
     if (t.location?.latitude && t.location?.longitude && !seen.has(t.id)) {
       seen.add(t.id);
-      results.push({ id: t.id, name: t.name, city: t.city, type: t.type, latitude: t.location.latitude, longitude: t.location.longitude, userId: t.user_id });
+      results.push({ id: t.id, name: t.name, city: t.city, type: t.type, latitude: t.location.latitude, longitude: t.location.longitude, userId: t.user_id, timezone: t.timezone || null });
     }
   });
 
@@ -103,17 +111,30 @@ async function fetchTerrainsWithLocations(): Promise<
 
 /**
  * Compute activity score for a terrain at the current time.
- * Factors: match history (same weekday + hour), meetups today, tournaments today.
+ *
+ * All day-of-week / hour-of-day comparisons are performed in the FACILITY'S
+ * local timezone rather than the device's, so a match logged Friday 20:00
+ * Paris time is scored against the Friday-20:00 slot regardless of whether
+ * the current user is in Paris, Montreal, or Tokyo. This also makes the
+ * "today" comparison for meetups/tournaments robust to the UTC-midnight
+ * boundary (before this fix, a match at 22:00 UTC-3 could fall on the wrong
+ * ISO day).
+ *
+ * Factors: match history (same facility-local weekday + hour), meetups today,
+ * tournaments today (all evaluated in facility time).
  */
 async function computeTerrainActivityScore(
   terrainId: string,
   now: Date,
-  language: string
+  language: string,
+  terrainTimezone: string | null | undefined
 ): Promise<{ score: number; label: string; hasMeetupToday: boolean; hasTournamentToday: boolean; matchCountAtSlot: number }> {
   const supabase = getSupabaseClient();
-  const currentDow = now.getDay();
-  const currentHour = now.getHours();
-  const todayStr = now.toISOString().slice(0, 10);
+  const parsedTz = parseTerrainTimezone(terrainTimezone);
+  // Facility-local "now" components (used everywhere below)
+  const currentDow = getWeekdayInTimezone(now, parsedTz);
+  const currentHour = getHourInTimezone(now, parsedTz);
+  const todayStr = getDateStringInTimezone(now, parsedTz);
 
   let score = 0;
   let matchCountAtSlot = 0;
@@ -128,10 +149,14 @@ async function computeTerrainActivityScore(
 
   (matches || []).forEach((m: any) => {
     const d = new Date(m.date);
-    if (d.getDay() === currentDow) {
+    if (!Number.isFinite(d.getTime())) return;
+    // Compare in facility timezone, NOT device timezone
+    const matchDow = getWeekdayInTimezone(d, parsedTz);
+    const matchHour = getHourInTimezone(d, parsedTz);
+    if (matchDow === currentDow) {
       sameDayCount++;
       score += 3;
-      if (Math.abs(d.getHours() - currentHour) <= 2) {
+      if (Math.abs(matchHour - currentHour) <= 2) {
         matchCountAtSlot++;
         score += 10;
       }
@@ -148,7 +173,9 @@ async function computeTerrainActivityScore(
   let hasMeetupToday = false;
   (meetups || []).forEach((mt: any) => {
     const mtDate = new Date(mt.date);
-    if (mtDate.toISOString().slice(0, 10) === todayStr) {
+    if (!Number.isFinite(mtDate.getTime())) return;
+    // Compare in facility timezone to avoid UTC-midnight boundary bugs
+    if (getDateStringInTimezone(mtDate, parsedTz) === todayStr) {
       hasMeetupToday = true;
       score += 30; // Meetup today = very high signal
     }
@@ -163,9 +190,12 @@ async function computeTerrainActivityScore(
 
   let hasTournamentToday = false;
   (tournaments || []).forEach((t: any) => {
-    if (t.date && t.date.slice(0, 10) === todayStr) {
-      hasTournamentToday = true;
-      score += 25;
+    if (t.date) {
+      const tDate = new Date(t.date);
+      if (Number.isFinite(tDate.getTime()) && getDateStringInTimezone(tDate, parsedTz) === todayStr) {
+        hasTournamentToday = true;
+        score += 25;
+      }
     }
     if (t.status === 'En cours') {
       score += 15;
@@ -231,7 +261,7 @@ export async function findNearbyActiveTerrains(
     const results: NearbyActiveTerrain[] = [];
 
     for (const t of candidates) {
-      const activity = await computeTerrainActivityScore(t.id, now, language);
+      const activity = await computeTerrainActivityScore(t.id, now, language, t.timezone);
       if (activity.score > 0) {
         results.push({
           id: t.id,
