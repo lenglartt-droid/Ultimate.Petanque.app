@@ -53,6 +53,7 @@ Deno.serve(async (req: Request) => {
     try { body = await req.json(); } catch { /* no body is ok */ }
     const mode = body?.mode || 'full'; // 'full' (admin) or 'self' (single user)
     const targetUserId = body?.userId || requestingUserId;
+    const force = body?.force === true; // Bypass 24h anti-cheat digest cooldown when true (admin scan)
 
     // Non-admin can only compute their own score
     if (!isAdmin && mode === 'full') {
@@ -190,6 +191,29 @@ Deno.serve(async (req: Request) => {
         Math.cos((lat2 * Math.PI) / 180) *
         Math.sin(dLon / 2) * Math.sin(dLon / 2);
       return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+
+    // 9. Player owner + name map (self-match & ghost opponent detection)
+    const { data: allPlayersWithOwners } = await supabaseClient
+      .from('players')
+      .select('id, user_id, name');
+    const playerToUserMap = new Map<string, string>();
+    const playerToNameMap = new Map<string, string>();
+    for (const p of allPlayersWithOwners || []) {
+      if (!p.id) continue;
+      if (p.user_id) playerToUserMap.set(p.id, p.user_id);
+      if (p.name) playerToNameMap.set(p.id, p.name);
+    }
+
+    // 10. Player -> Set<match_submitter_user_id> for ghost-opponent detection
+    const playerToSubmitters = new Map<string, Set<string>>();
+    for (const m of matches) {
+      const pids = [...(m.team_a?.players || []), ...(m.team_b?.players || [])] as string[];
+      for (const pid of pids) {
+        if (!pid) continue;
+        if (!playerToSubmitters.has(pid)) playerToSubmitters.set(pid, new Set());
+        playerToSubmitters.get(pid)!.add(m.user_id);
+      }
     }
 
     // ============================================
@@ -861,6 +885,156 @@ Deno.serve(async (req: Request) => {
       }
 
       // ================================================
+      // FACTOR 19: Self-Match Detection (up to -15 pts)
+      // Same player_id on both teams, or players on both
+      // teams sharing the same owner user_id.
+      // ================================================
+      let selfMatchCount = 0;
+      const selfMatchExamples: any[] = [];
+      for (const m of playerMatches) {
+        const teamA = (m.team_a?.players || []) as string[];
+        const teamB = (m.team_b?.players || []) as string[];
+        if (teamA.length === 0 || teamB.length === 0) continue;
+        const teamASet = new Set<string>(teamA);
+        const directOverlap = teamB.filter((p: string) => teamASet.has(p));
+        const teamAOwners = new Set<string>();
+        const teamBOwners = new Set<string>();
+        for (const p of teamA) { const u = playerToUserMap.get(p); if (u) teamAOwners.add(u); }
+        for (const p of teamB) { const u = playerToUserMap.get(p); if (u) teamBOwners.add(u); }
+        const sharedOwners = Array.from(teamAOwners).filter((u: string) => teamBOwners.has(u));
+        if (directOverlap.length > 0 || sharedOwners.length > 0) {
+          selfMatchCount++;
+          if (selfMatchExamples.length < 5) {
+            selfMatchExamples.push({
+              matchId: m.id,
+              date: m.date || m.created_at,
+              directOverlap: directOverlap.length > 0,
+              sameOwner: sharedOwners.length > 0,
+              overlappingPlayers: directOverlap.slice(0, 3).map((p: string) => playerToNameMap.get(p) || p.substring(0, 8)),
+              sharedOwnerCount: sharedOwners.length,
+            });
+          }
+        }
+      }
+      details.selfMatches = {
+        count: selfMatchCount,
+        totalMatches: playerMatches.length,
+        ratio: playerMatches.length > 0 ? Math.round((selfMatchCount / playerMatches.length) * 100) : 0,
+        examples: selfMatchExamples,
+      };
+      if (selfMatchCount >= 3) {
+        score -= 15;
+        flags.push('self_match_frequent');
+      } else if (selfMatchCount >= 1) {
+        score -= 10;
+        flags.push('self_match');
+      }
+
+      // ================================================
+      // FACTOR 20: Symmetric Score Streak (up to -15 pts)
+      // Streaks of >5 consecutive matches with 13-0 / 13-1
+      // scores strongly suggest fabricated match logs.
+      // ================================================
+      const sortedByDate = [...playerMatches].sort((a: any, b: any) => {
+        const ta = new Date(a.date || a.created_at).getTime();
+        const tb = new Date(b.date || b.created_at).getTime();
+        return ta - tb;
+      });
+      let currentSymStreak = 0;
+      let maxSymStreak = 0;
+      let symStreakStart: string | null = null;
+      let bestSymStart: string | null = null;
+      let bestSymEnd: string | null = null;
+      const symExamples: any[] = [];
+      let totalSymCount = 0;
+      for (const m of sortedByDate) {
+        const sa = Number(m.team_a?.score) || 0;
+        const sb = Number(m.team_b?.score) || 0;
+        const isSym = (sa === 13 && sb <= 1) || (sb === 13 && sa <= 1);
+        if (isSym) {
+          totalSymCount++;
+          if (currentSymStreak === 0) symStreakStart = m.date || m.created_at;
+          currentSymStreak++;
+          if (currentSymStreak > maxSymStreak) {
+            maxSymStreak = currentSymStreak;
+            bestSymStart = symStreakStart;
+            bestSymEnd = m.date || m.created_at;
+          }
+          if (symExamples.length < 5) {
+            symExamples.push({ matchId: m.id, date: m.date || m.created_at, score: `${sa}-${sb}` });
+          }
+        } else {
+          currentSymStreak = 0;
+          symStreakStart = null;
+        }
+      }
+      details.symmetricScores = {
+        maxConsecutiveStreak: maxSymStreak,
+        totalSymmetricMatches: totalSymCount,
+        totalMatches: sortedByDate.length,
+        ratio: sortedByDate.length > 0 ? Math.round((totalSymCount / sortedByDate.length) * 100) : 0,
+        streakStartDate: bestSymStart,
+        streakEndDate: bestSymEnd,
+        threshold: 5,
+        examples: symExamples,
+      };
+      if (maxSymStreak >= 10) {
+        score -= 15;
+        flags.push('symmetric_score_streak_extreme');
+      } else if (maxSymStreak > 5) {
+        score -= 12;
+        flags.push('symmetric_score_streak');
+      }
+
+      // ================================================
+      // FACTOR 21: Ghost Opponents (up to -12 pts)
+      // Opponents who appear ONLY in this user's matches
+      // are strong signals of fabricated adversaries.
+      // ================================================
+      const opponentIds = new Set<string>();
+      for (const m of playerMatches) {
+        const teamA = (m.team_a?.players || []) as string[];
+        const teamB = (m.team_b?.players || []) as string[];
+        const inA = teamA.includes(player.id);
+        const opps = inA ? teamB : teamA;
+        for (const p of opps) {
+          if (p && p !== player.id) opponentIds.add(p);
+        }
+      }
+      const ghostOpponentIds: string[] = [];
+      const ghostOpponentExamples: any[] = [];
+      for (const oppId of opponentIds) {
+        const submitters = playerToSubmitters.get(oppId);
+        if (!submitters) continue;
+        if (submitters.size === 1 && submitters.has(player.user_id)) {
+          ghostOpponentIds.push(oppId);
+          if (ghostOpponentExamples.length < 5) {
+            const oppOwner = playerToUserMap.get(oppId);
+            ghostOpponentExamples.push({
+              opponentId: oppId,
+              opponentName: playerToNameMap.get(oppId) || 'Unknown',
+              sameOwner: oppOwner === player.user_id,
+            });
+          }
+        }
+      }
+      const ghostRatio = opponentIds.size > 0 ? ghostOpponentIds.length / opponentIds.size : 0;
+      details.ghostOpponents = {
+        totalOpponents: opponentIds.size,
+        ghostCount: ghostOpponentIds.length,
+        ratio: Math.round(ghostRatio * 100),
+        threshold: 0.5,
+        examples: ghostOpponentExamples,
+      };
+      if (opponentIds.size >= 5 && ghostRatio > 0.7) {
+        score -= 12;
+        flags.push('ghost_opponents_dominant');
+      } else if (opponentIds.size >= 3 && ghostRatio > 0.5) {
+        score -= 8;
+        flags.push('ghost_opponents');
+      }
+
+      // ================================================
       // BONUS: Arranged match detection
       // ================================================
       // Same opponent pair > 5 times this week with same/similar scores
@@ -1053,6 +1227,110 @@ Deno.serve(async (req: Request) => {
     }
 
     // ============================================
+    // TEMPORAL ALERT COLLECTION
+    // Detects newly-set temporal flags (unrealistic duration,
+    // nocturnal pattern, mass submission) on absent -> present
+    // transitions. Data flows into the unified digest push below.
+    // ============================================
+    interface TemporalAlert {
+      userId: string;
+      flagType: 'unrealistic_duration' | 'nocturnal_pattern' | 'mass_submission';
+      count: number;
+      details: Record<string, any>;
+    }
+    const temporalAlerts: TemporalAlert[] = [];
+
+    for (const r of results) {
+      const prevFlags = prevFlagsMap.get(r.player_id) || [];
+      const newFlags = r.flags;
+
+      const wasUnrealistic = prevFlags.includes('unrealistic_duration') || prevFlags.includes('unrealistic_duration_frequent');
+      const nowUnrealistic = newFlags.includes('unrealistic_duration') || newFlags.includes('unrealistic_duration_frequent');
+      if (!wasUnrealistic && nowUnrealistic) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'unrealistic_duration',
+          count: r.details.unrealisticDuration?.count || 0,
+          details: r.details.unrealisticDuration || {},
+        });
+      }
+
+      const wasNocturnal = prevFlags.includes('nocturnal_pattern');
+      const nowNocturnal = newFlags.includes('nocturnal_pattern');
+      if (!wasNocturnal && nowNocturnal) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'nocturnal_pattern',
+          count: r.details.nocturnalActivity?.count || 0,
+          details: r.details.nocturnalActivity || {},
+        });
+      }
+
+      const wasMass = prevFlags.includes('mass_submission') || prevFlags.includes('mass_submission_repeated');
+      const nowMass = newFlags.includes('mass_submission') || newFlags.includes('mass_submission_repeated');
+      if (!wasMass && nowMass) {
+        temporalAlerts.push({
+          userId: r.user_id,
+          flagType: 'mass_submission',
+          count: r.details.massSubmission?.daysCount || 0,
+          details: r.details.massSubmission || {},
+        });
+      }
+    }
+
+    // ============================================
+    // BEHAVIORAL ALERT COLLECTION
+    // Detects newly-set behavioral flags on absent -> present
+    // transitions (self-match, symmetric-score streak, ghost
+    // opponents). Feeds into unified digest push below.
+    // ============================================
+    interface BehavioralAlert {
+      userId: string;
+      flagType: 'self_match' | 'symmetric_score_streak' | 'ghost_opponents';
+      count: number;
+      details: Record<string, any>;
+    }
+    const behavioralAlerts: BehavioralAlert[] = [];
+
+    for (const r of results) {
+      const prevFlags = prevFlagsMap.get(r.player_id) || [];
+      const newFlags = r.flags;
+
+      const wasSelfMatch = prevFlags.includes('self_match') || prevFlags.includes('self_match_frequent');
+      const nowSelfMatch = newFlags.includes('self_match') || newFlags.includes('self_match_frequent');
+      if (!wasSelfMatch && nowSelfMatch) {
+        behavioralAlerts.push({
+          userId: r.user_id,
+          flagType: 'self_match',
+          count: r.details.selfMatches?.count || 0,
+          details: r.details.selfMatches || {},
+        });
+      }
+
+      const wasSym = prevFlags.includes('symmetric_score_streak') || prevFlags.includes('symmetric_score_streak_extreme');
+      const nowSym = newFlags.includes('symmetric_score_streak') || newFlags.includes('symmetric_score_streak_extreme');
+      if (!wasSym && nowSym) {
+        behavioralAlerts.push({
+          userId: r.user_id,
+          flagType: 'symmetric_score_streak',
+          count: r.details.symmetricScores?.maxConsecutiveStreak || 0,
+          details: r.details.symmetricScores || {},
+        });
+      }
+
+      const wasGhost = prevFlags.includes('ghost_opponents') || prevFlags.includes('ghost_opponents_dominant');
+      const nowGhost = newFlags.includes('ghost_opponents') || newFlags.includes('ghost_opponents_dominant');
+      if (!wasGhost && nowGhost) {
+        behavioralAlerts.push({
+          userId: r.user_id,
+          flagType: 'ghost_opponents',
+          count: r.details.ghostOpponents?.ghostCount || 0,
+          details: r.details.ghostOpponents || {},
+        });
+      }
+    }
+
+    // ============================================
     // UNIFIED ANTI-CHEAT DIGEST PUSH
     // Consolidate geo alerts, temporal alerts, and trust
     // score improvements per user into a SINGLE digest push
@@ -1060,7 +1338,7 @@ Deno.serve(async (req: Request) => {
     // transitions (absent -> present) tracked earlier.
     // ============================================
     interface DigestAlert {
-      category: 'geo' | 'temporal' | 'trust_improved';
+      category: 'geo' | 'temporal' | 'trust_improved' | 'behavioral';
       flagType: string;
       count: number;
       details: Record<string, any>;
@@ -1078,10 +1356,39 @@ Deno.serve(async (req: Request) => {
       if (!digestByUser.has(tc.userId)) digestByUser.set(tc.userId, []);
       digestByUser.get(tc.userId)!.push({ category: 'trust_improved', flagType: tc.newLevel, count: tc.newScore, details: { previousScore: tc.previousScore, playerId: tc.playerId } });
     }
+    for (const alert of behavioralAlerts) {
+      if (!digestByUser.has(alert.userId)) digestByUser.set(alert.userId, []);
+      digestByUser.get(alert.userId)!.push({ category: 'behavioral', flagType: alert.flagType, count: alert.count, details: alert.details });
+    }
 
     if (digestByUser.size > 0) {
       console.log(`[detect-suspicious] Sending anti-cheat digest to ${digestByUser.size} user(s)`);
       try {
+        // 24-hour cooldown: skip users already notified via digest recently (bypass when force=true)
+        if (!force) {
+          const initialUserIds = Array.from(digestByUser.keys());
+          const { data: prefsRows } = await supabaseClient
+            .from('user_preferences')
+            .select('user_id, last_anticheat_digest_sent')
+            .in('user_id', initialUserIds);
+          const cooldownMs = 24 * 60 * 60 * 1000;
+          const nowTs = Date.now();
+          let cooldownSkipped = 0;
+          for (const p of prefsRows || []) {
+            if (p.last_anticheat_digest_sent) {
+              const lastSent = new Date(p.last_anticheat_digest_sent).getTime();
+              if (Number.isFinite(lastSent) && (nowTs - lastSent) < cooldownMs) {
+                digestByUser.delete(p.user_id);
+                cooldownSkipped++;
+              }
+            }
+          }
+          if (cooldownSkipped > 0) {
+            console.log(`[detect-suspicious] Cooldown: skipped ${cooldownSkipped} user(s) already notified within 24 h`);
+          }
+        } else {
+          console.log(`[detect-suspicious] Cooldown bypassed (force=true) - all ${digestByUser.size} eligible user(s) will receive digest`);
+        }
         const digestUserIds = Array.from(digestByUser.keys());
         const { data: allTokens } = await supabaseClient
           .from('push_tokens')
@@ -1131,6 +1438,18 @@ Deno.serve(async (req: Request) => {
               title = '\u26A1 Soumission massive de matchs';
               body = `${a.count} jour(s) avec plus de 20 matchs en 24 h detectes.`;
               notifType = 'temporal_alert';
+            } else if (a.category === 'behavioral' && a.flagType === 'self_match') {
+              title = '\u{1F464} Auto-affrontement detecte';
+              body = `${a.count} match(s) avec le meme joueur des deux cotes. Verifiez vos matchs recents.`;
+              notifType = 'behavioral_alert';
+            } else if (a.category === 'behavioral' && a.flagType === 'symmetric_score_streak') {
+              title = '\u{1F3AF} Serie de scores extremes';
+              body = `${a.count} matchs consecutifs avec des scores 13-0 ou 13-1 detectes.`;
+              notifType = 'behavioral_alert';
+            } else if (a.category === 'behavioral' && a.flagType === 'ghost_opponents') {
+              title = '\u{1F47B} Adversaires fantomes';
+              body = `${a.count} adversaire(s) n'apparaissent que dans vos matchs.`;
+              notifType = 'behavioral_alert';
             } else if (a.category === 'trust_improved') {
               const levelLabels: Record<string, string> = { verified: 'Verifie', high: 'Fiable', medium: 'Standard' };
               const label = levelLabels[a.flagType] || a.flagType;
@@ -1142,11 +1461,13 @@ Deno.serve(async (req: Request) => {
             // Multiple alerts: single grouped digest push per user
             const geoCount = alerts.filter(a => a.category === 'geo').length;
             const tempCount = alerts.filter(a => a.category === 'temporal').length;
+            const behavCount = alerts.filter(a => a.category === 'behavioral').length;
             const trustCount = alerts.filter(a => a.category === 'trust_improved').length;
             title = `\u{1F4CB} Anti-triche : ${alerts.length} alertes actives`;
             const parts: string[] = [];
             if (geoCount > 0) parts.push(`${geoCount} geographique${geoCount > 1 ? 's' : ''}`);
             if (tempCount > 0) parts.push(`${tempCount} temporelle${tempCount > 1 ? 's' : ''}`);
+            if (behavCount > 0) parts.push(`${behavCount} comportementale${behavCount > 1 ? 's' : ''}`);
             if (trustCount > 0) parts.push(`${trustCount} amelioration${trustCount > 1 ? 's' : ''}`);
             body = parts.join(', ') + '. Consultez votre score de confiance.';
             notifType = 'anticheat_digest';
@@ -1180,67 +1501,24 @@ Deno.serve(async (req: Request) => {
             });
           }
           console.log(`[detect-suspicious] Sent ${digestMessages.length} digest push message(s)`);
+
+          // Persist cooldown timestamp for notified users so next cycle honors the 24 h window
+          const notifiedIds = Array.from(digestByUser.keys());
+          const nowIso = new Date().toISOString();
+          for (const uid of notifiedIds) {
+            try {
+              await supabaseClient
+                .from('user_preferences')
+                .upsert({ user_id: uid, last_anticheat_digest_sent: nowIso }, { onConflict: 'user_id' });
+            } catch { /* silent */ }
+          }
         }
       } catch (e) {
         console.error('[detect-suspicious] Error sending anti-cheat digest:', e);
       }
     }
 
-    // ============================================
-    // TEMPORAL ALERT NOTIFICATIONS FOR USERS
-    // Notify users when newly flagged for unrealistic match
-    // durations, nocturnal patterns, or mass submissions.
-    // Only fires on transitions (absent -> present) to avoid spam.
-    // ============================================
-    interface TemporalAlert {
-      userId: string;
-      flagType: 'unrealistic_duration' | 'nocturnal_pattern' | 'mass_submission';
-      count: number;
-      details: Record<string, any>;
-    }
-    const temporalAlerts: TemporalAlert[] = [];
-
-    for (const r of results) {
-      const prevFlags = prevFlagsMap.get(r.player_id) || [];
-      const newFlags = r.flags;
-
-      const wasUnrealistic = prevFlags.includes('unrealistic_duration') || prevFlags.includes('unrealistic_duration_frequent');
-      const nowUnrealistic = newFlags.includes('unrealistic_duration') || newFlags.includes('unrealistic_duration_frequent');
-      if (!wasUnrealistic && nowUnrealistic) {
-        temporalAlerts.push({
-          userId: r.user_id,
-          flagType: 'unrealistic_duration',
-          count: r.details.unrealisticDuration?.count || 0,
-          details: r.details.unrealisticDuration || {},
-        });
-      }
-
-      const wasNocturnal = prevFlags.includes('nocturnal_pattern');
-      const nowNocturnal = newFlags.includes('nocturnal_pattern');
-      if (!wasNocturnal && nowNocturnal) {
-        temporalAlerts.push({
-          userId: r.user_id,
-          flagType: 'nocturnal_pattern',
-          count: r.details.nocturnalActivity?.count || 0,
-          details: r.details.nocturnalActivity || {},
-        });
-      }
-
-      const wasMass = prevFlags.includes('mass_submission') || prevFlags.includes('mass_submission_repeated');
-      const nowMass = newFlags.includes('mass_submission') || newFlags.includes('mass_submission_repeated');
-      if (!wasMass && nowMass) {
-        temporalAlerts.push({
-          userId: r.user_id,
-          flagType: 'mass_submission',
-          count: r.details.massSubmission?.daysCount || 0,
-          details: r.details.massSubmission || {},
-        });
-      }
-    }
-
-    // Temporal alerts are now bundled with the unified digest push above.
-
-    // Trust score threshold crossings are now bundled with the unified digest push above.
+    // Temporal alerts and trust score improvements are bundled with the unified digest push above.
 
     // ============================================
     // ADMIN PUSH NOTIFICATIONS FOR DELETION ALERTS
