@@ -296,6 +296,16 @@ function LayoutInner() {
             if (data.terrainId) router.push(`/terrain/${data.terrainId}` as any);
             else router.push({ pathname: '/(tabs)/map', params: { filter: 'terrains', activeNow: 'true' } } as any);
             break;
+          case 'geo_alert':
+          case 'temporal_alert':
+          case 'trust_score_improved':
+          case 'behavioral_alert':
+          case 'anticheat_digest':
+            router.push('/trust-score' as any);
+            break;
+          case 'ghost_invite':
+            router.push('/share-hub' as any);
+            break;
           case 'maintenance':
             // No navigation, banner auto-shows via polling
             break;
