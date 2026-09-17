@@ -17,6 +17,7 @@ import * as Haptics from '@/services/haptics';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
+import { trackFaqEvent } from '@/services/faqAnalyticsService';
 
 // ============================================
 // TYPES
@@ -85,8 +86,22 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'ot6',
           q: fr ? 'Comment partager un match avec mes partenaires de jeu ?' : 'How do I share a match with my playing partners?',
           a: fr
-            ? 'Ouvrez le detail d\'un match > "Partager". Choisissez parmi 4 options : partage WhatsApp/SMS/email, copie du code, copie de l\'invitation complete ou QR code. Quand votre partenaire accepte, le match apparait dans son historique et ses stats (ELO, taux de victoire, tir, point, carreaux) se mettent a jour automatiquement. Une notification locale resume les changements (delta ELO, evolution du win rate). Les demandes de partage expirent automatiquement apres 7 jours sans reponse. Un compte a rebours est visible dans la page de detail du match et dans le hub de notifications. En 1v1, l\'adversaire qui accepte genere aussi une attestation automatique. Si vous partagez par erreur avec un joueur non-participant, un avertissement s\'affiche et ses stats ne seront PAS mises a jour. Le proprietaire du match peut revoquer un partage a tout moment (bouton X par destinataire, ou "Revoquer tout" pour tous les partages en masse). La revocation d\'un partage accepte annule automatiquement les changements de stats et d\'ELO du destinataire.'
-            : 'Open match detail > "Share". Choose from 4 options: WhatsApp/SMS/email share, copy code, copy full invitation or QR code. When your partner accepts, the match appears in their history and stats (ELO, win rate, shot, point, carreaux) auto-update. A local notification summarizes the changes (ELO delta, win rate evolution). Share requests expire automatically after 7 days without response. A countdown is visible in the match detail page and the notifications hub. In 1v1, the accepting opponent also generates an automatic attestation. If you accidentally share with a non-participant player, a warning is shown and their stats will NOT be updated. The match owner can revoke a share at any time (X button per recipient, or "Revoke all" for bulk revocation). Revoking an accepted share automatically undoes the recipient\'s stats and ELO changes.',
+            ? 'Apres la sauvegarde d\'un match, une banniere non-intrusive s\'affiche si au moins un joueur avec un compte est detecte parmi les participants : "X joueur(s) avec compte detecte(s) - Envoyer une demande de partage ?". Le modal de partage est unifie en 2 etapes : (1) Auto-selection des comptes detectes avec un tap, (2) Options avancees (lien public, QR code, permissions granulaires lecture/modification, expiration). Choisissez parmi 4 modes de partage : partage natif (WhatsApp/SMS/email), copie du code, invitation complete ou QR code. Quand votre partenaire accepte, le match apparait dans son historique, ses stats (ELO, taux de victoire, tir, point, carreaux) se mettent a jour automatiquement, une notification locale resume les changements (delta ELO, win rate), et le match affiche un badge "Verifie" (bouclier vert) au lieu du badge "Non verifie". Les demandes de partage expirent automatiquement apres 7 jours (auto-decline) et l\'expediteur recoit une notification avec bouton "Renvoyer". Rappels automatiques 24h et 72h apres envoi pour maximiser les acceptations. En 1v1, l\'adversaire qui accepte genere aussi une attestation automatique. Si vous partagez par erreur avec un joueur non-participant, un avertissement s\'affiche et ses stats ne seront PAS mises a jour. Le proprietaire du match peut revoquer un partage a tout moment (bouton X par destinataire, ou "Revoquer tout" pour tous les partages en masse). La revocation d\'un partage accepte annule automatiquement les changements de stats et d\'ELO du destinataire.'
+            : 'After saving a match, a non-intrusive banner appears if at least one player with an account is detected among participants: "X player(s) with account detected - Send a share request?". The share modal is unified in 2 steps: (1) Auto-selection of detected accounts with one tap, (2) Advanced options (public link, QR code, granular read/write permissions, expiration). Choose from 4 share modes: native (WhatsApp/SMS/email), copy code, full invitation or QR code. When your partner accepts, the match appears in their history, stats (ELO, win rate, shot, point, carreaux) auto-update, a local notification summarizes the changes (ELO delta, win rate), and the match shows a "Verified" badge (green shield) instead of "Unverified". Share requests expire automatically after 7 days (auto-decline) and the sender receives a notification with a "Resend" button. Automatic reminders at 24h and 72h after sending to maximize acceptance. In 1v1, the accepting opponent also generates an automatic attestation. If you accidentally share with a non-participant player, a warning is shown and their stats will NOT be updated. The match owner can revoke a share at any time (X button per recipient, or "Revoke all" for bulk revocation). Revoking an accepted share automatically undoes the recipient\'s stats and ELO changes.',
+        },
+        {
+          id: 'ot7',
+          q: fr ? 'Comment voir les matchs qui me mentionnent sans etre partages ?' : 'How do I see matches mentioning me without being shared?',
+          a: fr
+            ? 'Si un autre joueur enregistre un match ou vous apparaissez sans vous envoyer explicitement de demande de partage, vous recevez une notification push "Un match vous mentionne". Une page dediee "Matchs me mentionnant" (widget violet sur l\'accueil ou notification) liste tous ces matchs avec le nom de l\'auteur, le score, l\'equipe et la date. Trois actions par match : (1) Accepter (le match rejoint votre historique et vos stats se mettent a jour), (2) Refuser (le match n\'apparait plus), (3) Signaler comme faux ("Ce match n\'a jamais eu lieu") avec details optionnels. Un signalement de faux match reduit le Trust Score de l\'expediteur et alerte l\'equipe de moderation. Pour les matchs sans demande de partage active, un bouton "Demander le partage" permet d\'envoyer une demande explicite a l\'auteur.'
+            : 'If another player records a match where you appear without explicitly sending you a share request, you receive a push notification "A match mentions you". A dedicated "Matches mentioning me" page (purple widget on home or via notification) lists all such matches with author name, score, team and date. Three actions per match: (1) Accept (match joins your history and stats update), (2) Decline (match no longer appears), (3) Report as fake ("This match never happened") with optional details. Reporting a fake match reduces the sender Trust Score and alerts the moderation team. For matches without an active share request, a "Request share" button lets you send an explicit share request to the author.',
+        },
+        {
+          id: 'ot8',
+          q: fr ? 'Que sont les badges Verifie et Non verifie sur les cartes de match ?' : 'What are the Verified and Unverified badges on match cards?',
+          a: fr
+            ? 'Chaque carte de match dans l\'historique affiche un badge de verification : (1) Badge "Verifie" (vert avec icone bouclier) : le match a ete partage ET accepte par au moins un autre participant, ce qui garantit qu\'il a reellement eu lieu et augmente sa credibilite dans le classement ; (2) Badge "Non verifie" (gris avec point d\'interrogation) : le match n\'a pas encore ete accepte par un autre participant. Utilisez le filtre "Verifie" dans les filtres avancees de l\'historique (Tous / Verifies / Non verifies) pour n\'afficher que les matchs verifies, utile pour prouver votre serieux ou preparer un export officiel.'
+            : 'Each match card in history shows a verification badge: (1) "Verified" badge (green shield icon): the match has been shared AND accepted by at least one other participant, ensuring it actually took place and increasing its credibility in the ranking; (2) "Unverified" badge (gray with question mark): the match has not yet been accepted by another participant. Use the "Verified" filter in history advanced filters (All / Verified / Unverified) to display only verified matches, useful for proving your seriousness or preparing an official export.',
         },
       ],
     },
@@ -215,8 +230,15 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           id: 'sr7',
           q: fr ? 'Comment le classement est-il protege contre la triche ?' : 'How is the ranking protected from cheating?',
           a: fr
-            ? 'Un systeme interne de fiabilite (Trust Score) analyse les comportements de jeu, detecte automatiquement les anomalies et ajuste l\'impact des matchs si necessaire. Les activites suspectes sont limitees ou invisibilisees. Seuls les resultats fiables influencent le classement, garantissant une progression basee sur le merite. Consultez votre score de confiance depuis Profil > Score de Confiance (sous Mon Palmares).'
-            : 'An internal reliability system (Trust Score) analyzes gameplay behaviors, detects anomalies automatically and adjusts match impact if needed. Suspicious activities are limited or hidden. Only reliable results influence ranking, ensuring merit-based progression. View your trust score from Profile > Trust Score (below My Honors).',
+            ? 'Un moteur anti-triche a 26 facteurs analyse chaque resultat sur 6 axes : (1) Geographique (voyage impossible >500km/6h, micro-teleportation >200km/2h, incoherence ville de residence >300km) ; (2) Temporel (matchs <5min ou >4h, patterns nocturnes 3-6h recurrents, soumission de masse >20 matchs/24h) ; (3) Comportemental (auto-match avec meme joueur dans les 2 equipes, streaks de scores symetriques 13-0 ou 13-1 sur 5+ matchs, adversaires fantomes n\'apparaissant que chez un seul utilisateur) ; (4) Statistique (progression ELO artificiellement lineaire via R2, deviation Benford sur les deltas ELO) ; (5) Identite (empreintes d\'appareil partagees sur 30j, clusters d\'emails sequentiels type ferme sur 24h avec bannissement automatique au-dela de 5 comptes) ; (6) Social (concentration excessive d\'un temoin unique >60% des attestations). Les alertes sont consolidees en un digest push unique par utilisateur avec cooldown de 24h. Consultez votre Trust Score depuis Profil > Score de Confiance avec un graphique 8 semaines et l\'historique de digests (actifs/resolus).'
+            : 'A 26-factor anti-cheat engine analyzes every result across 6 axes: (1) Geographic (impossible travel >500km/6h, micro-teleportation >200km/2h, home city mismatch >300km); (2) Temporal (matches <5min or >4h, recurring 3-6 AM nocturnal patterns, mass submission >20 matches/24h); (3) Behavioral (self-matches with same player on both teams, symmetric score streaks 13-0 or 13-1 over 5+ matches, ghost opponents appearing only in one user submissions); (4) Statistical (artificially linear ELO progression via R2, Benford chi-square deviation on ELO deltas); (5) Identity (30-day shared device fingerprints, 24-hour sequential email farm clusters with auto-ban above 5 accounts); (6) Social (excessive concentration of a single witness >60% of attestations). Alerts are consolidated into a single unified digest push per user with 24h cooldown. View your Trust Score from Profile > Trust Score with an 8-week trend chart and digest history (active/resolved).',
+        },
+        {
+          id: 'sr7b',
+          q: fr ? 'Qu\'est-ce que la banniere de temoin diversifie ?' : 'What is the diverse witness banner?',
+          a: fr
+            ? 'Si un meme temoin atteste plus de 60% de vos matchs, le systeme reduit son poids et affiche une CTA "Temoin Diversifie" qui vous propose jusqu\'a 3 joueurs a proximite (meme club puis meme ville) pour envoyer une invitation d\'attestation personnalisee (280 caracteres). Un selecteur de match permet de choisir jusqu\'a 3 matchs recents avec info equipes et score avant d\'envoyer l\'invitation.'
+            : 'If a single witness attests over 60% of your matches, the system reduces their weight and shows a "Diverse Witness" CTA offering up to 3 nearby players (same club then same city) to send a personalized 280-character attestation invitation. A match selector lets you pick up to 3 recent matches with team info and score before sending the invitation.',
         },
         {
           id: 'sr8',
@@ -467,6 +489,20 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
             : 'From profile, Data section > "Share History". The page shows all your sent and received shares, with a summary (sent, received, accepted, pending counts) and total ELO impact. Filter by direction (sent/received), status (pending/accepted/declined) to find a specific share. Each card shows the recipient or sender, match summary, status, ELO delta and time remaining before expiry. Tap a card to open the match or challenge detail.',
         },
         {
+          id: 'ps3c',
+          q: fr ? 'Comment renvoyer plusieurs demandes refusees ou expirees en une fois ?' : 'How do I resend multiple declined or expired requests at once?',
+          a: fr
+            ? 'Ouvrez "Demandes envoyees" (Profil > Notifications > Demandes envoyees, ou icone dediee dans le hub de notifications). Les filtres par statut (Toutes / En attente / Acceptees / Refusees) affichent chaque demande avec un compte a rebours d\'expiration. Pour chaque demande refusee ou expiree, un bouton "Renvoyer" cree une nouvelle demande en 1 tap. Pour un traitement en masse : appuyez sur l\'icone checklist dans l\'en-tete pour activer le mode multi-selection, cochez les demandes eligibles (les non-eligibles sont grisees avec un cadenas), utilisez "Selectionner tout" pour cocher toutes les eligibles, puis "Renvoyer (N)" ouvre un modal de confirmation. Une barre de progression en temps reel affiche l\'avancement et une banniere de resultat indique combien ont ete renvoyees et combien ont echoue.'
+            : 'Open "Sent share requests" (Profile > Notifications > Sent requests, or dedicated icon in notifications hub). Status filters (All / Pending / Accepted / Declined) show each request with an expiration countdown. For each declined or expired request, a "Resend" button creates a new request in 1 tap. For bulk processing: tap the checklist icon in the header to enable multi-selection mode, check eligible requests (non-eligible ones are grayed out with a lock), use "Select all" to check all eligible, then "Resend (N)" opens a confirmation modal. A real-time progress bar shows progress and a result banner indicates how many were resent and how many failed.',
+        },
+        {
+          id: 'ps3d',
+          q: fr ? 'Qu\'est-ce que la detection d\'usurpation d\'identite ?' : 'What is impersonation detection?',
+          a: fr
+            ? 'Lorsque quelqu\'un cree un joueur local dans son annuaire avec le meme nom que votre profil public, le systeme vous envoie automatiquement une notification push "Alerte d\'usurpation d\'identite". Une page dediee "Alertes d\'usurpation" (widget ambre sur l\'accueil ou notification) liste toutes les entrees locales qui correspondent a l\'un de vos profils publics, avec le nom du createur, la date de creation et le profil correspondant. Trois actions : (1) Voir le joueur local (ouvre sa fiche), (2) Signaler (envoie un rapport de moderation avec la raison "Usurpation suspectee" reduisant le Trust Score du createur), (3) Ignorer (masque l\'alerte). Cette protection empeche les faux comptes et les manipulations de classement en volant l\'identite d\'un joueur reconnu.'
+            : 'When someone creates a local player in their directory with the same name as your public profile, the system automatically sends you a push notification "Impersonation Alert". A dedicated "Impersonation alerts" page (amber widget on home or via notification) lists all local entries matching one of your public profiles, with the creator name, creation date and matching profile. Three actions: (1) View the local player (opens their card), (2) Report (submits a moderation report with reason "Suspected impersonation" reducing the creator Trust Score), (3) Dismiss (hides the alert). This protection prevents fake accounts and ranking manipulation by stealing the identity of a recognized player.',
+        },
+        {
           id: 'ps4',
           q: fr ? 'Comment partager mes resultats sur les reseaux sociaux (Instagram, WhatsApp, etc.) ?' : 'How do I share my results on social media (Instagram, WhatsApp, etc.)?',
           a: fr
@@ -509,6 +545,20 @@ function getPlayerFaq(fr: boolean): FAQCategory[] {
           a: fr
             ? 'Profil > Notifications > onglet Reglages (redirige vers la page complete). 13 categories regroupees en 5 sections : Competitif (classement, ligues, digest, inactivite), Communaute (evenements, rappels, RDV), Partage (partage, attestations, badges, abonnes), Carte (alerte proximite avec rayon configurable) et Club (invitations, rappels). Un compteur affiche le nombre actif sur le total. Bouton "Tout activer/desactiver" disponible. 24+ types de push differents sont geres cote serveur.'
             : 'Profile > Notifications > Settings tab (redirects to the full page). 13 categories grouped in 5 sections: Competitive (ranking, leagues, digest, inactivity), Community (events, reminders, meetups), Sharing (shares, attestations, badges, followers), Map (proximity alert with configurable radius) and Club (invitations, reminders). A counter shows active out of total. "Enable/Disable all" button available. 24+ different push types are managed server-side.',
+        },
+        {
+          id: 'ac4b',
+          q: fr ? 'Comment fonctionnent les preferences de fuseau horaire ?' : 'How do timezone preferences work?',
+          a: fr
+            ? 'Depuis Preferences de notifications > section "Fuseau horaire de reference", choisissez le mode d\'affichage : (1) Auto (par defaut) : utilise le fuseau du terrain quand il est disponible, sinon votre fuseau appareil ; (2) Terrain uniquement : force l\'affichage dans le fuseau du terrain / evenement (utile si vous voyagez et voulez garder l\'heure locale du terrain) ; (3) Personnalise : selectionnez un fuseau IANA specifique via une modal de recherche. Deux toggles supplementaires : "Chat en heure appareil" (les timestamps du chat de RDV s\'affichent en heure locale de votre telephone au lieu de l\'heure du terrain) et "Cartes de match en heure appareil" (les cartes de l\'historique affichent l\'heure de votre appareil au lieu du fuseau du terrain). Quand une conversion est necessaire, une petite pastille violette affiche l\'equivalent ("20:00 Paris (14:00 chez vous)"). Les notifications push respectent aussi ces preferences avec le nom du fuseau du terrain dans le message.'
+            : 'From Notification Preferences > "Reference timezone" section, choose display mode: (1) Auto (default): uses the terrain timezone when available, otherwise your device timezone; (2) Terrain only: forces display in the terrain / event timezone (useful when traveling and you want to keep the terrain local time); (3) Custom: pick a specific IANA timezone via a search modal. Two additional toggles: "Chat in device time" (meetup chat timestamps display in your phone local time instead of terrain time) and "Match cards in device time" (history cards show your device time instead of terrain timezone). When conversion is needed, a small purple chip shows the equivalent ("20:00 Paris (14:00 your time)"). Push notifications also respect these preferences with the terrain timezone name embedded in the message.',
+        },
+        {
+          id: 'ac4c',
+          q: fr ? 'Pourquoi les evenements affichent-ils l\'heure du terrain plutot que l\'heure de mon appareil ?' : 'Why do events show terrain time instead of my device time?',
+          a: fr
+            ? 'L\'application utilise le fuseau horaire du TERRAIN comme reference systeme pour tous les evenements (matchs, RDV, tournois, defis, evenements sponsorises). Cela evite un bug frequent : un evenement prevu le 30 juin a 20h a Paris pouvait apparaitre le 1er juillet a Montreal a cause du passage de minuit UTC. Cette approche garantit que "3 parties vendredi vers 20h" reste 20h heure locale du terrain, quelle que soit votre position. Une pastille de conversion s\'affiche automatiquement quand votre appareil est dans un fuseau different, montrant l\'equivalent dans votre heure locale. Un bandeau d\'alerte est aussi affiche en haut de la fiche d\'un terrain si vous consultez un lieu dans un fuseau different du votre. Les rappels push sont declenches en fonction du fuseau du terrain, pas de votre appareil, pour eviter les alertes en pleine nuit lors de voyages.'
+            : 'The app uses the TERRAIN timezone as system-wide reference for all events (matches, meetups, tournaments, challenges, sponsored events). This prevents a common bug: an event scheduled June 30 at 8 PM in Paris could appear July 1 in Montreal because of UTC midnight crossing. This approach ensures "3 games Friday ~8 PM" stays 8 PM terrain local time regardless of your location. A conversion chip appears automatically when your device is in a different timezone, showing the equivalent in your local time. An alert banner is also displayed at the top of a terrain card if you view a place in a different timezone than yours. Push reminders are triggered based on terrain timezone, not your device, to avoid alerts in the middle of the night when traveling.',
         },
         {
           id: 'ac5',
@@ -1136,15 +1186,15 @@ function HighlightText({ text, search, style, numberOfLines, highlightColor }: {
   );
 }
 
-function AccordionItem({ question, answer, isOpen, onToggle, color, search }: {
-  question: string; answer: string; isOpen: boolean; onToggle: () => void; color: string; search?: string;
+function AccordionItem({ question, answer, isOpen, onToggle, color, search, onOpen }: {
+  question: string; answer: string; isOpen: boolean; onToggle: () => void; color: string; search?: string; onOpen?: () => void;
 }) {
   const rotation = useSharedValue(0);
   React.useEffect(() => { rotation.value = withTiming(isOpen ? 180 : 0, { duration: 200 }); }, [isOpen]);
   const iconStyle = useAnimatedStyle(() => ({ transform: [{ rotate: `${rotation.value}deg` }] }));
 
   return (
-    <Pressable style={[st.faqItem, isOpen && { borderLeftWidth: 3, borderLeftColor: color }]} onPress={() => { Haptics.selectionAsync(); onToggle(); }}>
+    <Pressable style={[st.faqItem, isOpen && { borderLeftWidth: 3, borderLeftColor: color }]} onPress={() => { Haptics.selectionAsync(); const willOpen = !isOpen; onToggle(); if (willOpen) onOpen?.(); }}>
       <View style={st.faqQuestion}>
         <HighlightText text={question} search={search || ''} style={[st.faqQuestionText, isOpen && { color }]} highlightColor={color} />
         <Animated.View style={[iconStyle, st.faqChevron]}>
@@ -1255,6 +1305,24 @@ export default function FAQScreen() {
   const toggleQ = useCallback((id: string) => {
     setOpenQs(prev => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
   }, []);
+
+  // Debounced search tracking
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!search || search.trim().length < 3) return;
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    const query = search.trim();
+    searchDebounceRef.current = setTimeout(() => {
+      const results = filtered.reduce((sum, c) => sum + c.questions.length, 0);
+      trackFaqEvent({
+        eventType: results === 0 ? 'search_no_result' : 'search',
+        searchQuery: query,
+        audienceTab: activeTab,
+        language,
+      });
+    }, 1200);
+    return () => { if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current); };
+  }, [search, filtered, activeTab, language]);
 
   const handleTabChange = useCallback((tab: AudienceTab) => {
     Haptics.selectionAsync();
@@ -1447,7 +1515,7 @@ export default function FAQScreen() {
               const active = selectedCat === cat.id;
               return (
                 <Pressable key={cat.id} style={[st.catChip, active && { backgroundColor: cat.color, borderColor: cat.color }]}
-                  onPress={() => { Haptics.selectionAsync(); setSelectedCat(active ? null : cat.id); }}>
+                  onPress={() => { Haptics.selectionAsync(); const next = active ? null : cat.id; setSelectedCat(next); if (next) trackFaqEvent({ eventType: 'category_view', categoryId: next, audienceTab: activeTab, language }); }}>
                   <MaterialIcons name={cat.icon as any} size={14} color={active ? '#FFF' : cat.color} />
                   <Text style={[st.catChipText, active && { color: '#FFF' }]}>{cat.category}</Text>
                   <View style={[st.catChipBadge, active && { backgroundColor: 'rgba(255,255,255,0.25)' }]}>
@@ -1497,7 +1565,7 @@ export default function FAQScreen() {
                 </View>
                 <View style={st.faqList}>
                   {cat.questions.map(q => (
-                    <AccordionItem key={q.id} question={q.q} answer={q.a} isOpen={openQs.has(q.id)} onToggle={() => toggleQ(q.id)} color={cat.color} search={search} />
+                    <AccordionItem key={q.id} question={q.q} answer={q.a} isOpen={openQs.has(q.id)} onToggle={() => toggleQ(q.id)} color={cat.color} search={search} onOpen={() => trackFaqEvent({ eventType: 'question_view', questionId: q.id, categoryId: cat.id, audienceTab: activeTab, language })} />
                   ))}
                 </View>
               </View>

@@ -39,6 +39,8 @@ import { useAlert } from '@/template';
 import { useAuth } from '@/template';
 import { useLanguage } from '@/hooks/useLanguage';
 import SponsoredItemBanner from '@/components/ui/SponsoredItemBanner';
+import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
+import { parseTerrainTimezone, formatTimeInTimezone } from '@/services/timezoneService';
 
 // Community stats type for terrain detail
 interface TerrainCommunityStats {
@@ -596,6 +598,12 @@ export default function TerrainDetailScreen() {
           />
         }
       >
+        {/* Timezone mismatch alert - shows current facility time vs device time */}
+        <TimezoneMismatchBanner
+          terrainTimezone={(terrain as any).timezone}
+          facilityName={terrain.name}
+          locale={language === 'fr' ? 'fr-FR' : 'en-US'}
+        />
         {/* Photo Gallery */}
         {hasPhotos ? (
           <View style={styles.photoSection}>
@@ -1226,6 +1234,8 @@ export default function TerrainDetailScreen() {
             meetups.slice(0, 5).map((m, idx) => {
               const mDate = new Date(m.date);
               const isOwner = user && m.creator_id === user.id;
+              const facilityTz = parseTerrainTimezone((terrain as any).timezone);
+              const timeInFacility = formatTimeInTimezone(mDate, facilityTz, language === 'fr' ? 'fr-FR' : 'en-US');
               return (
                 <Pressable
                   key={m.id}
@@ -1238,9 +1248,8 @@ export default function TerrainDetailScreen() {
                   </View>
                   <View style={styles.meetupCardContent}>
                     <Text style={styles.meetupCardTitle} numberOfLines={1}>{m.title}</Text>
-                    <Text style={styles.meetupCardTime}>
-                      {mDate.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
+                    <Text style={styles.meetupCardTime}>{timeInFacility}</Text>
+                    <TimezoneBadge date={mDate} terrainTimezone={(terrain as any).timezone} locale={language === 'fr' ? 'fr-FR' : 'en-US'} compact />
                   </View>
                   {isOwner ? (
                     <View style={styles.meetupOwnerBadge}>
