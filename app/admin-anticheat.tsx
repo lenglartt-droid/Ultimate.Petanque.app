@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   View, Text, ScrollView, Pressable, StyleSheet, ActivityIndicator,
-  TextInput, RefreshControl, Modal,
+  TextInput, RefreshControl, Modal, Share,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Image } from 'expo-image';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 
 import * as Haptics from '@/services/haptics';
 import theme from '@/constants/theme';
@@ -30,7 +30,7 @@ import { useAdminCache } from '@/hooks/useAdminCache';
 
 const et = extraTranslations.trustScore;
 
-type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts' | 'behavioralAlerts';
+type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts' | 'behavioralAlerts' | 'statisticalAlerts' | 'identityAlerts' | 'socialAlerts';
 type TrustScoreFilter = 'all' | 'critical' | 'low' | 'medium' | 'high' | 'verified';
 type SortMode = 'default' | 'trustAsc' | 'trustDesc' | 'analysisRecent' | 'analysisOld' | 'nocturnalDesc' | 'unrealisticDurationDesc' | 'massSubmissionDesc' | 'selfMatchDesc' | 'symmetricStreakDesc' | 'ghostRatioDesc';
 
@@ -59,6 +59,24 @@ const BEHAVIORAL_ALERT_FLAGS = new Set<string>([
   'ghost_opponents_dominant',
 ]);
 
+const STATISTICAL_ALERT_FLAGS = new Set<string>([
+  'artificial_progression',
+  'suspiciously_linear_elo',
+  'benford_deviation',
+  'benford_deviation_severe',
+]);
+
+const IDENTITY_ALERT_FLAGS = new Set<string>([
+  'shared_fingerprint_recent',
+  'shared_fingerprint_recent_multi',
+  'email_farm',
+]);
+
+const SOCIAL_ALERT_FLAGS = new Set<string>([
+  'witness_reputation_biased',
+  'witness_reputation_extreme',
+]);
+
 const TRUST_SCORE_RANGES: Record<Exclude<TrustScoreFilter, 'all'>, { min: number; max: number; color: string }> = {
   critical: { min: 0, max: 24, color: '#EF4444' },
   low: { min: 25, max: 44, color: '#F97316' },
@@ -74,6 +92,7 @@ export default function AdminAntiCheatScreen() {
   const { showAlert } = useAlert();
   const isFr = language === 'fr';
   const adminCache = useAdminCache();
+  const params = useLocalSearchParams<{ playerId?: string }>();
 
   const [players, setPlayers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -152,6 +171,38 @@ export default function AdminAntiCheatScreen() {
   const [undoBan, setUndoBan] = useState<{ targets: Array<{ id: string; prevStatus: string; prevTrustScore: number }>; expiresAt: number; label: string } | null>(null);
   const [undoRemaining, setUndoRemaining] = useState<number>(0);
 
+  // Ban reason selector (prompted before executing bulk ban)
+  const [banReasonPrompt, setBanReasonPrompt] = useState<{
+    targets: Array<{ id: string; playerId?: string; playerName?: string; status: string; trustScore: number }>;
+    kind: 'filtered' | 'behavioral';
+  } | null>(null);
+  const [selectedBanReason, setSelectedBanReason] = useState<'cheat' | 'spam' | 'harassment' | 'other'>('cheat');
+
+  // Statistical detail modal (Benford + ELO regression visualization)
+  const [showStatModal, setShowStatModal] = useState(false);
+  const [statEloHistory, setStatEloHistory] = useState<Array<{ delta: number; recordedAt: string }>>([]);
+  const [statHistLoading, setStatHistLoading] = useState(false);
+
+  // Email farm cluster bulk ban
+  const [emailFarmBusy, setEmailFarmBusy] = useState(false);
+
+  // Admin behavioral digest history (last 30 entries, all players)
+  const [adminDigestHistory, setAdminDigestHistory] = useState<Array<{
+    id: string;
+    userId: string;
+    userName: string;
+    playerId: string | null;
+    playerName: string | null;
+    flags: string[];
+    alertSummary: string;
+    sentAt: string;
+    isResolved: boolean;
+    resolvedAt: string | null;
+  }>>([]);
+  const [adminDigestLoading, setAdminDigestLoading] = useState(false);
+  const [adminDigestLoaded, setAdminDigestLoaded] = useState(false);
+  const [adminDigestSearch, setAdminDigestSearch] = useState('');
+
   const loadData = useCallback(async () => {
     setLoading(true);
     const cached = adminCache.getCached<any[]>('anticheat-players');
@@ -173,6 +224,16 @@ export default function AdminAntiCheatScreen() {
   }, [language]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Deep link: open detail modal when playerId is provided via URL params
+  useEffect(() => {
+    if (!params.playerId || players.length === 0 || selectedPlayer) return;
+    const target = players.find(p => p.playerId === params.playerId);
+    if (target) {
+      setSelectedPlayer(target);
+      setAdminNotes(target.adminNotes || '');
+    }
+  }, [params.playerId, players.length]);
 
   // Countdown timer for undo-ban toast
   useEffect(() => {
@@ -392,6 +453,12 @@ export default function AdminAntiCheatScreen() {
       if (!Array.isArray(p.flags) || !p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))) return false;
     } else if (statusFilter === 'behavioralAlerts') {
       if (!Array.isArray(p.flags) || !p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter === 'statisticalAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => STATISTICAL_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter === 'identityAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => IDENTITY_ALERT_FLAGS.has(f))) return false;
+    } else if (statusFilter === 'socialAlerts') {
+      if (!Array.isArray(p.flags) || !p.flags.some((f: string) => SOCIAL_ALERT_FLAGS.has(f))) return false;
     } else if (statusFilter !== 'all' && p.status !== statusFilter) return false;
     if (trustScoreFilter !== 'all') {
       const range = TRUST_SCORE_RANGES[trustScoreFilter];
@@ -436,6 +503,9 @@ export default function AdminAntiCheatScreen() {
     geoAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => GEO_ALERT_FLAGS.has(f))).length,
     temporalAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f))).length,
     behavioralAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f))).length,
+    statisticalAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => STATISTICAL_ALERT_FLAGS.has(f))).length,
+    identityAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => IDENTITY_ALERT_FLAGS.has(f))).length,
+    socialAlerts: players.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => SOCIAL_ALERT_FLAGS.has(f))).length,
   };
 
   const trustScoreCounts = {
@@ -469,6 +539,9 @@ export default function AdminAntiCheatScreen() {
       case 'geoAlerts': return '#F59E0B';
       case 'temporalAlerts': return '#8B5CF6';
       case 'behavioralAlerts': return '#EC4899';
+      case 'statisticalAlerts': return '#0EA5E9';
+      case 'identityAlerts': return '#DC2626';
+      case 'socialAlerts': return '#F59E0B';
       default: return theme.textMuted;
     }
   };
@@ -477,6 +550,9 @@ export default function AdminAntiCheatScreen() {
     if (status === 'geoAlerts') return isFr ? 'Geo-alertes' : 'Geo alerts';
     if (status === 'temporalAlerts') return isFr ? 'Alertes temporelles' : 'Temporal alerts';
     if (status === 'behavioralAlerts') return isFr ? 'Comportement' : 'Behavioral';
+    if (status === 'statisticalAlerts') return isFr ? 'Statistiques' : 'Statistical';
+    if (status === 'identityAlerts') return isFr ? 'Identite' : 'Identity';
+    if (status === 'socialAlerts') return isFr ? 'Social' : 'Social';
     const labels: Record<string, any> = {
       ok: et.adminStatusOk, watch: et.adminStatusWatch,
       flagged: et.adminStatusFlagged, banned: et.adminStatusBanned,
@@ -518,43 +594,18 @@ export default function AdminAntiCheatScreen() {
     );
   };
 
-  const handleBulkBanFiltered = async () => {
+  const handleBulkBanFiltered = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const targets = filtered.filter(p => p.status !== 'banned');
     if (targets.length === 0) {
       showAlert(isFr ? 'Aucun joueur a bannir' : 'No players to ban');
       return;
     }
-    showAlert(
-      isFr ? `Bannir ${targets.length} joueur(s) ?` : `Ban ${targets.length} player(s)?`,
-      isFr ? 'Action destructive: score de confiance reduit a 0.' : 'Destructive: trust score reduced to 0.',
-      [
-        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
-        {
-          text: isFr ? 'Bannir tout' : 'Ban all',
-          style: 'destructive',
-          onPress: async () => {
-            setBulkBusy(true);
-            const snapshot: Array<{ id: string; prevStatus: string; prevTrustScore: number }> = [];
-            let ok = 0;
-            for (const p of targets) {
-              snapshot.push({ id: p.id, prevStatus: p.status, prevTrustScore: p.trustScore });
-              const { error } = await banPlayer(p.id, p.playerId || '');
-              if (!error) ok++;
-            }
-            const ids = new Set(targets.map(t => t.id));
-            setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
-            setBulkBusy(false);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setUndoBan({
-              targets: snapshot.slice(0, ok),
-              expiresAt: Date.now() + 10_000,
-              label: isFr ? `${ok} joueur(s) banni(s)` : `${ok} player(s) banned`,
-            });
-          },
-        },
-      ]
-    );
+    setSelectedBanReason('cheat');
+    setBanReasonPrompt({
+      targets: targets.map(t => ({ id: t.id, playerId: t.playerId, playerName: t.playerName, status: t.status, trustScore: t.trustScore })),
+      kind: 'filtered',
+    });
   };
 
   const handleBulkTemporalNotify = async () => {
@@ -661,43 +712,240 @@ export default function AdminAntiCheatScreen() {
   };
 
   // Bulk behavioral ban handler (bans all filtered players with behavioral alert flags)
-  const handleBulkBanBehavioral = async () => {
+  const handleBulkBanBehavioral = () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f)) && p.status !== 'banned');
     if (targets.length === 0) {
       showAlert(isFr ? 'Aucun joueur a bannir' : 'No players to ban');
       return;
     }
+    setSelectedBanReason('cheat');
+    setBanReasonPrompt({
+      targets: targets.map(t => ({ id: t.id, playerId: t.playerId, playerName: t.playerName, status: t.status, trustScore: t.trustScore })),
+      kind: 'behavioral',
+    });
+  };
+
+  // Confirm bulk ban with the selected reason - executes ban, logs to admin_activity_logs, and opens the undo toast
+  const handleConfirmBanWithReason = async () => {
+    if (!banReasonPrompt) return;
+    const { targets, kind } = banReasonPrompt;
+    const reason = selectedBanReason;
+    setBanReasonPrompt(null);
+    setBulkBusy(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const snapshot: Array<{ id: string; prevStatus: string; prevTrustScore: number }> = [];
+    let ok = 0;
+    for (const p of targets) {
+      snapshot.push({ id: p.id, prevStatus: p.status, prevTrustScore: p.trustScore });
+      const { error } = await banPlayer(p.id, p.playerId || '');
+      if (!error) ok++;
+    }
+    const ids = new Set(targets.map(t => t.id));
+    setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
+
+    // Log to admin_activity_logs for traceability
+    try {
+      const supabase = getSupabaseClient();
+      await supabase.from('admin_activity_logs').insert({
+        admin_user_id: user?.id,
+        admin_name: (user as any)?.username || user?.email || 'Admin',
+        action_type: kind === 'behavioral' ? 'bulk_ban_behavioral' : 'bulk_ban_filtered',
+        action_detail: `Reason: ${reason} | Banned: ${ok}/${targets.length} player(s)`,
+        target_type: 'players',
+        metadata: {
+          reason,
+          kind,
+          bannedCount: ok,
+          attemptedCount: targets.length,
+          targetPreview: targets.slice(0, 20).map(t => ({ id: t.id, playerId: t.playerId, playerName: t.playerName })),
+        },
+      });
+    } catch { /* silent */ }
+
+    setBulkBusy(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const kindLabel = kind === 'behavioral' ? (isFr ? ' comportemental(aux)' : ' behavioral') : '';
+    const reasonLabel = isFr
+      ? (reason === 'cheat' ? 'triche' : reason === 'spam' ? 'spam' : reason === 'harassment' ? 'harcelement' : 'autre')
+      : reason;
+    setUndoBan({
+      targets: snapshot.slice(0, ok),
+      expiresAt: Date.now() + 10_000,
+      label: isFr ? `${ok} joueur(s)${kindLabel} banni(s) - ${reasonLabel}` : `${ok}${kindLabel} player(s) banned - ${reasonLabel}`,
+    });
+  };
+
+  // Load ELO history for the currently selected player (for statistical detail modal)
+  const loadStatEloHistory = async () => {
+    if (!selectedPlayer?.playerId) return;
+    setStatHistLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data } = await supabase
+        .from('elo_history')
+        .select('elo_delta, recorded_at')
+        .eq('player_id', selectedPlayer.playerId)
+        .order('recorded_at', { ascending: true })
+        .limit(100);
+      setStatEloHistory((data || []).map((d: any) => ({ delta: Number(d.elo_delta) || 0, recordedAt: d.recorded_at })));
+    } catch { /* silent */ }
+    setStatHistLoading(false);
+  };
+
+  // Bulk-ban every account tied to the selected player's email farm cluster
+  // (same prefix + domain + 24h window). Logs action to admin_activity_logs.
+  const handleBulkBanEmailFarmCluster = () => {
+    if (!selectedPlayer?.details?.emailFarm) return;
+    const emailFarm = selectedPlayer.details.emailFarm;
+    const siblings: string[] = Array.isArray(emailFarm.siblings) ? emailFarm.siblings : [];
+    if (siblings.length === 0) {
+      showAlert(isFr ? 'Aucun compte a bannir' : 'No accounts to ban');
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
     showAlert(
-      isFr ? `Bannir ${targets.length} joueur(s) comportemental(aux) ?` : `Ban ${targets.length} behavioral player(s)?`,
-      isFr ? 'Action destructive: score de confiance reduit a 0 pour tous les joueurs avec self-match / scores symetriques / adversaires fantomes.' : 'Destructive: trust score reset to 0 for all players with self-match / symmetric scores / ghost opponents.',
+      isFr ? `Bannir tout le cluster (${siblings.length}) ?` : `Ban entire cluster (${siblings.length})?`,
+      isFr
+        ? `Prefixe "${emailFarm.prefix}" @${emailFarm.domain} en ${emailFarm.spanHours || 0}h`
+        : `Prefix "${emailFarm.prefix}" @${emailFarm.domain} in ${emailFarm.spanHours || 0}h`,
       [
         { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
         {
-          text: isFr ? 'Bannir tout' : 'Ban all',
+          text: isFr ? 'Bannir tout le cluster' : 'Ban entire cluster',
           style: 'destructive',
           onPress: async () => {
-            setBulkBusy(true);
-            const snapshot: Array<{ id: string; prevStatus: string; prevTrustScore: number }> = [];
-            let ok = 0;
-            for (const p of targets) {
-              snapshot.push({ id: p.id, prevStatus: p.status, prevTrustScore: p.trustScore });
-              const { error } = await banPlayer(p.id, p.playerId || '');
-              if (!error) ok++;
+            setEmailFarmBusy(true);
+            try {
+              const supabase = getSupabaseClient();
+              const { data: profiles } = await supabase
+                .from('user_profiles')
+                .select('id, email')
+                .in('email', siblings);
+              const userIds = (profiles || []).map((p: any) => p.id);
+              let banned = 0;
+              if (userIds.length > 0) {
+                const { data: clusterPlayers } = await supabase
+                  .from('players')
+                  .select('id, user_id')
+                  .in('user_id', userIds);
+                for (const pl of clusterPlayers || []) {
+                  const existing = players.find(x => x.playerId === pl.id);
+                  if (existing) {
+                    const { error } = await banPlayer(existing.id, pl.id);
+                    if (!error) banned++;
+                  } else {
+                    const { error } = await supabase
+                      .from('suspicious_players')
+                      .upsert({
+                        player_id: pl.id,
+                        user_id: pl.user_id,
+                        trust_score: 0,
+                        flags: ['email_farm'],
+                        details: { emailFarm: { domain: emailFarm.domain, prefix: emailFarm.prefix } },
+                        status: 'banned',
+                        analyzed_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                      }, { onConflict: 'player_id' });
+                    if (!error) banned++;
+                  }
+                }
+              }
+              await supabase.from('admin_activity_logs').insert({
+                admin_user_id: user?.id,
+                admin_name: (user as any)?.username || user?.email || 'Admin',
+                action_type: 'bulk_ban_email_farm',
+                action_detail: `Cluster ${emailFarm.prefix}@${emailFarm.domain}: ${banned}/${siblings.length} banned`,
+                target_type: 'players',
+                metadata: {
+                  reason: 'email_farm',
+                  domain: emailFarm.domain,
+                  prefix: emailFarm.prefix,
+                  clusterSize: siblings.length,
+                  bannedCount: banned,
+                  spanHours: emailFarm.spanHours || 0,
+                  siblings: siblings.slice(0, 20),
+                },
+              });
+              await loadData();
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              showAlert(isFr ? `${banned} compte(s) banni(s)` : `${banned} account(s) banned`);
+            } catch (e: any) {
+              showAlert('Error', e.message);
             }
-            const ids = new Set(targets.map(t => t.id));
-            setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
-            setBulkBusy(false);
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            setUndoBan({
-              targets: snapshot.slice(0, ok),
-              expiresAt: Date.now() + 10_000,
-              label: isFr ? `${ok} joueur(s) comportemental(aux) banni(s)` : `${ok} behavioral player(s) banned`,
-            });
+            setEmailFarmBusy(false);
           },
         },
       ]
     );
+  };
+
+  // CSV export for admin behavioral digest history
+  const handleExportDigestCSV = async () => {
+    if (adminDigestHistory.length === 0) {
+      showAlert(isFr ? 'Aucune donnee a exporter' : 'No data to export');
+      return;
+    }
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    const headers = ['ID', 'User', 'Player', 'Flags', 'Summary', 'Sent At', 'Resolved', 'Resolved At'];
+    const rows = adminDigestHistory.map(h => [
+      h.id,
+      h.userName,
+      h.playerName || '-',
+      h.flags.join('|'),
+      (h.alertSummary || '').replace(/"/g, "'").replace(/\n/g, ' '),
+      h.sentAt,
+      h.isResolved ? 'yes' : 'no',
+      h.resolvedAt || '-',
+    ]);
+    const csv = [headers.join(','), ...rows.map(r => r.map(v => `"${v}"`).join(','))].join('\n');
+    try {
+      await Share.share({ message: csv, title: 'Behavioral Digest History Export' });
+    } catch { /* silent */ }
+  };
+
+  // Load admin behavioral digest history (last 30 entries with user + player joins)
+  const loadAdminDigestHistory = async () => {
+    if (adminDigestLoaded) {
+      setAdminDigestLoaded(false);
+      setAdminDigestHistory([]);
+      return;
+    }
+    setAdminDigestLoading(true);
+    try {
+      const supabase = getSupabaseClient();
+      const { data: bdh } = await supabase
+        .from('behavioral_digest_history')
+        .select('id, user_id, player_id, flags, alert_summary, sent_at, is_resolved, resolved_at')
+        .order('sent_at', { ascending: false })
+        .limit(30);
+      const userIds = Array.from(new Set((bdh || []).map((d: any) => d.user_id).filter(Boolean))) as string[];
+      const playerIds = Array.from(new Set((bdh || []).map((d: any) => d.player_id).filter(Boolean))) as string[];
+      const [usersRes, playersRes] = await Promise.all([
+        userIds.length > 0
+          ? supabase.from('user_profiles').select('id, username, email').in('id', userIds)
+          : Promise.resolve({ data: [] as any[] }),
+        playerIds.length > 0
+          ? supabase.from('players').select('id, name').in('id', playerIds)
+          : Promise.resolve({ data: [] as any[] }),
+      ]);
+      const userMap = new Map<string, string>((usersRes.data || []).map((u: any) => [u.id, u.username || u.email || String(u.id).substring(0, 8)]));
+      const playerMap = new Map<string, string>((playersRes.data || []).map((p: any) => [p.id, p.name]));
+      setAdminDigestHistory((bdh || []).map((d: any) => ({
+        id: d.id,
+        userId: d.user_id,
+        userName: userMap.get(d.user_id) || String(d.user_id).substring(0, 8),
+        playerId: d.player_id,
+        playerName: d.player_id ? (playerMap.get(d.player_id) || null) : null,
+        flags: Array.isArray(d.flags) ? d.flags : [],
+        alertSummary: d.alert_summary || '',
+        sentAt: d.sent_at,
+        isResolved: !!d.is_resolved,
+        resolvedAt: d.resolved_at,
+      })));
+    } catch { /* silent */ }
+    setAdminDigestLoading(false);
+    setAdminDigestLoaded(true);
   };
 
   // Undo the most recent bulk ban within the 10-second window
@@ -1520,6 +1768,120 @@ export default function AdminAntiCheatScreen() {
         ) : null}
       </View>
 
+      {/* ============ ADMIN BEHAVIORAL DIGEST HISTORY (last 30 entries, all players) ============ */}
+      <View style={st.deviceSection}>
+        <Pressable style={st.deviceHeaderRow} onPress={loadAdminDigestHistory}>
+          <View style={[st.deviceIcon, { backgroundColor: '#F43F5E15' }]}>
+            <MaterialIcons name="history" size={18} color="#F43F5E" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Historique rappels comportementaux' : 'Behavioral Digest History'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? '30 dernieres entrees (tous joueurs)' : 'Last 30 entries (all players)'}</Text>
+          </View>
+          {adminDigestLoading ? <ActivityIndicator size="small" color="#F43F5E" /> : (
+            <MaterialIcons name={adminDigestLoaded ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+        {adminDigestLoaded ? (
+          <View style={{ paddingTop: 10 }}>
+            <View style={[st.searchBar, { marginHorizontal: 0, marginBottom: 10 }]}>
+              <MaterialIcons name="search" size={18} color={theme.textMuted} />
+              <TextInput
+                style={st.searchInput}
+                value={adminDigestSearch}
+                onChangeText={setAdminDigestSearch}
+                placeholder={isFr ? 'Filtrer par joueur ou user...' : 'Filter by player or user...'}
+                placeholderTextColor={theme.textMuted}
+              />
+              {adminDigestSearch.length > 0 ? (
+                <Pressable onPress={() => setAdminDigestSearch('')} hitSlop={8}>
+                  <MaterialIcons name="close" size={16} color={theme.textMuted} />
+                </Pressable>
+              ) : null}
+            </View>
+            {(() => {
+              const filteredList = adminDigestHistory.filter(h => {
+                if (!adminDigestSearch.trim()) return true;
+                const q = adminDigestSearch.toLowerCase();
+                return h.userName.toLowerCase().includes(q) || (h.playerName || '').toLowerCase().includes(q);
+              });
+              const activeCount = adminDigestHistory.filter(h => !h.isResolved).length;
+              const resolvedCount = adminDigestHistory.filter(h => h.isResolved).length;
+              return (
+                <>
+                  <View style={{ flexDirection: 'row', gap: 6, marginBottom: 10 }}>
+                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: theme.textPrimary }}>{adminDigestHistory.length}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Total' : 'Total'}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#F43F5E10', borderRadius: 10, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#F43F5E' }}>{activeCount}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Actifs' : 'Active'}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: 'center', backgroundColor: '#22C55E10', borderRadius: 10, paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '800', color: '#22C55E' }}>{resolvedCount}</Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Resolus' : 'Resolved'}</Text>
+                    </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                    <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
+                      {`${filteredList.length} / ${adminDigestHistory.length} ${isFr ? 'entree(s)' : 'entry(ies)'}`}
+                    </Text>
+                    <Pressable style={st.digestExportBtn} onPress={handleExportDigestCSV}>
+                      <MaterialIcons name="file-download" size={13} color="#F43F5E" />
+                      <Text style={st.digestExportBtnText}>{isFr ? 'Export CSV' : 'Export CSV'}</Text>
+                    </Pressable>
+                  </View>
+                  {filteredList.length === 0 ? (
+                    <View style={{ paddingVertical: 20, alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="filter-list" size={24} color={theme.textMuted} />
+                      <Text style={{ fontSize: 11, color: theme.textMuted, fontWeight: '600' }}>
+                        {isFr ? 'Aucune entree' : 'No entries'}
+                      </Text>
+                    </View>
+                  ) : filteredList.map(h => {
+                    const dateStr = new Date(h.sentAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                    const resolvedColor = h.isResolved ? '#22C55E' : '#F43F5E';
+                    return (
+                      <Pressable
+                        key={h.id}
+                        style={[st.digestRow, { borderLeftColor: resolvedColor }, h.playerId && { paddingRight: 6 }]}
+                        onPress={() => {
+                          if (!h.playerId) return;
+                          Haptics.selectionAsync();
+                          router.push(`/player/${h.playerId}` as any);
+                        }}
+                        disabled={!h.playerId}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 3 }}>
+                            <MaterialIcons name="person" size={11} color={theme.textMuted} />
+                            <Text style={st.digestUser} numberOfLines={1}>{h.playerName || h.userName}</Text>
+                          </View>
+                          <Text style={st.digestDate}>{dateStr}</Text>
+                          {h.alertSummary ? (
+                            <Text style={st.digestSummary} numberOfLines={2}>{h.alertSummary}</Text>
+                          ) : null}
+                        </View>
+                        <View style={[st.digestStatusBadge, { backgroundColor: resolvedColor + '15', borderColor: resolvedColor + '30' }]}>
+                          <MaterialIcons name={h.isResolved ? 'check-circle' : 'radio-button-checked'} size={10} color={resolvedColor} />
+                          <Text style={[st.digestStatusText, { color: resolvedColor }]}>
+                            {h.isResolved ? (isFr ? 'Resolu' : 'Resolved') : (isFr ? 'Actif' : 'Active')}
+                          </Text>
+                        </View>
+                        {h.playerId ? (
+                          <MaterialIcons name="chevron-right" size={16} color={theme.textMuted} />
+                        ) : null}
+                      </Pressable>
+                    );
+                  })}
+                </>
+              );
+            })()}
+          </View>
+        ) : null}
+      </View>
+
       {/* ============ DEVICE TRANSFER REQUESTS ============ */}
       <View style={st.deviceSection}>
         <Pressable
@@ -1738,8 +2100,8 @@ export default function AdminAntiCheatScreen() {
 
       {/* Status filter chips */}
       <View><ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
-        {(['all', 'geoAlerts', 'temporalAlerts', 'behavioralAlerts', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => {
-          const isAlertFilter = sf === 'geoAlerts' || sf === 'temporalAlerts' || sf === 'behavioralAlerts';
+        {(['all', 'geoAlerts', 'temporalAlerts', 'behavioralAlerts', 'statisticalAlerts', 'identityAlerts', 'socialAlerts', 'flagged', 'watch', 'ok', 'dismissed', 'banned'] as StatusFilter[]).map(sf => {
+          const isAlertFilter = sf === 'geoAlerts' || sf === 'temporalAlerts' || sf === 'behavioralAlerts' || sf === 'statisticalAlerts' || sf === 'identityAlerts' || sf === 'socialAlerts';
           const isActive = statusFilter === sf;
           const alertColor = isAlertFilter ? getStatusColor(sf) : theme.textSecondary;
           return (
@@ -2042,6 +2404,25 @@ export default function AdminAntiCheatScreen() {
                   <Text style={st.adjustBtnText}>{(et.adminAdjustScore as any)?.[language] || 'Adjust'}</Text>
                 </Pressable>
               </View>
+
+              {/* Statistical analysis trigger (Benford + ELO regression) */}
+              {(selectedPlayer.details?.eloVariance || selectedPlayer.details?.benfordAnalysis) ? (
+                <Pressable
+                  style={st.statAnalysisSection}
+                  onPress={() => { setShowStatModal(true); loadStatEloHistory(); }}
+                >
+                  <View style={[st.sectionIconBg, { backgroundColor: '#0EA5E915' }]}>
+                    <MaterialIcons name="analytics" size={16} color="#0EA5E9" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={st.statAnalysisTitle}>{isFr ? 'Analyses statistiques' : 'Statistical analysis'}</Text>
+                    <Text style={st.statAnalysisSub}>
+                      {isFr ? 'Distribution Benford + courbe ELO avec regression' : 'Benford distribution + ELO curve with regression'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={20} color="#0EA5E9" />
+                </Pressable>
+              ) : null}
 
               {/* Stats from details */}
               {selectedPlayer.details ? (
@@ -2821,6 +3202,64 @@ export default function AdminAntiCheatScreen() {
                 </View>
               ) : null}
 
+              {/* Email Farm Cluster */}
+              {selectedPlayer.details?.emailFarm ? (
+                <View style={st.detailSection}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                    <MaterialIcons name="alternate-email" size={16} color="#DC2626" />
+                    <Text style={st.detailSectionTitle}>{isFr ? 'Cluster email farm' : 'Email farm cluster'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryRow}>
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#DC2626' }]}>{selectedPlayer.details.emailFarm.clusterSize || 0}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Comptes' : 'Accounts'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: '#EF4444' }]}>{selectedPlayer.details.emailFarm.spanHours || 0}h</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Fenetre' : 'Window'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary, fontSize: 11 }]} numberOfLines={1}>{selectedPlayer.details.emailFarm.prefix}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Prefixe' : 'Prefix'}</Text>
+                    </View>
+                    <View style={st.deletionSummaryDivider} />
+                    <View style={st.deletionSummaryItem}>
+                      <Text style={[st.deletionSummaryValue, { color: theme.textSecondary, fontSize: 11 }]} numberOfLines={1}>{selectedPlayer.details.emailFarm.domain}</Text>
+                      <Text style={st.deletionSummaryLabel}>{isFr ? 'Domaine' : 'Domain'}</Text>
+                    </View>
+                  </View>
+                  {Array.isArray(selectedPlayer.details.emailFarm.siblings) && selectedPlayer.details.emailFarm.siblings.length > 0 ? (
+                    <View style={{ marginTop: 12 }}>
+                      <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                        {isFr ? `Comptes lies (${selectedPlayer.details.emailFarm.siblings.length})` : `Linked accounts (${selectedPlayer.details.emailFarm.siblings.length})`}
+                      </Text>
+                      {selectedPlayer.details.emailFarm.siblings.slice(0, 6).map((email: string, i: number) => (
+                        <View key={i} style={st.geoAlertRow}>
+                          <View style={[st.geoAlertIcon, { backgroundColor: '#DC262615' }]}>
+                            <MaterialIcons name="email" size={14} color="#DC2626" />
+                          </View>
+                          <Text style={[st.geoAlertTitle, { flex: 1 }]} numberOfLines={1}>{email}</Text>
+                        </View>
+                      ))}
+                    </View>
+                  ) : null}
+                  <Pressable
+                    style={[st.emailFarmBanBtn, emailFarmBusy && { opacity: 0.6 }]}
+                    onPress={handleBulkBanEmailFarmCluster}
+                    disabled={emailFarmBusy}
+                  >
+                    {emailFarmBusy ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="block" size={16} color="#FFF" />}
+                    <Text style={st.emailFarmBanBtnText}>
+                      {emailFarmBusy
+                        ? (isFr ? 'Bannissement...' : 'Banning...')
+                        : (isFr ? `Bannir tout le cluster (${selectedPlayer.details.emailFarm.siblings?.length || 0})` : `Ban entire cluster (${selectedPlayer.details.emailFarm.siblings?.length || 0})`)}
+                    </Text>
+                  </Pressable>
+                </View>
+              ) : null}
+
               {/* Flags */}
               <View style={st.detailSection}>
                 <Text style={st.detailSectionTitle}>{(et.adminFlags as any)?.[language] || 'Flags'} ({selectedPlayer.flags.length})</Text>
@@ -2884,6 +3323,243 @@ export default function AdminAntiCheatScreen() {
               </View>
             </ScrollView>
           ) : null}
+        </SafeAreaView>
+      </Modal>
+
+      {/* Ban Reason Selector Modal */}
+      <Modal visible={banReasonPrompt !== null} animationType="fade" transparent onRequestClose={() => setBanReasonPrompt(null)}>
+        <View style={st.adjustOverlay}>
+          <View style={[st.adjustContent, { maxWidth: 380, width: '100%' }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <MaterialIcons name="gpp-bad" size={22} color="#EF4444" />
+              <Text style={[st.adjustTitle, { marginBottom: 0 }]}>{isFr ? 'Motif du bannissement' : 'Ban reason'}</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: theme.textSecondary, textAlign: 'center', marginBottom: 14 }}>
+              {isFr
+                ? `${banReasonPrompt?.targets.length || 0} joueur(s) - Choisissez un motif`
+                : `${banReasonPrompt?.targets.length || 0} player(s) - Choose a reason`}
+            </Text>
+            <View style={{ gap: 8, alignSelf: 'stretch', marginBottom: 16 }}>
+              {([
+                { value: 'cheat', labelFr: 'Triche', labelEn: 'Cheating', icon: 'gpp-bad', color: '#EF4444' },
+                { value: 'spam', labelFr: 'Spam', labelEn: 'Spam', icon: 'block', color: '#F97316' },
+                { value: 'harassment', labelFr: 'Harcelement', labelEn: 'Harassment', icon: 'report', color: '#DB2777' },
+                { value: 'other', labelFr: 'Autre', labelEn: 'Other', icon: 'more-horiz', color: '#6B7280' },
+              ] as const).map(opt => {
+                const isSelected = selectedBanReason === opt.value;
+                return (
+                  <Pressable
+                    key={opt.value}
+                    style={[st.banReasonOption, isSelected && { backgroundColor: opt.color + '15', borderColor: opt.color }]}
+                    onPress={() => { Haptics.selectionAsync(); setSelectedBanReason(opt.value); }}
+                  >
+                    <View style={[st.banReasonIcon, { backgroundColor: opt.color + (isSelected ? '25' : '12') }]}>
+                      <MaterialIcons name={opt.icon as any} size={16} color={opt.color} />
+                    </View>
+                    <Text style={[st.banReasonLabel, isSelected && { color: opt.color, fontWeight: '800' }]}>
+                      {isFr ? opt.labelFr : opt.labelEn}
+                    </Text>
+                    {isSelected ? (
+                      <MaterialIcons name="check-circle" size={18} color={opt.color} />
+                    ) : (
+                      <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: theme.border }} />
+                    )}
+                  </Pressable>
+                );
+              })}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 10, alignSelf: 'stretch' }}>
+              <Pressable style={st.adjustCancel} onPress={() => setBanReasonPrompt(null)}>
+                <Text style={st.adjustCancelText}>{t('common', 'cancel')}</Text>
+              </Pressable>
+              <Pressable
+                style={[st.adjustConfirm, { backgroundColor: '#EF4444', flexDirection: 'row', gap: 6, justifyContent: 'center' }, bulkBusy && { opacity: 0.6 }]}
+                onPress={handleConfirmBanWithReason}
+                disabled={bulkBusy}
+              >
+                {bulkBusy ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="block" size={16} color="#FFF" />}
+                <Text style={st.adjustConfirmText}>{isFr ? 'Bannir' : 'Ban'}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Statistical Detail Modal (Benford chart + ELO regression) */}
+      <Modal visible={showStatModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setShowStatModal(false)}>
+        <SafeAreaView style={st.detailContainer}>
+          <View style={st.detailHeader}>
+            <Pressable style={st.detailClose} onPress={() => setShowStatModal(false)}>
+              <MaterialIcons name="close" size={24} color={theme.textPrimary} />
+            </Pressable>
+            <Text style={st.detailTitle}>{isFr ? 'Analyses statistiques' : 'Statistical analysis'}</Text>
+            <View style={{ width: 40 }} />
+          </View>
+          <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 32 }} showsVerticalScrollIndicator={false}>
+            {/* Benford */}
+            {selectedPlayer?.details?.benfordAnalysis ? (
+              <View style={st.detailSection}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <MaterialIcons name="insights" size={16} color="#0EA5E9" />
+                  <Text style={st.detailSectionTitle}>{isFr ? 'Loi de Benford (scores + ELO)' : 'Benford Law (scores + ELO)'}</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 17, marginBottom: 10 }}>
+                  {isFr
+                    ? 'Distribution des chiffres de tete observee vs attendue. Chi-carre > 15.51 = ecart significatif.'
+                    : 'Observed leading-digit distribution vs expected. Chi-square > 15.51 = significant deviation.'}
+                </Text>
+                <View style={st.deletionSummaryRow}>
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#0EA5E9' }]}>{selectedPlayer.details.benfordAnalysis.sampleSize}</Text>
+                    <Text style={st.deletionSummaryLabel}>{isFr ? 'Echantillon' : 'Sample'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#0284C7' }]}>{selectedPlayer.details.benfordAnalysis.chiSquare}</Text>
+                    <Text style={st.deletionSummaryLabel}>Chi2</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#0369A1' }]}>{selectedPlayer.details.benfordAnalysis.threshold95}</Text>
+                    <Text style={st.deletionSummaryLabel}>{isFr ? 'Seuil 95%' : '95%'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#075985' }]}>{selectedPlayer.details.benfordAnalysis.threshold99}</Text>
+                    <Text style={st.deletionSummaryLabel}>{isFr ? 'Seuil 99%' : '99%'}</Text>
+                  </View>
+                </View>
+                <View style={st.benfordChart}>
+                  {(() => {
+                    const expected = [30.1, 17.6, 12.5, 9.7, 7.9, 6.7, 5.8, 5.1, 4.6];
+                    const observed = Array.isArray(selectedPlayer.details.benfordAnalysis.digitDistribution)
+                      ? selectedPlayer.details.benfordAnalysis.digitDistribution : [];
+                    const maxPct = 35;
+                    return Array.from({ length: 9 }, (_, i) => {
+                      const obs = Number(observed[i]) || 0;
+                      const exp = expected[i];
+                      const obsH = Math.max(2, (obs / maxPct) * 70);
+                      const expH = Math.max(2, (exp / maxPct) * 70);
+                      return (
+                        <View key={i} style={st.benfordBarCol}>
+                          <View style={st.benfordBarWrap}>
+                            <View style={[st.benfordExpected, { height: expH }]} />
+                            <View style={[st.benfordObserved, { height: obsH }]} />
+                          </View>
+                          <Text style={st.benfordDigit}>{i + 1}</Text>
+                        </View>
+                      );
+                    });
+                  })()}
+                </View>
+                <View style={st.benfordLegend}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#0EA5E9' }} />
+                    <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Observe' : 'Observed'}</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 10, height: 10, borderRadius: 3, backgroundColor: '#94A3B850' }} />
+                    <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Attendu (Benford)' : 'Expected (Benford)'}</Text>
+                  </View>
+                </View>
+              </View>
+            ) : (
+              <View style={st.detailSection}>
+                <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: 'center', paddingVertical: 12 }}>
+                  {isFr ? 'Pas assez de donnees pour analyse Benford' : 'Not enough data for Benford analysis'}
+                </Text>
+              </View>
+            )}
+
+            {/* ELO Variance */}
+            {selectedPlayer?.details?.eloVariance ? (
+              <View style={st.detailSection}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+                  <MaterialIcons name="show-chart" size={16} color="#DB2777" />
+                  <Text style={st.detailSectionTitle}>{isFr ? 'Progression ELO (regression)' : 'ELO progression (regression)'}</Text>
+                </View>
+                <Text style={{ fontSize: 12, color: theme.textSecondary, lineHeight: 17, marginBottom: 10 }}>
+                  {isFr ? 'R2 eleve = progression trop lineaire. CV faible = variance suspecte.' : 'High R2 = too-linear progression. Low CV = suspicious variance.'}
+                </Text>
+                <View style={st.deletionSummaryRow}>
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#DB2777' }]}>{selectedPlayer.details.eloVariance.matchesAnalyzed}</Text>
+                    <Text style={st.deletionSummaryLabel}>{isFr ? 'Matchs' : 'Matches'}</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#BE185D' }]}>{selectedPlayer.details.eloVariance.coefficientOfVariation}</Text>
+                    <Text style={st.deletionSummaryLabel}>CV</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#9D174D' }]}>{selectedPlayer.details.eloVariance.linearityR2}</Text>
+                    <Text style={st.deletionSummaryLabel}>R2</Text>
+                  </View>
+                  <View style={st.deletionSummaryDivider} />
+                  <View style={st.deletionSummaryItem}>
+                    <Text style={[st.deletionSummaryValue, { color: '#831843' }]}>{selectedPlayer.details.eloVariance.slope}</Text>
+                    <Text style={st.deletionSummaryLabel}>{isFr ? 'Pente' : 'Slope'}</Text>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                  <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#DB2777' }}>{selectedPlayer.details.eloVariance.meanAbsDelta}</Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Delta moyen (abs)' : 'Mean abs delta'}</Text>
+                  </View>
+                  <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 16, fontWeight: '800', color: '#BE185D' }}>{selectedPlayer.details.eloVariance.positiveDeltaRatio}%</Text>
+                    <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Ratio gains' : 'Positive ratio'}</Text>
+                  </View>
+                </View>
+                {statHistLoading ? (
+                  <View style={{ paddingVertical: 20, alignItems: 'center' }}>
+                    <ActivityIndicator size="small" color="#DB2777" />
+                  </View>
+                ) : statEloHistory.length > 0 ? (
+                  <View style={{ marginTop: 12 }}>
+                    <Text style={{ fontSize: 11, fontWeight: '700', color: theme.textMuted, marginBottom: 6, textTransform: 'uppercase' }}>
+                      {isFr ? `Courbe cumulative (${statEloHistory.length} matchs)` : `Cumulative curve (${statEloHistory.length} matches)`}
+                    </Text>
+                    <View style={st.eloSparkline}>
+                      {(() => {
+                        const cum: number[] = [];
+                        let running = 0;
+                        for (const h of statEloHistory) { running += h.delta; cum.push(running); }
+                        const minVal = Math.min(...cum, 0);
+                        const maxVal = Math.max(...cum, 0);
+                        const range = Math.max(1, maxVal - minVal);
+                        return cum.map((v, i) => {
+                          const pct = (v - minVal) / range;
+                          const barH = Math.max(2, pct * 44);
+                          const color = statEloHistory[i].delta >= 0 ? '#22C55E' : '#EF4444';
+                          return <View key={i} style={{ flex: 1, height: barH, backgroundColor: color, borderRadius: 1, opacity: 0.85 }} />;
+                        });
+                      })()}
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>
+                        {new Date(statEloHistory[0].recordedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                      </Text>
+                      <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600' }}>
+                        {new Date(statEloHistory[statEloHistory.length - 1].recordedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <Text style={{ fontSize: 11, color: theme.textMuted, textAlign: 'center', marginTop: 12 }}>
+                    {isFr ? 'Aucun historique ELO' : 'No ELO history'}
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View style={st.detailSection}>
+                <Text style={{ fontSize: 13, color: theme.textMuted, textAlign: 'center', paddingVertical: 12 }}>
+                  {isFr ? 'Pas assez de donnees pour analyse ELO' : 'Not enough data for ELO analysis'}
+                </Text>
+              </View>
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
 
@@ -3138,4 +3814,40 @@ const st = StyleSheet.create({
   undoToastSub: { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontWeight: '600' as const },
   undoToastBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
   undoToastBtnText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF' },
+
+  // Admin behavioral digest history section
+  digestExportBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, backgroundColor: '#F43F5E15', borderWidth: 1, borderColor: '#F43F5E30' },
+  digestExportBtnText: { fontSize: 10, fontWeight: '800' as const, color: '#F43F5E' },
+  digestRow: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginBottom: 6, borderLeftWidth: 3 },
+  digestUser: { fontSize: 12, fontWeight: '700' as const, color: theme.textPrimary, flex: 1 },
+  digestDate: { fontSize: 9, color: theme.textMuted, fontWeight: '500' as const, marginBottom: 3 },
+  digestSummary: { fontSize: 10, color: theme.textSecondary, fontWeight: '500' as const, lineHeight: 14 },
+  digestStatusBadge: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 7, borderWidth: 1 },
+  digestStatusText: { fontSize: 9, fontWeight: '800' as const },
+
+  // Ban reason selector
+  banReasonOption: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: theme.backgroundSecondary, borderWidth: 1.5, borderColor: theme.border },
+  banReasonIcon: { width: 28, height: 28, borderRadius: 8, alignItems: 'center' as const, justifyContent: 'center' as const },
+  banReasonLabel: { flex: 1, fontSize: 13, fontWeight: '600' as const, color: theme.textPrimary },
+
+  // Statistical analysis section trigger
+  statAnalysisSection: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: theme.surface, borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#0EA5E930', ...theme.shadows.card },
+  statAnalysisTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  statAnalysisSub: { fontSize: 11, color: theme.textMuted, marginTop: 2 },
+
+  // Benford chart
+  benfordChart: { flexDirection: 'row' as const, gap: 4, alignItems: 'flex-end' as const, height: 90, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 10, marginTop: 10 },
+  benfordBarCol: { flex: 1, alignItems: 'center' as const, gap: 3 },
+  benfordBarWrap: { width: '100%' as const, height: 70, position: 'relative' as const, justifyContent: 'flex-end' as const },
+  benfordObserved: { position: 'absolute' as const, bottom: 0, left: '20%' as any, width: '30%' as any, borderRadius: 2, backgroundColor: '#0EA5E9' },
+  benfordExpected: { position: 'absolute' as const, bottom: 0, right: '20%' as any, width: '30%' as any, borderRadius: 2, backgroundColor: '#94A3B850' },
+  benfordDigit: { fontSize: 9, fontWeight: '800' as const, color: theme.textSecondary },
+  benfordLegend: { flexDirection: 'row' as const, gap: 12, justifyContent: 'center' as const, marginTop: 8 },
+
+  // ELO cumulative sparkline
+  eloSparkline: { flexDirection: 'row' as const, alignItems: 'flex-end' as const, height: 50, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 6, gap: 1 },
+
+  // Email farm bulk ban button
+  emailFarmBanBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#DC2626', paddingVertical: 12, borderRadius: 12, marginTop: 12 },
+  emailFarmBanBtnText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
 });

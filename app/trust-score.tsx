@@ -173,6 +173,15 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   symmetric_score_streak_extreme: { fr: 'Serie de scores extremes (10+ matchs)', en: 'Extreme score streak (10+ matches)', icon: 'repeat', color: '#E11D48' },
   ghost_opponents: { fr: 'Adversaires fantomes detectes', en: 'Ghost opponents detected', icon: 'person-off', color: '#A855F7' },
   ghost_opponents_dominant: { fr: 'Adversaires fantomes dominants', en: 'Dominant ghost opponents', icon: 'person-off', color: '#9333EA' },
+  artificial_progression: { fr: 'Progression ELO artificielle (trop reguliere)', en: 'Artificial ELO progression (too regular)', icon: 'trending-up', color: '#DB2777' },
+  suspiciously_linear_elo: { fr: 'Progression ELO suspecte (lineaire)', en: 'Suspicious linear ELO progression', icon: 'show-chart', color: '#EC4899' },
+  benford_deviation: { fr: 'Distribution des scores atypique (Benford)', en: 'Atypical score distribution (Benford)', icon: 'insights', color: '#0EA5E9' },
+  benford_deviation_severe: { fr: 'Distribution des scores tres atypique (Benford)', en: 'Highly atypical score distribution (Benford)', icon: 'analytics', color: '#0284C7' },
+  shared_fingerprint_recent: { fr: 'Empreinte d\'appareil partagee (30 j)', en: 'Shared device fingerprint (30d)', icon: 'devices-other', color: '#F97316' },
+  shared_fingerprint_recent_multi: { fr: 'Empreinte partagee par plusieurs comptes (30 j)', en: 'Fingerprint shared by multiple accounts (30d)', icon: 'devices-other', color: '#EF4444' },
+  email_farm: { fr: 'Emails sequentiels detectes (email farm)', en: 'Sequential emails detected (email farm)', icon: 'alternate-email', color: '#DC2626' },
+  witness_reputation_biased: { fr: 'Reputation temoin biaisee (concentration)', en: 'Biased witness reputation (concentrated)', icon: 'visibility', color: '#F59E0B' },
+  witness_reputation_extreme: { fr: 'Reputation temoin extreme (temoin unique)', en: 'Extreme witness reputation (single witness)', icon: 'remove-red-eye', color: '#D97706' },
 };
 
 // ============================================
@@ -195,6 +204,8 @@ export default function TrustScoreScreen() {
   const [behavioralDigestHistory, setBehavioralDigestHistory] = useState<Array<{ id: string; flags: string[]; alertSummary: string; sentAt: string; isResolved: boolean; resolvedAt: string | null }>>([]);
   const [bdhLoading, setBdhLoading] = useState(false);
   const [bdhFilter, setBdhFilter] = useState<'active' | 'resolved' | 'all'>('all');
+  // Nearby witness suggestions (shown when witness concentration >= 60%)
+  const [nearbyWitnesses, setNearbyWitnesses] = useState<Array<{ id: string; userId: string; name: string; avatar?: string; city?: string; club?: string; eloRating: number }>>([]);
 
   const bdhFiltered = useMemo(() => {
     if (bdhFilter === 'active') return behavioralDigestHistory.filter(h => !h.isResolved);
@@ -236,6 +247,52 @@ export default function TrustScoreScreen() {
       setHistoryLoading(false);
     });
   }, [selfPlayer?.id]);
+
+  // Fetch 3 nearby users (by club, then city) as alternative witness suggestions
+  // when the dominant-witness concentration ratio exceeds 60%.
+  useEffect(() => {
+    const wr = trustData?.details?.witnessReputation;
+    const shouldFetch = !!(wr && wr.totalAttestations >= 3 && wr.concentrationRatio >= 60 && selfPlayer && user?.id);
+    if (!shouldFetch) { setNearbyWitnesses([]); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const supabaseClient = getSupabaseClient();
+        const city = (selfPlayer as any)?.city;
+        const clubName = (selfPlayer as any)?.club;
+        let rows: any[] = [];
+        if (clubName) {
+          const { data } = await supabaseClient
+            .from('players')
+            .select('id, user_id, name, avatar, city, club, elo_rating')
+            .eq('is_public', true)
+            .neq('user_id', user!.id)
+            .eq('club', clubName)
+            .limit(3);
+          if (data && data.length > 0) rows = data;
+        }
+        if (rows.length < 3 && city) {
+          const { data } = await supabaseClient
+            .from('players')
+            .select('id, user_id, name, avatar, city, club, elo_rating')
+            .eq('is_public', true)
+            .neq('user_id', user!.id)
+            .eq('city', city)
+            .limit(3 - rows.length);
+          if (data) {
+            const existingIds = new Set(rows.map(r => r.id));
+            for (const p of data) if (!existingIds.has(p.id)) rows.push(p);
+          }
+        }
+        if (cancelled) return;
+        setNearbyWitnesses(rows.slice(0, 3).map((p: any) => ({
+          id: p.id, userId: p.user_id, name: p.name, avatar: p.avatar || undefined,
+          city: p.city || undefined, club: p.club || undefined, eloRating: p.elo_rating || 1000,
+        })));
+      } catch { /* silent */ }
+    })();
+    return () => { cancelled = true; };
+  }, [trustData?.details?.witnessReputation?.concentrationRatio, (selfPlayer as any)?.city, (selfPlayer as any)?.club, user?.id]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -1053,6 +1110,230 @@ export default function TrustScoreScreen() {
                     </View>
                   );
                 })}
+              </Animated.View>
+            ) : null}
+
+            {/* Statistical Anomalies (ELO variance + Benford) */}
+            {(
+              trustData.flags.some((f: string) => f === 'artificial_progression' || f === 'suspiciously_linear_elo' || f === 'benford_deviation' || f === 'benford_deviation_severe')
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(246)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#0EA5E9' + '15' }]}>
+                    <MaterialIcons name="analytics" size={18} color="#0EA5E9" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Anomalies statistiques' : 'Statistical Anomalies'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Ces analyses statistiques comparent votre progression et vos scores a des distributions attendues dans un jeu equilibre.'
+                    : 'These statistical analyses compare your progression and scores against distributions expected in fair play.'}
+                </Text>
+
+                {/* ELO variance */}
+                {trustData.details?.eloVariance && (trustData.flags.includes('artificial_progression') || trustData.flags.includes('suspiciously_linear_elo')) ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="trending-up" size={14} color="#DB2777" />
+                      <Text style={[geoSt.groupTitle, { color: '#DB2777' }]}>
+                        {isFr ? 'Progression ELO trop reguliere' : 'ELO progression too regular'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#DB277715' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#DB2777' }]}>
+                          R² {trustData.details.eloVariance.linearityR2}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.eloVariance.matchesAnalyzed} matchs analyses. Coefficient de variation ${trustData.details.eloVariance.coefficientOfVariation} (trop bas), linearite ${Math.round(trustData.details.eloVariance.linearityR2 * 100)}% (trop haute), ${trustData.details.eloVariance.positiveDeltaRatio}% de gains.`
+                        : `${trustData.details.eloVariance.matchesAnalyzed} matches analyzed. Coefficient of variation ${trustData.details.eloVariance.coefficientOfVariation} (too low), linearity ${Math.round(trustData.details.eloVariance.linearityR2 * 100)}% (too high), ${trustData.details.eloVariance.positiveDeltaRatio}% wins.`}
+                    </Text>
+                    <View style={[geoSt.item, { borderLeftColor: '#DB2777' }]}>
+                      <Text style={geoSt.itemTitle}>{isFr ? 'Delta moyen' : 'Mean delta'}</Text>
+                      <Text style={geoSt.itemMeta}>{trustData.details.eloVariance.meanAbsDelta} pts · {isFr ? 'pente' : 'slope'} {trustData.details.eloVariance.slope}</Text>
+                    </View>
+                  </View>
+                ) : null}
+
+                {/* Benford */}
+                {trustData.details?.benfordAnalysis && (trustData.flags.includes('benford_deviation') || trustData.flags.includes('benford_deviation_severe')) ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="insights" size={14} color="#0EA5E9" />
+                      <Text style={[geoSt.groupTitle, { color: '#0EA5E9' }]}>
+                        {isFr ? 'Loi de Benford : ecart significatif' : 'Benford Law: significant deviation'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#0EA5E915' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#0EA5E9' }]}>
+                          χ² {trustData.details.benfordAnalysis.chiSquare}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `Distribution des chiffres de tete calculee sur ${trustData.details.benfordAnalysis.sampleSize} valeurs. Chi-carre ${trustData.details.benfordAnalysis.chiSquare} > seuil 95% (${trustData.details.benfordAnalysis.threshold95}).`
+                        : `Leading-digit distribution computed on ${trustData.details.benfordAnalysis.sampleSize} values. Chi-square ${trustData.details.benfordAnalysis.chiSquare} > 95% threshold (${trustData.details.benfordAnalysis.threshold95}).`}
+                    </Text>
+                    <View style={{ flexDirection: 'row', gap: 3, marginTop: 4 }}>
+                      {(trustData.details.benfordAnalysis.digitDistribution || []).map((pct: number, i: number) => (
+                        <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                          <View style={{ width: '100%', height: 32, backgroundColor: '#0EA5E915', borderRadius: 4, justifyContent: 'flex-end', overflow: 'hidden' }}>
+                            <View style={{ height: Math.max(2, Math.min(32, pct * 0.8)), backgroundColor: '#0EA5E9' }} />
+                          </View>
+                          <Text style={{ fontSize: 8, color: theme.textMuted, marginTop: 2, fontWeight: '700' }}>{i + 1}</Text>
+                          <Text style={{ fontSize: 7, color: '#0EA5E9', fontWeight: '600' }}>{pct}%</Text>
+                        </View>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {/* Identity/Network Alerts (shared fingerprint + email farm) */}
+            {(
+              trustData.flags.some((f: string) => f === 'shared_fingerprint_recent' || f === 'shared_fingerprint_recent_multi' || f === 'email_farm')
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(247)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#EF4444' + '15' }]}>
+                    <MaterialIcons name="security" size={18} color="#EF4444" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Alertes identite / reseau' : 'Identity / Network Alerts'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Ces alertes identifient des comportements typiques de multi-comptes ou de creation en masse.'
+                    : 'These alerts identify patterns typical of multi-accounting or bulk account creation.'}
+                </Text>
+
+                {trustData.details?.sharedFingerprintRecent && (trustData.flags.includes('shared_fingerprint_recent') || trustData.flags.includes('shared_fingerprint_recent_multi')) ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="devices-other" size={14} color="#F97316" />
+                      <Text style={[geoSt.groupTitle, { color: '#F97316' }]}>
+                        {isFr ? 'Empreinte d\'appareil partagee (30 j)' : 'Shared device fingerprint (30d)'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#F9731615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#F97316' }]}>
+                          {trustData.details.sharedFingerprintRecent.sharedAccountsCount}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.sharedFingerprintRecent.sharedAccountsCount} compte(s) actif(s) sur le meme appareil dans les 30 derniers jours. Assurez-vous de ne pas partager votre appareil avec des comptes suspects.`
+                        : `${trustData.details.sharedFingerprintRecent.sharedAccountsCount} account(s) active on the same device in the last 30 days. Make sure your device is not shared with suspicious accounts.`}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {trustData.details?.emailFarm && trustData.flags.includes('email_farm') ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="alternate-email" size={14} color="#DC2626" />
+                      <Text style={[geoSt.groupTitle, { color: '#DC2626' }]}>
+                        {isFr ? 'Emails sequentiels detectes' : 'Sequential emails detected'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#DC262615' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#DC2626' }]}>
+                          {trustData.details.emailFarm.clusterSize}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.emailFarm.clusterSize} emails sequentiels (prefixe "${trustData.details.emailFarm.prefix}") sur le domaine ${trustData.details.emailFarm.domain} crees en ${trustData.details.emailFarm.spanHours} h.`
+                        : `${trustData.details.emailFarm.clusterSize} sequential emails (prefix "${trustData.details.emailFarm.prefix}") on domain ${trustData.details.emailFarm.domain} created within ${trustData.details.emailFarm.spanHours} h.`}
+                    </Text>
+                    {Array.isArray(trustData.details.emailFarm.siblings) && trustData.details.emailFarm.siblings.length > 0 ? (
+                      <View style={[geoSt.item, { borderLeftColor: '#DC2626' }]}>
+                        <Text style={geoSt.itemTitle}>{isFr ? 'Comptes associes' : 'Associated accounts'}</Text>
+                        <Text style={geoSt.itemMeta}>{trustData.details.emailFarm.siblings.slice(0, 5).join(', ')}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {/* Witness Reputation Alert */}
+            {(
+              trustData.details?.witnessReputation && trustData.details.witnessReputation.totalAttestations >= 3 &&
+              (trustData.flags.includes('witness_reputation_biased') || trustData.flags.includes('witness_reputation_extreme') || trustData.details.witnessReputation.concentrationRatio >= 50)
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(249)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#F59E0B' + '15' }]}>
+                    <MaterialIcons name="visibility" size={18} color="#F59E0B" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Reputation de vos temoins' : 'Witness Reputation'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Les matchs avec un fort impact ELO doivent etre attestes par des temoins varies. Une concentration excessive sur un seul temoin reduit la credibilite des attestations.'
+                    : 'High-ELO-impact matches should be attested by diverse witnesses. Excessive concentration on a single witness reduces attestation credibility.'}
+                </Text>
+                <View style={geoSt.group}>
+                  <View style={geoSt.groupHeader}>
+                    <MaterialIcons name="pie-chart" size={14} color="#F59E0B" />
+                    <Text style={[geoSt.groupTitle, { color: '#F59E0B' }]}>
+                      {isFr ? 'Concentration temoin' : 'Witness concentration'}
+                    </Text>
+                    <View style={[geoSt.groupBadge, { backgroundColor: '#F59E0B15' }]}>
+                      <Text style={[geoSt.groupBadgeText, { color: '#F59E0B' }]}>
+                        {trustData.details.witnessReputation.concentrationRatio}%
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={geoSt.groupDesc}>
+                    {isFr
+                      ? `${trustData.details.witnessReputation.totalAttestations} attestations verifiees dont ${trustData.details.witnessReputation.dominantWitnessCount} par le meme temoin (${trustData.details.witnessReputation.concentrationRatio}%). ${trustData.details.witnessReputation.uniqueWitnesses} temoin(s) unique(s).`
+                      : `${trustData.details.witnessReputation.totalAttestations} verified attestations, ${trustData.details.witnessReputation.dominantWitnessCount} by the same witness (${trustData.details.witnessReputation.concentrationRatio}%). ${trustData.details.witnessReputation.uniqueWitnesses} unique witness(es).`}
+                  </Text>
+                  <View style={[geoSt.item, { borderLeftColor: '#F59E0B' }]}>
+                    <Text style={geoSt.itemTitle}>{isFr ? 'Diversite' : 'Diversity'}</Text>
+                    <Text style={geoSt.itemMeta}>
+                      {trustData.details.witnessReputation.diversityScore}% - {isFr ? 'invitez plus de temoins differents pour renforcer votre score' : 'invite more diverse witnesses to strengthen your score'}
+                    </Text>
+                  </View>
+                  <Pressable style={[geoSt.cta, { backgroundColor: '#F59E0B' }]} onPress={() => router.push('/notifications-hub')}>
+                    <MaterialIcons name="person-add" size={14} color="#FFF" />
+                    <Text style={geoSt.ctaText}>{isFr ? 'Voir mes attestations' : 'View my attestations'}</Text>
+                  </Pressable>
+                  {trustData.details.witnessReputation.concentrationRatio >= 60 && nearbyWitnesses.length > 0 ? (
+                    <View style={{ marginTop: 12, backgroundColor: '#F59E0B10', borderRadius: 12, padding: 12, borderWidth: 1, borderColor: '#F59E0B30' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                        <MaterialIcons name="lightbulb" size={14} color="#F59E0B" />
+                        <Text style={{ flex: 1, fontSize: 12, fontWeight: '800', color: '#F59E0B' }}>
+                          {isFr ? `${nearbyWitnesses.length} temoin(s) alternatif(s) proche(s)` : `${nearbyWitnesses.length} nearby alternative witness(es)`}
+                        </Text>
+                      </View>
+                      <Text style={{ fontSize: 11, color: theme.textSecondary, marginBottom: 10, lineHeight: 15 }}>
+                        {isFr ? 'Diversifiez vos temoins pour renforcer la credibilite de vos attestations.' : 'Diversify your witnesses to strengthen your attestation credibility.'}
+                      </Text>
+                      {nearbyWitnesses.map(w => (
+                        <Pressable
+                          key={w.id}
+                          style={{ flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.surface, borderRadius: 10, padding: 10, marginBottom: 6 }}
+                          onPress={() => router.push(`/player/${w.id}` as any)}
+                        >
+                          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: '#F59E0B20', alignItems: 'center', justifyContent: 'center' }}>
+                            <Text style={{ fontSize: 13, fontWeight: '800', color: '#F59E0B' }}>{(w.name || '?').charAt(0).toUpperCase()}</Text>
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color: theme.textPrimary }} numberOfLines={1}>{w.name}</Text>
+                            <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '500', marginTop: 1 }} numberOfLines={1}>
+                              {w.club || w.city || (isFr ? 'A proximite' : 'Nearby')} - ELO {w.eloRating}
+                            </Text>
+                          </View>
+                          <MaterialIcons name="chevron-right" size={18} color={theme.textMuted} />
+                        </Pressable>
+                      ))}
+                    </View>
+                  ) : null}
+                </View>
               </Animated.View>
             ) : null}
 

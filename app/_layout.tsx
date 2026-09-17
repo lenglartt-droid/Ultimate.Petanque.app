@@ -265,6 +265,13 @@ function LayoutInner() {
           case 'admin_deletion_alert':
             router.push('/admin-anticheat' as any);
             break;
+          case 'admin_critical_alert':
+            if (data.playerId) {
+              router.push({ pathname: '/admin-anticheat', params: { playerId: String(data.playerId) } } as any);
+            } else {
+              router.push('/admin-anticheat' as any);
+            }
+            break;
           case 'player_transfer_request':
             router.push({ pathname: '/notifications-hub', params: { tab: 'transfers' } } as any);
             break;
