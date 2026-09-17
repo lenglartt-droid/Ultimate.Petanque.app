@@ -240,16 +240,36 @@ export async function createSponsoredEvent(data: {
 
     // Trigger server-side push to nearby users (fire-and-forget)
     if (event) {
+      // Resolve terrain timezone + coords so server-side push body renders facility-local time
+      let terrainTimezone: string | null = null;
+      let terrainLat: number | null = null;
+      let terrainLng: number | null = null;
+      if (data.terrainId) {
+        try {
+          const { data: t } = await supabase
+            .from('terrains')
+            .select('timezone, location')
+            .eq('id', data.terrainId)
+            .maybeSingle();
+          terrainTimezone = t?.timezone || null;
+          if (t?.location && typeof t.location === 'object') {
+            terrainLat = t.location.latitude ?? null;
+            terrainLng = t.location.longitude ?? null;
+          }
+        } catch { /* silent */ }
+      }
       import('./pushTokenService').then(({ triggerServerPush }) => {
         triggerServerPush('event_created', {
           eventId: event.id,
           eventTitle: data.title,
           city: data.city || null,
           country: data.country || 'France',
-          latitude: null, // Will be resolved from terrain if available
-          longitude: null,
+          latitude: terrainLat,
+          longitude: terrainLng,
           challengeType: data.challengeType,
-          ambassadorName: null, // Resolved server-side if needed
+          ambassadorName: null,
+          terrainTimezone,
+          startTime: data.startTime,
         }).catch(() => {});
       }).catch(() => {});
 

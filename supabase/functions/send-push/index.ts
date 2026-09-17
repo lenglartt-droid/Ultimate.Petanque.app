@@ -20,6 +20,53 @@ import { sendPushNotifications, buildPushMessage, haversineDistance, getPushRece
 
 const PROXIMITY_RADIUS_KM = 200;
 
+/**
+ * Formats a date in the facility timezone with a compact label suffix.
+ * Supports IANA (Europe/Paris) and UTC±H[:MM] offsets.
+ * Returns "14 nov a 20:00 (Paris)" or fallback to device locale when tz missing.
+ */
+function formatFacilityDate(dateISO: string, terrainTimezone: string | undefined | null, locale = 'fr-FR', includeTime = true): string {
+  if (!dateISO) return '';
+  const d = new Date(dateISO);
+  if (!terrainTimezone) {
+    return includeTime
+      ? d.toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  }
+  try {
+    if (terrainTimezone.startsWith('UTC')) {
+      const m = terrainTimezone.match(/UTC([+-])(\d+)(?::(\d+))?/);
+      if (m) {
+        const sign = m[1] === '+' ? 1 : -1;
+        const hours = parseInt(m[2] || '0');
+        const mins = m[3] ? parseInt(m[3]) : 0;
+        const offsetMs = sign * (hours * 60 + mins) * 60000;
+        const shifted = new Date(d.getTime() + offsetMs);
+        const day = shifted.getUTCDate();
+        const monthOpts: Intl.DateTimeFormatOptions = { month: 'short', timeZone: 'UTC' };
+        const month = shifted.toLocaleDateString(locale, monthOpts);
+        if (includeTime) {
+          const h = shifted.getUTCHours().toString().padStart(2, '0');
+          const mm = shifted.getUTCMinutes().toString().padStart(2, '0');
+          return `${day} ${month} a ${h}:${mm} (${terrainTimezone})`;
+        }
+        return `${day} ${month} (${terrainTimezone})`;
+      }
+    }
+    const dayStr = d.toLocaleDateString(locale, { day: 'numeric', month: 'short', timeZone: terrainTimezone });
+    const shortTz = terrainTimezone.split('/').pop() || terrainTimezone;
+    if (includeTime) {
+      const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', timeZone: terrainTimezone });
+      return `${dayStr} a ${time} (${shortTz})`;
+    }
+    return `${dayStr} (${shortTz})`;
+  } catch {
+    return includeTime
+      ? d.toLocaleDateString(locale, { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+      : d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
+  }
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -260,7 +307,7 @@ Deno.serve(async (req: Request) => {
     // MEETUP_INVITATION: User invited to a meetup
     // ============================================================
     else if (type === 'meetup_invitation') {
-      const { meetupId, meetupTitle, invitedUserId, inviterName, meetupDate, terrainName } = payload || {};
+      const { meetupId, meetupTitle, invitedUserId, inviterName, meetupDate, terrainName, terrainTimezone } = payload || {};
       if (!meetupId || !invitedUserId) {
         return new Response(JSON.stringify({ error: 'Missing meetupId/invitedUserId' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -282,7 +329,7 @@ Deno.serve(async (req: Request) => {
         .eq('active', true);
 
       if (tokens && tokens.length > 0) {
-        const dateStr = meetupDate ? new Date(meetupDate).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' }) : '';
+        const dateStr = meetupDate ? formatFacilityDate(meetupDate, terrainTimezone, 'fr-FR', true) : '';
         const messages = tokens.map(t => buildPushMessage(
           t.token,
           `\u{1F3AF} Invitation a un RDV petanque !`,
@@ -404,7 +451,7 @@ Deno.serve(async (req: Request) => {
     // EVENT_REMINDER: Remind participants of an upcoming event
     // ============================================================
     else if (type === 'event_reminder') {
-      const { eventId, eventTitle, startTime } = payload || {};
+      const { eventId, eventTitle, startTime, terrainTimezone } = payload || {};
       if (!eventId) {
         return new Response(JSON.stringify({ error: 'Missing eventId' }), {
           status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -434,7 +481,7 @@ Deno.serve(async (req: Request) => {
         .eq('active', true);
 
       if (tokens && tokens.length > 0) {
-        const dateStr = startTime ? new Date(startTime).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
+        const dateStr = startTime ? formatFacilityDate(startTime, terrainTimezone, 'fr-FR', true) : '';
         const messages = tokens.map(t => buildPushMessage(
           t.token,
           `\u26A1 Defi ambassadeur bientot !`,

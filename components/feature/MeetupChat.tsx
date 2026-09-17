@@ -35,6 +35,14 @@ import {
   fetchMessageReactions,
   toggleReaction,
 } from '@/services/meetupChatService';
+import {
+  parseTerrainTimezone,
+  getDeviceTimezone,
+  timezonesDiffer,
+  formatTimeInTimezone,
+  formatDateInTimezone,
+  shortTimezoneLabel,
+} from '@/services/timezoneService';
 
 interface MeetupChatProps {
   meetupId: string;
@@ -43,6 +51,10 @@ interface MeetupChatProps {
   userAvatar: string | null;
   isParticipant: boolean;
   language: string;
+  /** Facility (terrain) timezone. When set, timestamps render in facility local time. */
+  terrainTimezone?: string | null;
+  /** When true, force device-time display regardless of terrainTimezone (user preference override). */
+  preferDeviceTime?: boolean;
 }
 
 const POLL_INTERVAL = 8000;
@@ -84,22 +96,27 @@ function getAvatarColor(userId: string): string {
   return AVATAR_COLORS[Math.abs(hash) % AVATAR_COLORS.length];
 }
 
-function formatTime(dateStr: string): string {
+function formatTime(dateStr: string, tz?: string | null, locale?: string): string {
   const d = new Date(dateStr);
+  if (tz) return formatTimeInTimezone(d, tz, locale);
   return d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
 }
 
-function formatDateSeparator(dateStr: string, lang: string): string {
+function formatDateSeparator(dateStr: string, lang: string, tz?: string | null): string {
   const d = new Date(dateStr);
   const now = new Date();
-  const isToday = d.toDateString() === now.toDateString();
+  const locale = lang === 'fr' ? 'fr-FR' : 'en-US';
+  const dayKey = (dt: Date) => (tz ? formatDateInTimezone(dt, tz, 'en-CA', { year: 'numeric', month: '2-digit', day: '2-digit' }) : dt.toDateString());
+  const dKey = dayKey(d);
+  const todayKey = dayKey(now);
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  const isYesterday = d.toDateString() === yesterday.toDateString();
+  const yesterdayKey = dayKey(yesterday);
 
-  if (isToday) return lang === 'fr' ? "Aujourd'hui" : 'Today';
-  if (isYesterday) return lang === 'fr' ? 'Hier' : 'Yesterday';
-  return d.toLocaleDateString(lang === 'fr' ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' });
+  if (dKey === todayKey) return lang === 'fr' ? "Aujourd'hui" : 'Today';
+  if (dKey === yesterdayKey) return lang === 'fr' ? 'Hier' : 'Yesterday';
+  if (tz) return formatDateInTimezone(d, tz, locale, { day: 'numeric', month: 'short' });
+  return d.toLocaleDateString(locale, { day: 'numeric', month: 'short' });
 }
 
 function getEmojiForType(type: string): string {
@@ -182,7 +199,7 @@ const ReactionPicker = React.memo(({ onSelect, onClose }: {
   </Animated.View>
 ));
 
-const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reactions, userId, onReact }: {
+const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reactions, userId, onReact, terrainTimezone, preferDeviceTime }: {
   msg: MeetupMessage;
   isOwn: boolean;
   onDelete: (id: string) => void;
@@ -191,12 +208,21 @@ const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reac
   reactions: ReactionGroup[];
   userId: string;
   onReact: (messageId: string, reactionType: string) => void;
+  terrainTimezone?: string | null;
+  preferDeviceTime?: boolean;
 }) => {
   const [showDelete, setShowDelete] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
   const avatarColor = getAvatarColor(msg.user_id);
   const initials = msg.user_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
   const hasReactions = reactions.length > 0;
+  const facilityTz = preferDeviceTime ? null : parseTerrainTimezone(terrainTimezone);
+  const deviceTz = getDeviceTimezone();
+  const locale = language === 'fr' ? 'fr-FR' : 'en-US';
+  const showTzChip = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, new Date(msg.created_at));
+  const primaryTime = formatTime(msg.created_at, facilityTz, locale);
+  const facilityLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+  const deviceTime = showTzChip ? formatTimeInTimezone(new Date(msg.created_at), deviceTz, locale) : null;
 
   const handleReact = useCallback((type: string) => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
@@ -220,9 +246,16 @@ const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reac
           ) : null}
           <Text style={[s.bubbleText, isOwn && s.bubbleTextOwn]}>{msg.message}</Text>
           <View style={s.bubbleFooter}>
-            <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>{formatTime(msg.created_at)}</Text>
+            <Text style={[s.bubbleTime, isOwn && s.bubbleTimeOwn]}>
+              {primaryTime}{facilityLabel ? ` ${facilityLabel}` : ''}
+            </Text>
             {isOwn ? <ReadStatusIcon isRead={isRead} /> : null}
           </View>
+          {showTzChip && deviceTime ? (
+            <Text style={[s.bubbleTzChip, isOwn && s.bubbleTzChipOwn]} numberOfLines={1}>
+              {deviceTime} {language === 'fr' ? 'chez vous' : 'your time'}
+            </Text>
+          ) : null}
         </View>
         {showDelete && isOwn ? (
           <Pressable style={s.deleteBtn} onPress={() => { onDelete(msg.id); setShowDelete(false); }}>
@@ -256,7 +289,7 @@ const MessageBubble = React.memo(({ msg, isOwn, onDelete, language, isRead, reac
   );
 });
 
-export default function MeetupChat({ meetupId, userId, userName, userAvatar, isParticipant, language }: MeetupChatProps) {
+export default function MeetupChat({ meetupId, userId, userName, userAvatar, isParticipant, language, terrainTimezone, preferDeviceTime }: MeetupChatProps) {
   const [messages, setMessages] = useState<MeetupMessage[]>([]);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -578,7 +611,7 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
                   return (
                     <View style={s.dateSeparator}>
                       <View style={s.dateSeparatorLine} />
-                      <Text style={s.dateSeparatorText}>{formatDateSeparator(item.date, language)}</Text>
+                      <Text style={s.dateSeparatorText}>{formatDateSeparator(item.date, language, preferDeviceTime ? null : terrainTimezone)}</Text>
                       <View style={s.dateSeparatorLine} />
                     </View>
                   );
@@ -596,6 +629,8 @@ export default function MeetupChat({ meetupId, userId, userName, userAvatar, isP
                     reactions={msgReactions}
                     userId={userId}
                     onReact={handleToggleReaction}
+                    terrainTimezone={terrainTimezone}
+                    preferDeviceTime={preferDeviceTime}
                   />
                 );
               }}
@@ -827,6 +862,16 @@ const s = StyleSheet.create({
   },
   bubbleTimeOwn: {
     color: 'rgba(255,255,255,0.6)',
+  },
+  bubbleTzChip: {
+    fontSize: 9,
+    fontWeight: '600' as const,
+    color: '#7C3AED',
+    marginTop: 2,
+    fontStyle: 'italic' as const,
+  },
+  bubbleTzChipOwn: {
+    color: 'rgba(255,255,255,0.7)',
   },
   readStatusWrap: {
     marginLeft: 2,

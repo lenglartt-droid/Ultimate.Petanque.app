@@ -18,6 +18,7 @@ import {
 } from '@/utils/homeDistanceCoords';
 import type { Terrain } from '@/types/petanque';
 import { calendarDaysUntil, getSponsoredEventDisplayDate } from '@/utils/calendarDate';
+import { parseTerrainTimezone, timezonesDiffer, getDeviceTimezone, formatTimeInTimezone, shortTimezoneLabel } from '@/services/timezoneService';
 
 interface UpcomingItem extends UpcomingItemLike {
   date: Date;
@@ -162,6 +163,21 @@ function UpcomingTimeline({
     const isToday = daysUntil === 0;
     const isTomorrow = daysUntil === 1;
 
+    // Resolve terrain timezone for cross-timezone events
+    let itemTerrainId: string | undefined;
+    if (item.type === 'tournament') itemTerrainId = item.data.terrainId;
+    else if (item.type === 'meetup') itemTerrainId = item.data.terrain_id;
+    else if (item.type === 'challenge') itemTerrainId = item.data.terrainId;
+    const itemTerrain = itemTerrainId ? terrains.find(t => t.id === itemTerrainId) : null;
+    const facilityTz = parseTerrainTimezone((itemTerrain as any)?.timezone);
+    const deviceTz = getDeviceTimezone();
+    const localeStr = language === 'fr' ? 'fr-FR' : 'en-US';
+    const eventTime = item.type === 'challenge' && item.data.startTime ? new Date(item.data.startTime) : d;
+    const facilityTime = facilityTz ? formatTimeInTimezone(eventTime, facilityTz, localeStr) : eventTime.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit' });
+    const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
+    const showTzConversion = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, eventTime);
+    const deviceTime = showTzConversion ? formatTimeInTimezone(eventTime, deviceTz, localeStr) : null;
+
     return (
       <Pressable
         key={item.id}
@@ -196,9 +212,7 @@ function UpcomingTimeline({
             <View style={s.metaItem}>
               <MaterialIcons name="schedule" size={11} color={cfg.accent + '90'} />
               <Text style={[s.metaText, { color: cfg.accent + '90' }]}>
-                {item.type === 'challenge'
-                  ? new Date(item.data.startTime).toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })
-                  : d.toLocaleTimeString(language === 'fr' ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' })}
+                {facilityTime}{tzLabel ? ` ${tzLabel}` : ''}
               </Text>
             </View>
             {(item.type === 'tournament' && item.data.location?.city) ? (
@@ -220,6 +234,14 @@ function UpcomingTimeline({
               </View>
             ) : null}
           </View>
+          {showTzConversion && deviceTime ? (
+            <View style={{ flexDirection: 'row' as const, alignItems: 'center' as const, gap: 3, backgroundColor: '#8B5CF608', borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2, alignSelf: 'flex-start' as const, marginTop: 2, borderWidth: 1, borderColor: '#8B5CF615' }}>
+              <MaterialIcons name="public" size={9} color="#7C3AED" />
+              <Text style={{ fontSize: 9, fontWeight: '700' as const, color: '#7C3AED' }}>
+                {deviceTime} {language === 'fr' ? 'chez vous' : 'your time'}
+              </Text>
+            </View>
+          ) : null}
           {(() => {
             const diffMs = d.getTime() - now;
             if (diffMs <= 0 || isToday || isTomorrow) return null;
