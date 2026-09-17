@@ -148,6 +148,10 @@ export default function AdminAntiCheatScreen() {
   const [behavioralTrends, setBehavioralTrends] = useState<Array<{ week: string; selfMatch: number; symmetric: number; ghost: number }>>([]);
   const [behavioralTrendsLoading, setBehavioralTrendsLoading] = useState(false);
 
+  // Bulk ban undo (10s window)
+  const [undoBan, setUndoBan] = useState<{ targets: Array<{ id: string; prevStatus: string; prevTrustScore: number }>; expiresAt: number; label: string } | null>(null);
+  const [undoRemaining, setUndoRemaining] = useState<number>(0);
+
   const loadData = useCallback(async () => {
     setLoading(true);
     const cached = adminCache.getCached<any[]>('anticheat-players');
@@ -169,6 +173,19 @@ export default function AdminAntiCheatScreen() {
   }, [language]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Countdown timer for undo-ban toast
+  useEffect(() => {
+    if (!undoBan) { setUndoRemaining(0); return; }
+    const tick = () => {
+      const remaining = Math.max(0, Math.ceil((undoBan.expiresAt - Date.now()) / 1000));
+      setUndoRemaining(remaining);
+      if (remaining <= 0) setUndoBan(null);
+    };
+    tick();
+    const timer = setInterval(tick, 250);
+    return () => clearInterval(timer);
+  }, [undoBan]);
 
   // Fetch terrain coords for pair match IDs when a player is selected
   useEffect(() => {
@@ -518,8 +535,10 @@ export default function AdminAntiCheatScreen() {
           style: 'destructive',
           onPress: async () => {
             setBulkBusy(true);
+            const snapshot: Array<{ id: string; prevStatus: string; prevTrustScore: number }> = [];
             let ok = 0;
             for (const p of targets) {
+              snapshot.push({ id: p.id, prevStatus: p.status, prevTrustScore: p.trustScore });
               const { error } = await banPlayer(p.id, p.playerId || '');
               if (!error) ok++;
             }
@@ -527,14 +546,18 @@ export default function AdminAntiCheatScreen() {
             setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
             setBulkBusy(false);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showAlert(isFr ? `${ok} joueur(s) banni(s)` : `${ok} player(s) banned`);
+            setUndoBan({
+              targets: snapshot.slice(0, ok),
+              expiresAt: Date.now() + 10_000,
+              label: isFr ? `${ok} joueur(s) banni(s)` : `${ok} player(s) banned`,
+            });
           },
         },
       ]
     );
   };
 
-  // Bulk temporal notify handler (sends a push reminder to all filtered players with temporal alerts)
+  const handleBulkBanBehavioral = async () => {
   const handleBulkTemporalNotify = async () => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => TEMPORAL_ALERT_FLAGS.has(f)));
@@ -656,8 +679,10 @@ export default function AdminAntiCheatScreen() {
           style: 'destructive',
           onPress: async () => {
             setBulkBusy(true);
+            const snapshot: Array<{ id: string; prevStatus: string; prevTrustScore: number }> = [];
             let ok = 0;
             for (const p of targets) {
+              snapshot.push({ id: p.id, prevStatus: p.status, prevTrustScore: p.trustScore });
               const { error } = await banPlayer(p.id, p.playerId || '');
               if (!error) ok++;
             }
@@ -665,11 +690,41 @@ export default function AdminAntiCheatScreen() {
             setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
             setBulkBusy(false);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-            showAlert(isFr ? `${ok} joueur(s) comportemental(aux) banni(s)` : `${ok} behavioral player(s) banned`);
+            setUndoBan({
+              targets: snapshot.slice(0, ok),
+              expiresAt: Date.now() + 10_000,
+              label: isFr ? `${ok} joueur(s) comportemental(aux) banni(s)` : `${ok} behavioral player(s) banned`,
+            });
           },
         },
       ]
     );
+  };
+
+  // Undo the most recent bulk ban within the 10-second window
+  const handleUndoBan = async () => {
+    if (!undoBan) return;
+    const currentUndo = undoBan;
+    setUndoBan(null);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    setBulkBusy(true);
+    let restored = 0;
+    for (const t of currentUndo.targets) {
+      try {
+        const { error: sErr } = await updateSuspiciousStatus(t.id, t.prevStatus);
+        const { error: tErr } = await updateTrustScore(t.id, t.prevTrustScore);
+        if (!sErr && !tErr) restored++;
+      } catch { /* silent */ }
+    }
+    const idToPrev = new Map(currentUndo.targets.map(t => [t.id, t]));
+    setPlayers(prev => prev.map(p => {
+      const prevData = idToPrev.get(p.id);
+      if (!prevData) return p;
+      return { ...p, status: prevData.prevStatus, trustScore: prevData.prevTrustScore };
+    }));
+    setBulkBusy(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    showAlert(isFr ? `${restored} bannissement(s) annule(s)` : `${restored} ban(s) undone`);
   };
 
   // Reset the anti-cheat digest push cooldown for a given user so the next scan re-notifies them
@@ -1930,6 +1985,22 @@ export default function AdminAntiCheatScreen() {
 
       </ScrollView>
 
+      {undoBan ? (
+        <View style={st.undoToast}>
+          <View style={st.undoToastIcon}>
+            <MaterialIcons name="block" size={18} color="#FFF" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.undoToastLabel}>{undoBan.label}</Text>
+            <Text style={st.undoToastSub}>{isFr ? `Annulez dans ${undoRemaining}s` : `Undo in ${undoRemaining}s`}</Text>
+          </View>
+          <Pressable style={st.undoToastBtn} onPress={handleUndoBan}>
+            <MaterialIcons name="undo" size={14} color="#FFF" />
+            <Text style={st.undoToastBtnText}>{isFr ? 'Annuler' : 'Undo'}</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       {/* Detail Modal */}
       <Modal visible={selectedPlayer !== null} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setSelectedPlayer(null)}>
         <SafeAreaView style={st.detailContainer}>
@@ -3060,4 +3131,12 @@ const st = StyleSheet.create({
   // Reset cooldown button (detail modal admin action)
   resetCooldownBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, marginTop: 8, paddingVertical: 10, borderRadius: 10, backgroundColor: '#8B5CF615', borderWidth: 1, borderColor: '#8B5CF630' },
   resetCooldownBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#8B5CF6' },
+
+  // Undo ban toast (bulk ban)
+  undoToast: { position: 'absolute' as const, left: 16, right: 16, bottom: 20, flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, backgroundColor: '#1F2937', borderRadius: 14, paddingHorizontal: 14, paddingVertical: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.35, shadowRadius: 12, elevation: 12, zIndex: 100 },
+  undoToastIcon: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#EF4444', alignItems: 'center' as const, justifyContent: 'center' as const },
+  undoToastLabel: { fontSize: 13, fontWeight: '800' as const, color: '#FFF' },
+  undoToastSub: { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontWeight: '600' as const },
+  undoToastBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 6, backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  undoToastBtnText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF' },
 });

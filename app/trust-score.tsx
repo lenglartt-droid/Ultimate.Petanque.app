@@ -17,7 +17,7 @@ import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import theme from '@/constants/theme';
 import { useLanguage } from '@/hooks/useLanguage';
-import { useAuth } from '@/template';
+import { useAuth, getSupabaseClient } from '@/template';
 import { useAppData } from '@/contexts/AppContext';
 import {
   fetchTrustScore,
@@ -192,6 +192,8 @@ export default function TrustScoreScreen() {
   const [history, setHistory] = useState<TrustScoreHistoryPoint[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showHowItWorks, setShowHowItWorks] = useState(false);
+  const [behavioralDigestHistory, setBehavioralDigestHistory] = useState<Array<{ id: string; flags: string[]; alertSummary: string; sentAt: string; isResolved: boolean; resolvedAt: string | null }>>([]);
+  const [bdhLoading, setBdhLoading] = useState(false);
 
   const [screenW, setScreenW] = useState(() => Dimensions.get('window').width || 375);
   useEffect(() => {
@@ -221,6 +223,31 @@ export default function TrustScoreScreen() {
       setHistoryLoading(false);
     });
   }, [selfPlayer?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    setBdhLoading(true);
+    (async () => {
+      try {
+        const supabaseClient = getSupabaseClient();
+        const { data } = await supabaseClient
+          .from('behavioral_digest_history')
+          .select('id, flags, alert_summary, sent_at, is_resolved, resolved_at')
+          .eq('user_id', user.id)
+          .order('sent_at', { ascending: false })
+          .limit(10);
+        setBehavioralDigestHistory((data || []).map((d: any) => ({
+          id: d.id,
+          flags: Array.isArray(d.flags) ? d.flags : [],
+          alertSummary: d.alert_summary || '',
+          sentAt: d.sent_at,
+          isResolved: !!d.is_resolved,
+          resolvedAt: d.resolved_at,
+        })));
+      } catch { /* silent */ }
+      setBdhLoading(false);
+    })();
+  }, [user?.id, trustData?.analyzedAt]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -927,6 +954,65 @@ export default function TrustScoreScreen() {
               </Animated.View>
             ) : null}
 
+            {/* Behavioral Digest History */}
+            {bdhLoading ? null : behavioralDigestHistory.length > 0 ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(248)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#F43F5E' + '15' }]}>
+                    <MaterialIcons name="history" size={18} color="#F43F5E" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Historique des rappels comportementaux' : 'Behavioral Alert History'}</Text>
+                  <View style={[st.flagCountBadge, { backgroundColor: '#F43F5E15' }]}>
+                    <Text style={[st.flagCountText, { color: '#F43F5E' }]}>{behavioralDigestHistory.length}</Text>
+                  </View>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Vos 10 derniers rappels comportementaux. Un rappel resolu indique que le pattern detecte a disparu depuis.'
+                    : 'Your last 10 behavioral alerts. A resolved alert means the detected pattern has since disappeared.'}
+                </Text>
+                {behavioralDigestHistory.map((h) => {
+                  const dateStr = new Date(h.sentAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                  const resolvedColor = h.isResolved ? '#22C55E' : '#F43F5E';
+                  return (
+                    <View key={h.id} style={[bdhSt.row, { borderLeftColor: resolvedColor }]}>
+                      <View style={{ flex: 1 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <MaterialIcons name="schedule" size={11} color={theme.textMuted} />
+                          <Text style={bdhSt.date}>{dateStr}</Text>
+                        </View>
+                        <View style={bdhSt.flagsRow}>
+                          {h.flags.slice(0, 3).map((f, i) => {
+                            const info = FLAG_LABELS[f] || FLAG_LABELS[`${f}_frequent`] || { fr: f, en: f, icon: 'warning', color: '#F97316' };
+                            return (
+                              <View key={i} style={[bdhSt.flagChip, { backgroundColor: info.color + '15' }]}>
+                                <MaterialIcons name={info.icon as any} size={10} color={info.color} />
+                                <Text style={[bdhSt.flagChipText, { color: info.color }]} numberOfLines={1}>{isFr ? info.fr : info.en}</Text>
+                              </View>
+                            );
+                          })}
+                          {h.flags.length > 3 ? (
+                            <Text style={bdhSt.moreText}>+{h.flags.length - 3}</Text>
+                          ) : null}
+                        </View>
+                        {h.isResolved && h.resolvedAt ? (
+                          <Text style={bdhSt.resolvedMeta}>
+                            {isFr ? 'Resolu le' : 'Resolved on'} {new Date(h.resolvedAt).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short' })}
+                          </Text>
+                        ) : null}
+                      </View>
+                      <View style={[bdhSt.statusBadge, { backgroundColor: resolvedColor + '15', borderColor: resolvedColor + '30' }]}>
+                        <MaterialIcons name={h.isResolved ? 'check-circle' : 'radio-button-checked'} size={11} color={resolvedColor} />
+                        <Text style={[bdhSt.statusText, { color: resolvedColor }]}>
+                          {h.isResolved ? (isFr ? 'Resolu' : 'Resolved') : (isFr ? 'Actif' : 'Active')}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </Animated.View>
+            ) : null}
+
             {/* History Chart */}
             <Animated.View entering={FadeInDown.duration(400).delay(250)} style={st.sectionCard}>
               <View style={st.sectionHeader}>
@@ -1196,6 +1282,18 @@ const geoSt = StyleSheet.create({
   itemMeta: { fontSize: 10, color: theme.textMuted, marginTop: 2, fontWeight: '500' },
   cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 10, borderRadius: 10, marginTop: 4 },
   ctaText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+});
+
+const bdhSt = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.backgroundSecondary + '80', borderRadius: 10, padding: 10, marginBottom: 8, borderLeftWidth: 3 },
+  date: { fontSize: 11, fontWeight: '700', color: theme.textSecondary },
+  flagsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+  flagChip: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 6, maxWidth: 180 },
+  flagChipText: { fontSize: 10, fontWeight: '700' },
+  moreText: { fontSize: 10, fontWeight: '700', color: theme.textMuted, alignSelf: 'center', paddingHorizontal: 4 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, borderWidth: 1 },
+  statusText: { fontSize: 10, fontWeight: '800' },
+  resolvedMeta: { fontSize: 9, color: '#22C55E', marginTop: 4, fontWeight: '600' },
 });
 
 const histSt = StyleSheet.create({

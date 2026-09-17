@@ -37,6 +37,18 @@ import { useAuth } from '@/template';
 import { uploadTerrainPhotos } from '@/services/storageService';
 import { isValidMapCoord, toMapCoord } from '@/utils/mapPlayerLocation';
 
+/**
+ * Convert Google Places `utcOffsetMinutes` to compact `UTC±H[:MM]` timezone string.
+ * Mirrors the helper used in `components/ui/LocationPicker.tsx`.
+ */
+function offsetMinutesToTimezone(offsetMinutes: number): string {
+  const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+  const mins = Math.abs(offsetMinutes) % 60;
+  const sign = offsetMinutes >= 0 ? '+' : '-';
+  if (mins === 0) return `UTC${sign}${hours}`;
+  return `UTC${sign}${hours}:${mins.toString().padStart(2, '0')}`;
+}
+
 // ============================================
 // SectionCard
 // ============================================
@@ -85,7 +97,7 @@ export default function EditTerrainScreen() {
   const insets = useSafeAreaInsets();
   const { clubs, loading: appLoading } = useAppData();
   const { getTerrainById, updateTerrain } = useAppActions();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { showAlert } = useAlert();
   const { user } = useAuth();
 
@@ -104,12 +116,14 @@ export default function EditTerrainScreen() {
   const [parking, setParking] = useState(false);
   const [toilets, setToilets] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
+  const [timezone, setTimezone] = useState<string>('');
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
   const [photos, setPhotos] = useState<string[]>([]);
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [locationPermission, setLocationPermission] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [refreshingTz, setRefreshingTz] = useState(false);
 
   // Club picker modal
   const [showClubPicker, setShowClubPicker] = useState(false);
@@ -149,6 +163,7 @@ export default function EditTerrainScreen() {
       setLongitude(toMapCoord(terrain.location?.longitude));
       setPhotos(terrain.photos || []);
       setEnvironment(terrain.environment || 'outdoor');
+      setTimezone(((terrain as any).timezone as string | undefined) || '');
       setParking((terrain as any).parking ?? false);
       setToilets((terrain as any).toilets ?? false);
     }
@@ -229,6 +244,46 @@ export default function EditTerrainScreen() {
     showAlert(t('common', 'success'), t('map', 'mergeSuccess'));
   }, [comparePublicData, clubs, showAlert, t]);
 
+  // Refresh timezone from Google Places using the stored place_id (address stays untouched)
+  const handleRefreshTimezone = async () => {
+    const placeId = (terrain as any)?.googlePlaceId;
+    if (!placeId) {
+      showAlert(language === 'fr' ? 'Aucun Place ID Google associe a ce terrain' : 'No Google Place ID linked to this terrain');
+      return;
+    }
+    const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY;
+    if (!apiKey) {
+      showAlert(language === 'fr' ? 'Cle API Google Maps manquante' : 'Missing Google Maps API key');
+      return;
+    }
+    Haptics.selectionAsync();
+    setRefreshingTz(true);
+    try {
+      const cleanId = String(placeId).replace(/^places\//, '').split('/')[0];
+      const res = await fetch(
+        `https://places.googleapis.com/v1/places/${encodeURIComponent(cleanId)}?languageCode=${language}`,
+        { method: 'GET', headers: { 'X-Goog-Api-Key': apiKey, 'X-Goog-FieldMask': 'utcOffsetMinutes' } }
+      );
+      if (!res.ok) {
+        showAlert(language === 'fr' ? 'Erreur Google Places' : 'Google Places error');
+        setRefreshingTz(false);
+        return;
+      }
+      const data = await res.json();
+      if (typeof data.utcOffsetMinutes === 'number') {
+        const tz = offsetMinutesToTimezone(data.utcOffsetMinutes);
+        setTimezone(tz);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        showAlert(language === 'fr' ? `Fuseau detecte: ${tz}` : `Detected timezone: ${tz}`);
+      } else {
+        showAlert(language === 'fr' ? 'Fuseau horaire indisponible pour ce lieu' : 'Timezone unavailable for this place');
+      }
+    } catch (e: any) {
+      showAlert(language === 'fr' ? `Erreur reseau: ${e?.message || ''}` : `Network error: ${e?.message || ''}`);
+    }
+    setRefreshingTz(false);
+  };
+
   // Geocode
   const geocodeAddress = async () => {
     if (!address.trim() || !city.trim()) return;
@@ -299,7 +354,7 @@ export default function EditTerrainScreen() {
         location: { latitude: saveLat, longitude: saveLng, country: terrain?.location?.country || 'France' }, type,
         description: description.trim() || undefined,
         clubId, clubName: sc?.name, publicAccess,
-        courtsCount: parseInt(courtsCount, 10) || 1, lighting, covered, parking, toilets, environment, photos: uploadedPhotos,
+        courtsCount: parseInt(courtsCount, 10) || 1, lighting, covered, parking, toilets, environment, timezone: timezone.trim() || undefined, photos: uploadedPhotos,
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.back();
@@ -417,6 +472,58 @@ export default function EditTerrainScreen() {
                 );
               })}
             </View>
+          </SectionCard>
+
+          {/* 2b. Fuseau horaire (optionnel) */}
+          <SectionCard title={language === 'fr' ? 'Fuseau horaire (optionnel)' : 'Timezone (optional)'} icon="access-time" color="#8B5CF6" delay={175}>
+            <TextInput
+              style={styles.textInput}
+              value={timezone}
+              onChangeText={setTimezone}
+              placeholder={language === 'fr' ? 'Europe/Paris ou UTC+1' : 'Europe/Paris or UTC+1'}
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 10 }}>
+              {['Europe/Paris', 'Europe/London', 'America/New_York', 'America/Los_Angeles', 'Asia/Tokyo', 'Australia/Sydney'].map(tz => {
+                const isActive = timezone === tz;
+                return (
+                  <Pressable
+                    key={tz}
+                    style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: isActive ? '#8B5CF6' : theme.backgroundSecondary, borderWidth: 1, borderColor: isActive ? '#8B5CF6' : theme.border }}
+                    onPress={() => { Haptics.selectionAsync(); setTimezone(tz); }}
+                  >
+                    <Text style={{ fontSize: 11, fontWeight: '600', color: isActive ? '#FFF' : theme.textSecondary }}>{tz}</Text>
+                  </Pressable>
+                );
+              })}
+              {timezone ? (
+                <Pressable
+                  style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.error + '15', borderWidth: 1, borderColor: theme.error + '30' }}
+                  onPress={() => { Haptics.selectionAsync(); setTimezone(''); }}
+                >
+                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.error }}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
+                </Pressable>
+              ) : null}
+            </View>
+            {(terrain as any)?.googlePlaceId ? (
+              <Pressable
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 10, paddingVertical: 10, borderRadius: 8, backgroundColor: '#8B5CF615', borderWidth: 1, borderColor: '#8B5CF630', opacity: refreshingTz ? 0.6 : 1 }}
+                onPress={handleRefreshTimezone}
+                disabled={refreshingTz}
+              >
+                {refreshingTz ? <ActivityIndicator size="small" color="#8B5CF6" /> : <MaterialIcons name="refresh" size={14} color="#8B5CF6" />}
+                <Text style={{ fontSize: 12, fontWeight: '700', color: '#8B5CF6' }}>
+                  {language === 'fr' ? 'Detecter via Google Places' : 'Detect via Google Places'}
+                </Text>
+              </Pressable>
+            ) : null}
+            <Text style={{ fontSize: 11, color: theme.textMuted, marginTop: 8, fontStyle: 'italic' }}>
+              {language === 'fr'
+                ? 'Ameliore la detection nocturne (3h-6h locales) pour les terrains hors fuseau serveur.'
+                : 'Improves nocturnal detection (3AM-6AM local) for terrains outside the server timezone.'}
+            </Text>
           </SectionCard>
 
           {/* 3. Adresse */}
