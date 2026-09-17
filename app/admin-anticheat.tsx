@@ -391,6 +391,29 @@ export default function AdminAntiCheatScreen() {
     })();
   }, [isFr]);
 
+  // Auto-load lightweight collapsible sections once players are ready
+  useEffect(() => {
+    if (loading || players.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        if (!deviceRegsLoaded) {
+          setDeviceRegsLoading(true);
+          const { registrations } = await fetchDeviceRegistrations();
+          if (!cancelled) { setDeviceRegs(registrations); setDeviceRegsLoaded(true); }
+          if (!cancelled) setDeviceRegsLoading(false);
+        }
+        if (!cancelled && transferRequests.length === 0) {
+          setTransferLoading(true);
+          const { requests } = await fetchPendingTransferRequests();
+          if (!cancelled) { setTransferRequests(requests); setTransferLoading(false); }
+        }
+      } catch { if (!cancelled) { setDeviceRegsLoading(false); setTransferLoading(false); } }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, players.length]);
+
   // Summary statistics
   const summaryStats = React.useMemo(() => {
     if (players.length === 0) return { total: 0, avg: 0, verified: 0, high: 0, medium: 0, low: 0, suspicious: 0, weeklyFlagged: 0 };
@@ -1090,14 +1113,15 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.headerSub}>{filtered.length} {(et.adminDesc as any)?.[language] || 'players'}</Text>
         </View>
         <Pressable
-          style={[st.eloRecalcBtn, { backgroundColor: '#991B1B' }]}
+          style={[st.headerIconBtn, { backgroundColor: '#991B1B' }]}
           onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat-config' as any); }}
+          hitSlop={6}
+          accessibilityLabel={isFr ? 'Configuration auto-ban' : 'Auto-ban settings'}
         >
-          <MaterialIcons name="tune" size={16} color="#FFF" />
-          <Text style={st.eloRecalcBtnText}>{isFr ? 'Auto-ban' : 'Auto-ban'}</Text>
+          <MaterialIcons name="tune" size={18} color="#FFF" />
         </Pressable>
         <Pressable
-          style={[st.eloRecalcBtn, recalculating && { opacity: 0.6 }]}
+          style={[st.headerIconBtn, { backgroundColor: '#7C3AED' }, recalculating && { opacity: 0.6 }]}
           onPress={async () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
             setRecalculating(true);
@@ -1110,17 +1134,19 @@ export default function AdminAntiCheatScreen() {
             }
           }}
           disabled={recalculating}
+          hitSlop={6}
+          accessibilityLabel={isFr ? 'Recalculer ELO' : 'Recalculate ELO'}
         >
-          {recalculating ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="calculate" size={16} color="#FFF" />}
-          <Text style={st.eloRecalcBtnText}>{recalculating ? t('leaderboard', 'eloRecalculating') : 'ELO'}</Text>
+          {recalculating ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="calculate" size={18} color="#FFF" />}
         </Pressable>
         <Pressable
-          style={[st.scanBtn, scanning && { opacity: 0.6 }]}
+          style={[st.headerIconBtn, { backgroundColor: '#EF4444' }, scanning && { opacity: 0.6 }]}
           onPress={handleRunFullScan}
           disabled={scanning}
+          hitSlop={6}
+          accessibilityLabel={isFr ? 'Lancer un scan complet' : 'Run full scan'}
         >
           {scanning ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="radar" size={18} color="#FFF" />}
-          <Text style={st.scanBtnText}>{scanning ? ((et.adminScanning as any)?.[language] || 'Scanning...') : ((et.adminRunFullScan as any)?.[language] || 'Scan')}</Text>
         </Pressable>
       </View>
 
@@ -1132,6 +1158,76 @@ export default function AdminAntiCheatScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} colors={[theme.primary]} />}
       >
+
+      {/* ============ OVERVIEW HERO (always visible - shows before data loads) ============ */}
+      <View style={st.heroSection}>
+        <View style={st.heroHeader}>
+          <View style={st.heroIconWrap}>
+            <MaterialIcons name="security" size={22} color="#EF4444" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.heroTitle}>{isFr ? "Vue d'ensemble Anti-triche" : 'Anti-cheat Overview'}</Text>
+            <Text style={st.heroSub}>
+              {loading
+                ? (isFr ? 'Chargement des donnees...' : 'Loading data...')
+                : players.length === 0
+                  ? (isFr ? 'Aucun joueur analyse - Lancez un scan complet pour commencer' : 'No players analyzed - Run a full scan to start')
+                  : (isFr ? `${players.length} joueur(s) analyse(s) - Score moyen ${summaryStats.avg}/100` : `${players.length} player(s) analyzed - Avg score ${summaryStats.avg}/100`)}
+            </Text>
+          </View>
+          {loading ? <ActivityIndicator size="small" color="#EF4444" /> : null}
+        </View>
+        <View style={st.heroKpis}>
+          <View style={[st.heroKpi, { borderColor: '#EF4444' + '25' }]}>
+            <Text style={[st.heroKpiValue, { color: '#EF4444' }]}>{statusCounts.flagged}</Text>
+            <Text style={st.heroKpiLabel}>{isFr ? 'Signales' : 'Flagged'}</Text>
+          </View>
+          <View style={[st.heroKpi, { borderColor: '#F97316' + '25' }]}>
+            <Text style={[st.heroKpiValue, { color: '#F97316' }]}>{statusCounts.watch}</Text>
+            <Text style={st.heroKpiLabel}>{isFr ? 'Surveille' : 'Watch'}</Text>
+          </View>
+          <View style={[st.heroKpi, { borderColor: '#DC2626' + '25' }]}>
+            <Text style={[st.heroKpiValue, { color: '#DC2626' }]}>{statusCounts.banned}</Text>
+            <Text style={st.heroKpiLabel}>{isFr ? 'Bannis' : 'Banned'}</Text>
+          </View>
+          <View style={[st.heroKpi, { borderColor: '#22C55E' + '25' }]}>
+            <Text style={[st.heroKpiValue, { color: '#22C55E' }]}>{statusCounts.ok}</Text>
+            <Text style={st.heroKpiLabel}>OK</Text>
+          </View>
+        </View>
+        {!loading && players.length === 0 ? (
+          <Pressable
+            style={[st.heroCTA, scanning && { opacity: 0.6 }]}
+            onPress={handleRunFullScan}
+            disabled={scanning}
+          >
+            {scanning ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="radar" size={16} color="#FFF" />}
+            <Text style={st.heroCTAText}>
+              {scanning
+                ? (isFr ? 'Analyse en cours...' : 'Scanning...')
+                : (isFr ? 'Lancer le premier scan' : 'Run first scan')}
+            </Text>
+          </Pressable>
+        ) : (
+          <View style={st.heroActionsRow}>
+            <Pressable
+              style={st.heroQuickAction}
+              onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat-config' as any); }}
+            >
+              <MaterialIcons name="tune" size={14} color="#991B1B" />
+              <Text style={[st.heroQuickActionText, { color: '#991B1B' }]}>{isFr ? 'Config auto-ban' : 'Auto-ban config'}</Text>
+            </Pressable>
+            <Pressable
+              style={st.heroQuickAction}
+              onPress={handleRunFullScan}
+              disabled={scanning}
+            >
+              <MaterialIcons name="radar" size={14} color="#EF4444" />
+              <Text style={[st.heroQuickActionText, { color: '#EF4444' }]}>{isFr ? 'Nouveau scan' : 'New scan'}</Text>
+            </Pressable>
+          </View>
+        )}
+      </View>
 
       {/* ============ DELETION ALERTS ============ */}
       {!deletionAlertsLoading && deletionAlerts.length > 0 ? (
@@ -3815,6 +3911,7 @@ const st = StyleSheet.create({
   scanBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
   eloRecalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#7C3AED', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12 },
   eloRecalcBtnText: { fontSize: 12, fontWeight: '700', color: '#FFF' },
+  headerIconBtn: { width: 40, height: 40, borderRadius: 12, alignItems: 'center' as const, justifyContent: 'center' as const },
 
   filterRow: { paddingHorizontal: 16, paddingVertical: 10, gap: 8 },
   filterChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, backgroundColor: theme.surface, borderWidth: 1.5, borderColor: theme.border },
@@ -4079,4 +4176,20 @@ const st = StyleSheet.create({
   r2AlertText: { fontSize: 10, color: theme.textSecondary, lineHeight: 14, marginBottom: 6 },
   r2AlertLink: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, alignSelf: 'flex-start' as const, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#FFF', borderWidth: 1, borderColor: '#EF444430' },
   r2AlertLinkText: { fontSize: 9, fontWeight: '800' as const, color: '#EF4444' },
+
+  // Overview hero (top of scroll view, always visible)
+  heroSection: { marginHorizontal: 16, marginTop: 12, marginBottom: 10, backgroundColor: theme.surface, borderRadius: 16, padding: 14, borderWidth: 1, borderColor: '#EF4444' + '20', ...theme.shadows.card },
+  heroHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10, marginBottom: 12 },
+  heroIconWrap: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#EF444415', alignItems: 'center' as const, justifyContent: 'center' as const },
+  heroTitle: { fontSize: 14, fontWeight: '700' as const, color: theme.textPrimary },
+  heroSub: { fontSize: 11, color: theme.textMuted, marginTop: 2, lineHeight: 15 },
+  heroKpis: { flexDirection: 'row' as const, gap: 6 },
+  heroKpi: { flex: 1, alignItems: 'center' as const, backgroundColor: theme.backgroundSecondary, borderRadius: 10, paddingVertical: 10, borderWidth: 1 },
+  heroKpiValue: { fontSize: 20, fontWeight: '900' as const },
+  heroKpiLabel: { fontSize: 9, color: theme.textMuted, marginTop: 2, fontWeight: '700' as const, textAlign: 'center' as const, textTransform: 'uppercase' as const, letterSpacing: 0.3 },
+  heroCTA: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 12, marginTop: 12 },
+  heroCTAText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
+  heroActionsRow: { flexDirection: 'row' as const, gap: 8, marginTop: 10 },
+  heroQuickAction: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 5, paddingVertical: 8, borderRadius: 10, backgroundColor: theme.backgroundSecondary, borderWidth: 1, borderColor: theme.border },
+  heroQuickActionText: { fontSize: 11, fontWeight: '700' as const },
 });
