@@ -48,6 +48,7 @@ import { getClubCoAdmins, addClubCoAdmin, removeClubCoAdmin, updateCoAdminPermis
 import { sendClubInvitation, getClubInvitations, removeInvitation, hasBeenInvited, ClubInvitation } from '@/services/clubInvitationService';
 import { fetchClubMemberRoles, assignMemberRole, removeMemberRole, getRoleConfig, getRoleLabel, CLUB_ROLES, ClubMemberRole, ClubMemberRoleEntry } from '@/services/clubMemberRoleService';
 import { fetchClubLeaderboard, sortClubLeaderboard, type LeaderboardClub } from '@/services/clubLeaderboardService';
+import { TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
 
 
 
@@ -842,6 +843,19 @@ export default function ClubDetailScreen() {
             </View>
           ) : null}
         </View>
+
+        {/* Timezone mismatch banner — surfaces when the main terrain lives in a different timezone than the viewer */}
+        {club.terrainId ? (() => {
+          const mt = allTerrains.find(tr => tr.id === club.terrainId);
+          if (!mt || !(mt as any).timezone) return null;
+          return (
+            <TimezoneMismatchBanner
+              terrainTimezone={(mt as any).timezone}
+              facilityName={mt.name}
+              locale={language === 'fr' ? 'fr-FR' : 'en-US'}
+            />
+          );
+        })() : null}
 
 
 

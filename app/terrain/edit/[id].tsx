@@ -36,6 +36,7 @@ import MergeComparisonModal, { MergeField } from '@/components/ui/MergeCompariso
 import { useAuth } from '@/template';
 import { uploadTerrainPhotos } from '@/services/storageService';
 import { isValidMapCoord, toMapCoord } from '@/utils/mapPlayerLocation';
+import { guessTimezoneFromLongitude, shortTimezoneLabel } from '@/services/timezoneService';
 
 /**
  * Convert Google Places `utcOffsetMinutes` to compact `UTC±H[:MM]` timezone string.
@@ -117,6 +118,7 @@ export default function EditTerrainScreen() {
   const [toilets, setToilets] = useState(false);
   const [environment, setEnvironment] = useState<'indoor' | 'outdoor'>('outdoor');
   const [timezone, setTimezone] = useState<string>('');
+  const [timezoneSource, setTimezoneSource] = useState<'manual' | 'google' | 'longitude' | null>(null);
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
   const [photos, setPhotos] = useState<string[]>([]);
@@ -164,6 +166,7 @@ export default function EditTerrainScreen() {
       setPhotos(terrain.photos || []);
       setEnvironment(terrain.environment || 'outdoor');
       setTimezone(((terrain as any).timezone as string | undefined) || '');
+      setTimezoneSource((terrain as any).timezone ? 'manual' : null);
       setParking((terrain as any).parking ?? false);
       setToilets((terrain as any).toilets ?? false);
     }
@@ -273,6 +276,7 @@ export default function EditTerrainScreen() {
       if (typeof data.utcOffsetMinutes === 'number') {
         const tz = offsetMinutesToTimezone(data.utcOffsetMinutes);
         setTimezone(tz);
+        setTimezoneSource('google');
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         showAlert(language === 'fr' ? `Fuseau detecte: ${tz}` : `Detected timezone: ${tz}`);
       } else {
@@ -476,10 +480,20 @@ export default function EditTerrainScreen() {
 
           {/* 2b. Fuseau horaire (optionnel) */}
           <SectionCard title={language === 'fr' ? 'Fuseau horaire (optionnel)' : 'Timezone (optional)'} icon="access-time" color="#8B5CF6" delay={175}>
+            {timezone && timezoneSource && timezoneSource !== 'manual' ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: (timezoneSource === 'google' ? '#4285F4' : '#F59E0B') + '10', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 10, borderWidth: 1, borderColor: (timezoneSource === 'google' ? '#4285F4' : '#F59E0B') + '30' }}>
+                <MaterialIcons name={timezoneSource === 'google' ? 'auto-awesome' : 'my-location'} size={14} color={timezoneSource === 'google' ? '#4285F4' : '#F59E0B'} />
+                <Text style={{ flex: 1, fontSize: 11, fontWeight: '700', color: timezoneSource === 'google' ? '#4285F4' : '#F59E0B' }}>
+                  {timezoneSource === 'google'
+                    ? (language === 'fr' ? `Detecte via Google Places : ${shortTimezoneLabel(timezone)}` : `Detected via Google Places: ${shortTimezoneLabel(timezone)}`)
+                    : (language === 'fr' ? `Estime via longitude : ${timezone}` : `Estimated via longitude: ${timezone}`)}
+                </Text>
+              </View>
+            ) : null}
             <TextInput
               style={styles.textInput}
               value={timezone}
-              onChangeText={setTimezone}
+              onChangeText={(txt) => { setTimezone(txt); if (txt.trim()) setTimezoneSource('manual'); }}
               placeholder={language === 'fr' ? 'Europe/Paris ou UTC+1' : 'Europe/Paris or UTC+1'}
               placeholderTextColor={theme.textMuted}
               autoCapitalize="none"
@@ -492,16 +506,29 @@ export default function EditTerrainScreen() {
                   <Pressable
                     key={tz}
                     style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: isActive ? '#8B5CF6' : theme.backgroundSecondary, borderWidth: 1, borderColor: isActive ? '#8B5CF6' : theme.border }}
-                    onPress={() => { Haptics.selectionAsync(); setTimezone(tz); }}
+                    onPress={() => { Haptics.selectionAsync(); setTimezone(tz); setTimezoneSource('manual'); }}
                   >
                     <Text style={{ fontSize: 11, fontWeight: '600', color: isActive ? '#FFF' : theme.textSecondary }}>{tz}</Text>
                   </Pressable>
                 );
               })}
+              {isValidMapCoord(latitude, longitude) && !timezone ? (
+                <Pressable
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: '#F59E0B15', borderWidth: 1, borderColor: '#F59E0B30' }}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    const guess = guessTimezoneFromLongitude(longitude);
+                    if (guess) { setTimezone(guess); setTimezoneSource('longitude'); }
+                  }}
+                >
+                  <MaterialIcons name="my-location" size={12} color="#F59E0B" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#F59E0B' }}>{language === 'fr' ? 'Estimer' : 'Estimate'}</Text>
+                </Pressable>
+              ) : null}
               {timezone ? (
                 <Pressable
                   style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, backgroundColor: theme.error + '15', borderWidth: 1, borderColor: theme.error + '30' }}
-                  onPress={() => { Haptics.selectionAsync(); setTimezone(''); }}
+                  onPress={() => { Haptics.selectionAsync(); setTimezone(''); setTimezoneSource(null); }}
                 >
                   <Text style={{ fontSize: 11, fontWeight: '600', color: theme.error }}>{language === 'fr' ? 'Effacer' : 'Clear'}</Text>
                 </Pressable>
