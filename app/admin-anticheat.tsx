@@ -75,6 +75,7 @@ export default function AdminAntiCheatScreen() {
   const [sortMode, setSortMode] = useState<SortMode>('default');
   const [search, setSearch] = useState('');
   const [bulkBusy, setBulkBusy] = useState(false);
+  const [resettingCooldownId, setResettingCooldownId] = useState<string | null>(null);
 
   // ELO recalculation
   const [recalculating, setRecalculating] = useState(false);
@@ -129,6 +130,10 @@ export default function AdminAntiCheatScreen() {
   // Anti-cheat weekly analytics
   const [weeklyAnalytics, setWeeklyAnalytics] = useState<Array<{ week: string; blocked: number; registrations: number; multiAccount: number }>>([]);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
+
+  // Temporal alert trends (last 8 weeks): nocturnal matches, unrealistic durations, mass submission days
+  const [temporalTrends, setTemporalTrends] = useState<Array<{ week: string; nocturnal: number; unrealistic: number; massSub: number }>>([]);
+  const [temporalTrendsLoading, setTemporalTrendsLoading] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -294,7 +299,7 @@ export default function AdminAntiCheatScreen() {
     setScanning(true);
     try {
       const supabase = getSupabaseClient();
-      await supabase.functions.invoke('detect-suspicious', { body: { mode: 'full' } });
+      await supabase.functions.invoke('detect-suspicious', { body: { mode: 'full', force: true } });
       setTimeout(async () => {
         await loadData();
         setScanning(false);
@@ -558,6 +563,28 @@ export default function AdminAntiCheatScreen() {
         },
       ]
     );
+  };
+
+  // Reset the anti-cheat digest push cooldown for a given user so the next scan re-notifies them
+  const handleResetCooldown = async (userId: string) => {
+    if (!userId) return;
+    Haptics.selectionAsync();
+    setResettingCooldownId(userId);
+    try {
+      const supabase = getSupabaseClient();
+      const { error } = await supabase
+        .from('user_preferences')
+        .upsert({ user_id: userId, last_anticheat_digest_sent: null }, { onConflict: 'user_id' });
+      if (error) {
+        showAlert(isFr ? `Erreur: ${error.message}` : `Error: ${error.message}`);
+      } else {
+        showAlert(isFr ? 'Cooldown push reinitialise' : 'Push cooldown reset');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (e: any) {
+      showAlert(isFr ? `Erreur: ${e?.message || 'inconnue'}` : `Error: ${e?.message || 'unknown'}`);
+    }
+    setResettingCooldownId(null);
   };
 
   // Bulk ELO reversal handler
@@ -1051,6 +1078,143 @@ export default function AdminAntiCheatScreen() {
                 <Text style={{ fontSize: 9, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Violations' : 'Violations'}</Text>
               </View>
             </View>
+          </View>
+        ) : null}
+      </View>
+
+      {/* ============ TEMPORAL ALERT TRENDS (last 8 weeks) ============ */}
+      <View style={st.deviceSection}>
+        <Pressable
+          style={st.deviceHeaderRow}
+          onPress={async () => {
+            if (temporalTrends.length > 0) { setTemporalTrends([]); return; }
+            setTemporalTrendsLoading(true);
+            try {
+              const supabase = getSupabaseClient();
+              const eightWeeksAgo = new Date(); eightWeeksAgo.setDate(eightWeeksAgo.getDate() - 56);
+              const { data: matchData } = await supabase
+                .from('matches')
+                .select('id, date, created_at, duration')
+                .gte('created_at', eightWeeksAgo.toISOString())
+                .order('created_at', { ascending: true });
+              const weekMap = new Map<string, { nocturnal: number; unrealistic: number; dailyCounts: Map<string, number> }>();
+              for (const m of matchData || []) {
+                const d = new Date(m.date || m.created_at);
+                if (!Number.isFinite(d.getTime())) continue;
+                const monday = new Date(d); monday.setDate(d.getDate() - ((d.getDay() + 6) % 7)); monday.setHours(0, 0, 0, 0);
+                const wk = monday.toISOString().split('T')[0];
+                if (!weekMap.has(wk)) weekMap.set(wk, { nocturnal: 0, unrealistic: 0, dailyCounts: new Map() });
+                const w = weekMap.get(wk)!;
+                const hour = d.getUTCHours();
+                if (hour >= 3 && hour < 6) w.nocturnal++;
+                if (Number.isFinite(m.duration) && (m.duration < 5 || m.duration > 240)) w.unrealistic++;
+                const day = d.toISOString().split('T')[0];
+                w.dailyCounts.set(day, (w.dailyCounts.get(day) || 0) + 1);
+              }
+              const weeks = Array.from(weekMap.entries())
+                .sort((a, b) => a[0].localeCompare(b[0]))
+                .slice(-8)
+                .map(([week, stats]) => {
+                  const massSub = Array.from(stats.dailyCounts.values()).filter(c => c > 20).length;
+                  return { week: week.substring(5), nocturnal: stats.nocturnal, unrealistic: stats.unrealistic, massSub };
+                });
+              setTemporalTrends(weeks);
+            } catch { /* silent */ }
+            setTemporalTrendsLoading(false);
+          }}
+        >
+          <View style={[st.deviceIcon, { backgroundColor: '#8B5CF615' }]}>
+            <MaterialIcons name="query-stats" size={18} color="#8B5CF6" />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={st.deviceTitle}>{isFr ? 'Tendances alertes temporelles' : 'Temporal Alert Trends'}</Text>
+            <Text style={st.deviceSubtitle}>{isFr ? '8 dernieres semaines (nocturnes, durees, volume)' : 'Last 8 weeks (nocturnal, durations, volume)'}</Text>
+          </View>
+          {temporalTrendsLoading ? <ActivityIndicator size="small" color="#8B5CF6" /> : (
+            <MaterialIcons name={temporalTrends.length > 0 ? 'expand-less' : 'expand-more'} size={22} color={theme.textMuted} />
+          )}
+        </Pressable>
+        {temporalTrends.length > 0 ? (
+          <View style={{ paddingTop: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4, height: 100, backgroundColor: theme.backgroundSecondary, borderRadius: 12, padding: 10, paddingBottom: 24 }}>
+              {(() => {
+                const avgSum = temporalTrends.length > 0
+                  ? temporalTrends.reduce((s, x) => s + x.nocturnal + x.unrealistic + x.massSub, 0) / temporalTrends.length
+                  : 0;
+                const alertThreshold = avgSum * 2;
+                const maxVal = Math.max(...temporalTrends.map(x => Math.max(x.nocturnal, x.unrealistic, x.massSub)), 1);
+                return temporalTrends.map((w) => {
+                  const nH = Math.max(2, (w.nocturnal / maxVal) * 60);
+                  const uH = Math.max(2, (w.unrealistic / maxVal) * 60);
+                  const mH = Math.max(2, (w.massSub / maxVal) * 60);
+                  const sum = w.nocturnal + w.unrealistic + w.massSub;
+                  const isAlert = alertThreshold > 0 && sum > alertThreshold;
+                  return (
+                    <View key={w.week} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                      {isAlert ? (
+                        <View style={{ backgroundColor: '#EF4444', borderRadius: 6, width: 12, height: 12, alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>
+                          <MaterialIcons name="priority-high" size={8} color="#FFF" />
+                        </View>
+                      ) : null}
+                      <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 1 }}>
+                        {w.nocturnal > 0 ? <View style={{ width: 5, height: nH, borderRadius: 3, backgroundColor: '#7C3AED' }} /> : null}
+                        {w.unrealistic > 0 ? <View style={{ width: 5, height: uH, borderRadius: 3, backgroundColor: '#F97316' }} /> : null}
+                        {w.massSub > 0 ? <View style={{ width: 5, height: mH, borderRadius: 3, backgroundColor: '#DC2626' }} /> : null}
+                      </View>
+                      <Text style={{ fontSize: 7, color: isAlert ? '#EF4444' : theme.textMuted, fontWeight: isAlert ? '800' : '500' }}>{w.week}</Text>
+                    </View>
+                  );
+                });
+              })()}
+            </View>
+            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 12, marginTop: 8, flexWrap: 'wrap' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#7C3AED' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Nocturnes' : 'Nocturnal'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F97316' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Durees' : 'Durations'}</Text>
+              </View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#DC2626' }} />
+                <Text style={{ fontSize: 10, color: theme.textMuted, fontWeight: '600' }}>{isFr ? 'Volume >20/j' : 'Volume >20/day'}</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6, marginTop: 10 }}>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#7C3AED' }}>{temporalTrends.reduce((s, w) => s + w.nocturnal, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Nocturnes' : 'Nocturnal'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#F97316' }}>{temporalTrends.reduce((s, w) => s + w.unrealistic, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Durees' : 'Durations'}</Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: theme.backgroundSecondary, borderRadius: 10, padding: 8, alignItems: 'center' }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: '#DC2626' }}>{temporalTrends.reduce((s, w) => s + w.massSub, 0)}</Text>
+                <Text style={{ fontSize: 8, color: theme.textMuted, fontWeight: '600', marginTop: 2 }}>{isFr ? 'Jours >20' : 'Days >20'}</Text>
+              </View>
+            </View>
+            {(() => {
+              const avgSum = temporalTrends.length > 0
+                ? temporalTrends.reduce((s, x) => s + x.nocturnal + x.unrealistic + x.massSub, 0) / temporalTrends.length
+                : 0;
+              const alertThreshold = avgSum * 2;
+              const alertWeeks = alertThreshold > 0
+                ? temporalTrends.filter(x => (x.nocturnal + x.unrealistic + x.massSub) > alertThreshold).length
+                : 0;
+              if (alertWeeks === 0) return null;
+              return (
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#EF444415', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, borderWidth: 1, borderColor: '#EF444430' }}>
+                  <MaterialIcons name="warning" size={14} color="#EF4444" />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#EF4444', flex: 1 }}>
+                    {isFr
+                      ? `${alertWeeks} semaine(s) au-dessus de 2x la moyenne (${Math.round(alertThreshold)})`
+                      : `${alertWeeks} week(s) above 2x average (${Math.round(alertThreshold)})`}
+                  </Text>
+                </View>
+              );
+            })()}
           </View>
         ) : null}
       </View>
@@ -2171,6 +2335,16 @@ export default function AdminAntiCheatScreen() {
                   {savingNotes ? <ActivityIndicator size="small" color="#FFF" /> : <MaterialIcons name="save" size={16} color="#FFF" />}
                   <Text style={st.saveNotesBtnText}>{(et.adminSaveNotes as any)?.[language] || 'Save'}</Text>
                 </Pressable>
+                <Pressable
+                  style={[st.resetCooldownBtn, resettingCooldownId === selectedPlayer.userId && { opacity: 0.6 }]}
+                  onPress={() => handleResetCooldown(selectedPlayer.userId)}
+                  disabled={resettingCooldownId === selectedPlayer.userId}
+                >
+                  {resettingCooldownId === selectedPlayer.userId ? <ActivityIndicator size="small" color="#8B5CF6" /> : <MaterialIcons name="notifications-active" size={14} color="#8B5CF6" />}
+                  <Text style={st.resetCooldownBtnText}>
+                    {isFr ? 'Reinitialiser cooldown push' : 'Reset push cooldown'}
+                  </Text>
+                </Pressable>
               </View>
 
               {/* Status actions */}
@@ -2432,4 +2606,8 @@ const st = StyleSheet.create({
   bulkActionsBtns: { flexDirection: 'row' as const, gap: 8 },
   bulkActionBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
   bulkActionBtnText: { fontSize: 11, fontWeight: '700' as const },
+
+  // Reset cooldown button (detail modal admin action)
+  resetCooldownBtn: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, marginTop: 8, paddingVertical: 10, borderRadius: 10, backgroundColor: '#8B5CF615', borderWidth: 1, borderColor: '#8B5CF630' },
+  resetCooldownBtnText: { fontSize: 12, fontWeight: '700' as const, color: '#8B5CF6' },
 });
