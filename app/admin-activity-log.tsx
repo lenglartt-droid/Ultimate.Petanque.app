@@ -57,6 +57,63 @@ export default function AdminActivityLogScreen() {
   const [filterGroup, setFilterGroup] = useState<string | null>(null);
   const [filterAdmin, setFilterAdmin] = useState<string | null>(null);
 
+  // Ban Reason Analytics (last 30 days) - separate query independent of paginated logs
+  const [banAnalytics, setBanAnalytics] = useState<{
+    reasonCounts: { cheat: number; spam: number; harassment: number; other: number };
+    totalBans: number;
+    totalEvents: number;
+    topAdmins: Array<{ id: string; name: string; count: number; totalBanned: number }>;
+  } | null>(null);
+  const [banAnalyticsLoading, setBanAnalyticsLoading] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const supabase = getSupabaseClient();
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const { data } = await supabase
+          .from('admin_activity_logs')
+          .select('id, admin_user_id, admin_name, action_type, metadata, created_at')
+          .in('action_type', ['bulk_ban_filtered', 'bulk_ban_behavioral'])
+          .gte('created_at', thirtyDaysAgo.toISOString())
+          .order('created_at', { ascending: false });
+
+        const reasonCounts = { cheat: 0, spam: 0, harassment: 0, other: 0 };
+        const adminCounts = new Map<string, { name: string; count: number; totalBanned: number }>();
+
+        for (const row of data || []) {
+          const rawReason = String(row.metadata?.reason || 'other').toLowerCase();
+          const banned = Number(row.metadata?.bannedCount) || 0;
+          const bucket = (rawReason === 'cheat' || rawReason === 'spam' || rawReason === 'harassment') ? rawReason : 'other';
+          reasonCounts[bucket as 'cheat' | 'spam' | 'harassment' | 'other'] += banned;
+          if (row.admin_user_id) {
+            const entry = adminCounts.get(row.admin_user_id) || { name: row.admin_name || 'Admin', count: 0, totalBanned: 0 };
+            entry.count += 1;
+            entry.totalBanned += banned;
+            if (row.admin_name) entry.name = row.admin_name;
+            adminCounts.set(row.admin_user_id, entry);
+          }
+        }
+
+        const topAdmins = Array.from(adminCounts.entries())
+          .map(([id, v]) => ({ id, ...v }))
+          .sort((a, b) => (b.totalBanned - a.totalBanned) || (b.count - a.count))
+          .slice(0, 5);
+
+        setBanAnalytics({
+          reasonCounts,
+          totalBans: Object.values(reasonCounts).reduce((s, x) => s + x, 0),
+          totalEvents: (data || []).length,
+          topAdmins,
+        });
+      } catch (e) {
+        console.log('[ActivityLog] Ban analytics error:', e);
+      }
+      setBanAnalyticsLoading(false);
+    })();
+  }, []);
+
   // Unique admins from data
   const uniqueAdmins = useMemo(() => {
     const map = new Map<string, string>();
@@ -314,6 +371,86 @@ export default function AdminActivityLogScreen() {
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} />}
       >
+        {banAnalyticsLoading ? null : banAnalytics && banAnalytics.totalEvents > 0 ? (
+          <View style={s.analyticsCard}>
+            <View style={s.analyticsHeader}>
+              <View style={s.analyticsIconWrap}>
+                <MaterialIcons name="pie-chart" size={16} color="#DC2626" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.analyticsTitle}>{fr ? 'Motifs de bannissement (30j)' : 'Ban Reasons (30d)'}</Text>
+                <Text style={s.analyticsSub}>
+                  {banAnalytics.totalBans} {fr ? 'joueur(s) banni(s)' : 'player(s) banned'} · {banAnalytics.totalEvents} {fr ? 'action(s)' : 'action(s)'}
+                </Text>
+              </View>
+            </View>
+
+            {banAnalytics.totalBans > 0 ? (
+              <View style={s.analyticsStack}>
+                {([
+                  { key: 'cheat' as const, color: '#EF4444' },
+                  { key: 'spam' as const, color: '#F97316' },
+                  { key: 'harassment' as const, color: '#DB2777' },
+                  { key: 'other' as const, color: '#6B7280' },
+                ]).map(r => {
+                  const count = banAnalytics.reasonCounts[r.key] || 0;
+                  if (count === 0) return null;
+                  return <View key={r.key} style={{ flex: count, backgroundColor: r.color, height: 14 }} />;
+                })}
+              </View>
+            ) : (
+              <Text style={s.analyticsEmpty}>{fr ? 'Aucun bannissement sur 30j' : 'No bans in last 30d'}</Text>
+            )}
+
+            <View style={s.analyticsLegend}>
+              {([
+                { key: 'cheat' as const, color: '#EF4444', labelFr: 'Triche', labelEn: 'Cheating', icon: 'gpp-bad' },
+                { key: 'spam' as const, color: '#F97316', labelFr: 'Spam', labelEn: 'Spam', icon: 'block' },
+                { key: 'harassment' as const, color: '#DB2777', labelFr: 'Harcelement', labelEn: 'Harassment', icon: 'report' },
+                { key: 'other' as const, color: '#6B7280', labelFr: 'Autre', labelEn: 'Other', icon: 'more-horiz' },
+              ]).map(r => {
+                const count = banAnalytics.reasonCounts[r.key] || 0;
+                const pct = banAnalytics.totalBans > 0 ? Math.round((count / banAnalytics.totalBans) * 100) : 0;
+                return (
+                  <View key={r.key} style={s.analyticsLegendItem}>
+                    <View style={[s.analyticsLegendDot, { backgroundColor: r.color }]} />
+                    <MaterialIcons name={r.icon as any} size={12} color={r.color} />
+                    <Text style={s.analyticsLegendLabel}>{fr ? r.labelFr : r.labelEn}</Text>
+                    <View style={{ flex: 1 }} />
+                    <Text style={[s.analyticsLegendValue, { color: r.color }]}>{count}</Text>
+                    <Text style={s.analyticsLegendPct}>({pct}%)</Text>
+                  </View>
+                );
+              })}
+            </View>
+
+            {banAnalytics.topAdmins.length > 0 ? (
+              <View style={s.analyticsAdminsSection}>
+                <View style={s.analyticsAdminsHeader}>
+                  <MaterialIcons name="emoji-events" size={13} color="#D97706" />
+                  <Text style={s.analyticsAdminsTitle}>{fr ? 'Top 5 admins' : 'Top 5 admins'}</Text>
+                </View>
+                {banAnalytics.topAdmins.map((a, i) => (
+                  <View key={a.id} style={s.analyticsAdminRow}>
+                    <View style={[s.analyticsAdminRank, i === 0 && { backgroundColor: '#D9770620' }]}>
+                      <Text style={[s.analyticsAdminRankText, i === 0 && { color: '#D97706' }]}>{i + 1}</Text>
+                    </View>
+                    <Text style={s.analyticsAdminName} numberOfLines={1}>{a.name}</Text>
+                    <View style={s.analyticsAdminBadge}>
+                      <Text style={[s.analyticsAdminBadgeValue, { color: '#DC2626' }]}>{a.totalBanned}</Text>
+                      <Text style={s.analyticsAdminBadgeLabel}>{fr ? 'bans' : 'bans'}</Text>
+                    </View>
+                    <View style={[s.analyticsAdminBadge, { backgroundColor: '#F1F5F9' }]}>
+                      <Text style={[s.analyticsAdminBadgeValue, { color: '#64748B' }]}>{a.count}</Text>
+                      <Text style={s.analyticsAdminBadgeLabel}>{fr ? 'actions' : 'actions'}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+          </View>
+        ) : null}
+
         {filteredLogs.length === 0 ? (
           <View style={s.emptyWrap}>
             <View style={s.emptyIcon}><MaterialIcons name="history" size={40} color="#CBD5E1" /></View>
@@ -420,4 +557,29 @@ const s = StyleSheet.create({
   // Load more
   loadMoreBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 14, borderRadius: 12, backgroundColor: '#EFF6FF', borderWidth: 1, borderColor: '#DBEAFE', marginTop: 8 },
   loadMoreText: { fontSize: 13, fontWeight: '700', color: '#2563EB' },
+
+  // Ban Reason Analytics
+  analyticsCard: { backgroundColor: '#FFF', borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: '#FEE2E2', shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.03, shadowRadius: 3, elevation: 1 },
+  analyticsHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 12 },
+  analyticsIconWrap: { width: 32, height: 32, borderRadius: 10, backgroundColor: '#FEE2E2', alignItems: 'center', justifyContent: 'center' },
+  analyticsTitle: { fontSize: 14, fontWeight: '700', color: '#0F172A' },
+  analyticsSub: { fontSize: 11, color: '#94A3B8', marginTop: 1, fontWeight: '500' },
+  analyticsStack: { flexDirection: 'row', height: 14, borderRadius: 7, overflow: 'hidden', backgroundColor: '#F1F5F9', marginBottom: 12 },
+  analyticsEmpty: { fontSize: 12, color: '#94A3B8', textAlign: 'center', paddingVertical: 12, fontWeight: '500' },
+  analyticsLegend: { gap: 6, marginBottom: 12 },
+  analyticsLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#F8FAFC', borderRadius: 8, paddingHorizontal: 10, paddingVertical: 6 },
+  analyticsLegendDot: { width: 8, height: 8, borderRadius: 4 },
+  analyticsLegendLabel: { fontSize: 12, fontWeight: '600', color: '#0F172A' },
+  analyticsLegendValue: { fontSize: 12, fontWeight: '800' },
+  analyticsLegendPct: { fontSize: 10, color: '#94A3B8', fontWeight: '700' },
+  analyticsAdminsSection: { paddingTop: 10, borderTopWidth: 1, borderTopColor: '#F1F5F9' },
+  analyticsAdminsHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  analyticsAdminsTitle: { fontSize: 12, fontWeight: '800', color: '#D97706', letterSpacing: 0.3, textTransform: 'uppercase' },
+  analyticsAdminRow: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#F8FAFC', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 8, marginBottom: 5 },
+  analyticsAdminRank: { width: 22, height: 22, borderRadius: 11, backgroundColor: '#E2E8F0', alignItems: 'center', justifyContent: 'center' },
+  analyticsAdminRankText: { fontSize: 11, fontWeight: '800', color: '#64748B' },
+  analyticsAdminName: { flex: 1, fontSize: 12, fontWeight: '600', color: '#0F172A' },
+  analyticsAdminBadge: { alignItems: 'center', backgroundColor: '#FEE2E2', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, minWidth: 44 },
+  analyticsAdminBadgeValue: { fontSize: 13, fontWeight: '800' },
+  analyticsAdminBadgeLabel: { fontSize: 8, color: '#94A3B8', fontWeight: '600', marginTop: 1 },
 });
