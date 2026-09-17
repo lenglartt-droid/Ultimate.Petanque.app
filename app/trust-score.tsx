@@ -167,6 +167,12 @@ const FLAG_LABELS: Record<string, { fr: string; en: string; icon: string; color:
   nocturnal_pattern: { fr: 'Activite nocturne recurrente (3h-6h)', en: 'Recurring nocturnal activity (3AM-6AM)', icon: 'nightlight-round', color: '#7C3AED' },
   mass_submission: { fr: 'Soumission massive (>20/24h)', en: 'Mass submission (>20/24h)', icon: 'flash-on', color: '#DC2626' },
   mass_submission_repeated: { fr: 'Soumissions massives repetees', en: 'Repeated mass submissions', icon: 'flash-on', color: '#B91C1C' },
+  self_match: { fr: 'Auto-affrontement detecte', en: 'Self-match detected', icon: 'content-copy', color: '#EC4899' },
+  self_match_frequent: { fr: 'Auto-affrontements frequents', en: 'Frequent self-matches', icon: 'content-copy', color: '#DB2777' },
+  symmetric_score_streak: { fr: 'Serie de scores symetriques (13-0/13-1)', en: 'Symmetric score streak (13-0/13-1)', icon: 'repeat', color: '#F43F5E' },
+  symmetric_score_streak_extreme: { fr: 'Serie de scores extremes (10+ matchs)', en: 'Extreme score streak (10+ matches)', icon: 'repeat', color: '#E11D48' },
+  ghost_opponents: { fr: 'Adversaires fantomes detectes', en: 'Ghost opponents detected', icon: 'person-off', color: '#A855F7' },
+  ghost_opponents_dominant: { fr: 'Adversaires fantomes dominants', en: 'Dominant ghost opponents', icon: 'person-off', color: '#9333EA' },
 };
 
 // ============================================
@@ -789,6 +795,133 @@ export default function TrustScoreScreen() {
                         </View>
                       ))
                       : null}
+                  </View>
+                ) : null}
+              </Animated.View>
+            ) : null}
+
+            {/* Behavioral Alerts (personal view) */}
+            {(
+              ((trustData.details?.selfMatches?.count || 0) > 0) ||
+              ((trustData.details?.symmetricScores?.maxConsecutiveStreak || 0) > 5) ||
+              ((trustData.details?.ghostOpponents?.ghostCount || 0) > 0)
+            ) ? (
+              <Animated.View entering={FadeInDown.duration(400).delay(245)} style={st.sectionCard}>
+                <View style={st.sectionHeader}>
+                  <View style={[st.sectionIconBg, { backgroundColor: '#EC4899' + '15' }]}>
+                    <MaterialIcons name="psychology" size={18} color="#EC4899" />
+                  </View>
+                  <Text style={st.sectionTitle}>{isFr ? 'Alertes comportementales' : 'Behavioral Alerts'}</Text>
+                </View>
+                <Text style={geoSt.intro}>
+                  {isFr
+                    ? 'Ces alertes reperent des patterns suspects dans vos matchs (auto-affrontements, scores extremes repetes, adversaires isoles).'
+                    : 'These alerts detect suspicious patterns in your matches (self-matches, repeated extreme scores, isolated opponents).'}
+                </Text>
+
+                {/* Self-Match */}
+                {(trustData.details?.selfMatches?.count || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="content-copy" size={14} color="#EC4899" />
+                      <Text style={[geoSt.groupTitle, { color: '#EC4899' }]}>
+                        {isFr ? 'Auto-affrontements' : 'Self-matches'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#EC489915' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#EC4899' }]}>
+                          {trustData.details.selfMatches.count}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? 'Le meme joueur (ou son proprietaire) apparait des deux cotes du match. Verifiez la composition de vos equipes.'
+                        : 'The same player (or their owner) appears on both sides of the match. Verify your team compositions.'}
+                    </Text>
+                    {Array.isArray(trustData.details.selfMatches.examples)
+                      ? trustData.details.selfMatches.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#EC4899' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {ex.directOverlap ? (isFr ? 'Meme joueur des deux cotes' : 'Same player on both sides') : (isFr ? 'Meme proprietaire' : 'Same owner')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Symmetric Score Streak */}
+                {(trustData.details?.symmetricScores?.maxConsecutiveStreak || 0) > 5 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="repeat" size={14} color="#F43F5E" />
+                      <Text style={[geoSt.groupTitle, { color: '#F43F5E' }]}>
+                        {isFr ? 'Serie de scores extremes' : 'Extreme score streak'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#F43F5E15' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#F43F5E' }]}>
+                          {trustData.details.symmetricScores.maxConsecutiveStreak}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.symmetricScores.maxConsecutiveStreak} matchs consecutifs avec des scores 13-0 ou 13-1. Ce type de serie est rare dans un jeu equilibre.`
+                        : `${trustData.details.symmetricScores.maxConsecutiveStreak} consecutive matches with 13-0 or 13-1 scores. This type of streak is rare in balanced play.`}
+                    </Text>
+                    {Array.isArray(trustData.details.symmetricScores.examples)
+                      ? trustData.details.symmetricScores.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#F43F5E' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {isFr ? 'Score' : 'Score'}: {ex.score}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.date ? new Date(ex.date).toLocaleDateString(isFr ? 'fr-FR' : 'en-US', { day: 'numeric', month: 'short', year: 'numeric' }) : '-'}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                  </View>
+                ) : null}
+
+                {/* Ghost Opponents */}
+                {(trustData.details?.ghostOpponents?.ghostCount || 0) > 0 ? (
+                  <View style={geoSt.group}>
+                    <View style={geoSt.groupHeader}>
+                      <MaterialIcons name="person-off" size={14} color="#A855F7" />
+                      <Text style={[geoSt.groupTitle, { color: '#A855F7' }]}>
+                        {isFr ? 'Adversaires fantomes' : 'Ghost opponents'}
+                      </Text>
+                      <View style={[geoSt.groupBadge, { backgroundColor: '#A855F715' }]}>
+                        <Text style={[geoSt.groupBadgeText, { color: '#A855F7' }]}>
+                          {trustData.details.ghostOpponents.ghostCount}
+                        </Text>
+                      </View>
+                    </View>
+                    <Text style={geoSt.groupDesc}>
+                      {isFr
+                        ? `${trustData.details.ghostOpponents.ghostCount}/${trustData.details.ghostOpponents.totalOpponents || 0} adversaires (${trustData.details.ghostOpponents.ratio || 0}%) n'apparaissent que dans vos matchs. Invitez-les a rejoindre l'app pour renforcer la validation.`
+                        : `${trustData.details.ghostOpponents.ghostCount}/${trustData.details.ghostOpponents.totalOpponents || 0} opponents (${trustData.details.ghostOpponents.ratio || 0}%) only appear in your matches. Invite them to join the app to strengthen validation.`}
+                    </Text>
+                    {Array.isArray(trustData.details.ghostOpponents.examples)
+                      ? trustData.details.ghostOpponents.examples.slice(0, 3).map((ex: any, i: number) => (
+                        <View key={i} style={[geoSt.item, { borderLeftColor: '#A855F7' }]}>
+                          <Text style={geoSt.itemTitle} numberOfLines={1}>
+                            {ex.opponentName || (isFr ? 'Inconnu' : 'Unknown')}
+                          </Text>
+                          <Text style={geoSt.itemMeta}>
+                            {ex.sameOwner ? (isFr ? 'Cree par vous' : 'Created by you') : (isFr ? 'Aucun autre match enregistre' : 'No other matches recorded')}
+                          </Text>
+                        </View>
+                      ))
+                      : null}
+                    <Pressable style={[geoSt.cta, { backgroundColor: '#A855F7' }]} onPress={() => router.push('/share-hub')}>
+                      <MaterialIcons name="share" size={14} color="#FFF" />
+                      <Text style={geoSt.ctaText}>{isFr ? 'Inviter mes adversaires' : 'Invite my opponents'}</Text>
+                    </Pressable>
                   </View>
                 ) : null}
               </Animated.View>

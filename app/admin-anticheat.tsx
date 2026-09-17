@@ -32,7 +32,7 @@ const et = extraTranslations.trustScore;
 
 type StatusFilter = 'all' | 'flagged' | 'watch' | 'ok' | 'dismissed' | 'banned' | 'geoAlerts' | 'temporalAlerts' | 'behavioralAlerts';
 type TrustScoreFilter = 'all' | 'critical' | 'low' | 'medium' | 'high' | 'verified';
-type SortMode = 'default' | 'trustAsc' | 'trustDesc' | 'analysisRecent' | 'analysisOld' | 'nocturnalDesc' | 'unrealisticDurationDesc' | 'massSubmissionDesc';
+type SortMode = 'default' | 'trustAsc' | 'trustDesc' | 'analysisRecent' | 'analysisOld' | 'nocturnalDesc' | 'unrealisticDurationDesc' | 'massSubmissionDesc' | 'selfMatchDesc' | 'symmetricStreakDesc' | 'ghostRatioDesc';
 
 const GEO_ALERT_FLAGS = new Set<string>([
   'impossible_travel',
@@ -402,6 +402,9 @@ export default function AdminAntiCheatScreen() {
       case 'nocturnalDesc': return ((b.details?.nocturnalActivity?.count || 0) - (a.details?.nocturnalActivity?.count || 0));
       case 'unrealisticDurationDesc': return ((b.details?.unrealisticDuration?.count || 0) - (a.details?.unrealisticDuration?.count || 0));
       case 'massSubmissionDesc': return ((b.details?.massSubmission?.daysCount || 0) - (a.details?.massSubmission?.daysCount || 0));
+      case 'selfMatchDesc': return ((b.details?.selfMatches?.count || 0) - (a.details?.selfMatches?.count || 0));
+      case 'symmetricStreakDesc': return ((b.details?.symmetricScores?.maxConsecutiveStreak || 0) - (a.details?.symmetricScores?.maxConsecutiveStreak || 0));
+      case 'ghostRatioDesc': return ((b.details?.ghostOpponents?.ratio || 0) - (a.details?.ghostOpponents?.ratio || 0));
       default: return 0;
     }
   });
@@ -629,6 +632,40 @@ export default function AdminAntiCheatScreen() {
             setBulkBusy(false);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
             showAlert(isFr ? `${sent} rappel(s) envoye(s)` : `${sent} reminder(s) sent`);
+          },
+        },
+      ]
+    );
+  };
+
+  // Bulk behavioral ban handler (bans all filtered players with behavioral alert flags)
+  const handleBulkBanBehavioral = async () => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
+    const targets = filtered.filter(p => Array.isArray(p.flags) && p.flags.some((f: string) => BEHAVIORAL_ALERT_FLAGS.has(f)) && p.status !== 'banned');
+    if (targets.length === 0) {
+      showAlert(isFr ? 'Aucun joueur a bannir' : 'No players to ban');
+      return;
+    }
+    showAlert(
+      isFr ? `Bannir ${targets.length} joueur(s) comportemental(aux) ?` : `Ban ${targets.length} behavioral player(s)?`,
+      isFr ? 'Action destructive: score de confiance reduit a 0 pour tous les joueurs avec self-match / scores symetriques / adversaires fantomes.' : 'Destructive: trust score reset to 0 for all players with self-match / symmetric scores / ghost opponents.',
+      [
+        { text: isFr ? 'Annuler' : 'Cancel', style: 'cancel' },
+        {
+          text: isFr ? 'Bannir tout' : 'Ban all',
+          style: 'destructive',
+          onPress: async () => {
+            setBulkBusy(true);
+            let ok = 0;
+            for (const p of targets) {
+              const { error } = await banPlayer(p.id, p.playerId || '');
+              if (!error) ok++;
+            }
+            const ids = new Set(targets.map(t => t.id));
+            setPlayers(prev => prev.map(p => ids.has(p.id) ? { ...p, status: 'banned', trustScore: 0 } : p));
+            setBulkBusy(false);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+            showAlert(isFr ? `${ok} joueur(s) comportemental(aux) banni(s)` : `${ok} behavioral player(s) banned`);
           },
         },
       ]
@@ -1702,7 +1739,7 @@ export default function AdminAntiCheatScreen() {
           <Text style={st.trustFilterLabel}>{isFr ? 'Trier par' : 'Sort by'}</Text>
         </View>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={st.filterRow}>
-          {(['default', 'trustAsc', 'trustDesc', 'analysisRecent', 'analysisOld', 'nocturnalDesc', 'unrealisticDurationDesc', 'massSubmissionDesc'] as SortMode[]).map(sm => {
+          {(['default', 'trustAsc', 'trustDesc', 'analysisRecent', 'analysisOld', 'nocturnalDesc', 'unrealisticDurationDesc', 'massSubmissionDesc', 'selfMatchDesc', 'symmetricStreakDesc', 'ghostRatioDesc'] as SortMode[]).map(sm => {
             const isActive = sortMode === sm;
             const iconName: any = sm === 'trustAsc' ? 'arrow-upward'
               : sm === 'trustDesc' ? 'arrow-downward'
@@ -1711,6 +1748,9 @@ export default function AdminAntiCheatScreen() {
               : sm === 'nocturnalDesc' ? 'nightlight-round'
               : sm === 'unrealisticDurationDesc' ? 'timer-off'
               : sm === 'massSubmissionDesc' ? 'flash-on'
+              : sm === 'selfMatchDesc' ? 'content-copy'
+              : sm === 'symmetricStreakDesc' ? 'repeat'
+              : sm === 'ghostRatioDesc' ? 'person-off'
               : 'list';
             const label = sm === 'default' ? (isFr ? 'Par defaut' : 'Default')
               : sm === 'trustAsc' ? (isFr ? 'Score bas' : 'Score low')
@@ -1719,7 +1759,10 @@ export default function AdminAntiCheatScreen() {
               : sm === 'analysisOld' ? (isFr ? 'Analyse ancienne' : 'Old scan')
               : sm === 'nocturnalDesc' ? (isFr ? 'Nocturnes' : 'Nocturnal')
               : sm === 'unrealisticDurationDesc' ? (isFr ? 'Durees' : 'Durations')
-              : (isFr ? 'Volume' : 'Volume');
+              : sm === 'massSubmissionDesc' ? (isFr ? 'Volume' : 'Volume')
+              : sm === 'selfMatchDesc' ? (isFr ? 'Auto-affr.' : 'Self-match')
+              : sm === 'symmetricStreakDesc' ? (isFr ? 'Serie sym.' : 'Symmetric')
+              : (isFr ? 'Fantomes' : 'Ghosts');
             return (
               <Pressable
                 key={sm}
@@ -1783,6 +1826,16 @@ export default function AdminAntiCheatScreen() {
               >
                 {bulkBusy ? <ActivityIndicator size="small" color="#EC4899" /> : <MaterialIcons name="psychology" size={13} color="#EC4899" />}
                 <Text style={[st.bulkActionBtnText, { color: '#EC4899' }]}>{isFr ? 'Rappel push' : 'Notify'}</Text>
+              </Pressable>
+            ) : null}
+            {statusFilter === 'behavioralAlerts' ? (
+              <Pressable
+                style={[st.bulkActionBtn, { backgroundColor: '#DB277715' }, bulkBusy && { opacity: 0.5 }]}
+                onPress={handleBulkBanBehavioral}
+                disabled={bulkBusy}
+              >
+                {bulkBusy ? <ActivityIndicator size="small" color="#DB2777" /> : <MaterialIcons name="gpp-bad" size={13} color="#DB2777" />}
+                <Text style={[st.bulkActionBtnText, { color: '#DB2777' }]}>{isFr ? 'Bannir comport.' : 'Ban behav.'}</Text>
               </Pressable>
             ) : null}
           </View>
