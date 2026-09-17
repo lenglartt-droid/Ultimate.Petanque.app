@@ -38,6 +38,8 @@ import { fetchAmbassadors, Ambassador } from '@/services/ambassadorService';
 import { trackAmbassadorEvent } from '@/services/ambassadorAnalyticsService';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
+import { parseTerrainTimezone, timezonesDiffer, getDeviceTimezone, formatTimeInTimezone, shortTimezoneLabel } from '@/services/timezoneService';
 
 interface MeneEdit {
   teamAPoints: number;
@@ -1249,6 +1251,22 @@ export default function EditMatchScreen() {
                 <Text style={styles.dateText}>{matchDate.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit' })}</Text>
               </Pressable>
             </View>
+            {(() => {
+              const facilityTz = parseTerrainTimezone((selectedTerrain as any)?.timezone);
+              const deviceTz = getDeviceTimezone();
+              if (!facilityTz || !timezonesDiffer(facilityTz, deviceTz, matchDate)) return null;
+              const facilityTime = formatTimeInTimezone(matchDate, facilityTz, locale);
+              const label = shortTimezoneLabel(facilityTz);
+              const deviceTime = formatTimeInTimezone(matchDate, deviceTz, locale);
+              return (
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: '#8B5CF610', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 8, borderWidth: 1, borderColor: '#8B5CF625' }}>
+                  <MaterialIcons name="public" size={14} color="#7C3AED" />
+                  <Text style={{ flex: 1, fontSize: 12, color: '#7C3AED', fontWeight: '600' }}>
+                    {facilityTime} {label} <Text style={{ color: '#8B5CF6', fontWeight: '500' }}>({deviceTime} {language === 'fr' ? 'chez vous' : 'your time'})</Text>
+                  </Text>
+                </View>
+              );
+            })()}
             {showDatePicker && <DateTimePicker value={matchDate} mode="date" display="default" onChange={handleDateChange} />}
             {showTimePicker && <DateTimePicker value={matchDate} mode="time" display="default" onChange={handleTimeChange} />}
           </View>
