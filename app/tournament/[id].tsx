@@ -26,6 +26,7 @@ import { useAppData, useAppActions, useAppUI } from '@/contexts/AppContext';
 import { TextInput } from 'react-native';
 import { TournamentType } from '@/constants/config';
 import ShareModal from '@/components/ui/ShareModal';
+import ShareRequestModal from '@/components/ui/ShareRequestModal';
 import ModificationLogsSection from '@/components/ui/ModificationLogsSection';
 import SharedBadge from '@/components/ui/SharedBadge';
 import MergePickerModal from '@/components/ui/MergePickerModal';
@@ -246,6 +247,7 @@ export default function TournamentDetailScreen() {
   const [isScheduling, setIsScheduling] = useState(false);
   const [permissionStatus, setPermissionStatus] = useState<'unknown' | 'granted' | 'denied'>('unknown');
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showShareRequestModal, setShowShareRequestModal] = useState(false);
   const [isShared, setIsShared] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isPublicState, setIsPublicState] = useState(false);
@@ -466,7 +468,8 @@ export default function TournamentDetailScreen() {
   const handleOpenShare = useCallback(() => {
     if (!tournament) return;
     Haptics.selectionAsync();
-    setShowShareModal(true);
+    // Unified 2-step Partager flow (detection + public link)
+    setShowShareRequestModal(true);
   }, [tournament]);
   
   // Notification state
@@ -1248,66 +1251,7 @@ export default function TournamentDetailScreen() {
           </View>
         </Modal>
 
-        {/* Quick Share with Tournament Players */}
-        {canEdit && !isSharedItem && myMatches.length > 0 ? (
-          <Animated.View entering={FadeInDown.duration(300).delay(140)}>
-            <Pressable
-              style={[styles.quickShareBtn, quickShareState === 'sent' && styles.quickShareBtnSent, quickShareState === 'loading' && { opacity: 0.7 }]}
-              onPress={handleQuickShareWithPlayers}
-              disabled={quickShareState === 'loading' || quickShareState === 'sent'}
-            >
-              {quickShareState === 'loading' ? (
-                <>
-                  <ActivityIndicator size="small" color={theme.primary} />
-                  <Text style={styles.quickShareText}>{language === 'fr' ? 'Detection des comptes...' : 'Detecting accounts...'}</Text>
-                </>
-              ) : quickShareState === 'sent' ? (
-                <>
-                  <View style={[styles.quickShareIconBg, { backgroundColor: '#10B98115' }]}>
-                    <MaterialIcons name="check-circle" size={20} color="#10B981" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.quickShareTitle, { color: '#10B981' }]}>{language === 'fr' ? 'Demandes envoyees !' : 'Requests sent!'}</Text>
-                    <Text style={styles.quickShareSub}>{quickShareCount} {language === 'fr' ? 'joueur(s) notifie(s)' : 'player(s) notified'}</Text>
-                  </View>
-                </>
-              ) : quickShareState === 'no_accounts' ? (
-                <>
-                  <View style={[styles.quickShareIconBg, { backgroundColor: '#F59E0B15' }]}>
-                    <MaterialIcons name="person-off" size={20} color="#F59E0B" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.quickShareTitle, { color: '#F59E0B' }]}>{language === 'fr' ? 'Aucun compte detecte' : 'No accounts detected'}</Text>
-                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Les joueurs n\'ont pas de compte lie' : 'Players have no linked accounts'}</Text>
-                  </View>
-                </>
-              ) : quickShareState === 'already_shared' ? (
-                <>
-                  <View style={[styles.quickShareIconBg, { backgroundColor: theme.primary + '15' }]}>
-                    <MaterialIcons name="done-all" size={20} color={theme.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.quickShareTitle, { color: theme.primary }]}>{language === 'fr' ? 'Deja partage' : 'Already shared'}</Text>
-                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Tous les joueurs ont deja recu une demande' : 'All players already received a request'}</Text>
-                  </View>
-                </>
-              ) : (
-                <>
-                  <View style={[styles.quickShareIconBg, { backgroundColor: '#22C55E15' }]}>
-                    <MaterialIcons name="group-add" size={20} color="#22C55E" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.quickShareTitle}>{language === 'fr' ? 'Partager avec les coequipiers' : 'Share with teammates'}</Text>
-                    <Text style={styles.quickShareSub}>{language === 'fr' ? 'Envoie automatique aux joueurs avec un compte' : 'Auto-send to players with an account'}</Text>
-                  </View>
-                  <View style={styles.quickShareArrow}>
-                    <MaterialIcons name="send" size={16} color="#22C55E" />
-                  </View>
-                </>
-              )}
-            </Pressable>
-          </Animated.View>
-        ) : null}
+        {/* Quick Share with Tournament Players - Merged into unified 'Partager' modal (opens via header icon) */}
 
         {/* Match Timeline */}
         <Animated.View entering={FadeInDown.duration(300).delay(150)} style={styles.section}>
@@ -1771,6 +1715,25 @@ export default function TournamentDetailScreen() {
         itemType="tournament"
         itemId={tournament.id}
         itemName={tournament.name}
+      />
+
+      <ShareRequestModal
+        visible={showShareRequestModal}
+        onClose={() => setShowShareRequestModal(false)}
+        itemType={'tournament' as any}
+        itemId={tournament.id}
+        playerIds={(() => {
+          const ids = new Set<string>();
+          myMatches.forEach(m => {
+            [...(m.teamA.players || []), ...(m.teamB.players || [])].forEach(pid => {
+              if (pid !== '1' && pid !== '2') ids.add(pid);
+            });
+          });
+          return [...ids];
+        })()}
+        senderName={user?.username || user?.email || 'Joueur'}
+        itemSummary={`${tournament.name} - ${t('formats', tournament.format)} (${myStats.wins}V/${myStats.losses}D)`}
+        language={language}
       />
 
       <MergePickerModal
