@@ -142,9 +142,6 @@ export default function AdminDashboardScreen() {
   const [smartAlerts, setSmartAlerts] = useState<{ id: string; severity: 'critical' | 'warning' | 'info'; title: string; message: string; icon: string; color: string; route?: string }[]>([]);
   const [adminNotifCount, setAdminNotifCount] = useState(0);
 
-  // Critical anti-cheat alerts (email_farm + artificial_progression) - top 5 recent
-  const [criticalAlerts, setCriticalAlerts] = useState<Array<{ suspiciousId: string; playerId: string; playerName: string; playerAvatar?: string; trustScore: number; flags: string[]; analyzedAt: string; alertTypes: string[] }>>([]);
-
   // Push analytics
   const [pushStats, setPushStats] = useState({ sent: 0, errors: 0, types: {} as Record<string, number>, daily: [] as { date: string; sent: number; errors: number }[] });
 
@@ -207,7 +204,7 @@ export default function AdminDashboardScreen() {
   const [transferStats, setTransferStats] = useState<TransferStats>({ pending: 0, accepted: 0, declined: 0, expired: 0, acceptanceRate: 0, avgResponseTimeHours: 0, weeklyEvolution: [], topSenders: [], recent: [] });
 
   // Widget order (persisted)
-  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'criticalAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'receiptDelivery', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
+  const DEFAULT_ORDER = ['overview', 'smartAlerts', 'transfers', 'clubHealthAlerts', 'onboarding', 'pushAnalytics', 'receiptDelivery', 'pushTokenAnalytics', 'moderation', 'appeals', 'activity', 'weeklyMatches', 'userGrowth', 'clubVerification', 'eloDistribution'];
   const [widgetOrder, setWidgetOrder] = useState<string[]>(DEFAULT_ORDER);
 
   // Load widget preferences + order
@@ -385,41 +382,6 @@ export default function AdminDashboardScreen() {
 
       // Declining clubs
       setDecliningClubs(res.decliningClubs || []);
-
-      // Critical anti-cheat alerts (email_farm + artificial_progression) - top 5 recent
-      try {
-        const { data: susData } = await supabase
-          .from('suspicious_players')
-          .select('id, player_id, trust_score, flags, analyzed_at')
-          .neq('status', 'banned')
-          .neq('status', 'dismissed')
-          .order('analyzed_at', { ascending: false })
-          .limit(100);
-        const critList: Array<{ suspiciousId: string; playerId: string; trustScore: number; flags: string[]; analyzedAt: string; alertTypes: string[] }> = [];
-        for (const sp of susData || []) {
-          const flags = Array.isArray(sp.flags) ? sp.flags : [];
-          const alertTypes: string[] = [];
-          if (flags.includes('email_farm')) alertTypes.push('email_farm');
-          if (flags.includes('artificial_progression') || flags.includes('suspiciously_linear_elo')) alertTypes.push('artificial_progression');
-          if (alertTypes.length > 0) {
-            critList.push({ suspiciousId: sp.id, playerId: sp.player_id, trustScore: sp.trust_score, flags, analyzedAt: sp.analyzed_at, alertTypes });
-          }
-          if (critList.length >= 5) break;
-        }
-        if (critList.length > 0) {
-          const playerIds = critList.map(c => c.playerId);
-          const { data: playersInfo } = await supabase.from('players').select('id, name, avatar').in('id', playerIds);
-          const playerMap = new Map<string, { name: string; avatar?: string }>();
-          (playersInfo || []).forEach((p: any) => playerMap.set(p.id, { name: p.name, avatar: p.avatar || undefined }));
-          setCriticalAlerts(critList.map(c => ({
-            ...c,
-            playerName: playerMap.get(c.playerId)?.name || String(c.playerId).substring(0, 8),
-            playerAvatar: playerMap.get(c.playerId)?.avatar,
-          })));
-        } else {
-          setCriticalAlerts([]);
-        }
-      } catch { /* silent - RLS may block */ }
 
       // Fetch announcement timestamps for push delivery heatmap
       try {
@@ -1087,7 +1049,6 @@ export default function AdminDashboardScreen() {
               const items = [
                 { key: 'overview', label: fr ? 'Vue d\'ensemble' : 'Overview', icon: 'analytics' },
                 { key: 'smartAlerts', label: fr ? 'Alertes' : 'Alerts', icon: 'notifications-active' },
-                { key: 'criticalAlerts', label: fr ? 'Alertes anti-triche' : 'Anti-Cheat Alerts', icon: 'security' },
                 { key: 'transfers', label: fr ? 'Transferts joueurs' : 'Player Transfers', icon: 'swap-horiz' },
                 { key: 'onboarding', label: 'Onboarding', icon: 'person-add' },
                 { key: 'clubHealthAlerts', label: fr ? 'Sante clubs' : 'Club Health', icon: 'favorite' },
@@ -1445,63 +1406,6 @@ export default function AdminDashboardScreen() {
                 {alert.route ? <MaterialIcons name="chevron-right" size={18} color={alert.color} /> : null}
               </Pressable>
             ))}
-          </Animated.View>
-          );
-
-          if (wKey === 'criticalAlerts' && criticalAlerts.length > 0) return (
-          <Animated.View key={wKey} entering={FadeInDown.duration(300).delay(wDelay)}>
-            <View style={s.activityHeader}>
-              <Text style={s.sectionTitle}>{fr ? 'ALERTES CRITIQUES ANTI-TRICHE' : 'CRITICAL ANTI-CHEAT ALERTS'}</Text>
-              <Pressable
-                style={s.activityViewAllBtn}
-                onPress={() => { Haptics.selectionAsync(); router.push('/admin-anticheat' as any); }}
-              >
-                <Text style={s.activityViewAllText}>{fr ? 'Voir tout' : 'View all'}</Text>
-                <MaterialIcons name="chevron-right" size={16} color="#3B82F6" />
-              </Pressable>
-            </View>
-            <View style={s.activityCard}>
-              {criticalAlerts.map((alert, idx) => {
-                const scoreColor = alert.trustScore < 25 ? '#DC2626' : alert.trustScore < 45 ? '#F97316' : '#D97706';
-                return (
-                  <Pressable
-                    key={alert.suspiciousId}
-                    style={[s.activityItem, idx > 0 && s.activityItemBorder]}
-                    onPress={() => {
-                      Haptics.selectionAsync();
-                      router.push({ pathname: '/admin-anticheat', params: { playerId: alert.playerId } } as any);
-                    }}
-                  >
-                    <View style={[s.activityIcon, { backgroundColor: '#DC262612' }]}>
-                      <MaterialIcons name="security" size={14} color="#DC2626" />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={s.activityText} numberOfLines={1}>{alert.playerName}</Text>
-                      <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', marginTop: 3 }}>
-                        {alert.alertTypes.includes('email_farm') ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#DC262615', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                            <MaterialIcons name="alternate-email" size={9} color="#DC2626" />
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#DC2626' }}>{fr ? 'Email farm' : 'Email farm'}</Text>
-                          </View>
-                        ) : null}
-                        {alert.alertTypes.includes('artificial_progression') ? (
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: '#DB277715', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 5 }}>
-                            <MaterialIcons name="trending-up" size={9} color="#DB2777" />
-                            <Text style={{ fontSize: 9, fontWeight: '800', color: '#DB2777' }}>{fr ? 'Progression ELO' : 'ELO progression'}</Text>
-                          </View>
-                        ) : null}
-                      </View>
-                      <Text style={s.activityMeta}>{fr ? 'Analyse' : 'Analyzed'} {getTimeAgo(alert.analyzedAt, fr)}</Text>
-                    </View>
-                    <View style={{ alignItems: 'center', backgroundColor: scoreColor + '12', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, minWidth: 40 }}>
-                      <Text style={{ fontSize: 13, fontWeight: '800', color: scoreColor }}>{alert.trustScore}</Text>
-                      <Text style={{ fontSize: 7, color: scoreColor, fontWeight: '600' }}>/100</Text>
-                    </View>
-                    <MaterialIcons name="chevron-right" size={14} color="#CBD5E1" />
-                  </Pressable>
-                );
-              })}
-            </View>
           </Animated.View>
           );
 

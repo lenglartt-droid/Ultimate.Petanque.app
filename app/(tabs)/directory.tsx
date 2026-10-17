@@ -51,7 +51,6 @@ import { getSupabaseClient, useAuth, useAlert } from '@/template';
 import { computeQuickTrustScore, getTrustScoreColor, getLevelFromScore } from '@/services/trustScoreService';
 import { saveMergeLog, getMergeLogs, undoMerge, isUndoable, getUndoTimeRemaining, deleteMergeLog, MergeLog, ReassignedRelation } from '@/services/mergeHistoryService';
 import { getMyActiveMeetups, inviteSingleUserToMeetup, Meetup } from '@/services/meetupService';
-import { parseTerrainTimezone, timezonesDiffer, getDeviceTimezone, shortTimezoneLabel } from '@/services/timezoneService';
 
 type DirectoryTab = 'players' | 'clubs' | 'terrains' | 'tournaments' | 'events';
 type TournamentStatus = 'all' | 'À venir' | 'En cours' | 'Terminé';
@@ -2742,10 +2741,6 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
   const hasSponsor = !!sponsorInfo;
   const hasMultiPhotos = item.photos && item.photos.length > 1;
   const [photoIdx, setPhotoIdx] = React.useState(0);
-  const facilityTz = parseTerrainTimezone((item as any).timezone);
-  const deviceTz = getDeviceTimezone();
-  const showTz = !!facilityTz && timezonesDiffer(facilityTz, deviceTz);
-  const tzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
   return (
     <Pressable style={[styles.itemCard, isFavorite && styles.favoriteCard]} onPress={() => router.push(`/terrain/${item.id}`)}>
       <View style={[styles.itemAvatar, { backgroundColor: theme.success }]}>
@@ -2795,12 +2790,6 @@ const MemoizedTerrainCard = React.memo(({ item, favoriteTerrainIds, getSharedPer
           {item.publicAccess === false ? <View style={[styles.tag, { backgroundColor: theme.error + '15' }]}><MaterialIcons name="lock" size={10} color={theme.error} /><Text style={[styles.tagText, { color: theme.error }]}>{t('directory', 'privateAccessShort')}</Text></View> : null}
           {item.parking ? <View style={[styles.tag, { backgroundColor: '#6366F115' }]}><MaterialIcons name="local-parking" size={10} color="#6366F1" /></View> : null}
           {item.toilets ? <View style={[styles.tag, { backgroundColor: '#EC489915' }]}><MaterialIcons name="wc" size={10} color="#EC4899" /></View> : null}
-          {showTz ? (
-            <View style={[styles.tag, { backgroundColor: '#8B5CF612', borderWidth: 1, borderColor: '#8B5CF625' }]}>
-              <MaterialIcons name="public" size={10} color="#7C3AED" />
-              <Text style={[styles.tagText, { color: '#7C3AED' }]} numberOfLines={1}>{tzLabel}</Text>
-            </View>
-          ) : null}
         </View>
         {activityInfo ? (
           <View style={styles.activityScoreRow}>

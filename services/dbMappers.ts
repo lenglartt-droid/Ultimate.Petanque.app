@@ -71,9 +71,8 @@ export function mapTerrainFromDb(t: any): Terrain {
     clubId: t.club_id, clubName: t.club_name, isPublic: t.is_public ?? true,
     publicAccess: t.public_access ?? true, courtsCount: t.courts_count || 1,
     lighting: t.lighting ?? false, covered: t.covered ?? false, parking: t.parking ?? false, toilets: t.toilets ?? false,
-    environment: t.environment || 'outdoor', timezone: t.timezone || undefined, createdAt: t.created_at,
+    environment: t.environment || 'outdoor', createdAt: t.created_at,
     sponsorId: t.sponsor_id || undefined,
-    googlePlaceId: t.google_place_id || undefined,
   };
 }
 

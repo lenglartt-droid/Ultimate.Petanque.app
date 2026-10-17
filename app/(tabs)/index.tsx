@@ -52,9 +52,6 @@ import { findNearbyActiveTerrains, formatDistance, NearbyActiveTerrain } from '@
 import { loadNotificationPreferences } from '@/services/notificationPreferencesService';
 import { sendProximityTerrainNotification } from '@/services/notificationService';
 import { checkCityChange, markCityPromptShown, CityChangeDetection } from '@/services/autoCityDetectionService';
-import { detectHomeCityMismatch, markHomeCityMismatchPromptShown, HomeCityMismatchResult } from '@/services/homeCityMismatchService';
-import { getMatchesMentioningUser, MatchMention } from '@/services/mentionsService';
-import { getImpersonationAlertsForUser, ImpersonationAlert } from '@/services/impersonationService';
 
 // ============================================================
 // FULL PAGE SKELETON — single unified skeleton for initial load
@@ -108,7 +105,7 @@ const sk = StyleSheet.create({
 // ============================================================
 // SECTION TYPES
 // ============================================================
-type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner' | 'cityMatchMismatch' | 'mentions' | 'impersonation';
+type SectionKey = 'hero' | 'actions' | 'geoRanking' | 'leaderboardHub' | 'witness' | 'eloDecay' | 'sponsor' | 'progress' | 'seasonSummary' | 'leaderboard' | 'divider1' | 'weeklyStats' | 'adBanner1' | 'adBanner2' | 'timeline' | 'divider2' | 'ambassadors' | 'divider3' | 'history' | 'frBanner' | 'enBanner';
 interface HomeSection { key: SectionKey; data: SectionKey[] }
 
 // ============================================================
@@ -227,10 +224,6 @@ export default function HomeScreen() {
   const [cityChangeDismissed, setCityChangeDismissed] = useState(false);
   const [cityUpdating, setCityUpdating] = useState(false);
 
-  // Home city mismatch (based on match analysis)
-  const [cityMismatch, setCityMismatch] = useState<HomeCityMismatchResult | null>(null);
-  const [cityMismatchDismissed, setCityMismatchDismissed] = useState(false);
-
   // Gold partner carousel
   const [goldCarouselIndex, setGoldCarouselIndex] = useState(0);
   const goldFadeAnim = React.useRef(new RNAnimated.Value(1)).current;
@@ -245,13 +238,6 @@ export default function HomeScreen() {
 
   // Pending match witnesses
   const [pendingWitnessMatchCount, setPendingWitnessMatchCount] = useState(0);
-
-  // Match mentions widget
-  const [mentionsCount, setMentionsCount] = useState(0);
-  const [mentionsPreview, setMentionsPreview] = useState<MatchMention[]>([]);
-
-  // Impersonation alerts widget
-  const [impersonationCount, setImpersonationCount] = useState(0);
 
   // ELO Decay Warning
   const eloDecayWarning = useMemo(() => {
@@ -274,21 +260,6 @@ export default function HomeScreen() {
   }, [userStats?.matchesPlayed, matches.length]);
 
   // === LOAD FUNCTIONS ===
-
-  const loadMentions = useCallback(async () => {
-    try {
-      const { mentions } = await getMatchesMentioningUser();
-      setMentionsCount(mentions.length);
-      setMentionsPreview(mentions.slice(0, 3));
-    } catch { /* silent */ }
-  }, []);
-
-  const loadImpersonation = useCallback(async () => {
-    try {
-      const { alerts } = await getImpersonationAlertsForUser();
-      setImpersonationCount(alerts.length);
-    } catch { /* silent */ }
-  }, []);
 
   const loadWitnessRequests = useCallback(async () => {
     const [{ requests }, count] = await Promise.all([
@@ -361,19 +332,6 @@ export default function HomeScreen() {
         playerLocationLng: selfPlayer.location?.longitude || null,
       });
       if (result?.detected) setCityChange(result);
-    } catch { /* silent */ }
-  }, [selfPlayer]);
-
-  // Home city mismatch detection (match-based)
-  const checkHomeCityMismatch = useCallback(async () => {
-    if (!selfPlayer) return;
-    try {
-      const result = await detectHomeCityMismatch({
-        playerLat: selfPlayer.location?.latitude || null,
-        playerLng: selfPlayer.location?.longitude || null,
-        playerCity: selfPlayer.location?.city || (selfPlayer as any).city || null,
-      });
-      if (result?.detected) setCityMismatch(result);
     } catch { /* silent */ }
   }, [selfPlayer]);
 
@@ -460,21 +418,18 @@ export default function HomeScreen() {
           loadMeetups(),
           loadUpcomingEvents(),
           loadFeedUnread(),
-          loadMentions(),
-          loadImpersonation(),
         ]).then(() => {
           if (cancelled) return;
           setTimeout(() => {
             loadProximityAlert();
             checkAutoCityDetection();
-            checkHomeCityMismatch();
           }, 2000);
         });
       });
     };
     loadCritical();
     return () => { cancelled = true; };
-  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection, checkHomeCityMismatch, loadMentions, loadImpersonation]);
+  }, [loadAmbassadors, loadMeetups, loadUpcomingEvents, loadWitnessRequests, loadFeedUnread, loadProximityAlert, checkAutoCityDetection]);
 
   // Polling — unified into single interval to reduce timer overhead
   useEffect(() => {
@@ -554,13 +509,10 @@ export default function HomeScreen() {
     s.push({ key: 'actions', data: ['actions'] });
     if (nearbyTerrains.length > 0 && !proximityDismissed) s.push({ key: 'proximity' as SectionKey, data: ['proximity' as SectionKey] });
     if (cityChange && !cityChangeDismissed) s.push({ key: 'cityChange' as SectionKey, data: ['cityChange' as SectionKey] });
-    if (cityMismatch && !cityMismatchDismissed && !(cityChange && !cityChangeDismissed)) s.push({ key: 'cityMatchMismatch' as SectionKey, data: ['cityMatchMismatch' as SectionKey] });
     // Geographic Ranking Widget — above full leaderboard
     s.push({ key: 'geoRanking', data: ['geoRanking'] });
     // Leaderboard Hub — prominent position
     s.push({ key: 'leaderboardHub', data: ['leaderboardHub'] });
-    if (mentionsCount > 0) s.push({ key: 'mentions' as SectionKey, data: ['mentions' as SectionKey] });
-    if (impersonationCount > 0) s.push({ key: 'impersonation' as SectionKey, data: ['impersonation' as SectionKey] });
     if (witnessRequests.length > 0) s.push({ key: 'witness', data: ['witness'] });
     if (eloDecayWarning) s.push({ key: 'eloDecay' as SectionKey, data: ['eloDecay' as SectionKey] });
     s.push({ key: 'sponsor', data: ['sponsor'] });
@@ -583,7 +535,7 @@ export default function HomeScreen() {
     if (language === 'fr') s.push({ key: 'frBanner', data: ['frBanner'] });
     if (language === 'en') s.push({ key: 'enBanner', data: ['enBanner'] });
     return s;
-  }, [witnessRequests.length, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed, cityMismatch, cityMismatchDismissed, mentionsCount, impersonationCount]);
+  }, [witnessRequests.length, selfPlayer?.isPublic, totalMatches, featuredAmbassadors.length, matches.length, challenges.length, language, nearbyTerrains.length, proximityDismissed, cityChange, cityChangeDismissed]);
 
   // === RENDER SECTION ITEM ===
   const renderSectionItem = useCallback(({ item }: { item: SectionKey }) => {
@@ -745,63 +697,6 @@ export default function HomeScreen() {
           </View>
         ) : null;
 
-      // ===== HOME CITY MISMATCH ALERT (match-based) =====
-      case 'cityMatchMismatch' as SectionKey:
-        return cityMismatch && !cityMismatchDismissed ? (
-          <View style={[st.section, isTablet && st.sectionTablet]}>
-            <View style={st.cityMismatchCard}>
-              <Pressable
-                style={st.cityMismatchClose}
-                onPress={() => { setCityMismatchDismissed(true); markHomeCityMismatchPromptShown(); }}
-                hitSlop={8}
-              >
-                <MaterialIcons name="close" size={16} color="#B45309" />
-              </Pressable>
-              <View style={st.cityMismatchHeader}>
-                <View style={st.cityMismatchIconBg}>
-                  <MaterialIcons name="wrong-location" size={22} color="#D97706" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={st.cityMismatchTitle}>
-                    {language === 'fr' ? 'Votre ville a-t-elle change ?' : 'Has your city changed?'}
-                  </Text>
-                  <Text style={st.cityMismatchSub}>
-                    {Math.round(cityMismatch.ratio * 100)}% {language === 'fr' ? 'de vos matchs recents a > 300 km' : 'of your recent matches > 300 km'}
-                  </Text>
-                </View>
-              </View>
-              <Text style={st.cityMismatchDesc}>
-                {language === 'fr'
-                  ? `${cityMismatch.mismatchCount}/${cityMismatch.totalMatchesWithGeo} de vos matchs recents sont a plus de 300 km de ${cityMismatch.homeCity}${cityMismatch.dominantCity ? `, souvent a ${cityMismatch.dominantCity}` : ''}. Mettez a jour votre ville pour un classement geographique correct.`
-                  : `${cityMismatch.mismatchCount}/${cityMismatch.totalMatchesWithGeo} of your recent matches are more than 300 km from ${cityMismatch.homeCity}${cityMismatch.dominantCity ? `, often at ${cityMismatch.dominantCity}` : ''}. Update your city for accurate geographic ranking.`}
-              </Text>
-              <View style={st.cityMismatchActions}>
-                <Pressable
-                  style={st.cityMismatchCta}
-                  onPress={() => {
-                    markHomeCityMismatchPromptShown();
-                    setCityMismatchDismissed(true);
-                    router.push('/profile');
-                  }}
-                >
-                  <MaterialIcons name="edit-location" size={16} color="#FFF" />
-                  <Text style={st.cityMismatchCtaText}>
-                    {language === 'fr' ? 'Modifier ma ville' : 'Edit my city'}
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={st.cityMismatchSkip}
-                  onPress={() => { setCityMismatchDismissed(true); markHomeCityMismatchPromptShown(); }}
-                >
-                  <Text style={st.cityMismatchSkipText}>
-                    {language === 'fr' ? 'Plus tard' : 'Later'}
-                  </Text>
-                </Pressable>
-              </View>
-            </View>
-          </View>
-        ) : null;
-
       // ===== PROXIMITY ALERT =====
       case 'proximity' as SectionKey:
         return nearbyTerrains.length > 0 && !proximityDismissed ? (
@@ -917,61 +812,6 @@ export default function HomeScreen() {
                 <Text style={st.eloDecayCtaText}>{t('leaderboard', 'eloDecayWarningCta')}</Text>
               </Pressable>
             </View>
-          </View>
-        ) : null;
-
-      // ===== MATCH MENTIONS WIDGET =====
-      case 'mentions' as SectionKey:
-        return mentionsCount > 0 ? (
-          <View style={[st.section, isTablet && st.sectionTablet]}>
-            <Pressable style={st.mentionsCard} onPress={() => { Haptics.selectionAsync(); router.push('/matches-mentioning-me' as any); }}>
-              <View style={st.mentionsHeader}>
-                <View style={st.mentionsIconBg}>
-                  <MaterialIcons name="alternate-email" size={20} color="#7C3AED" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={st.mentionsTitle}>{language === 'fr' ? 'Matchs vous mentionnant' : 'Matches mentioning you'}</Text>
-                  <Text style={st.mentionsCount}>{mentionsCount} {language === 'fr' ? 'a verifier' : 'to verify'}</Text>
-                </View>
-                <View style={st.mentionsBadge}><Text style={st.mentionsBadgeText}>{mentionsCount > 9 ? '9+' : mentionsCount}</Text></View>
-              </View>
-              {mentionsPreview.slice(0, 2).map(m => (
-                <View key={m.matchId} style={st.mentionsItem}>
-                  <View style={st.mentionsDot} />
-                  <Text style={st.mentionsItemText} numberOfLines={1}>
-                    <Text style={st.mentionsSender}>{m.senderName || (language === 'fr' ? 'Auteur' : 'Author')}</Text>
-                    {' '}
-                    {language === 'fr' ? 'a ajoute un match' : 'added a match'}
-                    {' '}({m.teamAScore}-{m.teamBScore})
-                  </Text>
-                </View>
-              ))}
-              <View style={st.mentionsCta}>
-                <Text style={st.mentionsCtaText}>{language === 'fr' ? 'Voir et confirmer' : 'View and confirm'}</Text>
-                <MaterialIcons name="chevron-right" size={16} color="#7C3AED" />
-              </View>
-            </Pressable>
-          </View>
-        ) : null;
-
-      // ===== IMPERSONATION ALERTS WIDGET =====
-      case 'impersonation' as SectionKey:
-        return impersonationCount > 0 ? (
-          <View style={[st.section, isTablet && st.sectionTablet]}>
-            <Pressable style={st.impersonationCard} onPress={() => { Haptics.selectionAsync(); router.push('/impersonation-alerts' as any); }}>
-              <View style={st.impersonationHeader}>
-                <View style={st.impersonationIconBg}>
-                  <MaterialIcons name="warning" size={20} color="#B45309" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={st.impersonationTitle}>{language === 'fr' ? 'Alertes d\'usurpation' : 'Impersonation alerts'}</Text>
-                  <Text style={st.impersonationSub}>
-                    {impersonationCount} {language === 'fr' ? 'joueur(s) local(aux) au meme nom' : 'local player(s) with your name'}
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={18} color="#B45309" />
-              </View>
-            </Pressable>
           </View>
         ) : null;
 
@@ -1238,7 +1078,6 @@ export default function HomeScreen() {
     witnessRequests, tournaments, meetups, upcomingEvents, featuredAmbassadors, goldPartners, goldCarouselIndex,
     now, screenWidth, user?.id, matches, recentResults, nearbyTerrains, proximityDismissed,
     cityChange, cityChangeDismissed, cityUpdating,
-    cityMismatch, cityMismatchDismissed, mentionsCount, mentionsPreview, impersonationCount,
   ]);
 
   const keyExtractor = useCallback((item: SectionKey) => item, []);
@@ -1470,20 +1309,6 @@ const st = StyleSheet.create({
   cityChangeSkip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#2563EB12' },
   cityChangeSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#2563EB' },
 
-  // CITY MISMATCH ALERT (match-based)
-  cityMismatchCard: { backgroundColor: '#FFFBEB', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#FDE68A', position: 'relative' as const },
-  cityMismatchClose: { position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#D9770612', alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10 },
-  cityMismatchHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 10, paddingRight: 32 },
-  cityMismatchIconBg: { width: 44, height: 44, borderRadius: 14, backgroundColor: '#D9770618', alignItems: 'center' as const, justifyContent: 'center' as const },
-  cityMismatchTitle: { fontSize: 15, fontWeight: '700' as const, color: '#78350F' },
-  cityMismatchSub: { fontSize: 11, fontWeight: '600' as const, color: '#D97706', marginTop: 2 },
-  cityMismatchDesc: { fontSize: 13, color: '#92400E', lineHeight: 19, marginBottom: 14 },
-  cityMismatchActions: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 10 },
-  cityMismatchCta: { flex: 1, flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#D97706', paddingVertical: 12, borderRadius: 12 },
-  cityMismatchCtaText: { fontSize: 13, fontWeight: '700' as const, color: '#FFF' },
-  cityMismatchSkip: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 12, backgroundColor: '#D9770612' },
-  cityMismatchSkipText: { fontSize: 13, fontWeight: '600' as const, color: '#D97706' },
-
   // PROXIMITY ALERT
   proximityCard: { backgroundColor: '#F0FDF4', borderRadius: 18, padding: 16, borderWidth: 1.5, borderColor: '#BBF7D0', position: 'relative' as const },
   proximityClose: { position: 'absolute' as const, top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: '#22C55E12', alignItems: 'center' as const, justifyContent: 'center' as const, zIndex: 10 },
@@ -1520,28 +1345,6 @@ const st = StyleSheet.create({
   eloDecayProgressFill: { height: '100%' as const, borderRadius: 3 },
   eloDecayCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 8, backgroundColor: '#2563EB', paddingVertical: 12, borderRadius: 12 },
   eloDecayCtaText: { fontSize: 14, fontWeight: '700' as const, color: '#FFF' },
-
-  // MENTIONS WIDGET
-  mentionsCard: { backgroundColor: '#F5F3FF', borderRadius: 16, padding: 14, borderWidth: 1.5, borderColor: '#DDD6FE' },
-  mentionsHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12, marginBottom: 10 },
-  mentionsIconBg: { width: 40, height: 40, borderRadius: 12, backgroundColor: '#7C3AED18', alignItems: 'center' as const, justifyContent: 'center' as const },
-  mentionsTitle: { fontSize: 14, fontWeight: '700' as const, color: '#4C1D95' },
-  mentionsCount: { fontSize: 11, fontWeight: '600' as const, color: '#7C3AED', marginTop: 2 },
-  mentionsBadge: { minWidth: 26, height: 26, borderRadius: 13, backgroundColor: '#7C3AED', alignItems: 'center' as const, justifyContent: 'center' as const, paddingHorizontal: 6 },
-  mentionsBadgeText: { fontSize: 12, fontWeight: '800' as const, color: '#FFF' },
-  mentionsItem: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 8, paddingVertical: 6 },
-  mentionsDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#7C3AED' },
-  mentionsItemText: { flex: 1, fontSize: 12, color: '#5B21B6', lineHeight: 16 },
-  mentionsSender: { fontWeight: '700' as const, color: '#4C1D95' },
-  mentionsCta: { flexDirection: 'row' as const, alignItems: 'center' as const, justifyContent: 'center' as const, gap: 4, marginTop: 10, paddingTop: 10, borderTopWidth: 1, borderTopColor: '#DDD6FE' },
-  mentionsCtaText: { fontSize: 12, fontWeight: '700' as const, color: '#7C3AED' },
-
-  // IMPERSONATION WIDGET
-  impersonationCard: { backgroundColor: '#FFFBEB', borderRadius: 14, padding: 12, borderWidth: 1.5, borderColor: '#FDE68A' },
-  impersonationHeader: { flexDirection: 'row' as const, alignItems: 'center' as const, gap: 12 },
-  impersonationIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#D9770618', alignItems: 'center' as const, justifyContent: 'center' as const },
-  impersonationTitle: { fontSize: 13, fontWeight: '700' as const, color: '#78350F' },
-  impersonationSub: { fontSize: 11, fontWeight: '600' as const, color: '#B45309', marginTop: 2 },
 
   // GOLD PARTNER BANNER
   goldBanner: { backgroundColor: '#FFFDF5', borderRadius: 16, borderWidth: 2, overflow: 'hidden' as const, position: 'relative' as const, ...Platform.select({ ios: { shadowColor: '#D4A017', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 8 }, android: { elevation: 3 }, default: {} }) },

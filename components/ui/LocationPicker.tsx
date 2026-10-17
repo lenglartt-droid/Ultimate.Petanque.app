@@ -51,17 +51,6 @@ export interface LocationData {
   googlePhotoRef?: string;
   /** All photo references from Places API */
   googlePhotoRefs?: string[];
-  /** IANA-style or UTC-offset timezone (e.g. `UTC+1`) auto-derived from Google Places `utcOffsetMinutes`. */
-  timezone?: string;
-}
-
-/** Convert UTC offset in minutes (from Google Places `utcOffsetMinutes`) to a compact `UTC±H[:MM]` string. */
-function offsetMinutesToTimezone(offsetMinutes: number): string {
-  const hours = Math.floor(Math.abs(offsetMinutes) / 60);
-  const mins = Math.abs(offsetMinutes) % 60;
-  const sign = offsetMinutes >= 0 ? '+' : '-';
-  if (mins === 0) return `UTC${sign}${hours}`;
-  return `UTC${sign}${hours}:${mins.toString().padStart(2, '0')}`;
 }
 
 interface MyPlace {
@@ -98,7 +87,6 @@ interface SearchResult {
   placeName?: string;
   googlePhotoRef?: string;
   googlePhotoRefs?: string[];
-  timezone?: string;
 }
 
 // ============================================
@@ -193,7 +181,7 @@ async function searchGooglePlacesText(
         'Content-Type': 'application/json',
         'X-Goog-Api-Key': GOOGLE_API_KEY,
         'X-Goog-FieldMask':
-          'places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.photos,places.utcOffsetMinutes',
+          'places.id,places.displayName,places.formattedAddress,places.location,places.addressComponents,places.photos',
       },
       body: JSON.stringify(body),
     });
@@ -236,7 +224,6 @@ async function searchGooglePlacesText(
         const formatted =
           place.formattedAddress || place.displayName?.text || [street, city, country].filter(Boolean).join(', ');
         const photoRefs: string[] = (place.photos || []).map((p: any) => p.name).filter(Boolean);
-        const utcOffsetMinutes = typeof place.utcOffsetMinutes === 'number' ? place.utcOffsetMinutes : undefined;
 
         return {
           id: placeId,
@@ -252,7 +239,6 @@ async function searchGooglePlacesText(
           placeName: place.displayName?.text || undefined,
           googlePhotoRef: photoRefs[0],
           googlePhotoRefs: photoRefs.length > 0 ? photoRefs : undefined,
-          timezone: utcOffsetMinutes !== undefined ? offsetMinutesToTimezone(utcOffsetMinutes) : undefined,
         } as SearchResult;
       })
       .filter(Boolean) as SearchResult[];
@@ -278,7 +264,6 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
       'location',
       'addressComponents',
       'photos',
-      'utcOffsetMinutes',
     ].join(',');
 
     const response = await fetch(
@@ -325,7 +310,6 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
     // First photo reference (New API uses photo resource name)
     const photoRef = result.photos?.[0]?.name || '';
     const photoRefs: string[] = (result.photos || []).map((p: any) => p.name).filter(Boolean);
-    const utcOffsetMinutes = typeof result.utcOffsetMinutes === 'number' ? result.utcOffsetMinutes : undefined;
 
     return {
       id: pid,
@@ -341,7 +325,6 @@ async function getGooglePlaceDetails(placeId: string, lang: string = 'fr'): Prom
       placeName: result.displayName?.text || '',
       googlePhotoRef: photoRef || undefined,
       googlePhotoRefs: photoRefs.length > 0 ? photoRefs : undefined,
-      timezone: utcOffsetMinutes !== undefined ? offsetMinutesToTimezone(utcOffsetMinutes) : undefined,
     };
   } catch (e) {
     console.log('[Google Places New] Details exception:', e);
@@ -911,7 +894,6 @@ export default function LocationPicker({
           placeId: details.placeId,
           googlePhotoRef: details.googlePhotoRef,
           googlePhotoRefs: details.googlePhotoRefs,
-          timezone: details.timezone,
         };
         if (GOOGLE_API_KEY && details.latitude && details.longitude && !details.googlePhotoRef) {
           setResolvingPlace(true);
@@ -961,7 +943,6 @@ export default function LocationPicker({
         placeName: result.placeName,
         placeId: result.placeId,
         googlePhotoRef: result.googlePhotoRef,
-        timezone: result.timezone,
       };
       onChange(baseLocation);
 

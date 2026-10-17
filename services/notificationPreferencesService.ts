@@ -23,19 +23,7 @@ export interface NotificationPreferences {
   terrain_proximity: boolean;
   terrain_proximity_radius: number; // meters: 1000, 3000, 5000, 10000
   terrain_activity: boolean; // Push when favorite terrains become active
-  // === Display preferences (not push triggers) ===
-  chat_display_device_time: boolean; // Chat timestamps in device time instead of facility time
-  match_card_display_device_time: boolean; // Match history card timestamps in device time instead of facility time
 }
-
-/**
- * Display timezone reference mode. Persisted in
- * `user_preferences.display_timezone` and `user_preferences.custom_timezone`.
- *   - auto    : use the terrain's timezone when known, else the device's
- *   - terrain : always use the terrain's timezone (fall back to device)
- *   - custom  : always use a user-supplied IANA timezone
- */
-export type DisplayTimezoneMode = 'auto' | 'terrain' | 'custom';
 
 export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   event_created: true,
@@ -54,8 +42,6 @@ export const DEFAULT_NOTIFICATION_PREFERENCES: NotificationPreferences = {
   terrain_proximity: true,
   terrain_proximity_radius: 3000,
   terrain_activity: true,
-  chat_display_device_time: false,
-  match_card_display_device_time: false,
 };
 
 export const PROXIMITY_RADIUS_OPTIONS = [

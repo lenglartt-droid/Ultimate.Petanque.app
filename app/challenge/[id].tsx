@@ -36,8 +36,6 @@ import { logModification } from '@/services/modificationLogService';
 import EditConflictModal from '@/components/ui/EditConflictModal';
 import AttestationSection from '@/components/feature/AttestationSection';
 import { getShareRequestsForItem, detectLinkedPlayers, createShareRequests, MatchShareRequest } from '@/services/matchShareService';
-import { TimezoneBadge, TimezoneMismatchBanner } from '@/components/ui/TimezoneBadge';
-import { parseTerrainTimezone, timezonesDiffer, getDeviceTimezone, formatTimeInTimezone, formatDateInTimezone, shortTimezoneLabel } from '@/services/timezoneService';
 
 const CHALLENGE_LABELS: Record<string, Record<ChallengeType, string>> = {
   fr: { '10_tirs': '10 Tirs', '10_tirs_sautee': '10 Tirs Sautee', precision: 'Precision' },
@@ -55,7 +53,7 @@ const POINT_COLORS: Record<number, string> = { 0: '#EF4444', 1: '#F59E0B', 3: '#
 export default function ChallengeDetailScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { challenges, terrains, loading: appLoading } = useAppData();
+  const { challenges, loading: appLoading } = useAppData();
   const { getSharedPermission, isSharedItem, refreshData, updateChallenge, deleteChallenge } = useAppActions();
   const { user } = useAuth();
   const { showAlert } = useAlert();
@@ -387,21 +385,8 @@ export default function ChallengeDetailScreen() {
   const typeLabel = CHALLENGE_LABELS[fr ? 'fr' : 'en'][challenge.type] || challenge.type;
   const is1v1 = challenge.mode === '1v1';
   const isPrecision = challenge.type === 'precision';
-  const challengeTerrain = (challenge as any).terrainId ? terrains.find((tr: any) => tr.id === (challenge as any).terrainId) : null;
-  const terrainTimezone: string | null = challengeTerrain ? ((challengeTerrain as any).timezone || null) : null;
-  const facilityTz = parseTerrainTimezone(terrainTimezone);
-  const deviceTz = getDeviceTimezone();
-  const localeStr = fr ? 'fr-FR' : 'en-US';
-  const challengeDateObj = new Date(challenge.date);
-  const dateStr = facilityTz
-    ? formatDateInTimezone(challengeDateObj, facilityTz, localeStr, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-    : challengeDateObj.toLocaleDateString(localeStr, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
-  const timeStr = facilityTz
-    ? formatTimeInTimezone(challengeDateObj, facilityTz, localeStr)
-    : challengeDateObj.toLocaleTimeString(localeStr, { hour: '2-digit', minute: '2-digit' });
-  const facilityTzLabel = facilityTz ? shortTimezoneLabel(facilityTz) : '';
-  const showTzConversion = !!facilityTz && timezonesDiffer(facilityTz, deviceTz, challengeDateObj);
-  const deviceTimeStr = showTzConversion ? formatTimeInTimezone(challengeDateObj, deviceTz, localeStr) : null;
+  const dateStr = new Date(challenge.date).toLocaleDateString(fr ? 'fr-FR' : 'en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const timeStr = new Date(challenge.date).toLocaleTimeString(fr ? 'fr-FR' : 'en-US', { hour: '2-digit', minute: '2-digit' });
   const durationMin = challenge.duration ? Math.floor(challenge.duration / 60) : 0;
   const durationSec = challenge.duration ? challenge.duration % 60 : 0;
 
@@ -418,15 +403,6 @@ export default function ChallengeDetailScreen() {
       keyboardShouldPersistTaps="handled"
       refreshControl={!isEditing ? <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={theme.primary} /> : undefined}
     >
-      {/* Timezone mismatch banner - facility vs device */}
-      {challengeTerrain && terrainTimezone ? (
-        <TimezoneMismatchBanner
-          terrainTimezone={terrainTimezone}
-          facilityName={(challengeTerrain as any).name}
-          locale={fr ? 'fr-FR' : 'en-US'}
-        />
-      ) : null}
-
       {/* Hero Card */}
       <View style={s.heroCard}>
         <View style={[s.heroAccent, { backgroundColor: cfg.color }]} />
@@ -461,7 +437,7 @@ export default function ChallengeDetailScreen() {
             </View>
             <View style={s.metaPill}>
               <MaterialIcons name="schedule" size={13} color={theme.accent} />
-              <Text style={s.metaPillText}>{timeStr}{facilityTzLabel ? ` ${facilityTzLabel}` : ''}</Text>
+              <Text style={s.metaPillText}>{timeStr}</Text>
             </View>
             {isEditing ? (
               <View style={s.editDurationPill}>
@@ -483,15 +459,6 @@ export default function ChallengeDetailScreen() {
               </View>
             ) : null}
           </View>
-
-          {showTzConversion && deviceTimeStr ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#8B5CF610', borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, alignSelf: 'flex-start', marginBottom: 12, borderWidth: 1, borderColor: '#8B5CF625' }}>
-              <MaterialIcons name="public" size={12} color="#7C3AED" />
-              <Text style={{ fontSize: 11, fontWeight: '700', color: '#7C3AED' }}>
-                {deviceTimeStr} {fr ? 'chez vous' : 'your time'}
-              </Text>
-            </View>
-          ) : null}
 
           {/* 1v1 Winner Banner */}
           {is1v1 && winnerLabel ? (
