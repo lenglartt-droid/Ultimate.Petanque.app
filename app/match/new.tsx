@@ -1839,26 +1839,11 @@ export default function NewMatchScreen() {
                   )}
                   
                   <View style={styles.fsWinnerButtons}>
-                    {/* Save & Finish - Primary CTA (auto-opens share modal if linked accounts detected) */}
+                    {/* Save & Finish - Primary CTA */}
                     <Pressable 
                       style={styles.fsWinnerBtnPrimary}
-                      onPress={async () => {
+                      onPress={() => {
                         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-                        // Detect linked accounts to show the share detection banner automatically
-                        const tAIds = getTeamPlayerIds(teamAPlayers);
-                        const tBIds = getTeamPlayerIds(teamBPlayers);
-                        const allPids = [...tAIds, ...tBIds].filter(id => id !== '1' && id !== '2');
-                        if (allPids.length > 0 && user?.id) {
-                          try {
-                            const { linkedPlayers } = await detectLinkedPlayers(allPids, user.id);
-                            if (linkedPlayers.length > 0) {
-                              // Save + auto-open share modal (shows the 'X player(s) with account detected' banner)
-                              await handleSaveAndShare();
-                              return;
-                            }
-                          } catch { /* fallback to silent save */ }
-                        }
-                        // No linked accounts: silent save + home
                         setFullscreenMode(false);
                         setHasExitedFullscreen(true);
                         handleSaveMatch();
@@ -1885,7 +1870,7 @@ export default function NewMatchScreen() {
                           </>
                         )}
                       </Pressable>
-                    ) : (
+                    ) : !hasOnlyLocalPlayers() ? (
                       <Pressable 
                         style={styles.fsWinnerBtnShare}
                         onPress={() => { handleSaveAndShare(); }}
@@ -1900,7 +1885,7 @@ export default function NewMatchScreen() {
                           </>
                         )}
                       </Pressable>
-                    )}
+                    ) : null}
 
                     {!isTournamentMode && (
                       <Pressable 

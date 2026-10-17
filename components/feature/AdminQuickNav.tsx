@@ -37,7 +37,6 @@ const ADMIN_SECTIONS: NavSection[] = [
   { route: '/admin-activity-log', icon: 'history', label: 'Journal', color: '#64748B', group: 'system' },
   { route: '/admin-notifications', icon: 'notifications', label: 'Alertes', color: '#DC2626', group: 'system' },
   { route: '/admin-changelog', icon: 'update', label: 'Changelog', color: '#0EA5E9', group: 'system' },
-  { route: '/admin-faq-analytics', icon: 'analytics', label: 'FAQ', color: '#7C3AED', group: 'system' },
 ];
 
 const GROUP_SEPARATORS: Record<string, string> = {
